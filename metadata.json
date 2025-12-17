@@ -1,0 +1,7 @@
+{
+  "name": "HoubaraTracker v2.0",
+  "description": "Advanced telemetry system for tracking Houbara bustards with Argos satellite data, real-time alerts, and AI migration predictions.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
