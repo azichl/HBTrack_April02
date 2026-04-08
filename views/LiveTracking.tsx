@@ -1,12 +1,11 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
-import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
+import { getHistoricalPositions } from '../services/firestoreService';
 
 // Use standard colored markers (matching Migration view style)
 const greenIcon = new L.Icon({
@@ -575,7 +574,8 @@ export const LiveTracking = () => {
   // History State
   const [showHistory, setShowHistory] = useState(false);
   const [historyMode, setHistoryMode] = useState<'preset' | 'custom'>('preset');
-  const [historyPreset, setHistoryPreset] = useState<'24h' | '7d' | '30d'>('24h');
+  const [historyPreset, setHistoryPreset] = useState<'24h' | '7d' | '30d' | '1y' | '2y'>('24h');
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyFixType, setHistoryFixType] = useState<'All' | 'GPS' | 'Doppler'>('All');
   const [customDates, setCustomDates] = useState({
       start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -662,7 +662,7 @@ export const LiveTracking = () => {
        return true;
     });
     
-    const relevantIds = new Set(relevantTransmitters.map(t => t.platform_id));
+    const relevantIds = new Set(relevantTransmitters.map(t => String(t.platform_id)));
     
     // 2. Map to store latest position per ID
     const latestMap = new Map<string, typeof positions[0]>();
@@ -699,67 +699,68 @@ export const LiveTracking = () => {
     return Array.from(latestMap.values());
   }, [positions, selectedTransmitterIds, selectedStatus, transmitters]);
   
-  // Generate Historical Path (Using REAL data from store)
+  // Generate Historical Path (Fetching REAL data from Firestore directly)
   useEffect(() => {
     if (!showHistory || selectedTransmitterIds.length === 0) {
         setHistoryPaths([]);
         return;
     }
 
-    const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, color: string}> = [];
-    const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
-
-    selectedTransmitterIds.forEach((pttId, index) => {
-        // 1. Get all positions for this PTT
-        let track = positions.filter(p => p.transmitter_id === pttId);
-
-        // 2. Filter by Date Range
-        const now = new Date();
-        let cutoffTime = 0;
-        let endTime = now.getTime();
+    const loadHistory = async () => {
+        setIsHistoryLoading(true);
         
+        let startDate = new Date();
+        let endDate = new Date();
+        const now = new Date();
+
         if (historyMode === 'preset') {
-            if (historyPreset === '24h') cutoffTime = now.getTime() - 24 * 60 * 60 * 1000;
-            else if (historyPreset === '7d') cutoffTime = now.getTime() - 7 * 24 * 60 * 60 * 1000;
-            else if (historyPreset === '30d') cutoffTime = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+            if (historyPreset === '24h') startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            else if (historyPreset === '7d') startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            else if (historyPreset === '30d') startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            else if (historyPreset === '1y') startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            else if (historyPreset === '2y') startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+            else startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         } else {
-             cutoffTime = new Date(customDates.start).getTime();
-             endTime = new Date(customDates.end).setHours(23,59,59);
+             startDate = new Date(customDates.start);
+             endDate = new Date(customDates.end);
+             endDate.setHours(23,59,59);
         }
 
-        track = track.filter(p => {
-            const t = new Date(p.timestamp).getTime();
-            // Filter invalid timestamps AND invalid coordinates (0,0)
-            const validCoords = (p.lat !== 0 || p.lon !== 0) && !isNaN(p.lat) && !isNaN(p.lon);
-            const validDate = !isNaN(t) && t >= cutoffTime && t <= endTime;
-            
-            // Filter by Location Type
-            const validType = historyFixType === 'All' || p.locationType === historyFixType;
+        const rawPositions = await getHistoricalPositions(selectedTransmitterIds, startDate, endDate);
+        
+        const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, color: string}> = [];
+        const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
 
-            return validDate && validCoords && validType;
+        selectedTransmitterIds.forEach((pttId, index) => {
+            let track = rawPositions.filter(p => p.transmitter_id === pttId);
+
+            track = track.filter(p => {
+                const validCoords = (p.lat !== 0 || p.lon !== 0) && !isNaN(p.lat) && !isNaN(p.lon);
+                const validType = historyFixType === 'All' || p.locationType === historyFixType;
+                return validCoords && validType;
+            });
+
+            if (track.length > 0) {
+                 newPaths.push({
+                     id: pttId,
+                     path: track.map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp, type: p.locationType })),
+                     color: colors[index % colors.length]
+                 });
+            }
         });
+        
+        setHistoryPaths(newPaths);
+        setIsHistoryLoading(false);
+    };
 
-        // 3. Sort Chronologically (Ascending: Oldest -> Newest) for correct line drawing
-        track.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-        // 4. Map to path format
-        if (track.length > 0) {
-             newPaths.push({
-                 id: pttId,
-                 path: track.map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp, type: p.locationType })),
-                 color: colors[index % colors.length]
-             });
-        }
-    });
-    
-    setHistoryPaths(newPaths);
-  }, [showHistory, historyMode, historyPreset, customDates, historyFixType, selectedTransmitterIds, positions]);
+    loadHistory();
+  }, [showHistory, historyMode, historyPreset, customDates, historyFixType, selectedTransmitterIds]);
 
   // Filter transmitters for search suggestion
   const searchResults = useMemo(() => {
     const lowerQuery = searchQuery.toLowerCase();
     return transmitters.filter(t => 
-        t.platform_id.toLowerCase().includes(lowerQuery)
+        String(t.platform_id || '').toLowerCase().includes(lowerQuery)
     );
   }, [searchQuery, transmitters]);
 
@@ -779,7 +780,7 @@ export const LiveTracking = () => {
   };
   
   const selectAllFiltered = () => {
-      const ids = searchResults.map(t => t.platform_id);
+      const ids = searchResults.map(t => String(t.platform_id));
       const newSelection = Array.from(new Set([...selectedTransmitterIds, ...ids]));
       setSelectedTransmitterIds(newSelection);
       setShowHistory(true);
@@ -803,29 +804,37 @@ export const LiveTracking = () => {
     closeAllDropdowns(); // Close other UI elements
 
     try {
-       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-       const response = await ai.models.generateContent({
-           model: 'gemini-3-pro-preview',
-           contents: `User Query: "${geoQuery}"
-Find the coordinates for this location using Google Search.
-Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
-           config: {
-               tools: [{googleSearch: {}}],
-           }
-       });
+        const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+        if (!apiKey) {
+           console.warn("No Gemini API key available for search.");
+           return;
+        }
 
-       const fullText = response.text || "";
-       
-       // Extract Coords
-       const aiCoordMatch = fullText.match(/\[COORDS:\s*(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)\]/);
-       if (aiCoordMatch) {
-           const lat = parseFloat(aiCoordMatch[1]);
-           const lon = parseFloat(aiCoordMatch[3]);
-           setCustomFlyTo({ lat, lon });
-           setSearchMarkerPos({ lat, lon, label: geoQuery });
-       } else {
-           console.warn("No coordinates found for query");
-       }
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: `User Query: "${geoQuery}"\nFind the coordinates for this location using Google Search.\nReturn ONLY the latitude and longitude in this format: [COORDS: lat, lon]` }]
+                }]
+            })
+        });
+
+        if (!res.ok) throw new Error("Gemini API request failed");
+        
+        const data = await res.json();
+        const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        
+        // Extract Coords
+        const aiCoordMatch = fullText.match(/\[COORDS:\s*(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)\]/);
+        if (aiCoordMatch) {
+            const lat = parseFloat(aiCoordMatch[1]);
+            const lon = parseFloat(aiCoordMatch[3]);
+            setCustomFlyTo({ lat, lon });
+            setSearchMarkerPos({ lat, lon, label: geoQuery });
+        } else {
+            console.warn("No coordinates found for query");
+        }
 
     } catch (err) {
         console.error(err);
@@ -852,12 +861,23 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
           // Auto-fetch name
           setLocationName("Fetching location name...");
           try {
-             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-             const response = await ai.models.generateContent({
-                model: 'gemini-3-pro-preview',
-                contents: `What is the name of the place at coordinates ${e.latlng.lat}, ${e.latlng.lng}? Return ONLY the location name (City, Country or Region).`
+             const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
+             if (!apiKey) {
+                setLocationName("API Key Missing");
+                return;
+             }
+             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({
+                     contents: [{
+                         parts: [{ text: `What is the name of the place at coordinates ${e.latlng.lat}, ${e.latlng.lng}? Return ONLY the location name (City, Country or Region).` }]
+                     }]
+                 })
              });
-             setLocationName(response.text.trim());
+             const data = await res.json();
+             const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+             setLocationName(fullText.trim() || 'Unknown Location');
           } catch(err) {
               setLocationName("Unknown Location");
           }
@@ -954,6 +974,10 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
   useEffect(() => {
     const onFullscreenChange = () => {
       setIsFullscreen(Boolean(document.fullscreenElement));
+      // Force Leaflet to recalculate size after entering/exiting fullscreen
+      setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
@@ -1061,13 +1085,14 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
   ];
 
   const renderTrackingMap = () => (
-    <div className="relative w-full h-full">
+    <div className="relative w-full h-full" style={{ height: '100%', width: '100%', minHeight: '400px' }}>
         <MapContainer 
             center={[36.0, 59.0]} 
             zoom={4} 
             minZoom={3}
             maxBounds={[[-90, -180], [90, 180]]}
             className={`w-full h-full z-0 ${isMeasuring ? 'cursor-crosshair' : ''}`}
+            style={{ height: '100%', width: '100%' }}
             zoomControl={false}
         >
             <MapController selectedPos={flyToPos} customFlyTo={customFlyTo} />
@@ -1126,7 +1151,7 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
 
             {/* Bird Markers (LATEST POSITIONS ONLY) */}
             {latestPositions.map((pos) => {
-                const transmitter = transmitters.find(t => t.platform_id === pos.transmitter_id);
+                const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));
                 const bird = birds.find(b => b.id === transmitter?.bird_id);
                 
                 return (
@@ -1435,7 +1460,10 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
                 </button>
                  {historyOpen && (
                     <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2" onClick={(e) => e.stopPropagation()}>
-                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Track History</h4>
+                        <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Track History</h4>
+                            {isHistoryLoading && <Loader2 size={14} className="text-brand-500 animate-spin" />}
+                        </div>
                         
                         {selectedTransmitterIds.length === 0 ? (
                             <p className="text-xs text-gray-500 italic">Please select a PTT to view history.</p>
@@ -1470,7 +1498,7 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
 
                                         {historyMode === 'preset' ? (
                                             <div className="space-y-1">
-                                                {['24h', '7d', '30d'].map(range => (
+                                                {['24h', '7d', '30d', '1y', '2y'].map(range => (
                                                     <button
                                                         key={range}
                                                         onClick={() => setHistoryPreset(range as any)}
@@ -1480,7 +1508,7 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
                                                                 : 'text-gray-600 hover:bg-gray-50'
                                                         }`}
                                                     >
-                                                        {range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : 'Last 30 Days'}
+                                                        {range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
                                                         {historyPreset === range && <CheckCircle2 size={14} className="text-brand-500" />}
                                                     </button>
                                                 ))}
@@ -1607,11 +1635,11 @@ Return ONLY the latitude and longitude in this format: [COORDS: lat, lon]`,
                             {searchResults.length > 0 ? (
                                 searchResults.map(t => {
                                     const bird = birds.find(b => b.id === t.bird_id);
-                                    const isSelected = selectedTransmitterIds.includes(t.platform_id);
+                                    const isSelected = selectedTransmitterIds.includes(String(t.platform_id || ''));
                                     return (
                                         <div
                                             key={t.id}
-                                            onClick={() => handleSearchToggle(t.platform_id)}
+                                            onClick={() => handleSearchToggle(String(t.platform_id || ''))}
                                             className={`w-full text-left px-4 py-3 border-b border-gray-50 last:border-none flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
                                         >
                                             <div className="flex items-center gap-3 overflow-hidden">

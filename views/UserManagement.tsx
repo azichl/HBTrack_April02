@@ -1,8 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Users, UserPlus, Shield, CheckCircle2, User, Key, X, Search, Mail, Filter, Database, Lock } from 'lucide-react';
+import { Users, UserPlus, Shield, CheckCircle2, User, Key, X, Search, Mail, Filter, Database, Lock, Loader2, AlertCircle } from 'lucide-react';
 import { User as UserType, Role } from '../types';
+import { listUsers, createUser, updateUserProfile, deleteUserAccount, AppUser } from '../services/authService';
+import { getAuth } from 'firebase/auth';
 
 const SYSTEM_PERMISSIONS = [
   'View Data',
@@ -43,11 +45,84 @@ const RoleBadge = ({ role }: { role: Role }) => {
 };
 
 export const UserManagement = () => {
-  const { users, addUser, updateUser, deleteUser } = useAppStore();
+  const { users, addUser, updateUser, deleteUser: deleteUserFromStore } = useAppStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All Roles');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+
+  // Load users from Firebase Auth on mount
+  useEffect(() => {
+    loadFirebaseUsers();
+  }, []);
+
+  const loadFirebaseUsers = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const firebaseUsers = await listUsers();
+      // Sync to local store
+      firebaseUsers.forEach((u: AppUser) => {
+        const existing = users.find(eu => eu.id === u.id);
+        if (!existing) {
+          addUser({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: mapFirebaseRole(u.role) as Role,
+            status: u.status === 'active' ? 'active' : 'inactive',
+            permissions: mapPermissions(u.role),
+            lastLogin: u.lastActive || undefined
+          });
+        } else {
+          updateUser(u.id, {
+            name: u.name,
+            email: u.email,
+            role: mapFirebaseRole(u.role) as Role,
+            status: u.status === 'active' ? 'active' : 'inactive',
+            lastLogin: u.lastActive || undefined
+          });
+        }
+      });
+    } catch (err: any) {
+      console.error('Failed to load users from Firebase:', err);
+      setError(err.message || 'Failed to load users');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Map Cloud Function roles to app roles
+  const mapFirebaseRole = (role: string): Role => {
+    const map: Record<string, Role> = {
+      'admin': 'Administrator',
+      'researcher': 'Researcher',
+      'field_operator': 'Field Coordinator',
+      'data_entry': 'Data Entry',
+      'viewer': 'Viewer'
+    };
+    return map[role] || role as Role;
+  };
+
+  const mapRoleToFirebase = (role: Role): string => {
+    const map: Record<Role, string> = {
+      'Administrator': 'admin',
+      'Researcher': 'researcher',
+      'Field Coordinator': 'field_operator',
+      'Data Entry': 'data_entry',
+      'Viewer': 'viewer'
+    };
+    return map[role] || 'viewer';
+  };
+
+  const mapPermissions = (role: string): string[] => {
+    const r = mapFirebaseRole(role);
+    return ROLE_DEFAULTS[r] || ROLE_DEFAULTS['Viewer'];
+  };
 
   // Stats
   const totalUsers = users.length;
@@ -72,6 +147,8 @@ export const UserManagement = () => {
   });
 
   const handleOpenModal = (user?: UserType) => {
+    setError(null);
+    setPassword('');
     if (user) {
       setEditingUser(user);
       setFormData(user);
@@ -92,7 +169,6 @@ export const UserManagement = () => {
     setFormData({
       ...formData,
       role,
-      // When changing role, we allow resetting permissions to that role's default
       permissions: ROLE_DEFAULTS[role]
     });
   };
@@ -108,29 +184,79 @@ export const UserManagement = () => {
     setFormData({ ...formData, permissions: newPerms });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUser) {
-      updateUser(editingUser.id, formData);
-    } else {
-      const newUser: UserType = {
-        id: `u-${Date.now()}`,
-        ...formData as UserType,
-        lastLogin: undefined
-      };
-      addUser(newUser);
+    setIsSaving(true);
+    setError(null);
+    
+    try {
+      if (editingUser) {
+        // Update existing user via Cloud Function
+        await updateUserProfile(editingUser.id, {
+          role: mapRoleToFirebase(formData.role as Role),
+          status: formData.status,
+          name: formData.name,
+        });
+        updateUser(editingUser.id, formData);
+      } else {
+        // Create new user via Cloud Function
+        if (!password || password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setIsSaving(false);
+          return;
+        }
+        const result = await createUser(
+          formData.email!,
+          password,
+          formData.name!,
+          mapRoleToFirebase(formData.role as Role)
+        );
+        addUser({
+          id: result.id,
+          name: formData.name!,
+          email: formData.email!,
+          role: formData.role as Role,
+          status: 'active',
+          permissions: formData.permissions || ROLE_DEFAULTS['Viewer'],
+          lastLogin: undefined
+        });
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      setError(err.message || 'Operation failed');
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this user?')) {
-      deleteUser(id);
+  const handleDelete = async (id: string) => {
+    const currentUid = getAuth().currentUser?.uid;
+    if (id === currentUid) {
+      setError('Cannot delete your own account');
+      return;
+    }
+    if (window.confirm('Are you sure you want to delete this user? This will also remove their Firebase Auth account.')) {
+      try {
+        await deleteUserAccount(id);
+        deleteUserFromStore(id);
+      } catch (err: any) {
+        setError(err.message || 'Delete failed');
+      }
     }
   };
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
+      {/* Error Banner */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 text-sm">
+          <AlertCircle size={18} />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-600">
+            <X size={16} />
+          </button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -415,6 +541,29 @@ export const UserManagement = () => {
                   </div>
                 </div>
 
+                {/* Password (only for new users) */}
+                {!editingUser && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                    <input 
+                      type="password" required
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                      placeholder="Minimum 6 characters"
+                      minLength={6}
+                    />
+                  </div>
+                )}
+
+                {/* Modal Error */}
+                {error && (
+                  <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-xs">
+                    <AlertCircle size={14} />
+                    <span>{error}</span>
+                  </div>
+                )}
+
                 {/* Role Selection */}
                 <div>
                   <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Role Assignment</h4>
@@ -497,7 +646,10 @@ export const UserManagement = () => {
 
             <div className="p-6 bg-gray-50 dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 shrink-0 flex justify-end gap-3">
                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
-               <button type="submit" form="userForm" className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors shadow-sm">Save User</button>
+               <button type="submit" form="userForm" disabled={isSaving} className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors shadow-sm disabled:opacity-70 flex items-center gap-2">
+                  {isSaving && <Loader2 size={16} className="animate-spin" />}
+                  {isSaving ? 'Saving...' : 'Save User'}
+               </button>
             </div>
           </div>
         </div>

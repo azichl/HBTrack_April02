@@ -61,13 +61,14 @@ export interface Position {
 
 export interface Alert {
   id: string;
-  type: 'geofence' | 'battery_low' | 'no_fix' | 'speed_anomaly' | 'temp_anomaly';
+  type: 'geofence' | 'border' | 'distance' | 'battery_low' | 'no_fix' | 'speed_anomaly' | 'temp_anomaly';
   severity: 'critical' | 'warning' | 'info';
   transmitter_id: string;
-  bird_name: string;
+  bird_name?: string;
   message: string;
   timestamp: string;
   status: 'active' | 'acknowledged' | 'resolved';
+  location?: { lat: number; lon: number };
 }
 
 export interface KPI {

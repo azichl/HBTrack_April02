@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        proxy: {
+          '^/proxy/argos': {
+            target: 'https://trackapp-v2.web.app/proxy/argos',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/proxy\/argos/, '')
+          }
+        }
       },
       plugins: [react()],
       define: {

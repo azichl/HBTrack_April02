@@ -29,7 +29,6 @@ export const Monitoring = () => {
     setSelectedMapBirdId, 
     setActiveTab,
     setDatabaseActiveTab,
-    syncArgosToApp,
     timeZone
   } = useAppStore();
 
@@ -90,7 +89,7 @@ export const Monitoring = () => {
   };
 
   const handleSync = () => {
-      syncArgosToApp();
+      // Data is automatically synced to Firebase during ingestion
   };
 
   return (

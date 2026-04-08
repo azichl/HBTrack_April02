@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { KPICard } from '../components/KPICard';
 import { Radio, Bird, AlertTriangle, Satellite } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -20,17 +20,52 @@ const generateEmptyChartData = () => {
 };
 
 export const Dashboard = () => {
-  const { transmitters, birds, alerts, argosData, timeZone } = useAppStore();
-  const chartData = generateEmptyChartData();
+  const { transmitters, birds, alerts, positions, timeZone, setActiveTab } = useAppStore();
+
+  // Generate chart data from real positions for the last 7 days
+  const chartData = useMemo(() => {
+    const data = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dayStart = new Date(d);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(d);
+      dayEnd.setHours(23, 59, 59, 999);
+      
+      const fixes = positions.filter(p => {
+        const t = new Date(p.timestamp).getTime();
+        return t >= dayStart.getTime() && t <= dayEnd.getTime();
+      }).length;
+
+      data.push({
+        name: d.toLocaleDateString('en-US', { weekday: 'short' }),
+        fixes
+      });
+    }
+    return data;
+  }, [positions]);
 
   // Dynamic counts
   const activeTransmittersCount = transmitters.filter(t => t.status === 'active').length;
   const birdsCount = birds.length;
   const activeAlertsCount = alerts.filter(a => a.status === 'active').length;
   
+  // Unique satellites from position data
+  const uniqueSatellites = useMemo(() => {
+    const sats = new Set<string>();
+    positions.forEach(p => {
+      if (p.satellite && p.satellite !== 'Simulated') sats.add(p.satellite);
+    });
+    return sats.size;
+  }, [positions]);
+  
+  // Total position fixes
+  const totalFixes = positions.length;
+  
   // Determine last ingest from actual data
-  const lastIngestDate = argosData.length > 0 
-      ? formatDateTime(new Date(Math.max(...argosData.map(d => new Date(d.timestamp).getTime()))).toISOString(), timeZone)
+  const lastIngestDate = positions.length > 0 
+      ? formatDateTime(new Date(Math.max(...positions.map(d => new Date(d.timestamp).getTime()))).toISOString(), timeZone)
       : 'No Data';
 
   return (
@@ -70,10 +105,10 @@ export const Dashboard = () => {
         />
         <KPICard 
           title="Satellites Used" 
-          value="0" 
+          value={uniqueSatellites || totalFixes} 
           icon={Satellite} 
           color="bg-slate-500" 
-          trend="-"
+          trend={`${totalFixes} total fixes`}
           trendUp={true}
         />
       </div>
@@ -104,7 +139,7 @@ export const Dashboard = () => {
         <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
           <div className="flex justify-between items-center mb-4">
              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Alerts</h3>
-             <span className="text-xs font-medium text-brand-600 hover:underline cursor-pointer dark:text-brand-400">View All</span>
+             <span onClick={() => setActiveTab('Real-Time Alerts')} className="text-xs font-medium text-brand-600 hover:underline cursor-pointer dark:text-brand-400">View All</span>
           </div>
           <div className="space-y-4">
             {alerts.length > 0 ? alerts.slice(0, 4).map((alert) => (

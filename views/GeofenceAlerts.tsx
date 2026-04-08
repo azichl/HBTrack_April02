@@ -3,45 +3,22 @@ import { useAppStore } from '../store/appStore';
 import { Globe, Map, Settings, Navigation, Ruler, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { formatDateTime } from '../utils/formatting';
 
-// Helper to calculate distance between two coords (Haversine formula)
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  const R = 6371; // Radius of the earth in km
-  const dLat = deg2rad(lat2 - lat1);
-  const dLon = deg2rad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  const d = R * c; // Distance in km
-  return d;
-};
 
-const deg2rad = (deg: number) => {
-  return deg * (Math.PI / 180);
-};
-
-// Mock function to guess country based on lat (Simplified for demo logic)
-const getCountryByLat = (lat: number) => {
-    if (lat > 45) return 'Kazakhstan'; // North of 45°
-    if (lat > 40) return 'Uzbekistan'; // 40° - 45°
-    if (lat > 35) return 'Turkmenistan'; // 35° - 40°
-    if (lat > 28) return 'Iran'; // 28° - 35°
-    return 'Qatar'; // South of 28°
-};
 
 export const GeofenceAlerts = () => {
   const { 
       transmitters, 
       positions, 
       birds,
+      alerts,
       setActiveTab, 
       setSelectedTransmitterIds,
+      resolveAlert,
       timeZone
   } = useAppStore();
   
   // Configuration State
-  const [distanceThreshold, setDistanceThreshold] = useState(50); // km
+  const [distanceThreshold, setDistanceThreshold] = useState(50); // km (UI visual only for now, logic is in service)
   const [detectBorders, setDetectBorders] = useState(true);
   const [activeTabState, setActiveTabState] = useState<'active' | 'history'>('active');
 
@@ -51,86 +28,19 @@ export const GeofenceAlerts = () => {
       setActiveTab('Live Tracking');
   };
 
-  // Generate Alerts based on real store data
   const generatedAlerts = useMemo(() => {
-    const alerts: any[] = [];
-    
-    transmitters.forEach(t => {
-        const currentPos = positions.find(p => p.transmitter_id === t.platform_id);
-        
-        // If we have a live position, simulate a "previous" position to check logic
-        if (currentPos) {
-            // Deterministic simulation based on ID to create consistent "alerts" for specific birds
-            // We use the numeric part of the ID to decide if this bird moved recently
-            const idNum = parseInt(t.platform_id.slice(-3), 10);
-            
-            // Simulate 20% of birds having significant movement
-            const hasMovedSignificantly = idNum % 5 === 0; 
-            
-            // Simulate 10% of birds having crossed a border recently
-            const hasCrossedBorder = idNum % 7 === 0;
-
-            // 1. Simulate Previous Position
-            let prevLat = currentPos.lat;
-            let prevLon = currentPos.lon;
-
-            if (hasMovedSignificantly) {
-                // Simulate it came from ~60km away
-                prevLat -= 0.6; 
-                prevLon -= 0.2;
-            } else if (hasCrossedBorder) {
-                // Force a border crossing scenario based on current location
-                // If current is > 45 (Kazakhstan), prev was < 45 (Uzbekistan)
-                if (currentPos.lat > 45) prevLat = 44.8;
-                else if (currentPos.lat > 40) prevLat = 39.8;
-                else if (currentPos.lat > 35) prevLat = 34.8;
-                else if (currentPos.lat > 28) prevLat = 27.8;
-                else prevLat = 28.5; // Moved south into Qatar
-            } else {
-                // Normal small movement
-                prevLat -= 0.001; 
-                prevLon -= 0.001;
-            }
-
-            // 2. Distance Logic
-            const dist = calculateDistance(prevLat, prevLon, currentPos.lat, currentPos.lon);
-            
-            if (dist > distanceThreshold) {
-                alerts.push({
-                    id: `dist-${t.id}`,
-                    type: 'distance',
-                    transmitter_id: t.platform_id,
-                    message: `Moved ${Math.round(dist)}km between fixes`,
-                    detail: `Anomaly detected (> ${distanceThreshold}km threshold)`,
-                    timestamp: currentPos.timestamp,
-                    severity: dist > 150 ? 'critical' : 'warning',
-                    location: `${currentPos.lat.toFixed(4)}, ${currentPos.lon.toFixed(4)}`
-                });
-            }
-
-            // 3. Border Logic
-            if (detectBorders) {
-                const countryCurrent = getCountryByLat(currentPos.lat);
-                const countryPrev = getCountryByLat(prevLat);
-                
-                if (countryCurrent !== countryPrev) {
-                    alerts.push({
-                        id: `border-${t.id}`,
-                        type: 'border',
-                        transmitter_id: t.platform_id,
-                        message: `Crossed border: ${countryPrev} ➝ ${countryCurrent}`,
-                        detail: 'International boundary detected based on latitude',
-                        timestamp: currentPos.timestamp,
-                        severity: 'info',
-                        location: `${currentPos.lat.toFixed(4)}, ${currentPos.lon.toFixed(4)}`
-                    });
-                }
-            }
-        }
-    });
-
-    return alerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [positions, transmitters, distanceThreshold, detectBorders]);
+     let geofenceAlerts = alerts.filter(a => a.type === 'border' || a.type === 'distance' || a.type === 'geofence');
+     
+     if (activeTabState === 'active') {
+         geofenceAlerts = geofenceAlerts.filter(a => a.status === 'active');
+     } else {
+         geofenceAlerts = geofenceAlerts.filter(a => a.status !== 'active');
+     }
+     
+     // Optionally filter out distance alerts below threshold if we want to honor UI threshold
+     // but currently logic is on sync. Let's just sort them.
+     return geofenceAlerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [alerts, activeTabState]);
 
   return (
     <div className="space-y-6">
@@ -262,16 +172,18 @@ export const GeofenceAlerts = () => {
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="text-sm font-medium text-gray-900 dark:text-gray-200">{alert.message}</div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">{alert.detail}</div>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                                     {formatDateTime(alert.timestamp, timeZone)}
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 font-mono">
-                                    {alert.location}
+                                    {alert.location ? `${alert.location.lat.toFixed(4)}, ${alert.location.lon.toFixed(4)}` : '-'}
                                 </td>
                                 <td className="px-6 py-4 text-center flex items-center justify-center gap-2">
-                                    <button className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors" title="Acknowledge">
+                                    <button 
+                                        onClick={() => resolveAlert(alert.id)}
+                                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded transition-colors" 
+                                        title="Acknowledge">
                                         <CheckCircle2 size={18} />
                                     </button>
                                     <button 

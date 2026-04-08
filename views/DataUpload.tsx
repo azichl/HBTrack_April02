@@ -128,8 +128,7 @@ const generateMockArgosData = (operation: ApiOperation): any[] => {
 
 export const DataUpload = () => {
   const { 
-      addArgosData, addArgosDevices, addArgosDoppler, addArgosCounts, 
-      syncArgosToApp,
+      syncArgosToFirebase, 
       importTransmitters, importBirds, assignTransmitterToBird, transmitters,
   } = useAppStore();
   const [activeTab, setActiveTab] = useState<'manual' | 'api'>('manual');
@@ -152,7 +151,7 @@ export const DataUpload = () => {
   
   // Date State for Bulk
   const [dateRange, setDateRange] = useState({
-      start: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default last 24h
+      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default last 30 days
       end: new Date().toISOString().split('T')[0]
   });
 
@@ -186,10 +185,8 @@ export const DataUpload = () => {
   };
 
   const getUrl = (url: string) => {
-      if (useCorsProxy) {
-          return `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      }
-      return url;
+      // Connect specifically to our secure proxy
+      return `/proxy/argos?url=${encodeURIComponent(url)}`;
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -407,10 +404,9 @@ export const DataUpload = () => {
 
             const invalidCount = rawData.length - mappedArgos.length;
             
-            addArgosData(mappedArgos); 
-            const stats = syncArgosToApp(); 
+            await syncArgosToFirebase(mappedArgos, []);
             
-            setUploadMessage(`Imported ${mappedArgos.length} messages. ${invalidCount > 0 ? `Filtered ${invalidCount} invalid rows (0,0 coordinates).` : ''} System updated: ${stats.transmittersUpdated} transmitters, ${stats.positionsCreated} new positions.`);
+            setUploadMessage(`Imported ${mappedArgos.length} messages (${invalidCount > 0 ? `${invalidCount} invalid rows filtered` : 'all valid'}). Data synced to Firebase.`);
         }
 
         setUploadStatus('success');
@@ -421,9 +417,9 @@ export const DataUpload = () => {
   };
 
   const handleSyncManual = () => {
-      const stats = syncArgosToApp();
-      setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
-      addLog(`MANUAL SYNC: Updated ${stats.transmittersUpdated} transmitters and created ${stats.positionsCreated} new positions.`);
+      // Manual sync now triggers a re-read from Firebase
+      addLog(`Data is already synced to Firebase automatically. Use 'Execute Request' to fetch new data.`);
+      setSyncStats({transmitters: 0, positions: 0});
   };
 
   // --- API INTEGRATION ---
@@ -632,7 +628,7 @@ export const DataUpload = () => {
     const { username, password } = apiConfig;
 
     if (isSimulationMode) {
-        setTimeout(() => {
+        setTimeout(async () => {
             setApiStatus('success');
             addLog(`Authenticated (Simulation).`);
             setRawResponse(JSON.stringify({ success: true, simulated: true }));
@@ -641,18 +637,13 @@ export const DataUpload = () => {
             setPreviewData(newData);
 
             if (selectedOperation === 'retrieve-device-list') {
-                addArgosDevices(newData as ArgosDevice[]);
-            } else if (selectedOperation === 'retrieve-doppler') {
-                addArgosDoppler(newData as ArgosDoppler[]);
-            } else if (selectedOperation === 'retrieve-bulk-count') {
-                addArgosCounts(newData as ArgosCount[]);
+                await syncArgosToFirebase([], newData as ArgosDevice[]);
             } else {
-                addArgosData(newData as ArgosMessage[]);
+                await syncArgosToFirebase(newData as ArgosMessage[], []);
             }
             
-            addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items.`);
-            const stats = syncArgosToApp();
-            setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
+            addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items. Synced to Firebase.`);
+            setSyncStats({transmitters: 0, positions: 0});
         }, 1000);
         return;
     }
@@ -707,15 +698,18 @@ export const DataUpload = () => {
         // Map and Store
         if (selectedOperation === 'retrieve-device-list') {
              const devices = mapArgosDevices(rawData);
-             addArgosDevices(devices);
-             stats = syncArgosToApp();
+             const syncResult = await syncArgosToFirebase([], devices);
+             stats = syncResult;
         } else if (selectedOperation === 'retrieve-doppler') {
-             const doppler = mapArgosDoppler(rawData);
-             addArgosDoppler(doppler);
+             // Doppler data mapped as positions
+             const msgs = mapArgosApiData(rawData);
+             const syncResult = await syncArgosToFirebase(msgs, [], (msg) => addLog(msg));
+             stats = syncResult;
         } else if (selectedOperation === 'retrieve-bulk' || selectedOperation === 'retrieve-realtime') {
              const msgs = mapArgosApiData(rawData);
-             addArgosData(msgs);
-             stats = syncArgosToApp();
+             const syncResult = await syncArgosToFirebase(msgs, [], (msg) => addLog(msg));
+             stats = syncResult;
+             addLog(`Synced ${msgs.length} messages to Firebase database.`);
         }
         
         setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
@@ -1119,10 +1113,8 @@ export const DataUpload = () => {
                              )}
                              
                              <div className="flex items-center gap-2 pt-2">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input type="checkbox" checked={useCorsProxy} onChange={() => setUseCorsProxy(!useCorsProxy)} className="rounded text-brand-600 focus:ring-brand-500" />
-                                  <span className="text-xs text-gray-600 dark:text-gray-400">Enable CORS Proxy (Browser Mode)</span>
-                                </label>
+                                {/* CORS proxy has been securely migrated to Firebase Cloud Functions */}
+                                <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">Secured with Firebase API Proxy ✓</span>
                              </div>
 
                              <button 

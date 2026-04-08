@@ -1,5 +1,8 @@
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import { Login } from './views/Login';
 import { Sidebar } from './components/Sidebar';
 import { useAppStore } from './store/appStore';
 import { Dashboard } from './views/Dashboard';
@@ -14,7 +17,7 @@ import { UserManagement } from './views/UserManagement';
 import { GISFeatures } from './views/GISFeatures';
 import { Settings } from './views/Settings';
 import { HelpSupport } from './views/HelpSupport';
-import { Bell, Search, UserCircle, Menu } from 'lucide-react';
+import { Bell, Search, UserCircle, Menu, LogOut } from 'lucide-react';
 
 // Placeholder components for other views
 const PlaceholderView = ({ title }: { title: string }) => (
@@ -25,7 +28,44 @@ const PlaceholderView = ({ title }: { title: string }) => (
 );
 
 const App = () => {
-  const { activeTab, darkMode, sidebarOpen, toggleSidebar } = useAppStore();
+  const { activeTab, darkMode, sidebarOpen, toggleSidebar, currentUser, setCurrentUser, authLoading, setAuthLoading, initializeFromFirestore, subscribeToLivePositions, setActiveTab } = useAppStore();
+  const liveUnsubRef = useRef<(() => void) | null>(null);
+  const firestoreInitialized = useRef(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      setAuthLoading(false);
+
+      if (user && !firestoreInitialized.current) {
+        firestoreInitialized.current = true;
+        // Load all data from Firestore on auth
+        await initializeFromFirestore();
+        // Subscribe to live position updates
+        liveUnsubRef.current = subscribeToLivePositions();
+      }
+
+      if (!user) {
+        firestoreInitialized.current = false;
+        if (liveUnsubRef.current) {
+          liveUnsubRef.current();
+          liveUnsubRef.current = null;
+        }
+      }
+    });
+    return () => {
+      unsubscribe();
+      if (liveUnsubRef.current) liveUnsubRef.current();
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   // Handle Standalone Mode (New Window) logic
   const searchParams = new URLSearchParams(window.location.search);
@@ -34,6 +74,18 @@ const App = () => {
   
   // Determine which view to render: URL param overrides store if in standalone mode
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
+
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-500"></div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <Login />;
+  }
 
   const renderContent = () => {
     switch (currentView) {
@@ -45,7 +97,9 @@ const App = () => {
       case 'Monitoring': return <Monitoring />;
       case 'Reports': return <Reports />;
       case 'Alerts': return <Alerts />;
-      case 'Geofence Alerts': return <Alerts />; 
+      case 'Geofence Alerts': return <GeofenceAlerts />;
+      case 'History Timeline': return <LiveTracking />;
+      case 'Admin Permissions': return <UserManagement />;
       case 'User Management': return <UserManagement />;
       case 'GIS Features': return <GISFeatures />;
       case 'Settings': return <Settings />;
@@ -122,19 +176,27 @@ const App = () => {
               
               <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-gray-200 dark:border-slate-700">
                 <div className="text-right hidden md:block">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Abdelaziz CHLIH</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
                 </div>
                 <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-50 dark:bg-slate-700 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-100 dark:border-slate-600">
                   <UserCircle size={20} className="md:w-6 md:h-6" />
                 </div>
+                <button 
+                  onClick={handleLogout}
+                  title="Log out"
+                  className="p-2 ml-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <LogOut size={20} />
+                  <span className="hidden md:inline text-sm font-medium">Logout</span>
+                </button>
               </div>
             </div>
           </header>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-50/50 dark:bg-slate-900/50 relative">
-            <div className="max-w-full mx-auto h-full">
+          <main className="flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 w-full mx-auto flex flex-col h-full">
                {renderContent()}
             </div>
           </main>

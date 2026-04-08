@@ -1,10 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { 
   User, Bell, Moon, Globe, Shield, Save, RotateCcw, 
-  Mail, Smartphone, Monitor, Lock, Check, Languages, CheckCircle2 
+  Mail, Smartphone, Monitor, Lock, Check, Languages, CheckCircle2, Loader2 
 } from 'lucide-react';
+import { getAuth, updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { saveDocument } from '../services/firestoreService';
 
 export const Settings = () => {
   const { 
@@ -16,11 +18,14 @@ export const Settings = () => {
 
   const [activeTab, setActiveTab] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  // Local state for form fields that might not be in global store yet
+  const firebaseUser = getAuth().currentUser;
+
+  // Local state for form fields
   const [profile, setProfile] = useState({
-    fullName: 'Abdelaziz CHLIH',
-    email: 'admin@houbaratracker.com',
+    fullName: firebaseUser?.displayName || firebaseUser?.email?.split('@')[0] || '',
+    email: firebaseUser?.email || '',
     language: 'English'
   });
 
@@ -38,14 +43,53 @@ export const Settings = () => {
     weeklyDigest: true
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
+    setSaveMessage(null);
+    try {
+      const user = getAuth().currentUser;
+      if (!user) throw new Error('Not authenticated');
+
+      // Update Firebase Auth display name
+      if (profile.fullName && profile.fullName !== user.displayName) {
+        await updateProfile(user, { displayName: profile.fullName });
+      }
+
+      // Save profile to Firestore
+      await saveDocument('users', user.uid, {
+        name: profile.fullName,
+        email: user.email,
+        language: profile.language,
+        timeZone,
+        notificationsEnabled,
+        darkMode,
+        simpleMode,
+        notifications,
+        updatedAt: new Date().toISOString()
+      });
+
+      // Handle password change if filled
+      if (security.newPassword && security.currentPassword) {
+        if (security.newPassword !== security.confirmPassword) {
+          throw new Error('New passwords do not match');
+        }
+        if (security.newPassword.length < 6) {
+          throw new Error('New password must be at least 6 characters');
+        }
+        // Re-authenticate before password change
+        const credential = EmailAuthProvider.credential(user.email!, security.currentPassword);
+        await reauthenticateWithCredential(user, credential);
+        await updatePassword(user, security.newPassword);
+        setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '', twoFactor: security.twoFactor });
+      }
+
+      setSaveMessage('Settings saved successfully!');
+      setTimeout(() => setSaveMessage(null), 3000);
+    } catch (error: any) {
+      setSaveMessage(`Error: ${error.message}`);
+    } finally {
       setIsSaving(false);
-      // In a real app, this would trigger a toast
-      alert('Settings saved successfully!');
-    }, 1000);
+    }
   };
 
   const tabs = [
@@ -76,6 +120,11 @@ export const Settings = () => {
             Save Changes
           </button>
         </div>
+        {saveMessage && (
+          <div className={`text-sm font-medium px-4 py-2 rounded-lg ${saveMessage.startsWith('Error') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'}`}>
+            {saveMessage}
+          </div>
+        )}
       </div>
 
       {/* Tabs */}

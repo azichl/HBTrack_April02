@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Core data — all authenticated users can read/write
+    match /positions/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    match /transmitters/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    match /birds/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    match /alerts/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    // Argos positions — the Firebase-first data store
+    match /argos_positions/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    // User profiles
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+  }
+}
