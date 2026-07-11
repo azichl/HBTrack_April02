@@ -7,28 +7,64 @@
     <title>HoubaraTracker v2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- MapTiler SDK JS (3D Terrain Modal) -->
+    <script src="https://cdn.maptiler.com/maptiler-sdk-js/v3.9.0/maptiler-sdk.umd.min.js"></script>
+    <link href="https://cdn.maptiler.com/maptiler-sdk-js/v3.9.0/maptiler-sdk.css" rel="stylesheet" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-      /* Sakkal Majalla is a standard system font on many OSs for Arabic/English. 
-         If not present, it falls back to Inter or sans-serif */
-      body { 
-        font-family: 'Sakkal Majalla', 'Inter', sans-serif; 
-      }
-      
-      /* Explicitly force font family on form elements (dropdowns, inputs) to ensure consistency */
-      select, option, input, textarea, button {
-        font-family: 'Sakkal Majalla', 'Inter', sans-serif !important;
+      @font-face {
+        font-family: 'Sakkal Majalla';
+        src: url('/fonts/majalla.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
       }
 
-      /* Custom scrollbar for sidebar */
+      /* Sakkal Majalla is a standard system font on many OSs for Arabic/English. 
+         If not present, it falls back to Inter or sans-serif */
+      * { 
+        font-family: 'Sakkal Majalla', 'Inter', sans-serif !important; 
+      }
+
+      /* Global sleek scrollbar for Chrome/Safari compatibility */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background-color: rgba(156, 163, 175, 0.5); /* Tailwind gray-400 */
+        border-radius: 20px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(107, 114, 128, 0.8); /* Tailwind gray-500 */
+      }
+
       .scrollbar-hide::-webkit-scrollbar {
           display: none;
       }
       .scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
+      }
+
+      /* Houbara Icon Dark Mode Adjustments */
+      .houbara-auto {
+        mix-blend-mode: multiply;
+      }
+      .dark .houbara-auto {
+        filter: invert(1);
+        mix-blend-mode: screen !important;
+      }
+      .houbara-white {
+        filter: invert(1) brightness(2);
+        mix-blend-mode: screen !important;
       }
     </style>
     <script>
@@ -73,10 +109,10 @@
                 500: '#5579b7', // Palette: Glaucous
                 600: '#395587', // Palette: Medium Sapphire
                 700: '#2e446d',
-                800: '#243454',
-                850: '#1e2b46', // Custom dark for sidebar
-                900: '#1a253a',
-                950: '#0f1521',
+                800: '#2c4060',
+                850: '#253552', // Custom dark for sidebar
+                900: '#1f2b42',
+                950: '#151e30',
               }
             }
           }

@@ -1,10 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Map as MapIcon, Activity, Battery, Navigation, Download, RefreshCw } from 'lucide-react';
+import { Map as MapIcon, Activity, Battery, Navigation, Download, RefreshCw, X, Save, Trash2, Search } from 'lucide-react';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { Position } from '../types';
 import { formatDateTime, formatBattery } from '../utils/formatting';
+import Draggable from 'react-draggable';
+import { saveDocument } from '../services/firestoreService';
+import { CustomSelect } from '../components/CustomSelect';
+import { deleteCoordinateRecord } from '../services/firestoreService';
 
 interface MonitoringTableRow {
     id: string;
@@ -29,8 +33,48 @@ export const Monitoring = () => {
     setSelectedMapBirdId, 
     setActiveTab,
     setDatabaseActiveTab,
-    timeZone
+    timeZone,
+    isPositionModalOpen: isModalOpen,
+    setIsPositionModalOpen: setIsModalOpen,
   } = useAppStore();
+
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<Partial<Position>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      if (editingRecordId) {
+        const p = positions.find(x => x.id === editingRecordId);
+        if (p) setFormData(p);
+      } else {
+        setFormData({
+          transmitter_id: '',
+          timestamp: new Date().toISOString(),
+          lat: 0,
+          lon: 0,
+          lc: '3',
+          is_kalman: false,
+          speed_kmh: 0,
+          course: 0,
+          satellite: 'Manual',
+          locationType: 'GPS'
+        });
+      }
+    }
+  }, [isModalOpen, editingRecordId, positions]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = editingRecordId || `pos-${Date.now()}`;
+    const newPos: Position = {
+      id,
+      ...formData as Position
+    };
+    await saveDocument('positions', id, newPos);
+    setIsModalOpen(false);
+  };
 
   // 1. Prepare Flattened Data for Table
   const latestPositions = useMemo(() => {
@@ -65,8 +109,20 @@ export const Monitoring = () => {
     });
   }, [transmitters, birds, latestPositions]);
 
+  // Client-side search filtering
+  const filteredData = useMemo(() => {
+    if (!searchQuery) return tableData;
+    const lowerQuery = searchQuery.toLowerCase();
+    return tableData.filter(row => 
+      String(row.platform_id || '').toLowerCase().includes(lowerQuery) ||
+      String(row.bird_ring_id || '').toLowerCase().includes(lowerQuery) ||
+      String(row.lat || '').toLowerCase().includes(lowerQuery) ||
+      String(row.lon || '').toLowerCase().includes(lowerQuery)
+    );
+  }, [tableData, searchQuery]);
+
   // 2. Hook for Sorting and Filtering
-  const { sortedData, requestSort, sortConfig, filters, setFilter } = useSortableTable<MonitoringTableRow>(tableData, 'timestamp');
+  const { sortedData, requestSort, sortConfig, filters, setFilter } = useSortableTable<MonitoringTableRow>(filteredData, 'timestamp');
 
   const handleViewOnMap = (birdId: string) => {
     setSelectedMapBirdId(birdId);
@@ -92,6 +148,15 @@ export const Monitoring = () => {
       // Data is automatically synced to Firebase during ingestion
   };
 
+  const handleDeleteCoordinate = async (platformId: string, timestamp: string | undefined) => {
+    if (!timestamp) return;
+    if (window.confirm(`Are you sure you want to permanently delete the latest coordinate for PTT ${platformId}?`)) {
+      await deleteCoordinateRecord(undefined, platformId, timestamp);
+      // Wait a moment for listeners to catch up or refresh state if needed
+      // Actually since positions are listener-based in appStore, it will automatically vanish!
+    }
+  };
+
   return (
     <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
       <div className="flex justify-between items-center flex-shrink-0">
@@ -99,8 +164,18 @@ export const Monitoring = () => {
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Live Monitoring</h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Real-time status overview of all active tracked assets.</p>
         </div>
-        <div className="flex gap-3">
-             <button 
+         <div className="flex gap-3 items-center">
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                    type="text" 
+                    placeholder="Search coordinates..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 w-64 transition-all"
+                />
+              </div>
+              <button 
                onClick={handleSync}
                className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-brand-700 dark:text-brand-300 shadow-sm transition-colors"
              >
@@ -190,13 +265,23 @@ export const Monitoring = () => {
                       {formatDateTime(row.timestamp, timeZone)}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <button 
-                      onClick={() => handleViewOnMap(row.bird_id || 'all')} 
-                      disabled={!row.hasPos}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/50 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <MapIcon size={14} /> Visualize
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button 
+                        onClick={() => handleViewOnMap(row.bird_id || 'all')} 
+                        disabled={!row.hasPos}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 hover:bg-brand-100 dark:hover:bg-brand-900/50 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <MapIcon size={14} /> Visualize
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteCoordinate(row.platform_id, row.timestamp)}
+                        disabled={!row.hasPos}
+                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Delete latest coordinate"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -211,6 +296,60 @@ export const Monitoring = () => {
           </table>
         </div>
       </div>
+
+       {/* Add/Edit Position Modal */}
+       {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+          {/* @ts-ignore */}
+          <Draggable handle=".modal-handle" nodeRef={nodeRef}>
+            <div ref={nodeRef} className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden flex flex-col">
+              <div className="modal-handle cursor-move px-6 py-4 bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{editingRecordId ? 'Edit Position' : 'Add Manual Position'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Transmitter</label>
+                    <CustomSelect
+                        value={formData.transmitter_id || ''}
+                        onChange={(val) => setFormData({...formData, transmitter_id: val})}
+                        options={[
+                          { value: '', label: '-- Select Transmitter --' },
+                          ...transmitters.map(t => ({ value: t.id, label: `${t.platform_id} (${t.model})` }))
+                        ]}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Timestamp</label>
+                    <input type="datetime-local" step="1" required value={formData.timestamp ? formData.timestamp.substring(0, 19) : ''} onChange={e => setFormData({...formData, timestamp: new Date(e.target.value).toISOString()})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Latitude</label>
+                      <input type="number" step="any" required value={formData.lat || ''} onChange={e => setFormData({...formData, lat: parseFloat(e.target.value)})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Longitude</label>
+                      <input type="number" step="any" required value={formData.lon || ''} onChange={e => setFormData({...formData, lon: parseFloat(e.target.value)})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg">Cancel</button>
+                  <button type="button" onClick={handleSubmit} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 flex items-center gap-2">
+                    <Save size={16} /> Save Position
+                  </button>
+              </div>
+            </div>
+          </Draggable>
+        </div>
+      )}
     </div>
   );
 };

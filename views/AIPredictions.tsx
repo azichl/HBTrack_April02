@@ -1,9 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { BrainCircuit, MapPin, TrendingUp, AlertTriangle, Calendar, Sparkles, Loader2, Brain } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import { MigrationPrediction } from './MigrationPrediction';
+import { CustomSelect } from '../components/CustomSelect';
 
 // Helper for bearing calculation
 const getBearing = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -22,8 +22,40 @@ export const AIPredictions = () => {
   const [selectedTransmitterId, setSelectedTransmitterId] = useState("");
   const [predictionType, setPredictionType] = useState("migration");
   const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [useThinkingMode, setUseThinkingMode] = useState(true); // Default to True for Gemini 3 Pro
+  const [useThinkingMode, setUseThinkingMode] = useState(false);
+  // Safe localStorage access wrapper
+  const getSafeStorage = (key: string) => {
+    try {
+      return localStorage.getItem(key) || '';
+    } catch (e) {
+      console.warn("localStorage is blocked or unavailable:", e);
+      return '';
+    }
+  };
+
+  const setSafeStorage = (key: string, value: string) => {
+    try {
+      if (value) {
+        localStorage.setItem(key, value);
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.warn("localStorage is blocked or unavailable:", e);
+    }
+  };
+
+  // Resolve Gemini API key from multiple possible env sources or local storage
+  const [localApiKey, setLocalApiKey] = useState(() => getSafeStorage('gemini_api_key'));
+  const envApiKey = ((import.meta as any).env?.VITE_GEMINI_API_KEY) || '';
+  const geminiApiKey = envApiKey || localApiKey;
+
+  const handleSaveApiKey = (key: string) => {
+    setLocalApiKey(key);
+    setSafeStorage('gemini_api_key', key);
+  };
 
   // Sync with global selection
   useEffect(() => {
@@ -47,7 +79,11 @@ export const AIPredictions = () => {
   // --- Gemini Integration for Detailed Analysis ---
   const handleAnalyze = async () => {
     if (!selectedTransmitterId) {
-      alert('Please select a transmitter');
+      setAnalysisError('Please select a transmitter first.');
+      return;
+    }
+    if (!geminiApiKey) {
+      setAnalysisError('Gemini API key is not configured. Please add GEMINI_API_KEY to your environment variables.');
       return;
     }
 
@@ -59,16 +95,15 @@ export const AIPredictions = () => {
         .slice(0, 10); // Last 10 positions
 
     if (recentPositions.length === 0) {
-        alert("No position data available for analysis.");
+        setAnalysisError('No position data available for this transmitter. Please ensure positions have been loaded.');
         return;
     }
 
     setIsAnalyzing(true);
     setAnalysisResult(null);
+    setAnalysisError(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
       const species = bird?.species || 'Houbara Bustard';
       const currentPos = recentPositions[0];
       const currentLoc = `${currentPos.lat.toFixed(4)}, ${currentPos.lon.toFixed(4)}`;
@@ -165,27 +200,42 @@ Predict:
 5. Alternative routes if conditions change`;
       }
 
-      let response;
+      const modelName = useThinkingMode ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
       
+      const payload: any = {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      };
+
       if (useThinkingMode) {
-          response = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: prompt,
-            config: {
-                thinkingConfig: { thinkingBudget: 32768 }
-            }
-          });
-      } else {
-          response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-          });
+        payload.generationConfig = {
+            thinkingConfig: { thinkingBudget: 8192 }
+        };
       }
 
-      setAnalysisResult(response.text || "No analysis could be generated.");
-    } catch (error) {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+         const errData = await res.json().catch(() => ({}));
+         throw new Error(errData.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      
+      setAnalysisResult(textResponse || "No analysis could be generated.");
+    } catch (error: any) {
       console.error("Analysis failed", error);
-      alert("Analysis failed. Please try again.");
+      const msg = error?.message || 'Unknown error';
+      if (msg.includes('Quota exceeded')) {
+         setAnalysisError('API Quota Exceeded. The Pro model has strict limits on the free tier. Please uncheck "Enable Deep Analysis" to use the faster Flash model.');
+      } else {
+         setAnalysisError(`Analysis failed: ${msg.includes('API_KEY') || msg.includes('API key') ? 'Invalid or missing Gemini API key.' : msg}`);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -199,49 +249,51 @@ Predict:
   ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col overflow-hidden">
        {/* Header */}
-       <div>
+       <div className="shrink-0">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <BrainCircuit className="text-brand-600" /> AI Migration Forecast
           </h2>
           <p className="text-gray-500 text-sm">Predictive modeling for migration routes and arrival times.</p>
        </div>
 
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+       <div className="flex flex-col gap-6 flex-1 overflow-y-auto min-h-0 pb-6 pr-1">
           {/* Main Map Visualization */}
-          <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden flex flex-col relative">
-             <div className="absolute top-4 left-4 z-10 bg-white/90 dark:bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm">
+          <div className="w-full h-[400px] lg:h-[500px] shrink-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden relative">
+             <div className="absolute top-4 right-4 z-[400] bg-white/90 dark:bg-slate-900/90 backdrop-blur p-2 rounded-lg border border-gray-200 dark:border-slate-700 shadow-sm">
                 <div className="flex items-center gap-2 text-xs font-bold text-gray-600 dark:text-gray-300">
                     <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Historical Corridor
                     <div className="w-2 h-2 rounded-full bg-red-500 ml-2"></div> Live Position
                 </div>
              </div>
-             <MigrationPrediction />
+             <MigrationPrediction selectedTransmitterId={selectedTransmitterId} />
           </div>
 
-          {/* Analysis Sidebar */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-6 flex flex-col overflow-y-auto">
-             <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Sparkles size={18} className="text-brand-500" /> Gemini Analysis
-             </h3>
-             
-             <div className="space-y-4 mb-6">
+          {/* Analysis Panel (Options + Output) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 shrink-0">
+             {/* Options Sidebar */}
+             <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-6 flex flex-col">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                   <BrainCircuit size={18} className="text-brand-500" /> Analysis Configuration
+                </h3>
+                
+                <div className="space-y-4 mb-6 flex-1">
                 <div>
                    <label className="text-xs font-bold text-gray-500 uppercase">Transmitter</label>
-                   <select 
-                     className="font-sans w-full mt-1 p-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                   <CustomSelect 
+                     className="w-full mt-1 font-sans"
+                     buttonClassName="p-2 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900"
                      value={selectedTransmitterId}
-                     onChange={(e) => setSelectedTransmitterId(e.target.value)}
-                     style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
-                   >
-                     <option value="">Select a PTT...</option>
-                     {activeAssets.map(a => (
-                        <option key={a.transmitter.platform_id} value={a.transmitter.platform_id}>
-                           {a.transmitter.platform_id} ({a.bird?.ring_id})
-                        </option>
-                     ))}
-                   </select>
+                     onChange={(val) => setSelectedTransmitterId(val)}
+                     options={[
+                       { value: '', label: 'Select a PTT...' },
+                       ...activeAssets.map(a => ({ 
+                         value: a.transmitter.platform_id, 
+                         label: `${a.transmitter.platform_id} (${a.bird?.ring_id})` 
+                       }))
+                     ]}
+                   />
                 </div>
 
                 <div>
@@ -271,7 +323,7 @@ Predict:
                       onChange={(e) => setUseThinkingMode(e.target.checked)}
                       className="rounded text-brand-600 focus:ring-brand-500"
                    />
-                   <label htmlFor="thinking" className="text-xs text-gray-600 dark:text-gray-400">Enable Thinking Mode (Gemini 3 Pro)</label>
+                   <label htmlFor="thinking" className="text-xs text-gray-600 dark:text-gray-400">Enable Deep Analysis (Pro Model)</label>
                 </div>
 
                 <button
@@ -288,18 +340,51 @@ Predict:
                 </button>
              </div>
 
-             {/* Output Area */}
-             <div className="flex-1 bg-gray-50 dark:bg-slate-900 rounded-xl p-4 overflow-y-auto min-h-[200px] border border-gray-200 dark:border-slate-700">
-                {analysisResult ? (
-                   <div className="prose prose-sm dark:prose-invert max-w-none text-xs">
-                      <ReactMarkdown>{analysisResult}</ReactMarkdown>
-                   </div>
-                ) : (
-                   <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                      <Brain size={32} className="mb-2 opacity-20" />
-                      <p className="text-xs text-center">Select a transmitter and run analysis to see AI insights.</p>
-                   </div>
+                {/* API key warning and input */}
+                {!envApiKey && (
+                  <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 mb-2">
+                      <AlertTriangle size={12} className={localApiKey ? "text-emerald-500" : "text-amber-500"}/> 
+                      {localApiKey ? "API Key Configured" : "Gemini API Key Required"}
+                    </p>
+                    <input 
+                      type="password" 
+                      value={localApiKey}
+                      onChange={(e) => handleSaveApiKey(e.target.value)}
+                      placeholder="Paste your Gemini API Key here..."
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 rounded text-xs outline-none focus:ring-1 focus:ring-brand-500"
+                    />
+                    <p className="text-[9px] text-gray-500 mt-1">Stored locally in your browser. Get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-brand-500 hover:underline">Google AI Studio</a>.</p>
+                  </div>
                 )}
+             </div>
+
+             {/* Output Area */}
+             <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-6 flex flex-col">
+                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <Sparkles size={18} className="text-brand-500" /> AI Insights
+                </h3>
+                <div className="flex-1 bg-gray-50 dark:bg-slate-900 rounded-xl p-6 overflow-y-auto min-h-[300px] border border-gray-200 dark:border-slate-700">
+                   {analysisError ? (
+                      <div className="flex flex-col items-center justify-center h-full gap-2 text-center p-4">
+                         <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
+                           <AlertTriangle size={20} className="text-red-500" />
+                         </div>
+                         <p className="text-xs font-semibold text-red-600 dark:text-red-400">{analysisError}</p>
+                         <button onClick={() => setAnalysisError(null)} className="text-[10px] text-gray-400 hover:text-gray-600 underline">Dismiss</button>
+                      </div>
+                   ) : analysisResult ? (
+                      <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+                         <ReactMarkdown>{analysisResult}</ReactMarkdown>
+                      </div>
+                   ) : (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
+                         <Brain size={48} className="mb-4 opacity-20" />
+                         <p className="text-sm font-medium text-gray-500">Awaiting Analysis</p>
+                         <p className="text-xs text-center mt-1 max-w-xs">Select a transmitter and run an analysis to view predictive insights powered by Gemini here.</p>
+                      </div>
+                   )}
+                </div>
              </div>
           </div>
        </div>

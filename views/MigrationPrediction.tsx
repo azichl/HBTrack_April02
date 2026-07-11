@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "../store/appStore";
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap, Tooltip } from "react-leaflet";
 import { Loader2 } from "lucide-react";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { formatDateTime } from "../utils/formatting";
 
 // Custom icons
@@ -15,25 +16,42 @@ const currentIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-// Mock Historical Corridors
+// 3 Major Asian Houbara Migration Corridors
 const HISTORICAL_CORRIDORS = [
   {
-    name: "Central Asian Flyway (Historical)",
-    color: "#10b981", 
+    name: "Central Asian Flyway (Wintering in Arabia/Iran)",
+    color: "#10b981", // Emerald Green
     positions: [
-      [52.0, 55.0], [48.0, 53.0], [42.0, 50.0], [35.0, 48.0], [28.0, 48.0], [24.0, 51.0], 
-      [24.0, 56.0], [30.0, 58.0], [38.0, 62.0], [45.0, 65.0], [52.0, 70.0], [55.0, 60.0]
+      [48.0, 60.0], [45.0, 58.0], [42.0, 56.0], [38.0, 54.0], [34.0, 52.0], [30.0, 48.0], [25.0, 45.0]
     ] as [number, number][]
   },
   {
-    name: "Eastern Flyway (Historical)",
-    color: "#f59e0b", 
+    name: "South Asian Flyway (Wintering in Pakistan/India)",
+    color: "#f59e0b", // Amber Orange
     positions: [
-      [50.0, 75.0], [42.0, 72.0], [35.0, 68.0], [28.0, 62.0], 
-      [28.0, 68.0], [35.0, 75.0], [45.0, 80.0], [50.0, 82.0]
+      [47.0, 70.0], [43.0, 68.0], [39.0, 66.0], [35.0, 64.0], [31.0, 66.0], [28.0, 68.0]
+    ] as [number, number][]
+  },
+  {
+    name: "East Asian Flyway (Wintering in NW India/Tibet)",
+    color: "#3b82f6", // Blue
+    positions: [
+      [46.0, 85.0], [42.0, 82.0], [38.0, 78.0], [34.0, 75.0], [30.0, 72.0]
     ] as [number, number][]
   }
 ];
+
+// Helper to fix Leaflet map grey area bug when container resizes
+const MapResizer = () => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [map]);
+  return null;
+};
 
 // Helper to fit bounds
 const MapBounds = ({ positions }: { positions: [number, number][] }) => {
@@ -47,15 +65,15 @@ const MapBounds = ({ positions }: { positions: [number, number][] }) => {
   return null;
 };
 
-export const MigrationPrediction = () => {
+export const MigrationPrediction = ({ selectedTransmitterId }: { selectedTransmitterId?: string }) => {
   const { transmitters, positions, timeZone } = useAppStore();
   
   // State
   const [isPredicting, setIsPredicting] = useState(false);
 
-  // Get latest position for each active transmitter
+  // Get latest position for each active transmitter, optionally filtered
   const activePositions = transmitters
-    .filter(t => t.status === 'active')
+    .filter(t => t.status === 'active' && (!selectedTransmitterId || t.platform_id === selectedTransmitterId))
     .map(t => {
       const pos = positions
         .filter(p => p.transmitter_id === t.platform_id)
@@ -80,6 +98,7 @@ export const MigrationPrediction = () => {
             zoom={4} 
             className="w-full h-full z-0"
         >
+            <MapResizer />
             <TileLayer 
                 url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
                 attribution="&copy; Google"
@@ -109,6 +128,19 @@ export const MigrationPrediction = () => {
                     position={[pos.lat, pos.lon]}
                     icon={currentIcon}
                 >
+                    <Tooltip 
+                        permanent 
+                        direction="top" 
+                        offset={[0, -38]} 
+                        className="!bg-transparent !border-0 !shadow-none !p-0 before:!hidden"
+                    >
+                        <div 
+                            className="bg-white text-gray-800 px-2 py-0 rounded-full shadow-md border border-gray-200 text-sm font-bold"
+                            style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+                        >
+                            {pos.transmitter_id}
+                        </div>
+                    </Tooltip>
                     <Popup>
                         <div className="text-sm font-bold">PTT {pos.transmitter_id}</div>
                         <div className="text-xs">{formatDateTime(pos.timestamp, timeZone)}</div>

@@ -1,10 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { Edit, Trash2, Download, Check, X, Plus, Save } from 'lucide-react';
 import { Transmitter } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
+import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime } from '../utils/formatting';
+import { CustomSelect } from '../components/CustomSelect';
+import Draggable from 'react-draggable';
 
 type TransmitterTableRow = Transmitter & {
   bird_species: string;
@@ -13,11 +16,19 @@ type TransmitterTableRow = Transmitter & {
 };
 
 export const Transmitters = () => {
-  const { transmitters, birds, addTransmitter, updateTransmitter, deleteTransmitter, timeZone } = useAppStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTransmitter, setEditingTransmitter] = useState<Transmitter | null>(null);
+  const { 
+    transmitters, birds, addTransmitter, updateTransmitter, deleteTransmitter, timeZone,
+    bulkDeleteTransmitters, bulkUpdateTransmitters,
+    isTransmitterModalOpen: isModalOpen,
+    setIsTransmitterModalOpen: setIsModalOpen,
+    editingRecordId,
+    setEditingRecordId
+  } = useAppStore();
+
+  const editingTransmitter = transmitters.find(t => t.id === editingRecordId) || null;
 
   const [formData, setFormData] = useState<Partial<Transmitter>>({});
+  const nodeRef = useRef<HTMLDivElement>(null);
 
   // 1. Prepare Flattened Data
   const tableData = useMemo<TransmitterTableRow[]>(() => {
@@ -33,32 +44,55 @@ export const Transmitters = () => {
   }, [transmitters, birds]);
 
   // 2. Sorting Hook
-  const { sortedData, requestSort, sortConfig, filters, setFilter } = useSortableTable<TransmitterTableRow>(tableData, 'platform_id');
+  const { 
+    sortedData, requestSort, sortConfig, filters, setFilter, clearFilters,
+    selectedIds, toggleSelection, selectAllFiltered, clearSelection, filteredData
+  } = useSortableTable<TransmitterTableRow>(tableData);
+
+  const handleBulkDelete = async (ids: string[]) => {
+    await bulkDeleteTransmitters(ids);
+  };
+
+  const handleBulkReplace = async (ids: string[], field: string, value: string) => {
+    await bulkUpdateTransmitters(ids, { [field]: value === 'true' ? true : value === 'false' ? false : value });
+  };
+
+  const isAllSelected = sortedData.length > 0 && sortedData.every(r => selectedIds.has(r.id));
+  const isSomeSelected = sortedData.some(r => selectedIds.has(r.id));
+
+  useEffect(() => {
+    if (isModalOpen) {
+      if (editingRecordId) {
+        const t = transmitters.find(x => x.id === editingRecordId);
+        if (t) setFormData(t);
+      } else {
+        setFormData({
+          platform_id: '',
+          model: 'GeoTrack 20g',
+          status: 'active',
+          bird_id: '',
+          battery_voltage: 4.0,
+          last_fix: new Date().toISOString(),
+          duty_cycle: '8h ON/16h OFF',
+          frequency: '',
+          hex_id: '',
+          manufacturer: '',
+          program_region: '',
+          site_location: '',
+          satellite_time: 'Continuous',
+          radio_time: 'None',
+          deployed: false,
+          comment: ''
+        });
+      }
+    }
+  }, [isModalOpen, editingRecordId, transmitters]);
 
   const handleOpenModal = (transmitter?: Transmitter) => {
     if (transmitter) {
-      setEditingTransmitter(transmitter);
-      setFormData(transmitter);
+      setEditingRecordId(transmitter.id || null);
     } else {
-      setEditingTransmitter(null);
-      setFormData({
-        platform_id: '',
-        model: 'GeoTrack 20g',
-        status: 'active',
-        bird_id: '',
-        battery_voltage: 4.0,
-        last_fix: new Date().toISOString(),
-        duty_cycle: '8h ON/16h OFF',
-        frequency: '',
-        hex_id: '',
-        manufacturer: '',
-        program_region: '',
-        site_location: '',
-        satellite_time: 'Continuous',
-        radio_time: 'Enabled',
-        deployed: false,
-        comment: ''
-      });
+      setEditingRecordId(null);
     }
     setIsModalOpen(true);
   };
@@ -77,18 +111,27 @@ export const Transmitters = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this transmitter? This action cannot be undone.')) {
-      deleteTransmitter(id);
-    }
-  };
-
   const handleExport = () => {
-    exportToCSV(sortedData, 'Transmitters_Inventory');
+    exportToCSV(sortedData, 'Transmitters_Database');
   };
 
   return (
-    <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
+    <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col relative">
+      <BulkActionsToolbar
+        selectedIds={Array.from(selectedIds)}
+        onClearSelection={clearSelection}
+        onBulkDelete={handleBulkDelete}
+        onBulkReplace={handleBulkReplace}
+        availableFields={[
+          { key: 'status', label: 'Status' },
+          { key: 'deployed', label: 'Deployed' },
+          { key: 'program_region', label: 'Program Region' },
+          { key: 'site_location', label: 'Site Location' },
+          { key: 'manufacturer', label: 'Manufacturer' },
+          { key: 'comment', label: 'Comment' }
+        ]}
+      />
+
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Transmitter Management</h2>
@@ -96,16 +139,16 @@ export const Transmitters = () => {
         </div>
         <div className="flex gap-3">
             <button 
-              onClick={() => handleOpenModal()}
-              className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 flex items-center gap-2 shadow-sm transition-colors"
-            >
-              <Plus size={18} /> Add Transmitter
-            </button>
-            <button 
               onClick={handleExport}
               className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-gray-600 dark:text-gray-300"
             >
               <Download size={16} /> Export CSV
+            </button>
+            <button 
+              onClick={() => { setEditingRecordId(null); setIsModalOpen(true); }}
+              className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 flex items-center gap-2 shadow-sm shadow-sky-600/20"
+            >
+              <Plus size={16} /> Add Transmitter
             </button>
         </div>
       </div>
@@ -115,6 +158,21 @@ export const Transmitters = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-sky-200 dark:bg-sky-900 border-b border-sky-300 dark:border-sky-800">
+                <th className="px-4 py-3 w-10 border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 sticky top-0 z-20">
+                  <input 
+                    type="checkbox" 
+                    checked={isAllSelected}
+                    ref={el => { if (el) el.indeterminate = isSomeSelected && !isAllSelected; }}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        selectAllFiltered(true, (item) => item.id);
+                      } else {
+                        clearSelection();
+                      }
+                    }}
+                    className="rounded border-sky-400 text-sky-600 focus:ring-sky-500"
+                  />
+                </th>
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Platform ID" sortKey="platform_id" currentSort={sortConfig} onSort={requestSort} filterValue={filters['platform_id']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Frequency" sortKey="frequency" currentSort={sortConfig} onSort={requestSort} filterValue={filters['frequency']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Hex ID" sortKey="hex_id" currentSort={sortConfig} onSort={requestSort} filterValue={filters['hex_id']} onFilter={setFilter} />
@@ -133,8 +191,22 @@ export const Transmitters = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {sortedData.map((t) => (
-                <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
+              {sortedData.map((t) => {
+                const isSelected = selectedIds.has(t.id);
+                return (
+                <tr 
+                  key={t.id} 
+                  onClick={(e) => handleRowClick(e, t.id)}
+                  className={`transition-colors cursor-pointer group ${isSelected ? 'bg-sky-50 dark:bg-sky-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+                >
+                  <td className="px-4 py-3 border-r border-gray-100 dark:border-slate-700">
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={() => toggleSelection(t.id)}
+                      className="rounded border-gray-300 text-sky-600 focus:ring-sky-500"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-sm font-bold text-brand-900 dark:text-brand-100 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.platform_id}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.frequency || '-'}</td>
                   <td className="px-4 py-3 text-sm font-mono text-gray-500 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.hex_id || '-'}</td>
@@ -176,7 +248,7 @@ export const Transmitters = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -189,9 +261,11 @@ export const Transmitters = () => {
        {/* Add/Edit Modal */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl mx-4 overflow-hidden max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">{editingTransmitter ? 'Edit Transmitter' : 'Add New Transmitter'}</h3>
+          {/* @ts-ignore - react-draggable types are missing default props */}
+          <Draggable handle=".modal-handle" nodeRef={nodeRef}>
+            <div ref={nodeRef} className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-3xl mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+              <div className="modal-handle cursor-move px-6 py-4 bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{editingTransmitter ? 'Edit Transmitter' : 'Add New Transmitter'}</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                 <X size={20} />
               </button>
@@ -232,16 +306,17 @@ export const Transmitters = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                      <select 
+                      <CustomSelect 
                         value={formData.status} 
-                        onChange={e => setFormData({...formData, status: e.target.value as any})} 
-                        className="font-sans input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500"
-                        style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
-                      >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="maintenance">Maintenance</option>
-                      </select>
+                        onChange={(val) => setFormData({...formData, status: val as any})} 
+                        className="w-full font-sans"
+                        buttonClassName="p-2 border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900"
+                        options={[
+                          { value: 'active', label: 'Active' },
+                          { value: 'inactive', label: 'Inactive' },
+                          { value: 'maintenance', label: 'Maintenance' }
+                        ]}
+                      />
                     </div>
                   </div>
                 </div>
@@ -252,15 +327,16 @@ export const Transmitters = () => {
                   <div className="grid grid-cols-3 gap-4">
                      <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned Bird</label>
-                      <select 
-                        value={formData.bird_id} 
-                        onChange={e => setFormData({...formData,bird_id: e.target.value})} 
-                        className="font-sans input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500"
-                        style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
-                      >
-                        <option value="">-- Unassigned --</option>
-                        {birds.map(b => <option key={b.id} value={b.id}>{b.ring_id}</option>)}
-                      </select>
+                      <CustomSelect 
+                        value={formData.bird_id || ''} 
+                        onChange={(val) => setFormData({...formData, bird_id: val})} 
+                        className="w-full font-sans"
+                        buttonClassName="p-2 border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900"
+                        options={[
+                          { value: '', label: '-- Unassigned --' },
+                          ...birds.map(b => ({ value: b.id, label: b.ring_id || 'Unknown' }))
+                        ]}
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Site Location</label>
@@ -310,6 +386,7 @@ export const Transmitters = () => {
                 </button>
             </div>
           </div>
+          </Draggable>
         </div>
       )}
     </div>

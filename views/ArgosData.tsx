@@ -1,111 +1,173 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Download, Search, Trash2, Database, ChevronLeft, ChevronRight, RefreshCw, Loader2, Filter } from 'lucide-react';
+import { Download, Search, Trash2, Database, ChevronLeft, ChevronRight, RefreshCw, Loader2, Filter, X, Save, Plus, Layers } from 'lucide-react';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
+import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime } from '../utils/formatting';
-import { loadArgosPositions, getArgosTransmitterIds, getArgosPositionCount, deleteArgosPositions } from '../services/firestoreService';
-import type { DocumentSnapshot } from 'firebase/firestore';
+import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
+import { CustomSelect } from '../components/CustomSelect';
+import Draggable from 'react-draggable';
+import { ArgosMessage } from '../types';
+
+type CollectionMode = 'argos_positions' | 'positions' | 'all';
 
 export const ArgosData = () => {
-  const { timeZone } = useAppStore();
+  const { 
+    timeZone,
+    isArgosModalOpen: isModalOpen,
+    setIsArgosModalOpen: setIsModalOpen,
+    editingRecordId,
+    setEditingRecordId
+  } = useAppStore();
 
-  // Firebase data state
-  const [firebaseData, setFirebaseData] = useState<any[]>([]);
+  const [formData, setFormData] = useState<Partial<ArgosMessage>>({});
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  // Data state — loaded directly, not from store
+  const [allData, setAllData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [totalRecords, setTotalRecords] = useState(0);
-  const [lastDoc, setLastDoc] = useState<DocumentSnapshot | null>(null);
-  const [pageHistory, setPageHistory] = useState<(DocumentSnapshot | null)[]>([null]); // Stack of page cursors
-  const [currentPageIndex, setCurrentPageIndex] = useState(0);
 
-  // Filters
+  // Collection mode
+  const [collectionMode, setCollectionMode] = useState<CollectionMode>('all');
+
+  // Pagination & Filtering state
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
-  const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  // Load available platform IDs on mount
-  useEffect(() => {
-    getArgosTransmitterIds().then(ids => setAvailablePlatforms(ids));
-  }, []);
-
   // Load data from Firebase
-  const loadData = useCallback(async (cursor: DocumentSnapshot | null = null) => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await loadArgosPositions({
-        platformId: platformFilter || undefined,
-        pageSize: rowsPerPage,
-        lastDocument: cursor || undefined,
-      });
-      setFirebaseData(result.data);
-      setLastDoc(result.lastDoc);
-      setTotalRecords(result.totalEstimate);
-    } catch (err) {
-      console.error('[ArgosData] Load error:', err);
+      let data: any[] = [];
+      if (collectionMode === 'argos_positions') {
+        data = await loadAllArgosPositions();
+      } else if (collectionMode === 'positions') {
+        data = await loadAllPositions();
+      } else {
+        // Load both collections
+        const [argos, pos] = await Promise.all([loadAllArgosPositions(), loadAllPositions()]);
+        data = [...argos, ...pos];
+      }
+      setAllData(data);
+    } catch (error) {
+      console.error('Failed to load data:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [platformFilter, rowsPerPage]);
+  }, [collectionMode]);
 
-  // Reload on filter change
+  // Load on mount and when collection changes
+  useEffect(() => {
+    loadData();
+    getArgosTransmitterIds().then(ids => setAvailablePlatforms(ids));
+  }, [loadData]);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      if (editingRecordId) {
+        const p = allData.find(x => x.id === editingRecordId);
+        if (p) setFormData(p);
+      } else {
+        setFormData({
+          programId: '',
+          platformId: '',
+          timestamp: new Date().toISOString(),
+          lat: '0',
+          lon: '0',
+          lc: '3',
+          msgType: 'ds',
+          satellite: 'Manual',
+          rawData: ''
+        });
+      }
+    }
+  }, [isModalOpen, editingRecordId, allData]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const id = editingRecordId || `argos-${Date.now()}`;
+    const newPos: ArgosMessage = {
+      id,
+      ...formData as ArgosMessage
+    };
+    await saveDocument('argos_positions', id, newPos);
+    setIsModalOpen(false);
+    await loadData();
+  };
+
+  // Pre-filter by platform
+  const platformFilteredData = platformFilter 
+    ? allData.filter(row => (row.platformId || row.transmitter_id) === platformFilter)
+    : allData;
+
+  // Global search — search across ALL fields
+  const searchableData = searchQuery
+    ? platformFilteredData.filter(row => {
+        const q = searchQuery.toLowerCase();
+        return (
+          String(row.platformId || '').toLowerCase().includes(q) ||
+          String(row.programId || '').toLowerCase().includes(q) ||
+          String(row.lc || '').toLowerCase().includes(q) ||
+          String(row.msgType || '').toLowerCase().includes(q) ||
+          String(row.satellite || '').toLowerCase().includes(q) ||
+          String(row.lat || '').includes(q) ||
+          String(row.lon || '').includes(q) ||
+          String(row.locationType || '').toLowerCase().includes(q) ||
+          String(row._collection || '').toLowerCase().includes(q)
+        );
+      })
+    : platformFilteredData;
+
+  // Apply sorting, column filtering, and selection
+  const { 
+    sortedData, 
+    requestSort, 
+    sortConfig, 
+    filters, 
+    setFilter, 
+    selectedIds,
+    toggleSelection,
+    selectAllFiltered,
+    clearSelection,
+    filteredData 
+  } = useSortableTable<any>(searchableData, 'timestamp');
+
+  // Reset pagination on filter change
   useEffect(() => {
     setCurrentPageIndex(0);
-    setPageHistory([null]);
-    loadData(null);
-  }, [platformFilter, rowsPerPage, loadData]);
+  }, [platformFilter, searchQuery, filters, rowsPerPage]);
 
-  // Client-side search on loaded page
-  const filteredData = searchQuery
-    ? firebaseData.filter(row =>
-        String(row.platformId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(row.programId || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(row.lc || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(row.msgType || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        String(row.satellite || '').toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : firebaseData;
+  const totalRecords = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / rowsPerPage));
+  
+  // Client-side pagination
+  const startIndex = currentPageIndex * rowsPerPage;
+  const paginatedData = sortedData.slice(startIndex, startIndex + rowsPerPage);
 
-  // Apply sorting
-  const { sortedData, requestSort, sortConfig, filters, setFilter, clearFilters } = useSortableTable(filteredData, 'timestamp');
-
-  // Pagination handlers
-  const handleNextPage = async () => {
-    if (!lastDoc) return;
-    const newHistory = [...pageHistory];
-    if (currentPageIndex + 1 >= newHistory.length) {
-      newHistory.push(lastDoc);
-    }
-    setPageHistory(newHistory);
-    setCurrentPageIndex(currentPageIndex + 1);
-    await loadData(lastDoc);
+  const handleNextPage = () => {
+    if (currentPageIndex < totalPages - 1) setCurrentPageIndex(prev => prev + 1);
   };
 
-  const handlePrevPage = async () => {
-    if (currentPageIndex <= 0) return;
-    const newIndex = currentPageIndex - 1;
-    setCurrentPageIndex(newIndex);
-    await loadData(pageHistory[newIndex]);
+  const handlePrevPage = () => {
+    if (currentPageIndex > 0) setCurrentPageIndex(prev => prev - 1);
   };
 
-  // Refresh
-  const handleRefresh = () => {
-    setCurrentPageIndex(0);
-    setPageHistory([null]);
-    loadData(null);
+  const handleRefresh = async () => {
+    await loadData();
     getArgosTransmitterIds().then(ids => setAvailablePlatforms(ids));
   };
 
-  // Export
   const handleExport = () => {
     exportToCSV(sortedData, 'Argos_Firebase_Data');
   };
 
-  // Clear
   const handleClear = async () => {
     if (isConfirming) {
-      setIsLoading(true);
       await deleteArgosPositions(platformFilter || undefined);
       handleRefresh();
       setIsConfirming(false);
@@ -115,16 +177,77 @@ export const ArgosData = () => {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(totalRecords / rowsPerPage));
+  const handleDeleteRow = async (row: any) => {
+    if (window.confirm("Are you sure you want to permanently delete this coordinate from the database?")) {
+      const col = row._collection || 'argos_positions';
+      await bulkDeleteRecords(col, [row.id]);
+      await loadData();
+    }
+  };
+
+  // Bulk Handlers — group by collection
+  const handleBulkDelete = async (ids: string[]) => {
+    // Separate IDs by collection
+    const argosIds: string[] = [];
+    const posIds: string[] = [];
+    ids.forEach(id => {
+      const row = allData.find(r => r.id === id);
+      if (row?._collection === 'positions') posIds.push(id);
+      else argosIds.push(id);
+    });
+    if (argosIds.length > 0) await bulkDeleteRecords('argos_positions', argosIds);
+    if (posIds.length > 0) await bulkDeleteRecords('positions', posIds);
+    await loadData();
+  };
+
+  const handleBulkReplace = async (ids: string[], field: string, value: string) => {
+    const argosIds: string[] = [];
+    const posIds: string[] = [];
+    ids.forEach(id => {
+      const row = allData.find(r => r.id === id);
+      if (row?._collection === 'positions') posIds.push(id);
+      else argosIds.push(id);
+    });
+    if (argosIds.length > 0) await bulkUpdateRecords('argos_positions', argosIds, { [field]: value });
+    if (posIds.length > 0) await bulkUpdateRecords('positions', posIds, { [field]: value });
+    await loadData();
+  };
+
+  // Row click handler — toggle selection
+  const handleRowClick = (e: React.MouseEvent, rowId: string) => {
+    // Don't toggle if clicking on a button or input
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('input')) return;
+    toggleSelection(rowId);
+  };
+
+  const isAllSelected = paginatedData.length > 0 && paginatedData.every(r => selectedIds.has(r.id));
+  const isSomeSelected = paginatedData.some(r => selectedIds.has(r.id));
 
   return (
-    <div className="space-y-4 h-[calc(100vh-140px)] flex flex-col">
+    <div className="space-y-4 h-[calc(100vh-140px)] flex flex-col relative">
+      <BulkActionsToolbar
+        selectedIds={Array.from(selectedIds)}
+        onClearSelection={clearSelection}
+        onBulkDelete={handleBulkDelete}
+        onBulkReplace={handleBulkReplace}
+        availableFields={[
+          { key: 'lat', label: 'Latitude' },
+          { key: 'lon', label: 'Longitude' },
+          { key: 'lc', label: 'Location Class (LC)' },
+          { key: 'locationType', label: 'Location Type' },
+          { key: 'platformId', label: 'Platform ID' },
+          { key: 'satellite', label: 'Satellite' }
+        ]}
+      />
+
       {/* Header */}
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Argos Database</h2>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Database Manager</h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-             Connected to Firebase • {totalRecords.toLocaleString()} total records
+             Firebase • {allData.length.toLocaleString()} records loaded
+             {collectionMode === 'all' ? ' (argos_positions + positions)' : ` (${collectionMode})`}
           </p>
         </div>
         <button 
@@ -140,12 +263,37 @@ export const ArgosData = () => {
       {/* Filters + Controls */}
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-4 flex flex-col gap-4 flex-shrink-0">
           <div className="flex items-center justify-between gap-4 flex-wrap">
+               {/* Collection Switcher */}
+               <div className="flex items-center gap-2">
+                 <Layers size={14} className="text-gray-400" />
+                 <div className="flex bg-gray-100 dark:bg-slate-900 rounded-lg p-0.5">
+                   <button 
+                     onClick={() => setCollectionMode('all')}
+                     className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${collectionMode === 'all' ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                   >
+                     All Collections
+                   </button>
+                   <button 
+                     onClick={() => setCollectionMode('argos_positions')}
+                     className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${collectionMode === 'argos_positions' ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                   >
+                     Argos Raw
+                   </button>
+                   <button 
+                     onClick={() => setCollectionMode('positions')}
+                     className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${collectionMode === 'positions' ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'}`}
+                   >
+                     Map Positions
+                   </button>
+                 </div>
+               </div>
+
                {/* Search */}
                <div className="relative flex-1 max-w-md">
                  <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                  <input 
                      type="text" 
-                     placeholder="Search this page..." 
+                     placeholder="Search all records (coordinates, ID, satellite...)" 
                      value={searchQuery}
                      onChange={(e) => setSearchQuery(e.target.value)}
                      className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
@@ -155,16 +303,16 @@ export const ArgosData = () => {
                {/* Platform Filter */}
                <div className="flex items-center gap-2">
                  <Filter size={14} className="text-gray-400" />
-                 <select
+                 <CustomSelect
                    value={platformFilter}
-                   onChange={(e) => setPlatformFilter(e.target.value)}
-                   className="text-sm border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-brand-500 min-w-[160px]"
-                 >
-                   <option value="">All Transmitters</option>
-                   {availablePlatforms.map(id => (
-                     <option key={id} value={id}>{id}</option>
-                   ))}
-                 </select>
+                   onChange={(val) => setPlatformFilter(val)}
+                   className="min-w-[160px] text-sm"
+                   buttonClassName="px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                   options={[
+                     { value: '', label: 'All Transmitters' },
+                     ...availablePlatforms.map(id => ({ value: id, label: id }))
+                   ]}
+                 />
                </div>
                
                {/* Actions */}
@@ -184,26 +332,59 @@ export const ArgosData = () => {
                    </button>
                </div>
           </div>
+
+          {/* Active filter count */}
+          {(Object.values(filters).some(v => v) || searchQuery || platformFilter) && (
+            <div className="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
+              <Filter size={12} />
+              <span className="font-medium">{totalRecords.toLocaleString()} of {allData.length.toLocaleString()} records match your filters</span>
+              {selectedIds.size > 0 && (
+                <span className="ml-2 px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 rounded font-bold">
+                  {selectedIds.size} selected
+                </span>
+              )}
+            </div>
+          )}
       </div>
 
       {/* Table Container */}
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden flex-1">
-          <div className="overflow-auto flex-1">
-            {isLoading ? (
+      <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden flex-1 relative">
+          <div className="overflow-auto flex-1 relative">
+            {isLoading && allData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8 text-gray-400">
                 <Loader2 size={32} className="mb-2 animate-spin text-brand-500" />
-                <p>Loading from Firebase...</p>
+                <p>Loading complete database...</p>
+                <p className="text-xs mt-1">This may take a moment for large datasets.</p>
               </div>
-            ) : sortedData.length === 0 ? (
+            ) : allData.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-8 text-gray-400">
                 <Database size={32} className="mb-2 opacity-50" />
                 <p>No records found.</p>
-                <p className="text-xs mt-1">Run Argos API ingestion to populate the database.</p>
               </div>
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-100 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
+                      {/* Sticky checkbox column */}
+                      <th className="px-3 py-3 w-10 sticky left-0 top-0 bg-gray-100 dark:bg-slate-900 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                        <input 
+                          type="checkbox" 
+                          checked={isAllSelected}
+                          ref={el => { if (el) el.indeterminate = isSomeSelected && !isAllSelected; }}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              selectAllFiltered(true, (item) => item.id);
+                            } else {
+                              clearSelection();
+                            }
+                          }}
+                          className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-4 h-4"
+                        />
+                      </th>
+                      {/* Source collection indicator */}
+                      {collectionMode === 'all' && (
+                        <SortableHeader label="Source" sortKey="_collection" currentSort={sortConfig} onSort={requestSort} filterValue={filters['_collection']} onFilter={setFilter} />
+                      )}
                       <SortableHeader label="Device ID" sortKey="platformId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['platformId']} onFilter={setFilter} />
                       <SortableHeader label="Program ID" sortKey="programId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['programId']} onFilter={setFilter} />
                       <SortableHeader label="Location Class" sortKey="lc" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lc']} onFilter={setFilter} />
@@ -214,34 +395,74 @@ export const ArgosData = () => {
                       <SortableHeader label="Latitude" sortKey="lat" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lat']} onFilter={setFilter} />
                       <SortableHeader label="Longitude" sortKey="lon" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lon']} onFilter={setFilter} />
                       <SortableHeader label="Satellite" sortKey="satellite" currentSort={sortConfig} onSort={requestSort} filterValue={filters['satellite']} onFilter={setFilter} />
+                      <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-100 dark:bg-slate-900 z-20 shadow-sm">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700 bg-white dark:bg-slate-800">
-                  {sortedData.map((row: any, idx: number) => {
-                      const displayLc = row.lc || '';
+                 {paginatedData.map((row: any, idx: number) => {
+                      const rawLc = row.lc || '';
+                      const dopplerErr = String(row.dopplerError || '');
+                      let derivedLc = rawLc;
+                      let derivedLocationType = row.locationType || '';
+                      if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) derivedLocationType = 'Doppler';
+                      if (dopplerErr === '0' && (!rawLc || rawLc.trim() === '')) { derivedLc = 'GPS'; derivedLocationType = 'GPS'; }
+
+                      const isSelected = selectedIds.has(row.id);
+                      const isPositionsCol = row._collection === 'positions';
+
                       return (
-                        <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">
+                        <tr 
+                          key={row.id || idx} 
+                          onClick={(e) => handleRowClick(e, row.id)}
+                          className={`transition-colors cursor-pointer group ${isSelected ? 'bg-brand-50 dark:bg-brand-900/20 ring-1 ring-inset ring-brand-300 dark:ring-brand-700' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}
+                        >
+                          {/* Sticky checkbox */}
+                          <td className={`px-3 py-2.5 sticky left-0 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors ${isSelected ? 'bg-brand-50 dark:bg-brand-900' : 'bg-white dark:bg-slate-900 group-hover:bg-gray-50 dark:group-hover:bg-slate-800'}`}>
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={() => toggleSelection(row.id)}
+                              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-4 h-4"
+                            />
+                          </td>
+                          {/* Source badge */}
+                          {collectionMode === 'all' && (
+                            <td className="px-4 py-2.5 text-xs">
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${isPositionsCol ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'}`}>
+                                {isPositionsCol ? 'MAP' : 'ARGOS'}
+                              </span>
+                            </td>
+                          )}
                           <td className="px-4 py-2.5 text-sm font-bold text-gray-900 dark:text-white">{row.platformId}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.programId}</td>
                           <td className="px-4 py-2.5 text-sm">
-                              {displayLc && (
+                              {derivedLc && (
                                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                      displayLc === 'GPS' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                                      ['3','2','1'].includes(displayLc) ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 
-                                      ['A','B'].includes(displayLc) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 
+                                      derivedLc === 'GPS' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                      ['3','2','1'].includes(derivedLc) ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 
+                                      ['A','B'].includes(derivedLc) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 
                                       'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
                                   }`}>
-                                      {displayLc}
+                                      {derivedLc}
                                   </span>
                               )}
                           </td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.locationType}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{derivedLocationType}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.msgType}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.dopplerError}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatDateTime(row.timestamp, timeZone)}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{row.lat}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{row.lon}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.satellite}</td>
+                          <td className="px-4 py-2.5 text-sm text-right">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteRow(row); }}
+                              className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                              title="Delete coordinate"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
                         </tr>
                       );
                   })}
@@ -253,41 +474,107 @@ export const ArgosData = () => {
           {/* Pagination Footer */}
           <div className="bg-gray-50 dark:bg-slate-900 px-6 py-3 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Page {currentPageIndex + 1} • {sortedData.length} records loaded • {totalRecords.toLocaleString()} total
+                  Showing {Math.min(startIndex + 1, totalRecords)}-{Math.min(startIndex + rowsPerPage, totalRecords)} of {totalRecords.toLocaleString()} filtered records
+                  {selectedIds.size > 0 && <span className="ml-2 font-bold text-brand-600">• {selectedIds.size} selected</span>}
               </span>
               
               <div className="flex items-center gap-2">
                   <button 
                     onClick={handlePrevPage}
-                    disabled={currentPageIndex === 0 || isLoading}
+                    disabled={currentPageIndex === 0}
                     className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       <ChevronLeft size={16} className="text-gray-600 dark:text-gray-400" />
                   </button>
                   <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                    Page {currentPageIndex + 1}
+                    Page {currentPageIndex + 1} of {totalPages}
                   </span>
                   <button 
                     onClick={handleNextPage}
-                    disabled={!lastDoc || sortedData.length < rowsPerPage || isLoading}
+                    disabled={currentPageIndex >= totalPages - 1}
                     className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       <ChevronRight size={16} className="text-gray-600 dark:text-gray-400" />
                   </button>
                   
-                  <select 
-                    value={rowsPerPage}
-                    onChange={(e) => { setRowsPerPage(Number(e.target.value)); }}
-                    className="ml-2 text-xs border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-300 rounded px-1 py-0.5 outline-none"
-                  >
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                      <option value={200}>200</option>
-                  </select>
+                  <CustomSelect 
+                    value={rowsPerPage.toString()}
+                    onChange={(val) => setRowsPerPage(Number(val))}
+                    className="ml-2 w-20"
+                    buttonClassName="px-2 py-0.5 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
+                    options={[
+                      { value: '50', label: '50' },
+                      { value: '100', label: '100' },
+                      { value: '500', label: '500' },
+                      { value: '2000', label: '2000' }
+                    ]}
+                  />
               </div>
           </div>
       </div>
+
+       {/* Add/Edit Argos Modal */}
+       {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
+          {/* @ts-ignore */}
+          <Draggable handle=".modal-handle" nodeRef={nodeRef}>
+            <div ref={nodeRef} className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col">
+              <div className="modal-handle cursor-move px-6 py-4 bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{editingRecordId ? 'Edit Argos Record' : 'Add Manual Argos Record'}</h3>
+                <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="p-6 overflow-y-auto max-h-[70vh]">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Platform ID</label>
+                      <input type="text" required value={formData.platformId || ''} onChange={e => setFormData({...formData, platformId: e.target.value})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Timestamp</label>
+                      <input type="datetime-local" step="1" required value={formData.timestamp ? formData.timestamp.substring(0, 19) : ''} onChange={e => setFormData({...formData, timestamp: new Date(e.target.value).toISOString()})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Latitude</label>
+                      <input type="text" required value={formData.lat || ''} onChange={e => setFormData({...formData, lat: e.target.value})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Longitude</label>
+                      <input type="text" required value={formData.lon || ''} onChange={e => setFormData({...formData, lon: e.target.value})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Location Class (LC)</label>
+                      <input type="text" required value={formData.lc || ''} onChange={e => setFormData({...formData, lc: e.target.value})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Program ID</label>
+                      <input type="text" value={formData.programId || ''} onChange={e => setFormData({...formData, programId: e.target.value})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Raw Data (Optional)</label>
+                    <textarea rows={3} value={formData.rawData || ''} onChange={e => setFormData({...formData, rawData: e.target.value})} className="w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500 font-mono"></textarea>
+                  </div>
+                </form>
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3 flex-shrink-0">
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg">Cancel</button>
+                  <button type="button" onClick={handleSubmit} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 flex items-center gap-2">
+                    <Save size={16} /> Save Record
+                  </button>
+              </div>
+            </div>
+          </Draggable>
+        </div>
+      )}
     </div>
   );
 };

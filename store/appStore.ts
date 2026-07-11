@@ -5,9 +5,12 @@ import {
   saveDocument, deleteDocument, savePositions, 
   loadCollection, subscribeToCollection, 
   syncTransmitters, syncBirds, syncAlerts,
-  batchWriteArgosPositions
+  batchWriteArgosPositions, deleteCollection,
+  batchWriteDocuments, batchDeleteDocuments,
+  loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
+import { decodeBatteryVoltage } from '../services/argosService';
 import type { Role } from '../types';
 
 interface AppState {
@@ -23,15 +26,47 @@ interface AppState {
   databaseActiveTab: string;
   setDatabaseActiveTab: (tab: string) => void;
 
+  // Global Modal States for Database View
+  isTransmitterModalOpen: boolean;
+  setIsTransmitterModalOpen: (isOpen: boolean) => void;
+  isBirdModalOpen: boolean;
+  setIsBirdModalOpen: (isOpen: boolean) => void;
+  isPositionModalOpen: boolean;
+  setIsPositionModalOpen: (isOpen: boolean) => void;
+  isArgosModalOpen: boolean;
+  setIsArgosModalOpen: (isOpen: boolean) => void;
+  
+  // Generic editing record reference (used by modals)
+  editingRecordId: string | null;
+  setEditingRecordId: (id: string | null) => void;
+
   // Settings
   darkMode: boolean;
   toggleDarkMode: () => void;
   simpleMode: boolean;
   toggleSimpleMode: () => void;
+  theme: 'light' | 'dark' | 'system';
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
   notificationsEnabled: boolean;
   setNotificationsEnabled: (enabled: boolean) => void;
   timeZone: string;
   setTimeZone: (tz: string) => void;
+  
+  // Global Argos Positions (Loaded on demand for Excel-style view)
+  argosPositions: any[];
+  isArgosPositionsLoading: boolean;
+  loadAllArgosPositionsAction: () => Promise<void>;
+  clearArgosPositionsCache: () => void;
+  
+  // Google Earth Engine Shared Tile URLs
+  geeNdviTileUrl: string | null;
+  geeLstTileUrl: string | null;
+  geeSaviTileUrl: string | null;
+  activeGeeLayer: 'ndvi' | 'lst' | 'savi' | null;
+  setGeeNdviTileUrl: (url: string | null) => void;
+  setGeeLstTileUrl: (url: string | null) => void;
+  setGeeSaviTileUrl: (url: string | null) => void;
+  setActiveGeeLayer: (layer: 'ndvi' | 'lst' | 'savi' | null) => void;
   
   // System State
   lastSaved: string;
@@ -77,17 +112,23 @@ interface AppState {
   // Actions
   addAlert: (alert: Alert) => void;
   resolveAlert: (id: string) => void;
+  resolveAllAlerts: () => void;
+  cleanupOldAlerts: () => void;
   
   // Bird Actions
   addBird: (bird: Bird) => void;
   updateBird: (id: string, updates: Partial<Bird>) => void;
   deleteBird: (id: string) => void;
+  bulkDeleteBirds: (ids: string[]) => Promise<void>;
+  bulkUpdateBirds: (ids: string[], updates: Partial<Bird>) => Promise<void>;
   importBirds: (birds: Bird[]) => void;
 
   // Transmitter Actions
   addTransmitter: (transmitter: Transmitter) => void;
   updateTransmitter: (id: string, updates: Partial<Transmitter>) => void;
   deleteTransmitter: (id: string) => void;
+  bulkDeleteTransmitters: (ids: string[]) => Promise<void>;
+  bulkUpdateTransmitters: (ids: string[], updates: Partial<Transmitter>) => Promise<void>;
   importTransmitters: (transmitters: Transmitter[]) => void;
   
   // User Actions
@@ -110,6 +151,9 @@ interface AppState {
   // Firestore Actions
   initializeFromFirestore: () => Promise<void>;
   subscribeToLivePositions: () => () => void;
+
+  // Danger Zone — Collection Clearing
+  clearTable: (table: 'transmitters' | 'birds' | 'positions' | 'argos_positions' | 'alerts' | 'all', onProgress?: (msg: string) => void) => Promise<void>;
 
   // Simulation Actions
   generateLivePositions: () => void;
@@ -134,6 +178,18 @@ export const useAppStore = create<AppState>()(
       databaseActiveTab: 'Monitoring',
       setDatabaseActiveTab: (tab) => set({ databaseActiveTab: tab }),
 
+      isTransmitterModalOpen: false,
+      setIsTransmitterModalOpen: (isOpen) => set({ isTransmitterModalOpen: isOpen }),
+      isBirdModalOpen: false,
+      setIsBirdModalOpen: (isOpen) => set({ isBirdModalOpen: isOpen }),
+      isPositionModalOpen: false,
+      setIsPositionModalOpen: (isOpen) => set({ isPositionModalOpen: isOpen }),
+      isArgosModalOpen: false,
+      setIsArgosModalOpen: (isOpen) => set({ isArgosModalOpen: isOpen }),
+
+      editingRecordId: null,
+      setEditingRecordId: (id) => set({ editingRecordId: id }),
+
       darkMode: false,
       toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
       simpleMode: false,
@@ -144,6 +200,25 @@ export const useAppStore = create<AppState>()(
 
       timeZone: 'UTC',
       setTimeZone: (tz) => set({ timeZone: tz }),
+      
+      argosPositions: [],
+      isArgosPositionsLoading: false,
+      loadAllArgosPositionsAction: async () => {
+        if (get().argosPositions.length > 0) return;
+        set({ isArgosPositionsLoading: true });
+        const data = await loadAllArgosPositions();
+        set({ argosPositions: data, isArgosPositionsLoading: false });
+      },
+      clearArgosPositionsCache: () => set({ argosPositions: [] }),
+
+      geeNdviTileUrl: null,
+      geeLstTileUrl: null,
+      geeSaviTileUrl: null,
+      activeGeeLayer: null,
+      setGeeNdviTileUrl: (url) => set({ geeNdviTileUrl: url }),
+      setGeeLstTileUrl: (url) => set({ geeLstTileUrl: url }),
+      setGeeSaviTileUrl: (url) => set({ geeSaviTileUrl: url }),
+      setActiveGeeLayer: (layer) => set({ activeGeeLayer: layer }),
       
       lastSaved: new Date().toISOString(),
       firestoreReady: false,
@@ -207,6 +282,38 @@ export const useAppStore = create<AppState>()(
           return { alerts: updated, lastSaved: new Date().toISOString() };
         });
       },
+      resolveAllAlerts: () => {
+        set((state) => {
+          const activeAlerts = state.alerts.filter(a => a.status !== 'resolved');
+          if (activeAlerts.length === 0) return state;
+          
+          const updated = state.alerts.map(a => ({ ...a, status: 'resolved' as const }));
+          const resolvedDocs = activeAlerts.map(a => ({ id: a.id, data: { ...a, status: 'resolved' as const } }));
+          
+          fireAndForget(() => batchWriteDocuments('alerts', resolvedDocs));
+          return { alerts: updated, lastSaved: new Date().toISOString() };
+        });
+      },
+      cleanupOldAlerts: () => {
+        set((state) => {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          
+          const oldResolvedAlerts = state.alerts.filter(a => {
+            if (a.status !== 'resolved') return false;
+            const alertDate = new Date(a.timestamp);
+            return alertDate < thirtyDaysAgo;
+          });
+          
+          if (oldResolvedAlerts.length === 0) return state;
+          
+          const idsToDelete = oldResolvedAlerts.map(a => a.id);
+          const keptAlerts = state.alerts.filter(a => !idsToDelete.includes(a.id));
+          
+          fireAndForget(() => batchDeleteDocuments('alerts', idsToDelete));
+          return { alerts: keptAlerts, lastSaved: new Date().toISOString() };
+        });
+      },
 
       // ─── Bird CRUD ──────────────────────────────────────────────────────────
       addBird: (bird) => {
@@ -228,6 +335,27 @@ export const useAppStore = create<AppState>()(
           lastSaved: new Date().toISOString()
         }));
         fireAndForget(() => deleteDocument('birds', id));
+      },
+      bulkDeleteBirds: async (ids) => {
+        set((state) => {
+          const idsSet = new Set(ids);
+          return {
+            birds: state.birds.filter(b => !idsSet.has(b.id)),
+            transmitters: state.transmitters.map(t => t.bird_id && idsSet.has(t.bird_id) ? { ...t, bird_id: '' } : t),
+            lastSaved: new Date().toISOString()
+          };
+        });
+        await bulkDeleteRecords('birds', ids);
+      },
+      bulkUpdateBirds: async (ids, updates) => {
+        set((state) => {
+          const idsSet = new Set(ids);
+          return {
+            birds: state.birds.map(b => idsSet.has(b.id) ? { ...b, ...updates } : b),
+            lastSaved: new Date().toISOString()
+          };
+        });
+        await bulkUpdateRecords('birds', ids, updates);
       },
       importBirds: (newBirds) => {
          set((state) => {
@@ -274,6 +402,27 @@ export const useAppStore = create<AppState>()(
             };
           });
           fireAndForget(() => deleteDocument('transmitters', id));
+      },
+      bulkDeleteTransmitters: async (ids: string[]) => {
+          set((state) => {
+            const idsSet = new Set(ids);
+            const deletedTransmitters = state.transmitters.filter(t => idsSet.has(t.id));
+            const deletedPlatformIds = new Set(deletedTransmitters.map(t => t.platform_id));
+            return {
+              transmitters: state.transmitters.filter(t => !idsSet.has(t.id)),
+              positions: state.positions.filter(p => !deletedPlatformIds.has(p.transmitter_id)),
+              lastSaved: new Date().toISOString()
+            };
+          });
+          await bulkDeleteRecords('transmitters', ids);
+      },
+      bulkUpdateTransmitters: async (ids: string[], updates: Partial<Transmitter>) => {
+          set((state) => {
+            const idsSet = new Set(ids);
+            const updated = state.transmitters.map(t => idsSet.has(t.id) ? { ...t, ...updates } : t);
+            return { transmitters: updated, lastSaved: new Date().toISOString() };
+          });
+          await bulkUpdateRecords('transmitters', ids, updates);
       },
       importTransmitters: (newTransmitters) => {
           set((state) => {
@@ -381,6 +530,9 @@ export const useAppStore = create<AppState>()(
               const lat = parseFloat(msg.lat);
               const lon = parseFloat(msg.lon);
               const pid = String(msg.platformId);
+              
+              // Attempt to decode battery voltage from rawData
+              const decodedBattery = msg.rawData ? decodeBatteryVoltage(msg.rawData) : undefined;
 
               let tIndex = newTransmitters.findIndex(t => String(t.platform_id) === pid);
               
@@ -391,16 +543,32 @@ export const useAppStore = create<AppState>()(
                       model: 'Unknown (Auto-detected)',
                       status: 'active',
                       bird_id: '',
-                      battery_voltage: undefined,
+                      battery_voltage: decodedBattery,
                       last_fix: msg.timestamp,
                       duty_cycle: 'Unknown',
                       deployed: true
                   });
                   tIndex = newTransmitters.length - 1;
                   tUpdated++;
+              } else {
+                  // Update existing transmitter with new battery and last_fix if this message is newer
+                  const t = newTransmitters[tIndex];
+                  // If we found a battery voltage, and this message is at least as new as the last_fix (or there is no last_fix), update it.
+                  if (decodedBattery !== undefined && (!t.last_fix || new Date(msg.timestamp) >= new Date(t.last_fix))) {
+                      newTransmitters[tIndex] = {
+                          ...t,
+                          battery_voltage: decodedBattery
+                      };
+                      tUpdated++;
+                  }
+                  // Update last_fix if it's strictly newer
+                  if (!t.last_fix || new Date(msg.timestamp) > new Date(t.last_fix)) {
+                      newTransmitters[tIndex].last_fix = msg.timestamp;
+                      tUpdated++;
+                  }
               }
 
-              if (!isNaN(lat) && !isNaN(lon)) {
+              if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) > 1 && Math.abs(lon) > 1) {
                   const key = `${pid}|${msg.timestamp}|${lat}|${lon}`;
                   if (!existingPosKeys.has(key)) {
                       existingPosKeys.add(key);
@@ -478,8 +646,31 @@ export const useAppStore = create<AppState>()(
           return { transmittersUpdated: tUpdated, positionsCreated: pCreated };
       },
 
+      // ─── Danger Zone: Clear Collections ────────────────────────────────────
+      clearTable: async (table, onProgress) => {
+        const tables = table === 'all'
+          ? ['transmitters', 'birds', 'positions', 'argos_positions', 'alerts']
+          : [table];
+
+        for (const t of tables) {
+          onProgress?.(`Deleting ${t}...`);
+          await deleteCollection(t, (n) => onProgress?.(`${t}: ${n} deleted...`));
+        }
+
+        // Reset local state
+        const resetState: any = {};
+        if (table === 'all' || table === 'transmitters') resetState.transmitters = [];
+        if (table === 'all' || table === 'birds')        resetState.birds = [];
+        if (table === 'all' || table === 'positions')    resetState.positions = [];
+        if (table === 'all' || table === 'alerts')       resetState.alerts = [];
+        resetState.lastSaved = new Date().toISOString();
+        set(resetState);
+        onProgress?.('✅ Done.');
+      },
+
       // ─── Firestore Initialization ──────────────────────────────────────────
       initializeFromFirestore: async () => {
+
         try {
           console.log('[AppStore] Loading data from Firestore...');
           
@@ -516,10 +707,37 @@ export const useAppStore = create<AppState>()(
               role = userProfile.role || 'Viewer';
               permissions = userProfile.permissions || ['View Data'];
             } else {
-              // First user or admin — check if it's the first user
-              if (mergedUsers.length === 0) {
+              // check if it's the first user or the super admin
+              const isFirstUser = mergedUsers.length === 0 || currentUser.email === 'achlih21@gmail.com';
+              if (isFirstUser) {
                 role = 'Administrator';
                 permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'System Settings'];
+              }
+              
+              // Automatically register the user in the database so they don't lose access later
+              const newUserProfile = {
+                id: currentUser.uid,
+                name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Unknown User',
+                email: currentUser.email || '',
+                role: role,
+                status: 'active' as const,
+                permissions: permissions
+              };
+              mergedUsers.push(newUserProfile);
+              fireAndForget(() => saveDocument('users', currentUser.uid, newUserProfile));
+            }
+
+            // GUARANTEE SUPER ADMIN ROLE
+            if (currentUser.email === 'achlih21@gmail.com') {
+              role = 'Administrator';
+              permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'System Settings'];
+              
+              // Also update the database document just in case it had Viewer loaded
+              if (userProfile && userProfile.role !== 'Administrator') {
+                const updatedProfile = { ...userProfile, role, permissions };
+                const index = mergedUsers.findIndex(u => u.id === userProfile.id);
+                if (index !== -1) mergedUsers[index] = updatedProfile;
+                fireAndForget(() => saveDocument('users', currentUser.uid, updatedProfile));
               }
             }
           }
@@ -535,6 +753,9 @@ export const useAppStore = create<AppState>()(
             currentUserPermissions: permissions,
             lastSaved: new Date().toISOString()
           });
+          
+          // Cleanup old resolved alerts (older than 30 days)
+          get().cleanupOldAlerts();
 
           console.log(`[AppStore] Firestore init complete: ${mergedTransmitters.length} transmitters, ${mergedBirds.length} birds, ${recentPositions.length} positions, role: ${role}`);
         } catch (error) {
@@ -552,7 +773,10 @@ export const useAppStore = create<AppState>()(
           const cutoff = thirtyDaysAgo.getTime();
           const positions = firestorePositions.filter(p => {
             const t = new Date(p.timestamp).getTime();
-            return !isNaN(t) && t >= cutoff;
+            const latNum = Number(p.lat);
+            const lonNum = Number(p.lon);
+            const validCoords = !(latNum === 0 && lonNum === 0) && !isNaN(latNum) && !isNaN(lonNum);
+            return !isNaN(t) && t >= cutoff && validCoords;
           });
           set({ positions });
         });
@@ -581,23 +805,7 @@ export const useAppStore = create<AppState>()(
              
              const hasAnyPosition = positions.some(p => p.transmitter_id === t.platform_id);
              if (!hasAnyPosition) {
-                 hasChanges = true;
-                 let baseLat = 24.5, baseLon = 54.5;
-                 if (index === 1) { baseLat = 32.0; baseLon = 54.0; }
-                 
-                 newSimulatedPositions.push({
-                    id: `pos-${t.id}-sim`,
-                    transmitter_id: t.platform_id,
-                    timestamp: new Date().toISOString(),
-                    lat: baseLat + (Math.random() * 0.1),
-                    lon: baseLon + (Math.random() * 0.1),
-                    lc: '3' as const,
-                    is_kalman: true,
-                    speed_kmh: 0,
-                    course: 0,
-                    satellite: 'Simulated',
-                    locationType: 'GPS' as const
-                 });
+                 // Removed simulated UAE positions
              }
          });
          

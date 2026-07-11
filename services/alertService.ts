@@ -31,9 +31,18 @@ export const analyzePositionsForAlerts = (
     existingPositions: Position[], 
     addAlert: (alert: Alert) => void
 ) => {
+    // Filter out 0.0, 0.0 coords and only keep good fixes (error < 1000m: typically LC 3, 2, 1, or GPS)
+    const isValidFix = (p: Position) => {
+        if (p.lat === 0 && p.lon === 0) return false;
+        if (!['3', '2', '1', 'G'].includes(p.lc)) return false;
+        return true;
+    };
+
+    const validNewPositions = newPositions.filter(isValidFix);
+
     // Group new positions by transmitter to find their chronological order
     const byTransmitter = new Map<string, Position[]>();
-    newPositions.forEach(p => {
+    validNewPositions.forEach(p => {
         if (!byTransmitter.has(p.transmitter_id)) {
             byTransmitter.set(p.transmitter_id, []);
         }
@@ -46,9 +55,9 @@ export const analyzePositionsForAlerts = (
         // Sort chronologically
         positions.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         
-        // Get the very last known location BEFORE these new positions
+        // Get the very last known VALID location BEFORE these new positions
         const oldPos = existingPositions
-             .filter(p => p.transmitter_id === transmitterId)
+             .filter(p => p.transmitter_id === transmitterId && isValidFix(p))
              .sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
              
         let lastPos = oldPos;

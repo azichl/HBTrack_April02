@@ -5,6 +5,7 @@ import { Users, UserPlus, Shield, CheckCircle2, User, Key, X, Search, Mail, Filt
 import { User as UserType, Role } from '../types';
 import { listUsers, createUser, updateUserProfile, deleteUserAccount, AppUser } from '../services/authService';
 import { getAuth } from 'firebase/auth';
+import { CustomSelect } from '../components/CustomSelect';
 
 const SYSTEM_PERMISSIONS = [
   'View Data',
@@ -326,19 +327,20 @@ export const UserManagement = () => {
             />
           </div>
           <div className="relative w-48">
-             <select 
+             <CustomSelect 
                 value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value)}
-                className="w-full bg-gray-100 dark:bg-slate-900 px-4 py-2.5 rounded-lg text-sm text-gray-700 dark:text-gray-300 outline-none appearance-none cursor-pointer"
-             >
-                <option>All Roles</option>
-                <option>Administrator</option>
-                <option>Researcher</option>
-                <option>Field Coordinator</option>
-                <option>Data Entry</option>
-                <option>Viewer</option>
-             </select>
-             <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                onChange={(val) => setRoleFilter(val)}
+                className="w-full"
+                buttonClassName="px-4 py-2.5 bg-gray-100 dark:bg-slate-900"
+                options={[
+                  { value: 'All Roles', label: 'All Roles' },
+                  { value: 'Administrator', label: 'Administrator' },
+                  { value: 'Researcher', label: 'Researcher' },
+                  { value: 'Field Coordinator', label: 'Field Coordinator' },
+                  { value: 'Data Entry', label: 'Data Entry' },
+                  { value: 'Viewer', label: 'Viewer' }
+                ]}
+             />
           </div>
         </div>
 

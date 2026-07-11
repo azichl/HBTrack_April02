@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileSpreadsheet, CheckCircle, Database, FileText, Server, Globe, Key, RefreshCw, ShieldCheck, Activity, User, Lock, Play, Table as TableIcon, Download, ToggleLeft, ToggleRight, Link as LinkIcon, List, Clock, BarChart3, Wifi, Layers, Globe2, AlertTriangle, Calendar, Link2, FileType, Radio, Bird, Info, HelpCircle, FileDown, ChevronDown } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, CheckCircle, Database, FileText, Server, Globe, Key, RefreshCw, ShieldCheck, Activity, User, Lock, Play, Table as TableIcon, Download, ToggleLeft, ToggleRight, Link as LinkIcon, List, Clock, BarChart3, Wifi, Layers, Globe2, AlertTriangle, Calendar, Link2, FileType, Radio, Info, HelpCircle, FileDown, ChevronDown } from 'lucide-react';
+import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
 import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird as BirdType } from '../types';
 import { exportToCSV } from '../utils/csvExport';
@@ -238,14 +239,14 @@ export const DataUpload = () => {
           }], 'template_birds');
       } else if (uploadType === 'argos_data') {
           exportToCSV([{
-              'Device ID': '123456',
-              'Unit type': 'Argos',
+              'Device ID': '244289',
+              'Unit type': 'Houbara',
               'Location class': '3',
-              'Location type': 'Doppler',
-              'Doppler Error radius (m)': '150',
-              'Location date (UTC)': new Date().toISOString(),
-              'Latitude': '24.5678',
-              'Longitude': '54.6789'
+              'Location type': 'GPS',
+              'Doppler Error radius (m)': '0',
+              'Location date (UTC)': '2026-07-07 10:01:00',
+              'Longitude': '66.9021',
+              'Latitude': '46.9450'
           }], 'template_argos_data');
       }
   };
@@ -741,7 +742,7 @@ export const DataUpload = () => {
           case 'argos_data':
               return {
                   title: 'Argos Data Requirements',
-                  columns: ['Device ID (Required)', 'Latitude', 'Longitude', 'Location date (UTC)', 'Location class', 'Doppler Error'],
+                  columns: ['Device ID (Required)', 'Unit type', 'Location class', 'Location type', 'Doppler Error radius (m)', 'Location date (UTC)', 'Longitude', 'Latitude'],
                   desc: 'Upload raw tracking data. Supports standard Argos CLS CSV/Excel exports.'
               };
       }
@@ -782,7 +783,7 @@ export const DataUpload = () => {
                     <div className="flex bg-gray-50 dark:bg-slate-900 p-1 rounded-lg border border-gray-100 dark:border-slate-700">
                         {[
                             { id: 'transmitters', label: 'Transmitters', icon: Radio },
-                            { id: 'birds', label: 'Bird Database', icon: Bird },
+                            { id: 'birds', label: 'Bird Database', icon: null },
                             { id: 'argos_data', label: 'Argos Data', icon: Database }
                         ].map((type) => {
                             const Icon = type.icon;
@@ -796,7 +797,10 @@ export const DataUpload = () => {
                                         : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-slate-700'
                                     }`}
                                 >
-                                    <Icon size={14} />
+                                    {type.id === 'birds' 
+                                        ? <HoubaraIcon size={14} color="currentColor" />
+                                        : Icon && <Icon size={14} />
+                                    }
                                     <span>{type.label}</span>
                                 </button>
                             );

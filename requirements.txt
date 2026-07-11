@@ -1,0 +1,3 @@
+earthengine-api>=0.1.350
+folium>=0.14.0
+requests>=2.31.0

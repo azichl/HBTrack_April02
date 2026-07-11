@@ -1,10 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { Edit, Trash2, Download, MapPin, Plus, X, Save, Map, Activity } from 'lucide-react';
 import { Bird } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
+import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime } from '../utils/formatting';
+import { CustomSelect } from '../components/CustomSelect';
 
 type BirdTableRow = Bird & {
     associated_ptt: string | null;
@@ -18,15 +20,20 @@ export const Birds = () => {
     addBird, 
     updateBird, 
     deleteBird, 
+    bulkDeleteBirds,
+    bulkUpdateBirds,
     assignTransmitterToBird,
     setSelectedMapBirdId,
     setActiveTab,
     setDatabaseActiveTab,
-    timeZone
+    timeZone,
+    isBirdModalOpen: isModalOpen,
+    setIsBirdModalOpen: setIsModalOpen,
+    editingRecordId,
+    setEditingRecordId
   } = useAppStore();
   
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBird, setEditingBird] = useState<Bird | null>(null);
+  const editingBird = birds.find(b => b.id === editingRecordId) || null;
   
   // Form State
   const [formData, setFormData] = useState<Partial<Bird>>({
@@ -52,27 +59,62 @@ export const Birds = () => {
     });
   }, [birds, transmitters]);
 
-  // 2. Hook for Sorting and Filtering
-  const { sortedData, requestSort, sortConfig, filters, setFilter } = useSortableTable<BirdTableRow>(tableData, 'ring_id');
+  // 2. Sorting Hook
+  const { 
+    sortedData, requestSort, sortConfig, filters, setFilter, clearFilters,
+    selectedIds, toggleSelection, selectAllFiltered, clearSelection, filteredData
+  } = useSortableTable<BirdTableRow>(tableData);
 
-  const handleOpenModal = (bird?: Bird) => {
-    if (bird) {
-      setEditingBird(bird);
-      setFormData({ ...bird });
-      const associatedTransmitter = transmitters.find(t => t.bird_id === bird.id);
-      setSelectedTransmitterId(associatedTransmitter ? associatedTransmitter.id : '');
+  const handleBulkDelete = async (ids: string[]) => {
+    await bulkDeleteBirds(ids);
+  };
+
+  const handleBulkReplace = async (ids: string[], field: string, value: string) => {
+    await bulkUpdateBirds(ids, { [field]: value });
+  };
+
+  const isAllSelected = sortedData.length > 0 && sortedData.every(r => selectedIds.has(r.id));
+  const isSomeSelected = sortedData.some(r => selectedIds.has(r.id));
+
+  useEffect(() => {
+    if (isModalOpen) {
+      if (editingRecordId) {
+        const bird = birds.find(b => b.id === editingRecordId);
+        if (bird) {
+          setFormData({ ...bird });
+          const associatedTransmitter = transmitters.find(t => t.bird_id === bird.id);
+          setSelectedTransmitterId(associatedTransmitter ? associatedTransmitter.id : '');
+        }
+      } else {
+        setFormData({
+          ring_id: '',
+          species: 'Houbara Bustard',
+          sex: 'M',
+          hatch_date: '',
+          release_location: '',
+          release_lat: '',
+          release_lon: ''
+        });
+        setSelectedTransmitterId('');
+      }
+    }
+  }, [isModalOpen, editingRecordId, birds, transmitters]);
+
+  const handleOpenModal = (b?: Bird) => {
+    if (b) {
+      setEditingRecordId(b.id || null);
+      setFormData(b);
     } else {
-      setEditingBird(null);
+      setEditingRecordId(null);
       setFormData({
         ring_id: '',
         species: 'Houbara Bustard',
         sex: 'M',
-        hatch_date: new Date().toISOString().split('T')[0],
+        hatch_date: '',
         release_location: '',
         release_lat: '',
         release_lon: ''
       });
-      setSelectedTransmitterId('');
     }
     setIsModalOpen(true);
   };
@@ -119,24 +161,36 @@ export const Birds = () => {
   const availableTransmitters = transmitters.filter(t => !t.bird_id || (editingBird && t.bird_id === editingBird.id));
 
   return (
-    <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
+    <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col relative">
+      <BulkActionsToolbar
+        selectedIds={Array.from(selectedIds)}
+        onClearSelection={clearSelection}
+        onBulkDelete={handleBulkDelete}
+        onBulkReplace={handleBulkReplace}
+        availableFields={[
+          { key: 'species', label: 'Species' },
+          { key: 'sex', label: 'Sex (M/F)' },
+          { key: 'release_location', label: 'Release Location' }
+        ]}
+      />
+
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bird Database</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Registry of tracked individual birds.</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Bird Registry</h2>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage individual bird records and PTT assignments.</p>
         </div>
         <div className="flex gap-3">
-            <button 
-              onClick={() => handleOpenModal()}
-              className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 flex items-center gap-2 shadow-sm transition-colors"
-            >
-              <Plus size={18} /> Add New Bird
-            </button>
             <button 
               onClick={handleExport}
               className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-gray-600 dark:text-gray-300"
             >
               <Download size={16} /> Export CSV
+            </button>
+            <button 
+              onClick={() => handleOpenModal()}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 flex items-center gap-2 shadow-sm shadow-emerald-600/20"
+            >
+              <Plus size={16} /> Add Bird
             </button>
         </div>
       </div>
@@ -146,6 +200,21 @@ export const Birds = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-emerald-100 dark:bg-emerald-900 border-b border-emerald-200 dark:border-emerald-800">
+                <th className="px-4 py-3 w-10 border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 sticky top-0 z-20">
+                  <input 
+                    type="checkbox" 
+                    checked={isAllSelected}
+                    ref={el => { if (el) el.indeterminate = isSomeSelected && !isAllSelected; }}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        selectAllFiltered(true, (item) => item.id);
+                      } else {
+                        clearSelection();
+                      }
+                    }}
+                    className="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                </th>
                 <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Assoc. PTT" sortKey="associated_ptt" currentSort={sortConfig} onSort={requestSort} filterValue={filters['associated_ptt']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Ring ID" sortKey="ring_id" currentSort={sortConfig} onSort={requestSort} filterValue={filters['ring_id']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Species" sortKey="species" currentSort={sortConfig} onSort={requestSort} filterValue={filters['species']} onFilter={setFilter} />
@@ -158,8 +227,22 @@ export const Birds = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
-              {sortedData.map((bird) => (
-                <tr key={bird.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors group">
+              {sortedData.map((bird) => {
+                const isSelected = selectedIds.has(bird.id);
+                return (
+                <tr 
+                  key={bird.id} 
+                  onClick={(e) => handleRowClick(e, bird.id)}
+                  className={`transition-colors cursor-pointer group ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+                >
+                  <td className="px-4 py-3 border-r border-gray-100 dark:border-slate-700">
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={() => toggleSelection(bird.id)}
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-sm whitespace-nowrap border-r border-gray-100 dark:border-slate-700 font-mono">
                     {bird.associated_ptt ? (
                       <button 
@@ -203,7 +286,7 @@ export const Birds = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -236,17 +319,16 @@ export const Birds = () => {
                 </div>
                 <div>
                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned Transmitter (PTT)</label>
-                   <select 
+                   <CustomSelect 
                     value={selectedTransmitterId}
-                    onChange={e => setSelectedTransmitterId(e.target.value)}
-                    className="font-sans w-full px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm font-mono outline-none"
-                    style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
-                   >
-                     <option value="">-- None --</option>
-                     {availableTransmitters.map(t => (
-                       <option key={t.id} value={t.id}>{t.platform_id} ({t.status})</option>
-                     ))}
-                   </select>
+                    onChange={(val) => setSelectedTransmitterId(val)}
+                    className="font-sans w-full text-sm font-mono"
+                    buttonClassName="px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                    options={[
+                      { value: '', label: '-- None --' },
+                      ...availableTransmitters.map(t => ({ value: t.id, label: `${t.platform_id} (${t.status})` }))
+                    ]}
+                   />
                 </div>
               </div>
               
@@ -262,15 +344,16 @@ export const Birds = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Sex</label>
-                  <select 
+                  <CustomSelect 
                     value={formData.sex}
-                    onChange={e => setFormData({...formData, sex: e.target.value as 'M'|'F'})}
-                    className="font-sans w-full px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-900 dark:text-white rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-sm outline-none"
-                    style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
-                  >
-                    <option value="M">Male</option>
-                    <option value="F">Female</option>
-                  </select>
+                    onChange={(val) => setFormData({...formData, sex: val as 'M'|'F'})}
+                    className="font-sans w-full text-sm"
+                    buttonClassName="px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                    options={[
+                      { value: 'M', label: 'Male' },
+                      { value: 'F', label: 'Female' }
+                    ]}
+                  />
                 </div>
               </div>
 

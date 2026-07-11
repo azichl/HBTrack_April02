@@ -9,6 +9,29 @@ export const isValidCoordinate = (lat: string | number, lon: string | number): b
     return true;
 };
 
+/**
+ * Attempts to decode battery voltage from Argos raw data payload.
+ * Since the exact manufacturer decoding rule is unknown, this function uses a 
+ * best-guess heuristic common to many Solar PTTs (e.g. Microwave Telemetry)
+ * where the voltage is transmitted as decimal value * 10 (e.g., 36 = 3.6V).
+ * It searches the raw data for plausible voltage values (3.2V to 4.3V).
+ */
+export const decodeBatteryVoltage = (rawData: string, model: string = 'Unknown'): number | undefined => {
+    if (!rawData) return undefined;
+
+    // Split raw data block into individual numbers
+    const numbers = rawData.split(/\s+/).filter(n => /^\d+$/.test(n)).map(Number);
+    
+    // Look for a reasonable battery voltage value (e.g. 32 to 43 which means 3.2V to 4.3V)
+    for (const num of numbers) {
+        if (num >= 32 && num <= 43) {
+            return num / 10.0;
+        }
+    }
+
+    return undefined;
+};
+
 
 // Map Argos API data
 export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
@@ -17,10 +40,28 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         const lat = item.gpsLocLat !== undefined ? item.gpsLocLat : (item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.location?.latitude || 0));
         const lon = item.gpsLocLon !== undefined ? item.gpsLocLon : (item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.location?.longitude || 0));
         
-        let lc = 'Z';
-        if (item.dopplerLocClass) lc = item.dopplerLocClass;
-        if (item.location?.locationClass) lc = item.location.locationClass;
-        if (item.gpsLocLat !== undefined && !item.dopplerLocClass) lc = 'GPS';
+        const dopplerError = item.dopplerLocErrorRadius ? String(item.dopplerLocErrorRadius) : '0';
+        
+        let rawLc = '';
+        if (item.dopplerLocClass) rawLc = item.dopplerLocClass;
+        else if (item.location?.locationClass) rawLc = item.location.locationClass;
+
+        let locationType = item.gpsLocLat !== undefined ? 'GPS' : 'Doppler';
+        let lc = rawLc;
+
+        // Rule: When the "Class Type" provided by CLS = 1, 2, 3, 0, A, B, Z the "Location Type" is Doppler
+        if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) {
+            locationType = 'Doppler';
+        }
+
+        // Rule: Always CLS when provide "GPS" in "location Type" provide "Location Class" blank 
+        // so if you have all Doppler error =0 and you have coordinate collected the "Location Class" is GPS
+        if (dopplerError === '0' && (!rawLc || rawLc.trim() === '')) {
+            lc = 'GPS';
+            locationType = 'GPS';
+        }
+
+        if (!lc) lc = 'Z'; // fallback
 
         const ts = item.msgDatetime || item.bestDate || item.date || new Date().toISOString();
         const platformId = item.deviceRef || item.platformId || 'Unknown';
@@ -36,8 +77,8 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
             msgType: 'DS', 
             satellite: item.kineisMetadata?.sat || 'UNK',
             rawData: item.rawData || '',
-            locationType: item.gpsLocLat !== undefined ? 'GPS' : 'Doppler', 
-            dopplerError: item.dopplerLocErrorRadius ? String(item.dopplerLocErrorRadius) : '0'
+            locationType: locationType, 
+            dopplerError: dopplerError
         };
     });
 };

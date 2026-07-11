@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
-import { Bird, ShieldAlert, LogIn, Lock, Mail, Activity } from 'lucide-react';
+import { ShieldAlert, LogIn, Lock, Mail, Activity } from 'lucide-react';
+import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
 
 export const Login = () => {
@@ -42,10 +43,7 @@ export const Login = () => {
       <div className="relative z-10 w-full max-w-md p-8 bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl shadow-2xl">
         
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-brand-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4">
-             <Bird className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">TrackApp v2</h1>
+          <img src="/ministry-logo-pure-white.png" alt="Ministry Logo" className="w-full max-w-[320px] h-auto object-contain mb-4 drop-shadow-md" />
           <p className="text-slate-400 mt-2 text-sm text-center">
             Advanced Ecological Monitoring & Geolocation Database
           </p>

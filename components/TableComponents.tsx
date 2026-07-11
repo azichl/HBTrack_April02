@@ -74,7 +74,43 @@ export const useSortableTable = <T,>(data: T[], defaultSortKey?: string) => {
     setFilters({});
   }, []);
 
-  return { sortedData, requestSort, sortConfig, filters, setFilter, clearFilters };
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  }, []);
+
+  const selectAllFiltered = useCallback((isSelectAll: boolean, getId: (item: T) => string) => {
+    if (isSelectAll) {
+      const allIds = filteredData.map(getId);
+      setSelectedIds(new Set(allIds));
+    } else {
+      setSelectedIds(new Set());
+    }
+  }, [filteredData]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
+  return { 
+    sortedData, 
+    requestSort, 
+    sortConfig, 
+    filters, 
+    setFilter, 
+    clearFilters,
+    selectedIds,
+    toggleSelection,
+    selectAllFiltered,
+    clearSelection,
+    filteredData
+  };
 };
 
 interface SortableHeaderProps {

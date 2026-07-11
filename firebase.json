@@ -8,6 +8,26 @@
   },
   "hosting": {
     "public": "dist",
+    "headers": [
+      {
+        "source": "**/*.@(js|css)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
+      },
+      {
+        "source": "index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
     "ignore": [
       "firebase.json",
       "**/.*",
@@ -17,6 +37,10 @@
       {
         "source": "/proxy/argos",
         "function": "proxyArgosApi"
+      },
+      {
+        "source": "/getGEETileUrl",
+        "function": "getGEETileUrl"
       },
       {
         "source": "**",

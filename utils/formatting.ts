@@ -3,7 +3,15 @@
 export const formatDateTime = (isoString?: string | null, timeZone: string = 'UTC'): string => {
   if (!isoString) return '-';
   try {
-    const date = new Date(isoString);
+    // Ensure the timestamp is parsed as UTC if it lacks a timezone indicator (like Z or +00:00)
+    let parsedString = isoString;
+    if (!parsedString.endsWith('Z') && !parsedString.match(/[+-]\d{2}:?\d{2}$/)) {
+        // Only append Z if it looks like a standard date string without timezone
+        parsedString = parsedString.replace(' ', 'T'); // Handle "YYYY-MM-DD HH:mm:ss"
+        parsedString += 'Z';
+    }
+
+    const date = new Date(parsedString);
     if (isNaN(date.getTime())) return '-';
     
     return new Intl.DateTimeFormat('en-GB', {

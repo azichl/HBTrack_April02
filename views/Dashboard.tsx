@@ -1,28 +1,21 @@
 import React, { useMemo } from 'react';
 import { KPICard } from '../components/KPICard';
-import { Radio, Bird, AlertTriangle, Satellite } from 'lucide-react';
+import { Radio, AlertTriangle, Battery, Navigation, Activity, Satellite, Clock, ShieldAlert, Zap } from 'lucide-react';
+import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { formatDateTime } from '../utils/formatting';
-
-// Generate empty chart data for the last 7 days
-const generateEmptyChartData = () => {
-  const data = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    data.push({
-      name: d.toLocaleDateString('en-US', { weekday: 'short' }),
-      fixes: 0
-    });
-  }
-  return data;
-};
+import { 
+  AreaChart, Area, 
+  BarChart, Bar, 
+  PieChart, Pie, Cell, 
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend 
+} from 'recharts';
+import { formatDateTime, formatBattery } from '../utils/formatting';
 
 export const Dashboard = () => {
   const { transmitters, birds, alerts, positions, timeZone, setActiveTab } = useAppStore();
 
-  // Generate chart data from real positions for the last 7 days
+  // 1. Generate chart data from real positions for the last 7 days (Volume - Area Chart)
   const chartData = useMemo(() => {
     const data = [];
     for (let i = 6; i >= 0; i--) {
@@ -46,121 +39,340 @@ export const Dashboard = () => {
     return data;
   }, [positions]);
 
+  // 2. Generate Location Class (LC) Data for Radar Chart (Last 7 Days)
+  const lcData = useMemo(() => {
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    
+    const recentFixes = positions.filter(p => new Date(p.timestamp).getTime() >= sevenDaysAgo);
+    const lcCounts: Record<string, number> = { '3': 0, '2': 0, '1': 0, '0': 0, 'A': 0, 'B': 0, 'Z': 0 };
+    
+    recentFixes.forEach(p => {
+      if (p.lc && lcCounts[p.lc] !== undefined) {
+        lcCounts[p.lc]++;
+      } else if (!p.lc && p.locationType === 'GPS') {
+         // GPS positions might not have an LC in some datasets, treat them as high accuracy
+         lcCounts['3']++;
+      }
+    });
+
+    return [
+      { lc: 'Class 3 (<250m)', count: lcCounts['3'] },
+      { lc: 'Class 2 (<500m)', count: lcCounts['2'] },
+      { lc: 'Class 1 (<1500m)', count: lcCounts['1'] },
+      { lc: 'Class 0 (>1500m)', count: lcCounts['0'] },
+      { lc: 'Class A (No limits)', count: lcCounts['A'] },
+      { lc: 'Class B (No limits)', count: lcCounts['B'] },
+      { lc: 'Class Z (Invalid)', count: lcCounts['Z'] }
+    ];
+  }, [positions]);
+
+  // 3. Generate Battery Health Data (Bar Chart)
+  const batteryData = useMemo(() => {
+    let critical = 0; // < 3.6V
+    let low = 0;      // 3.6 - 3.7V
+    let healthy = 0;  // >= 3.8V
+    let unknown = 0;
+
+    transmitters.forEach(t => {
+      if (t.status !== 'active') return;
+      if (!t.battery_voltage) {
+        unknown++;
+      } else if (t.battery_voltage < 3.6) {
+        critical++;
+      } else if (t.battery_voltage < 3.8) {
+        low++;
+      } else {
+        healthy++;
+      }
+    });
+
+    return [
+      { name: 'Critical (<3.6V)', count: critical, color: '#ef4444' },
+      { name: 'Low (3.6-3.7V)', count: low, color: '#f59e0b' },
+      { name: 'Healthy (≥3.8V)', count: healthy, color: '#10b981' }
+    ].filter(d => d.count > 0);
+  }, [transmitters]);
+
   // Dynamic counts
   const activeTransmittersCount = transmitters.filter(t => t.status === 'active').length;
+  const maintenanceTransmittersCount = transmitters.filter(t => t.status === 'maintenance').length;
+  const lostTransmittersCount = transmitters.filter(t => (t.status as string) === 'lost').length;
+  
   const birdsCount = birds.length;
-  const activeAlertsCount = alerts.filter(a => a.status === 'active').length;
+  const systemAlerts = alerts.filter(a => a.type !== 'ticket_created');
+  const activeAlertsCount = systemAlerts.filter(a => a.status === 'active').length;
+  const criticalAlertsCount = systemAlerts.filter(a => a.status === 'active' && a.severity === 'critical').length;
   
-  // Unique satellites from position data
-  const uniqueSatellites = useMemo(() => {
-    const sats = new Set<string>();
-    positions.forEach(p => {
-      if (p.satellite && p.satellite !== 'Simulated') sats.add(p.satellite);
-    });
-    return sats.size;
+  // Recent 24h Activity
+  const fixesLast24h = useMemo(() => {
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    return positions.filter(p => new Date(p.timestamp).getTime() >= dayAgo).length;
   }, [positions]);
-  
-  // Total position fixes
-  const totalFixes = positions.length;
-  
+
   // Determine last ingest from actual data
   const lastIngestDate = positions.length > 0 
       ? formatDateTime(new Date(Math.max(...positions.map(d => new Date(d.timestamp).getTime()))).toISOString(), timeZone)
       : 'No Data';
 
+  // Pie chart data
+  const statusData = [
+    { name: 'Active', value: activeTransmittersCount, color: '#10b981' },
+    { name: 'Maintenance', value: maintenanceTransmittersCount, color: '#f59e0b' },
+    { name: 'Lost', value: lostTransmittersCount, color: '#ef4444' }
+  ].filter(d => d.value > 0);
+
+  // Fleet Overview (Top 5 recent)
+  const recentFleet = useMemo(() => {
+    return [...transmitters]
+        .filter(t => t.last_fix)
+        .sort((a, b) => new Date(b.last_fix).getTime() - new Date(a.last_fix).getTime())
+        .slice(0, 5);
+  }, [transmitters]);
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-8">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Overview</h2>
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          Last Ingest: <span className="font-medium text-gray-900 dark:text-gray-200" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{lastIngestDate}</span>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Global Command Center</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Asian Houbara Satellite Tracking Dashboard</p>
+        </div>
+        <div className="text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-slate-800 py-2 px-4 rounded-full border border-gray-200 dark:border-slate-700 shadow-md flex items-center gap-2">
+          <Activity size={16} className="text-brand-600 animate-pulse" />
+          Last Ingest: <span className="font-semibold text-gray-900 dark:text-gray-200 tracking-wide" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{lastIngestDate}</span>
         </div>
       </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPICard 
-          title="Active Transmitters" 
-          value={activeTransmittersCount} 
-          icon={Radio} 
-          color="bg-brand-500" 
-          trend={activeTransmittersCount > 0 ? "+ deployed" : "-"}
-          trendUp={true}
-        />
-        <KPICard 
-          title="Birds Tracked" 
-          value={birdsCount} 
-          icon={Bird} 
-          color="bg-slate-600" 
-          trend={birdsCount > 0 ? "Tracking active" : "No active tracking"}
-          trendUp={true}
-        />
-        <KPICard 
-          title="Active Alerts" 
-          value={activeAlertsCount} 
-          icon={AlertTriangle} 
-          color="bg-brand-700" 
-          trend={activeAlertsCount === 0 ? "System healthy" : "Attention needed"}
-          trendUp={activeAlertsCount === 0}
-        />
-        <KPICard 
-          title="Satellites Used" 
-          value={uniqueSatellites || totalFixes} 
-          icon={Satellite} 
-          color="bg-slate-500" 
-          trend={`${totalFixes} total fixes`}
-          trendUp={true}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Activity Chart */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-          <div className="w-full min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Argos Message Volume (7 Days)</h3>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9ca3af'}} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', color: '#f3f4f6' }}
-                    itemStyle={{ color: '#f3f4f6' }}
-                  />
-                  <Line type="monotone" dataKey="fixes" stroke="#b79355" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
-                </LineChart>
-              </ResponsiveContainer>
+      {/* Top Level KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
+        
+        <div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Radio size={80} className="text-slate-600" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 mb-1 flex items-center gap-2"><Radio size={16}/> Active Transmitters</p>
+            <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{activeTransmittersCount}</h3>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
+              <span>{transmitters.length} Total Deployed</span>
             </div>
           </div>
         </div>
 
-        {/* Recent Alerts List */}
-        <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Alerts</h3>
-             <span onClick={() => setActiveTab('Real-Time Alerts')} className="text-xs font-medium text-brand-600 hover:underline cursor-pointer dark:text-brand-400">View All</span>
+        <div className="bg-gradient-to-br from-brand-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-brand-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
+            <HoubaraIcon size={80} color="#b79355" />
           </div>
-          <div className="space-y-4">
-            {alerts.length > 0 ? alerts.slice(0, 4).map((alert) => (
-              <div key={alert.id} className="flex gap-3 items-start p-3 rounded-lg bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
-                <div className={`w-2 h-2 mt-1.5 rounded-full flex-shrink-0 ${
-                  alert.severity === 'critical' ? 'bg-red-500' : alert.severity === 'warning' ? 'bg-amber-500' : 'bg-blue-400'
-                }`} />
-                <div>
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-200">{alert.message}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{alert.bird_name} ({alert.transmitter_id})</span>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">• {formatDateTime(alert.timestamp, timeZone)}</span>
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-2">
+                <HoubaraIcon size={40} color="currentColor" className="text-brand-700 dark:text-brand-400 flex-shrink-0" /> 
+                <div className="flex flex-col justify-center">
+                    <p className="text-sm font-semibold text-brand-700 dark:text-brand-400 leading-tight">Birds Tracked</p>
+                    <h3 className="text-4xl font-black text-gray-900 dark:text-white leading-tight mt-0.5">{birdsCount}</h3>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded mt-2">
+              <span>{birdsCount > 0 ? "Fleet tracking active" : "No birds registered"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Navigation size={80} className="text-blue-600" />
+          </div>
+          <div className="relative z-10">
+            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-1 flex items-center gap-2"><Navigation size={16}/> 24h Activity Fixes</p>
+            <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{fixesLast24h}</h3>
+            <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
+              <Activity size={12} /> High throughput
+            </div>
+          </div>
+        </div>
+
+        <div className={`bg-gradient-to-br ${criticalAlertsCount > 0 ? 'from-red-50 border-red-200' : 'from-emerald-50 border-emerald-200'} to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm relative overflow-hidden group`}>
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <ShieldAlert size={80} className={criticalAlertsCount > 0 ? "text-red-600" : "text-emerald-600"} />
+          </div>
+          <div className="relative z-10">
+            <p className={`text-sm font-semibold mb-1 flex items-center gap-2 ${criticalAlertsCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+              <AlertTriangle size={16}/> Active Alerts
+            </p>
+            <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{activeAlertsCount}</h3>
+            <div className={`flex items-center gap-2 text-xs font-medium w-fit px-2 py-1 rounded ${criticalAlertsCount > 0 ? 'text-red-700 bg-red-100/50 dark:bg-slate-700 dark:text-red-400' : 'text-emerald-700 bg-emerald-100/50 dark:bg-slate-700 dark:text-emerald-400'}`}>
+              <span>{activeAlertsCount === 0 ? "System completely healthy" : `${criticalAlertsCount} critical alerts`}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Analytical Section */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        
+        {/* Left Column - Large Charts */}
+        <div className="xl:col-span-2 space-y-6">
+          
+          {/* Advanced Area Chart for Data Volume */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Data Ingestion Flow</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Argos message volume processed over the last 7 days</p>
+            
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorFixes" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#b79355" stopOpacity={0.4}/>
+                      <stop offset="95%" stopColor="#b79355" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" opacity={0.4} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#6b7280', fontWeight: 500}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#6b7280', fontWeight: 500}} />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', color: '#f8fafc', borderRadius: '12px', backdropFilter: 'blur(4px)', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ color: '#f8fafc', fontWeight: 600 }}
+                  />
+                  <Area type="monotone" dataKey="fixes" name="Total Fixes" stroke="#b79355" strokeWidth={4} fillOpacity={1} fill="url(#colorFixes)" animationDuration={1500} activeDot={{r: 8, strokeWidth: 0, fill: '#b79355'}} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Lower Analytical Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* LC Radar Chart */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Location Class Accuracy</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Quality distribution (Last 7 Days)</p>
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={lcData}>
+                    <PolarGrid stroke="#e5e7eb" />
+                    <PolarAngleAxis dataKey="lc" tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 600 }} />
+                    <Radar name="Count" dataKey="count" stroke="#3b82f6" strokeWidth={2} fill="#3b82f6" fillOpacity={0.4} animationDuration={1500} />
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
+                      itemStyle={{ color: '#3b82f6', fontWeight: 600 }}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Battery Health Bar Chart */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Active Fleet Battery Health</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Voltage distribution across deployed PTTs</p>
+              <div className="h-48 w-full">
+                {batteryData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={batteryData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.5} />
+                      <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#6b7280'}} />
+                      <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#374151', fontWeight: 600}} width={95} />
+                      <RechartsTooltip 
+                        contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
+                        itemStyle={{ color: '#f8fafc', fontWeight: 600 }}
+                        cursor={{fill: 'rgba(0,0,0,0.05)'}}
+                      />
+                      <Bar dataKey="count" radius={[0, 4, 4, 0]} animationDuration={1000} barSize={24}>
+                        {batteryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                    <Zap size={24} className="mb-2 opacity-50" />
+                    <span className="text-sm">No battery telemetry available</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Right Column - Side Panels */}
+        <div className="space-y-6">
+          
+          {/* Status Donut (Moved to Sidebar) */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Network Status</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Current state of all deployed units</p>
+            <div className="h-44 w-full flex justify-center items-center">
+              {statusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={4}
+                      dataKey="value"
+                      animationDuration={1000}
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
+                      itemStyle={{ color: '#f8fafc', fontWeight: 600 }}
+                    />
+                    <Legend verticalAlign="bottom" height={20} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 500 }}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-gray-400 text-sm">No transmitter data</div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Alerts Feed */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col h-[380px]">
+            <div className="flex justify-between items-center mb-4">
+               <div>
+                 <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                   Live Alert Feed
+                 </h3>
+                 <p className="text-xs text-gray-500 dark:text-gray-400">Monitoring anomalies</p>
+               </div>
+               <button onClick={() => setActiveTab('Real-Time Alerts')} className="text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors shadow-sm dark:text-brand-400 dark:bg-brand-900/20 dark:hover:bg-brand-900/40">View All</button>
+            </div>
+            <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+              {systemAlerts.length > 0 ? systemAlerts.slice(0, 6).map((alert) => (
+                <div key={alert.id} className="group flex gap-3 items-start p-3.5 rounded-xl bg-gray-50/80 dark:bg-slate-700/50 hover:bg-white dark:hover:bg-slate-600 hover:shadow-md transition-all border border-transparent hover:border-gray-200 dark:hover:border-slate-500">
+                  <div className={`w-3 h-3 mt-1 rounded-full flex-shrink-0 shadow-sm ${
+                    alert.severity === 'critical' ? 'bg-red-500 shadow-red-500/40' : alert.severity === 'warning' ? 'bg-amber-500 shadow-amber-500/40' : 'bg-blue-400 shadow-blue-400/40'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-snug mb-1.5 line-clamp-2">{alert.message}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-brand-700 dark:text-brand-400 truncate bg-brand-100/50 dark:bg-brand-900/30 px-2 py-0.5 rounded">{alert.bird_name || `PTT ${alert.transmitter_id}`}</span>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 whitespace-nowrap bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded shadow-sm border border-gray-100 dark:border-slate-600 font-medium">
+                        {formatDateTime(alert.timestamp, timeZone).split(' ')[1]}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )) : (
-              <div className="py-8 text-center text-gray-400 text-sm">
-                No active alerts
-              </div>
-            )}
+              )) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-3">
+                  <div className="w-16 h-16 rounded-full bg-gray-50 dark:bg-slate-700/50 flex items-center justify-center">
+                    <ShieldAlert size={28} className="text-gray-300 dark:text-gray-500" />
+                  </div>
+                  <span className="text-sm font-semibold">No anomalies detected</span>
+                </div>
+              )}
+            </div>
           </div>
+
         </div>
       </div>
     </div>

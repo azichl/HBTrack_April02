@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getAuth, updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { saveDocument } from '../services/firestoreService';
+import { CustomSelect } from '../components/CustomSelect';
 
 export const Settings = () => {
   const { 
@@ -185,31 +186,35 @@ export const Settings = () => {
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Timezone</label>
                 <div className="relative">
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <select 
+                  <CustomSelect 
                     value={timeZone}
-                    onChange={e => setTimeZone(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none transition-shadow cursor-pointer"
-                  >
-                     <option value="UTC">UTC (Coordinated Universal Time)</option>
-                     <option value="Asia/Qatar">Asia/Qatar (GMT+3)</option>
-                     <option value="Asia/Dubai">Asia/Dubai (GMT+4)</option>
-                     <option value="Asia/Almaty">Asia/Almaty (GMT+5)</option>
-                  </select>
+                    onChange={(val) => setTimeZone(val)}
+                    className="w-full"
+                    buttonClassName="pl-10 pr-4 py-2.5"
+                    options={[
+                      { value: 'UTC', label: 'UTC (Coordinated Universal Time)' },
+                      { value: 'Asia/Qatar', label: 'Asia/Qatar (GMT+3)' },
+                      { value: 'Asia/Dubai', label: 'Asia/Dubai (GMT+4)' },
+                      { value: 'Asia/Almaty', label: 'Asia/Almaty (GMT+5)' }
+                    ]}
+                  />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Language</label>
                 <div className="relative">
                   <Languages className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                  <select 
+                  <CustomSelect 
                     value={profile.language}
-                    onChange={e => setProfile({...profile, language: e.target.value})}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none transition-shadow cursor-pointer"
-                  >
-                     <option value="English">English</option>
-                     <option value="Arabic">Arabic</option>
-                     <option value="French">French</option>
-                  </select>
+                    onChange={(val) => setProfile({...profile, language: val})}
+                    className="w-full"
+                    buttonClassName="pl-10 pr-4 py-2.5"
+                    options={[
+                      { value: 'English', label: 'English' },
+                      { value: 'Arabic', label: 'Arabic' },
+                      { value: 'French', label: 'French' }
+                    ]}
+                  />
                 </div>
               </div>
             </div>

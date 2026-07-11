@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_e580df29399d8f9e18e13e9ea6c9268b {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_e580df29399d8f9e18e13e9ea6c9268b" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_e580df29399d8f9e18e13e9ea6c9268b = L.map(
+                "map_e580df29399d8f9e18e13e9ea6c9268b",
+                {
+                    center: [39.268345, 38.19513],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 7,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_e783165028620f526523881148249163 = L.tileLayer(
+                "https://mt1.google.com/vt/lyrs=y\u0026x={x}\u0026y={y}\u0026z={z}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Google Satellite",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_e783165028620f526523881148249163.addTo(map_e580df29399d8f9e18e13e9ea6c9268b);
+        
+    
+            var tile_layer_fd9c60486b71b90ebe732fd80e456dd2 = L.tileLayer(
+                "https://earthengine.googleapis.com/v1/projects/trackapp-v2/maps/144a1944b3b33f7cc6f76a42fb1078cd-f5aece10b783548c077aeacfe64eb872/tiles/{z}/{x}/{y}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Google Earth Engine",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_fd9c60486b71b90ebe732fd80e456dd2.addTo(map_e580df29399d8f9e18e13e9ea6c9268b);
+        
+    
+            var tile_layer_b8bdae2abb8a0bc4ea3331fad69d4424 = L.tileLayer(
+                "https://earthengine.googleapis.com/v1/projects/trackapp-v2/maps/2e0bffc5bfb5c55fccdf604aaabdfeb5-4219cdc38b7c8c8c290d990baf40e1f7/tiles/{z}/{x}/{y}",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": false,
+  "attribution": "Google Earth Engine",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_b8bdae2abb8a0bc4ea3331fad69d4424.addTo(map_e580df29399d8f9e18e13e9ea6c9268b);
+        
+    
+            var feature_group_dbbd350e59e5f51281529ce824a5bbfd = L.featureGroup(
+                {
+}
+            );
+        
+    
+            var marker_2ed1fcae6477b297282e2623c7e72453 = L.marker(
+                [40.68347, 66.86854],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_8cbf6cc251c622147dcde7d2375b8bf6 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_391c0d108d1e97aede751b71fc5adfca = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_9e3c8d7b76116f0267f139b0ab5b7e7e = $(`<div id="html_9e3c8d7b76116f0267f139b0ab5b7e7e" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242091</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-28 04:47 UTC<br/>             <b>Lat:</b> 40.68347<br/>             <b>Lon:</b> 66.86854         </div>         </div>`)[0];
+                popup_391c0d108d1e97aede751b71fc5adfca.setContent(html_9e3c8d7b76116f0267f139b0ab5b7e7e);
+            
+        
+
+        marker_2ed1fcae6477b297282e2623c7e72453.bindPopup(popup_391c0d108d1e97aede751b71fc5adfca)
+        ;
+
+        
+    
+    
+            marker_2ed1fcae6477b297282e2623c7e72453.bindTooltip(
+                `<div>
+                     PTT 242091
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_2ed1fcae6477b297282e2623c7e72453.setIcon(icon_8cbf6cc251c622147dcde7d2375b8bf6);
+            
+    
+            var marker_e1cbf899973bb1833d5a230182bb3cb7 = L.marker(
+                [40.59458, 66.94255],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_df0410f120fe03c2ba4a16460f86315b = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_795718649fb8bf81b495520634155e6b = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_995b5b2eae2428cbd507b7ed83ca74a2 = $(`<div id="html_995b5b2eae2428cbd507b7ed83ca74a2" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242081</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-28 04:46 UTC<br/>             <b>Lat:</b> 40.59458<br/>             <b>Lon:</b> 66.94255         </div>         </div>`)[0];
+                popup_795718649fb8bf81b495520634155e6b.setContent(html_995b5b2eae2428cbd507b7ed83ca74a2);
+            
+        
+
+        marker_e1cbf899973bb1833d5a230182bb3cb7.bindPopup(popup_795718649fb8bf81b495520634155e6b)
+        ;
+
+        
+    
+    
+            marker_e1cbf899973bb1833d5a230182bb3cb7.bindTooltip(
+                `<div>
+                     PTT 242081
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_e1cbf899973bb1833d5a230182bb3cb7.setIcon(icon_df0410f120fe03c2ba4a16460f86315b);
+            
+    
+            var marker_22853d1ff01f4759589cb28f03d97e95 = L.marker(
+                [40.61666, 66.94705],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_ad39a5f02c82bf4995ce4665f2629d46 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_a99c2ff2f10d17c50ee948a56bab6a2d = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_2fbd69f0c32bfe231274708e2e5b2b5f = $(`<div id="html_2fbd69f0c32bfe231274708e2e5b2b5f" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242080</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-28 04:46 UTC<br/>             <b>Lat:</b> 40.61666<br/>             <b>Lon:</b> 66.94705         </div>         </div>`)[0];
+                popup_a99c2ff2f10d17c50ee948a56bab6a2d.setContent(html_2fbd69f0c32bfe231274708e2e5b2b5f);
+            
+        
+
+        marker_22853d1ff01f4759589cb28f03d97e95.bindPopup(popup_a99c2ff2f10d17c50ee948a56bab6a2d)
+        ;
+
+        
+    
+    
+            marker_22853d1ff01f4759589cb28f03d97e95.bindTooltip(
+                `<div>
+                     PTT 242080
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_22853d1ff01f4759589cb28f03d97e95.setIcon(icon_ad39a5f02c82bf4995ce4665f2629d46);
+            
+    
+            var marker_32d254796f7f0dc6096afa5052fead4e = L.marker(
+                [39.69249, 64.99098],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_2c910b1a165e121f8abafb5b7016f14a = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_85874ee7c724855c601dfca816a3a8aa = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_34ea211fece2f53f3c6a633420a3e327 = $(`<div id="html_34ea211fece2f53f3c6a633420a3e327" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 36109</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-28 04:45 UTC<br/>             <b>Lat:</b> 39.69249<br/>             <b>Lon:</b> 64.99098         </div>         </div>`)[0];
+                popup_85874ee7c724855c601dfca816a3a8aa.setContent(html_34ea211fece2f53f3c6a633420a3e327);
+            
+        
+
+        marker_32d254796f7f0dc6096afa5052fead4e.bindPopup(popup_85874ee7c724855c601dfca816a3a8aa)
+        ;
+
+        
+    
+    
+            marker_32d254796f7f0dc6096afa5052fead4e.bindTooltip(
+                `<div>
+                     PTT 36109
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_32d254796f7f0dc6096afa5052fead4e.setIcon(icon_2c910b1a165e121f8abafb5b7016f14a);
+            
+    
+            var marker_1e074a799315b820bfd9005ae651ab47 = L.marker(
+                [31.75019, -0.40661],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_d6e873611ddd50cbae561f8e7ec80430 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_f10bd3995c8e7d0bf1d8d220ded92ad3 = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_78042af819258f275226c7afca4913f6 = $(`<div id="html_78042af819258f275226c7afca4913f6" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242086</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-28 03:57 UTC<br/>             <b>Lat:</b> 31.75019<br/>             <b>Lon:</b> -0.40661         </div>         </div>`)[0];
+                popup_f10bd3995c8e7d0bf1d8d220ded92ad3.setContent(html_78042af819258f275226c7afca4913f6);
+            
+        
+
+        marker_1e074a799315b820bfd9005ae651ab47.bindPopup(popup_f10bd3995c8e7d0bf1d8d220ded92ad3)
+        ;
+
+        
+    
+    
+            marker_1e074a799315b820bfd9005ae651ab47.bindTooltip(
+                `<div>
+                     PTT 242086
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_1e074a799315b820bfd9005ae651ab47.setIcon(icon_d6e873611ddd50cbae561f8e7ec80430);
+            
+    
+            var marker_0884db74831a50e2b1dbee2771aeac26 = L.marker(
+                [44.83983, 76.79687],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_9198efc0196cbae2b4a9cb553a9407e8 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_953bc70277b640e7a23a3a6b39843fbc = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_dcf02214d3e23c59569fd4e4b7f4a800 = $(`<div id="html_dcf02214d3e23c59569fd4e4b7f4a800" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 284105</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-28 02:38 UTC<br/>             <b>Lat:</b> 44.83983<br/>             <b>Lon:</b> 76.79687         </div>         </div>`)[0];
+                popup_953bc70277b640e7a23a3a6b39843fbc.setContent(html_dcf02214d3e23c59569fd4e4b7f4a800);
+            
+        
+
+        marker_0884db74831a50e2b1dbee2771aeac26.bindPopup(popup_953bc70277b640e7a23a3a6b39843fbc)
+        ;
+
+        
+    
+    
+            marker_0884db74831a50e2b1dbee2771aeac26.bindTooltip(
+                `<div>
+                     PTT 284105
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_0884db74831a50e2b1dbee2771aeac26.setIcon(icon_9198efc0196cbae2b4a9cb553a9407e8);
+            
+    
+            var marker_d6e36fc60f6c040405a0ef59160a2eea = L.marker(
+                [46.93862, 66.89926],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_562879ebe2729e83ef8c3ef99d9c8088 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_6c1bdd9c45589921f4d293bc356f499d = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_6d82a2edddde4f3ec649acf1e221c81d = $(`<div id="html_6d82a2edddde4f3ec649acf1e221c81d" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 244289</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 21:26 UTC<br/>             <b>Lat:</b> 46.93862<br/>             <b>Lon:</b> 66.89926         </div>         </div>`)[0];
+                popup_6c1bdd9c45589921f4d293bc356f499d.setContent(html_6d82a2edddde4f3ec649acf1e221c81d);
+            
+        
+
+        marker_d6e36fc60f6c040405a0ef59160a2eea.bindPopup(popup_6c1bdd9c45589921f4d293bc356f499d)
+        ;
+
+        
+    
+    
+            marker_d6e36fc60f6c040405a0ef59160a2eea.bindTooltip(
+                `<div>
+                     PTT 244289
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_d6e36fc60f6c040405a0ef59160a2eea.setIcon(icon_562879ebe2729e83ef8c3ef99d9c8088);
+            
+    
+            var marker_468fd6650f2fa45b9402f0f630057500 = L.marker(
+                [41.52776, 64.92595],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_1efa98c9f549f5e6a9709af1b04acce8 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_c904eceaf02e54d5a5c65ab35b0a8c7f = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_41a0a607743e0b776775cb336e0a0848 = $(`<div id="html_41a0a607743e0b776775cb336e0a0848" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 244285</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 21:24 UTC<br/>             <b>Lat:</b> 41.52776<br/>             <b>Lon:</b> 64.92595         </div>         </div>`)[0];
+                popup_c904eceaf02e54d5a5c65ab35b0a8c7f.setContent(html_41a0a607743e0b776775cb336e0a0848);
+            
+        
+
+        marker_468fd6650f2fa45b9402f0f630057500.bindPopup(popup_c904eceaf02e54d5a5c65ab35b0a8c7f)
+        ;
+
+        
+    
+    
+            marker_468fd6650f2fa45b9402f0f630057500.bindTooltip(
+                `<div>
+                     PTT 244285
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_468fd6650f2fa45b9402f0f630057500.setIcon(icon_1efa98c9f549f5e6a9709af1b04acce8);
+            
+    
+            var marker_61891eef75f00f56d0a23bdc11db6df2 = L.marker(
+                [46.85194, 67.25759],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_7b5866530303930bcee09b131349b1db = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_140b95cced8bac17bb45b0dd4cf6e637 = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_d2c8ff558480f4facb89ef8dc7159cf2 = $(`<div id="html_d2c8ff558480f4facb89ef8dc7159cf2" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 244292</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 21:04 UTC<br/>             <b>Lat:</b> 46.85194<br/>             <b>Lon:</b> 67.25759         </div>         </div>`)[0];
+                popup_140b95cced8bac17bb45b0dd4cf6e637.setContent(html_d2c8ff558480f4facb89ef8dc7159cf2);
+            
+        
+
+        marker_61891eef75f00f56d0a23bdc11db6df2.bindPopup(popup_140b95cced8bac17bb45b0dd4cf6e637)
+        ;
+
+        
+    
+    
+            marker_61891eef75f00f56d0a23bdc11db6df2.bindTooltip(
+                `<div>
+                     PTT 244292
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_61891eef75f00f56d0a23bdc11db6df2.setIcon(icon_7b5866530303930bcee09b131349b1db);
+            
+    
+            var marker_a30143bec0d3572676c7e22f94dae338 = L.marker(
+                [44.29534, 74.89223],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_9de1c658e9baca8f58dc3b6c3c20ce07 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_2bf4f6e0fc3a7d6b13bbae6277529f1b = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_2a181e5444ee776eebbdad6c1987c51d = $(`<div id="html_2a181e5444ee776eebbdad6c1987c51d" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 283705</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 18:00 UTC<br/>             <b>Lat:</b> 44.29534<br/>             <b>Lon:</b> 74.89223         </div>         </div>`)[0];
+                popup_2bf4f6e0fc3a7d6b13bbae6277529f1b.setContent(html_2a181e5444ee776eebbdad6c1987c51d);
+            
+        
+
+        marker_a30143bec0d3572676c7e22f94dae338.bindPopup(popup_2bf4f6e0fc3a7d6b13bbae6277529f1b)
+        ;
+
+        
+    
+    
+            marker_a30143bec0d3572676c7e22f94dae338.bindTooltip(
+                `<div>
+                     PTT 283705
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_a30143bec0d3572676c7e22f94dae338.setIcon(icon_9de1c658e9baca8f58dc3b6c3c20ce07);
+            
+    
+            var marker_d67bad85b0063faabf1ccfef3994009a = L.marker(
+                [31.64077, 0.18827],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_cd85edf9116b9a40e2840f57df97a02d = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_029ab17df6c44ad16d57bff1bbbb8ebb = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_7daa73049df6f5553b5492c900084a35 = $(`<div id="html_7daa73049df6f5553b5492c900084a35" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242087</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 17:55 UTC<br/>             <b>Lat:</b> 31.64077<br/>             <b>Lon:</b> 0.18827         </div>         </div>`)[0];
+                popup_029ab17df6c44ad16d57bff1bbbb8ebb.setContent(html_7daa73049df6f5553b5492c900084a35);
+            
+        
+
+        marker_d67bad85b0063faabf1ccfef3994009a.bindPopup(popup_029ab17df6c44ad16d57bff1bbbb8ebb)
+        ;
+
+        
+    
+    
+            marker_d67bad85b0063faabf1ccfef3994009a.bindTooltip(
+                `<div>
+                     PTT 242087
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_d67bad85b0063faabf1ccfef3994009a.setIcon(icon_cd85edf9116b9a40e2840f57df97a02d);
+            
+    
+            var marker_b8cc193c4fe9c75f3be4914961d20652 = L.marker(
+                [46.33267, 72.46326],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_499aaab6086efaa4d5fb91e9e31e5973 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_d2d88679db56b40e3b3c9e51ab7a15d3 = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_9c022ba65f1cff8b823cf477520431da = $(`<div id="html_9c022ba65f1cff8b823cf477520431da" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 283700</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 17:51 UTC<br/>             <b>Lat:</b> 46.33267<br/>             <b>Lon:</b> 72.46326         </div>         </div>`)[0];
+                popup_d2d88679db56b40e3b3c9e51ab7a15d3.setContent(html_9c022ba65f1cff8b823cf477520431da);
+            
+        
+
+        marker_b8cc193c4fe9c75f3be4914961d20652.bindPopup(popup_d2d88679db56b40e3b3c9e51ab7a15d3)
+        ;
+
+        
+    
+    
+            marker_b8cc193c4fe9c75f3be4914961d20652.bindTooltip(
+                `<div>
+                     PTT 283700
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_b8cc193c4fe9c75f3be4914961d20652.setIcon(icon_499aaab6086efaa4d5fb91e9e31e5973);
+            
+    
+            var marker_4237a7ec691925645ed996a87c3e2fae = L.marker(
+                [40.60029, 66.93827],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_9fb49b98fe1543b19f5cc1e65d6c9094 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_332ebb45206ae379f4cfdcc93aca77e0 = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_cf97de0ce99e2ce74e4045c3cc0a7192 = $(`<div id="html_cf97de0ce99e2ce74e4045c3cc0a7192" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242090</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 16:03 UTC<br/>             <b>Lat:</b> 40.60029<br/>             <b>Lon:</b> 66.93827         </div>         </div>`)[0];
+                popup_332ebb45206ae379f4cfdcc93aca77e0.setContent(html_cf97de0ce99e2ce74e4045c3cc0a7192);
+            
+        
+
+        marker_4237a7ec691925645ed996a87c3e2fae.bindPopup(popup_332ebb45206ae379f4cfdcc93aca77e0)
+        ;
+
+        
+    
+    
+            marker_4237a7ec691925645ed996a87c3e2fae.bindTooltip(
+                `<div>
+                     PTT 242090
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_4237a7ec691925645ed996a87c3e2fae.setIcon(icon_9fb49b98fe1543b19f5cc1e65d6c9094);
+            
+    
+            var marker_71a77ce273a1b05c2bc16c4e6d734277 = L.marker(
+                [31.59807, 0.33767],
+                {
+}
+            ).addTo(feature_group_dbbd350e59e5f51281529ce824a5bbfd);
+        
+    
+            var icon_b2f4076fc1428edaaed3a9c94b868d10 = L.AwesomeMarkers.icon(
+                {
+  "markerColor": "green",
+  "iconColor": "white",
+  "icon": "info-sign",
+  "prefix": "glyphicon",
+  "extraClasses": "fa-rotate-0",
+}
+            );
+        
+    
+        var popup_71746ca53e842396aed46c51123fe6da = L.popup({
+  "maxWidth": 200,
+});
+
+        
+            
+                var html_8b7f9808dc5cda3967a624fb88f793bc = $(`<div id="html_8b7f9808dc5cda3967a624fb88f793bc" style="width: 100.0%; height: 100.0%;">         <div style="font-family: Arial, sans-serif; font-size: 12px; width: 180px;">             <h4 style="margin: 0 0 5px 0; color: #4F46E5;">PTT 242085</h4>             <hr style="margin: 5px 0; border: 0; border-top: 1px solid #E5E7EB;"/>             <b>Time:</b> 2026-06-27 09:15 UTC<br/>             <b>Lat:</b> 31.59807<br/>             <b>Lon:</b> 0.33767         </div>         </div>`)[0];
+                popup_71746ca53e842396aed46c51123fe6da.setContent(html_8b7f9808dc5cda3967a624fb88f793bc);
+            
+        
+
+        marker_71a77ce273a1b05c2bc16c4e6d734277.bindPopup(popup_71746ca53e842396aed46c51123fe6da)
+        ;
+
+        
+    
+    
+            marker_71a77ce273a1b05c2bc16c4e6d734277.bindTooltip(
+                `<div>
+                     PTT 242085
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+                marker_71a77ce273a1b05c2bc16c4e6d734277.setIcon(icon_b2f4076fc1428edaaed3a9c94b868d10);
+            
+    
+            feature_group_dbbd350e59e5f51281529ce824a5bbfd.addTo(map_e580df29399d8f9e18e13e9ea6c9268b);
+        
+    
+            var layer_control_0d5faa0958c8fd828682791be988f28d_layers = {
+                base_layers : {
+                    "https://mt1.google.com/vt/lyrs=y\u0026x={x}\u0026y={y}\u0026z={z}" : tile_layer_e783165028620f526523881148249163,
+                },
+                overlays :  {
+                    "NDVI (Vegetation Index)" : tile_layer_fd9c60486b71b90ebe732fd80e456dd2,
+                    "LST (Land Surface Temp \u00b0C)" : tile_layer_b8bdae2abb8a0bc4ea3331fad69d4424,
+                    "Bird Locations" : feature_group_dbbd350e59e5f51281529ce824a5bbfd,
+                },
+            };
+            let layer_control_0d5faa0958c8fd828682791be988f28d = L.control.layers(
+                layer_control_0d5faa0958c8fd828682791be988f28d_layers.base_layers,
+                layer_control_0d5faa0958c8fd828682791be988f28d_layers.overlays,
+                {
+  "position": "topright",
+  "collapsed": true,
+  "autoZIndex": true,
+}
+            ).addTo(map_e580df29399d8f9e18e13e9ea6c9268b);
+
+        
+</script>
+</html>

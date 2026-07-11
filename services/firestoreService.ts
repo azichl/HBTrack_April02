@@ -1,7 +1,7 @@
 import { 
   collection, doc, setDoc, getDocs, onSnapshot, query, deleteDoc, 
   writeBatch, where, orderBy, limit, startAfter, getCountFromServer,
-  DocumentSnapshot
+  DocumentSnapshot, addDoc, updateDoc, Timestamp, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ArgosMessage } from '../types';
@@ -29,6 +29,37 @@ export const deleteDocument = async (collectionName: string, id: string) => {
   }
 };
 
+/**
+ * Deletes ALL documents in a collection in batches of 400.
+ * Returns the total number of deleted documents.
+ */
+export const deleteCollection = async (
+  collectionName: string,
+  onProgress?: (deleted: number) => void
+): Promise<number> => {
+  const BATCH_LIMIT = 400;
+  let totalDeleted = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const q = query(collection(db, collectionName), limit(BATCH_LIMIT));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) { hasMore = false; break; }
+
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+    totalDeleted += snapshot.docs.length;
+    onProgress?.(totalDeleted);
+
+    if (snapshot.docs.length < BATCH_LIMIT) hasMore = false;
+  }
+
+  console.log(`[Firestore] Deleted ${totalDeleted} docs from ${collectionName}`);
+  return totalDeleted;
+};
+
+
 // ─── Batch Operations ─────────────────────────────────────────────────────────
 
 /** Batch write up to 500 documents at a time */
@@ -52,6 +83,28 @@ export const batchWriteDocuments = async (collectionName: string, documents: Arr
 
   console.log(`[Firestore] Batch wrote ${written} docs to ${collectionName}`);
   return written;
+};
+
+/** Batch delete up to 400 documents at a time */
+export const batchDeleteDocuments = async (collectionName: string, documentIds: string[]) => {
+  const BATCH_LIMIT = 400;
+  let deleted = 0;
+
+  for (let i = 0; i < documentIds.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    const chunk = documentIds.slice(i, i + BATCH_LIMIT);
+    
+    chunk.forEach(id => {
+      const ref = doc(db, collectionName, id);
+      batch.delete(ref);
+    });
+
+    await batch.commit();
+    deleted += chunk.length;
+  }
+
+  console.log(`[Firestore] Batch deleted ${deleted} docs from ${collectionName}`);
+  return deleted;
 };
 
 // ─── Collection Loading ───────────────────────────────────────────────────────
@@ -227,6 +280,59 @@ export const loadArgosPositions = async (options: {
 };
 
 /**
+ * Load ALL argos positions from Firebase efficiently without pagination.
+ * Use for client-side filtering and bulk operations.
+ */
+export const loadAllArgosPositions = async (): Promise<any[]> => {
+  try {
+    const snapshot = await getDocs(query(collection(db, 'argos_positions'), orderBy('timestamp', 'desc')));
+    const data: any[] = [];
+    snapshot.forEach(docSnap => {
+      data.push({ id: docSnap.id, _collection: 'argos_positions', ...docSnap.data() });
+    });
+    console.log(`[Firestore] Loaded ${data.length} total argos positions.`);
+    return data;
+  } catch (error) {
+    console.error('[Firestore] Error loading all argos_positions:', error);
+    return [];
+  }
+};
+
+/**
+ * Load ALL positions (the collection used by Live Tracking map).
+ */
+export const loadAllPositions = async (): Promise<any[]> => {
+  try {
+    const snapshot = await getDocs(query(collection(db, 'positions'), orderBy('timestamp', 'desc')));
+    const data: any[] = [];
+    snapshot.forEach(docSnap => {
+      const d = docSnap.data();
+      data.push({
+        id: docSnap.id,
+        _collection: 'positions',
+        platformId: d.transmitter_id || '',
+        programId: '',
+        lat: d.lat,
+        lon: d.lon,
+        lc: d.lc || '',
+        locationType: d.locationType || '',
+        msgType: '',
+        dopplerError: '',
+        timestamp: d.timestamp,
+        satellite: d.satellite || '',
+        speed_kmh: d.speed_kmh,
+        course: d.course
+      });
+    });
+    console.log(`[Firestore] Loaded ${data.length} total positions.`);
+    return data;
+  } catch (error) {
+    console.error('[Firestore] Error loading all positions:', error);
+    return [];
+  }
+};
+
+/**
  * Get all unique platform IDs from argos_positions for the filter dropdown.
  */
 export const getArgosTransmitterIds = async (): Promise<string[]> => {
@@ -261,9 +367,6 @@ export const getArgosPositionCount = async (platformId?: string): Promise<number
   }
 };
 
-/**
- * Delete all argos_positions (with optional platformId filter)
- */
 export const deleteArgosPositions = async (platformId?: string): Promise<number> => {
   try {
     const q = platformId
@@ -285,49 +388,185 @@ export const deleteArgosPositions = async (platformId?: string): Promise<number>
     
     console.log(`[Firestore] Deleted ${deleted} argos_positions`);
     return deleted;
-  } catch (error) {
-    console.error('[Firestore] Error deleting argos_positions:', error);
-    return 0;
+  } catch (err) {
+    console.error('Error deleting argos positions:', err);
+    throw err;
   }
+};
+
+/** Delete a single coordinate record from both argos_positions and positions */
+export const deleteCoordinateRecord = async (argosId: string | undefined, platformId: string, timestamp: string) => {
+  console.log('[Firestore] deleteCoordinateRecord called:', { argosId, platformId, timestamp });
+  const batch = writeBatch(db);
+  
+  if (argosId) {
+    batch.delete(doc(db, 'argos_positions', argosId));
+  } else if (platformId && timestamp) {
+    // If we don't have the explicit argosId (e.g. from Monitoring view), search for it
+    const argosQ = query(
+      collection(db, 'argos_positions'),
+      where('platformId', '==', String(platformId)),
+      where('timestamp', '==', timestamp)
+    );
+    const argosSnap = await getDocs(argosQ);
+    argosSnap.forEach(d => batch.delete(d.ref));
+  }
+  
+  if (platformId && timestamp) {
+    const posQ = query(
+      collection(db, 'positions'),
+      where('transmitter_id', '==', String(platformId)),
+      where('timestamp', '==', timestamp)
+    );
+    const posSnap = await getDocs(posQ);
+    posSnap.forEach(d => batch.delete(d.ref));
+  }
+  
+  await batch.commit();
+};
+
+/** Bulk delete records by a specific collection and list of IDs */
+export const bulkDeleteRecords = async (collectionName: string, docIds: string[]) => {
+  const BATCH_LIMIT = 400;
+  let deleted = 0;
+  for (let i = 0; i < docIds.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    const chunk = docIds.slice(i, i + BATCH_LIMIT);
+    chunk.forEach(id => batch.delete(doc(db, collectionName, id)));
+    await batch.commit();
+    deleted += chunk.length;
+  }
+  return deleted;
+};
+
+/** Bulk update records by a specific collection, list of IDs, and partial data */
+export const bulkUpdateRecords = async (collectionName: string, docIds: string[], data: any) => {
+  const BATCH_LIMIT = 400;
+  let updated = 0;
+  for (let i = 0; i < docIds.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    const chunk = docIds.slice(i, i + BATCH_LIMIT);
+    chunk.forEach(id => batch.update(doc(db, collectionName, id), data));
+    await batch.commit();
+    updated += chunk.length;
+  }
+  return updated;
 };
 
 // ─── Position-Specific Operations ─────────────────────────────────────────────
 
-/** Fetch historical positions for specific transmitters within a date range */
+/** Fetch historical positions for specific transmitters within a date range.
+ *  Queries argos_positions (primary data store) using platformId.
+ *  Falls back to the processed positions collection if needed.
+ */
 export const getHistoricalPositions = async (transmitterIds: string[], startDate: Date, endDate: Date) => {
-  if (!transmitterIds || transmitterIds.length === 0) return [];
-  
+  console.log('[Firestore] getHistoricalPositions called with:', { transmitterIds, startDate, endDate });
+  if (!transmitterIds || transmitterIds.length === 0) {
+    console.log('[Firestore] getHistoricalPositions: No transmitter IDs provided.');
+    return [];
+  }
+
+  const startISO = startDate.toISOString();
+  const endISO   = endDate.toISOString();
+  console.log('[Firestore] query time range (ISO):', { startISO, endISO });
+
+  // ── 1. Query argos_positions (primary source, always has data) ─────────────
   try {
-    const chunks = [];
+    let allArgosPositions: any[] = [];
+
+    // Firestore 'in' supports max 30 values; chunk if needed
     for (let i = 0; i < transmitterIds.length; i += 10) {
-      chunks.push(transmitterIds.slice(i, i + 10));
+      const chunk = transmitterIds.slice(i, i + 10);
+
+      // Query per PTT to avoid needing a composite index on 'in' + range
+      for (const pttId of chunk) {
+        console.log(`[Firestore] Querying argos_positions for PTT: ${pttId}`);
+        const q = query(
+          collection(db, 'argos_positions'),
+          where('platformId', '==', String(pttId)),
+          where('timestamp', '>=', startISO),
+          where('timestamp', '<=', endISO),
+          orderBy('timestamp', 'asc'),
+          limit(5000)
+        );
+        const snap = await getDocs(q);
+        console.log(`[Firestore] PTT ${pttId} returned ${snap.size} documents from argos_positions`);
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          allArgosPositions.push({
+            id: docSnap.id,
+            transmitter_id: String(d.platformId || pttId), // normalise field name
+            platformId: String(d.platformId || pttId),
+            lat: Number(d.lat),
+            lon: Number(d.lon),
+            timestamp: d.timestamp,
+            lc: d.lc || '',
+            satellite: d.satellite || '',
+            locationType: d.locationType || 'Doppler',
+            speed_kmh: d.speed_kmh || 0,
+          });
+        });
+      }
     }
 
-    let allPositions: any[] = [];
-    const startISO = startDate.toISOString();
-    const endISO = endDate.toISOString();
-
-    for (const chunk of chunks) {
-      const q = query(
-        collection(db, 'positions'),
-        where('transmitter_id', 'in', chunk),
-        where('timestamp', '>=', startISO),
-        where('timestamp', '<=', endISO)
+    if (allArgosPositions.length > 0) {
+      allArgosPositions.sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
-      
-      const snapshot = await getDocs(q);
-      snapshot.forEach(doc => {
-        allPositions.push({ id: doc.id, ...doc.data() });
-      });
+      console.log(`[Firestore] Loaded ${allArgosPositions.length} historical positions from argos_positions`);
+      return allArgosPositions;
+    } else {
+      console.log('[Firestore] No positions found in argos_positions, falling back to positions.');
+    }
+  } catch (error) {
+    console.warn('[Firestore] argos_positions query failed, falling back to positions:', error);
+  }
+
+  // ── 2. Fallback: query processed positions collection ──────────────────────
+  try {
+    let allPositions: any[] = [];
+
+    for (let i = 0; i < transmitterIds.length; i += 10) {
+      const chunk = transmitterIds.slice(i, i + 10);
+
+      for (const pttId of chunk) {
+        console.log(`[Firestore] Fallback query: positions for PTT: ${pttId}`);
+        const q = query(
+          collection(db, 'positions'),
+          where('transmitter_id', '==', String(pttId)),
+          where('timestamp', '>=', startISO),
+          where('timestamp', '<=', endISO),
+          orderBy('timestamp', 'asc'),
+          limit(5000)
+        );
+        const snap = await getDocs(q);
+        console.log(`[Firestore] Fallback PTT ${pttId} returned ${snap.size} documents from positions`);
+        snap.forEach(docSnap => {
+          const d = docSnap.data();
+          allPositions.push({
+            id: docSnap.id,
+            ...d,
+            transmitter_id: String(d.transmitter_id || pttId),
+            lat: Number(d.lat),
+            lon: Number(d.lon),
+            timestamp: d.timestamp,
+            locationType: d.locationType || 'Doppler',
+          });
+        });
+      }
     }
 
-    allPositions.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    allPositions.sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+    console.log(`[Firestore] Loaded ${allPositions.length} historical positions from positions (fallback)`);
     return allPositions;
   } catch (error) {
-    console.error('[Firestore] Error fetching historical positions:', error);
+    console.error('[Firestore] Error fetching historical positions fallback:', error);
     return [];
   }
 };
+
 
 /** Save positions in batch, using composite key as document ID */
 export const savePositions = async (positions: Array<{ id: string; [key: string]: any }>) => {
@@ -382,4 +621,136 @@ export const syncAlerts = async (alerts: Array<{ id: string; [key: string]: any 
     data: { ...a }
   }));
   return batchWriteDocuments('alerts', documents);
+};
+
+// ─── Support Tickets ──────────────────────────────────────────────────────────
+
+export interface SupportTicket {
+  id: string;
+  subject: string;
+  description: string;
+  status: 'open' | 'in-progress' | 'resolved';
+  priority: 'low' | 'medium' | 'high';
+  createdBy: string;       // uid of creator
+  createdByName: string;   // display name
+  createdByEmail: string;  // email
+  created: string;         // ISO date string
+  lastUpdate: string;      // ISO date string
+  resolvedBy?: string | null;    // name of who resolved
+}
+
+/** Create a new support ticket */
+export const createTicket = async (ticket: Omit<SupportTicket, 'id'>): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, 'support_tickets'), {
+      ...ticket,
+      createdAt: serverTimestamp()
+    });
+    // Update the doc with its own ID for easy reference
+    await updateDoc(docRef, { id: docRef.id });
+    return docRef.id;
+  } catch (error) {
+    console.error('[Firestore] Error creating ticket:', error);
+    throw error;
+  }
+};
+
+/** Update a ticket (status change, etc.) */
+export const updateTicket = async (ticketId: string, updates: Partial<SupportTicket>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'support_tickets', ticketId);
+    await updateDoc(docRef, { ...updates, lastUpdate: new Date().toISOString().split('T')[0] });
+  } catch (error) {
+    console.error(`[Firestore] Error updating ticket ${ticketId}:`, error);
+    throw error;
+  }
+};
+
+/** Subscribe to all tickets (real-time) */
+export const subscribeToTickets = (
+  callback: (tickets: SupportTicket[]) => void
+): (() => void) => {
+  const q = query(collection(db, 'support_tickets'));
+  return onSnapshot(q, (snapshot) => {
+    const tickets: SupportTicket[] = snapshot.docs.map(d => ({
+      ...d.data(),
+      id: d.id
+    } as SupportTicket));
+    // Sort by created date descending
+    tickets.sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+    callback(tickets);
+  }, (error) => {
+    console.error('[Firestore] Error subscribing to tickets:', error);
+  });
+};
+
+export const purgeInvalidCoordinates = async (onProgress?: (msg: string) => void) => {
+  let count = 0;
+  try {
+    // Purge positions
+    onProgress?.('Fetching positions...');
+    const posRef = collection(db, 'positions');
+    const posSnap = await getDocs(posRef);
+    const posBatch = [];
+    let currentBatch = writeBatch(db);
+    let ops = 0;
+
+    posSnap.forEach(doc => {
+       const data = doc.data();
+       const lat = Number(data.lat);
+       const lon = Number(data.lon);
+       if (Math.abs(lat) < 1 || Math.abs(lon) < 1 || isNaN(lat) || isNaN(lon)) {
+         currentBatch.delete(doc.ref);
+         ops++;
+         count++;
+         if (ops === 490) {
+           posBatch.push(currentBatch);
+           currentBatch = writeBatch(db);
+           ops = 0;
+         }
+       }
+    });
+    if (ops > 0) posBatch.push(currentBatch);
+
+    for(let i=0; i < posBatch.length; i++) {
+      await posBatch[i].commit();
+      onProgress?.(`Deleted batch ${i+1}/${posBatch.length} from positions`);
+    }
+
+    // Purge argos_positions
+    onProgress?.('Fetching argos_positions...');
+    const argosRef = collection(db, 'argos_positions');
+    const argosSnap = await getDocs(argosRef);
+    const argosBatch = [];
+    currentBatch = writeBatch(db);
+    ops = 0;
+    
+    argosSnap.forEach(doc => {
+       const data = doc.data();
+       const lat = Number(data.lat);
+       const lon = Number(data.lon);
+       if (Math.abs(lat) < 1 || Math.abs(lon) < 1 || isNaN(lat) || isNaN(lon)) {
+         currentBatch.delete(doc.ref);
+         ops++;
+         count++;
+         if (ops === 490) {
+           argosBatch.push(currentBatch);
+           currentBatch = writeBatch(db);
+           ops = 0;
+         }
+       }
+    });
+    if (ops > 0) argosBatch.push(currentBatch);
+    
+    for(let i=0; i < argosBatch.length; i++) {
+      await argosBatch[i].commit();
+      onProgress?.(`Deleted batch ${i+1}/${argosBatch.length} from argos_positions`);
+    }
+
+    onProgress?.(`✅ Purged ${count} invalid coordinates from database!`);
+  } catch (err) {
+    console.error('Purge error:', err);
+    onProgress?.(`❌ Purge error: ${(err as any).message}`);
+  }
+  return count;
 };

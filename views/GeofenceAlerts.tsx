@@ -14,6 +14,7 @@ export const GeofenceAlerts = () => {
       setActiveTab, 
       setSelectedTransmitterIds,
       resolveAlert,
+      resolveAllAlerts,
       timeZone
   } = useAppStore();
   
@@ -119,6 +120,14 @@ export const GeofenceAlerts = () => {
               <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center">
                   <h3 className="font-bold text-gray-900 dark:text-white">Alert History</h3>
                   <div className="flex gap-2">
+                      {activeTabState === 'active' && (
+                        <button 
+                          className="px-3 py-1.5 text-xs font-semibold rounded-md bg-white border border-gray-200 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors mr-2"
+                          onClick={() => resolveAllAlerts()}
+                        >
+                          Resolve All
+                        </button>
+                      )}
                       <button 
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTabState === 'active' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
                         onClick={() => setActiveTabState('active')}
@@ -127,7 +136,7 @@ export const GeofenceAlerts = () => {
                       </button>
                       <button 
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTabState === 'history' ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}`}
-                        onClick={() => setActiveTab('history')}
+                        onClick={() => setActiveTabState('history')}
                       >
                           Resolved
                       </button>
