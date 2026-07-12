@@ -313,7 +313,7 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
         
         <div className="flex items-center justify-between text-[12px] mb-2 bg-gray-50 p-1 rounded">
             <span className="text-gray-500">Location</span>
-            <span className="font-mono text-[11px] text-gray-700">{lat?.toFixed(3)}, {lon?.toFixed(3)}</span>
+            <span className="font-mono text-[11px] text-gray-700">Lat: {lat?.toFixed(3)}, Lon: {lon?.toFixed(3)}</span>
         </div>
 
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-2.5 border border-orange-200">
