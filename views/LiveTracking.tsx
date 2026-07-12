@@ -299,25 +299,25 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
   return (
     <div className="text-center p-1 min-w-[200px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
         <div className="flex items-center justify-center gap-1 mb-1">
-             <div className="font-bold text-xs" style={{color: color}}>PTT {pttId}</div>
+             <div className="font-bold text-[14px]" style={{color: color}}>PTT {pttId}</div>
              {type && (
-                 <span className={`text-[9px] px-1 rounded ${type === 'GPS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                 <span className={`text-[10px] px-1 rounded ${type === 'GPS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
                      {type}
                  </span>
              )}
         </div>
-        <div className="text-xs font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-2">
+        <div className="text-[12px] font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-2">
             {formatDateTime(timestamp, data.timezone || timeZone)}
-            {(data.timezone) && <div className="text-[9px] text-gray-400 font-normal mt-0.5">Local: {data.timezone.replace('_', ' ')}</div>}
+            {(data.timezone) && <div className="text-[10px] text-gray-400 font-normal mt-0.5">Local: {data.timezone.replace('_', ' ')}</div>}
         </div>
         
-        <div className="flex items-center justify-between text-xs mb-2 bg-gray-50 p-1 rounded">
+        <div className="flex items-center justify-between text-[12px] mb-2 bg-gray-50 p-1 rounded">
             <span className="text-gray-500">Location</span>
-            <span className="font-mono text-[10px] text-gray-700">{lat?.toFixed(3)}, {lon?.toFixed(3)}</span>
+            <span className="font-mono text-[11px] text-gray-700">{lat?.toFixed(3)}, {lon?.toFixed(3)}</span>
         </div>
 
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-2.5 border border-orange-200">
-            <div className="text-[10px] uppercase font-bold text-orange-800 mb-1 flex items-center justify-center gap-1">
+            <div className="text-[11px] uppercase font-bold text-orange-800 mb-1 flex items-center justify-center gap-1">
                  <ThermometerSun size={12} />
                  Land Surface Temp (LST)
             </div>
@@ -1372,7 +1372,7 @@ export const LiveTracking = () => {
         )}
 
         {/* Map Controls (Left) */}
-        <div className="absolute top-4 left-4 flex flex-col gap-2 z-[400]">
+        <div className="absolute top-4 left-4 flex flex-col gap-2 z-[500]">
             {/* Layer Control */}
             <div className="relative">
                 <button 
@@ -1463,7 +1463,7 @@ export const LiveTracking = () => {
                     <History size={20} />
                 </button>
                  {historyOpen && (
-                    <Draggable cancel="button, input, select">
+                    <Draggable cancel="button, input, select, label, .slider">
                     <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 cursor-move" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
                         <div className="flex items-center justify-between mb-3 hover:bg-gray-50 p-1 -m-1 rounded">
                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Track History</h4>

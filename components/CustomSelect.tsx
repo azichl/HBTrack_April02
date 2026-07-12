@@ -54,7 +54,7 @@ export function CustomSelect({ value, onChange, options, className = '', buttonC
             {options.map((option) => (
               <li
                 key={option.value}
-                className={`relative cursor-pointer select-none py-2 pl-10 pr-4 hover:bg-brand-50 dark:hover:bg-slate-800 ${
+                className={`relative cursor-pointer select-none py-2 pl-7 pr-4 hover:bg-brand-50 dark:hover:bg-slate-800 ${
                   value === option.value ? 'text-brand-600 bg-brand-50/50 dark:bg-slate-800/50' : 'text-gray-900 dark:text-gray-200'
                 }`}
                 onClick={() => {

@@ -500,9 +500,9 @@ export const ArgosData = () => {
                   <CustomSelect 
                     value={rowsPerPage.toString()}
                     onChange={(val) => setRowsPerPage(Number(val))}
-                    className="ml-2 w-20"
+                    className="ml-2 w-28"
                     menuPlacement="top"
-                    buttonClassName="px-2 py-0.5 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
+                    buttonClassName="px-2 py-0.5 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-[14px]"
                     options={[
                       { value: '50', label: '50' },
                       { value: '100', label: '100' },
