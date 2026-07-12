@@ -297,7 +297,7 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
   }, [lat, lon, timestamp]);
 
   return (
-    <div className="text-center p-1 min-w-[170px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+    <div className="text-center p-1 min-w-[200px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
         <div className="flex items-center justify-center gap-1 mb-1">
              <div className="font-bold text-xs" style={{color: color}}>PTT {pttId}</div>
              {type && (
@@ -496,7 +496,7 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = ({
                 popupclose: () => setIsOpen(false)
             }}
         >
-            <Popup closeButton={false}>
+            <Popup closeButton={false} minWidth={200}>
                 {isOpen && (
                     <LSTPopupContent 
                         lat={point.lat} 

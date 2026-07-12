@@ -13,9 +13,10 @@ interface CustomSelectProps {
   className?: string;
   buttonClassName?: string;
   disabled?: boolean;
+  menuPlacement?: 'top' | 'bottom';
 }
 
-export function CustomSelect({ value, onChange, options, className = '', buttonClassName = 'px-3 py-2', disabled = false }: CustomSelectProps) {
+export function CustomSelect({ value, onChange, options, className = '', buttonClassName = 'px-3 py-2', disabled = false, menuPlacement = 'bottom' }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -48,7 +49,7 @@ export function CustomSelect({ value, onChange, options, className = '', buttonC
       </button>
 
       {isOpen && (
-        <div className="absolute z-[1000] mt-1 w-full rounded-md bg-white dark:bg-slate-850 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none max-h-60 overflow-y-auto">
+        <div className={`absolute z-[1000] ${menuPlacement === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} w-full rounded-md bg-white dark:bg-slate-850 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none max-h-60 overflow-y-auto`}>
           <ul className="py-1">
             {options.map((option) => (
               <li

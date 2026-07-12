@@ -472,13 +472,13 @@ export const ArgosData = () => {
           </div>
 
           {/* Pagination Footer */}
-          <div className="bg-gray-50 dark:bg-slate-900 px-6 py-3 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div className="bg-gray-50 dark:bg-slate-900 px-6 py-3 border-t border-gray-200 dark:border-slate-700 flex flex-wrap gap-3 items-center justify-between flex-shrink-0">
               <span className="text-xs text-gray-500 dark:text-gray-400">
                   Showing {Math.min(startIndex + 1, totalRecords)}-{Math.min(startIndex + rowsPerPage, totalRecords)} of {totalRecords.toLocaleString()} filtered records
                   {selectedIds.size > 0 && <span className="ml-2 font-bold text-brand-600">• {selectedIds.size} selected</span>}
               </span>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 overflow-visible">
                   <button 
                     onClick={handlePrevPage}
                     disabled={currentPageIndex === 0}
@@ -501,6 +501,7 @@ export const ArgosData = () => {
                     value={rowsPerPage.toString()}
                     onChange={(val) => setRowsPerPage(Number(val))}
                     className="ml-2 w-20"
+                    menuPlacement="top"
                     buttonClassName="px-2 py-0.5 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
                     options={[
                       { value: '50', label: '50' },
