@@ -339,6 +339,17 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
                 <div className="text-xs text-gray-400 py-1">Data Unavailable</div>
             )}
         </div>
+
+        <div className="mt-2">
+            <a
+                href={`https://earth.google.com/web/search/${lat},${lon}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
+            >
+                <Globe size={12} /> Earth
+            </a>
+        </div>
     </div>
   );
 };
