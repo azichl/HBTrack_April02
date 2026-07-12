@@ -571,7 +571,10 @@ export const LiveTracking = () => {
       setSelectedTransmitterIds,
       timeZone,
       activeGeeLayer,
-      setActiveGeeLayer
+      setActiveGeeLayer,
+      geeNdviTileUrl,
+      geeLstTileUrl,
+      geeSaviTileUrl
   } = useAppStore();
   
   // View Mode State
@@ -1204,6 +1207,17 @@ export const LiveTracking = () => {
                     zIndex={600}
                     className="filter contrast-150 saturate-[3] brightness-110"
                 />
+            )}
+
+            {/* GEE Satellite Layers */}
+            {activeGeeLayer === 'ndvi' && geeNdviTileUrl && (
+                <TileLayer url={geeNdviTileUrl} zIndex={400} />
+            )}
+            {activeGeeLayer === 'savi' && geeSaviTileUrl && (
+                <TileLayer url={geeSaviTileUrl} zIndex={400} />
+            )}
+            {activeGeeLayer === 'lst' && geeLstTileUrl && (
+                <TileLayer url={geeLstTileUrl} zIndex={400} />
             )}
             
             {/* Historical Tracks */}
