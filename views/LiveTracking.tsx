@@ -728,8 +728,34 @@ export const LiveTracking = () => {
         }
     });
 
+    // OVERRIDE WITH HISTORY IF ACTIVE
+    if (showHistory && historyPaths.length > 0) {
+        historyPaths.forEach(hp => {
+            if (hp.path.length > 0) {
+                // The history path is sorted ASC, so the last point is the most recent
+                const lastPoint = hp.path[hp.path.length - 1];
+                const existingPos = latestMap.get(hp.id);
+                
+                const overridePos = {
+                    ...(existingPos || {}),
+                    id: existingPos?.id || `history-latest-${hp.id}`,
+                    transmitter_id: hp.id,
+                    lat: lastPoint.lat,
+                    lon: lastPoint.lon,
+                    timestamp: lastPoint.timestamp,
+                    locationType: lastPoint.type || (historyFixType !== 'All' ? historyFixType : 'Unknown')
+                };
+                
+                latestMap.set(hp.id, overridePos as any);
+            } else {
+                // If history is active but no points match the filter, hide the green marker
+                latestMap.delete(hp.id);
+            }
+        });
+    }
+
     return Array.from(latestMap.values());
-  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType]);
+  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType, showHistory, historyPaths]);
   
   // Generate Historical Path (Fetching REAL data from Firestore directly)
   useEffect(() => {
