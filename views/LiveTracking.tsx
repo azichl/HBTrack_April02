@@ -1463,13 +1463,16 @@ export const LiveTracking = () => {
                     <History size={20} />
                 </button>
                  {historyOpen && (
-                    <Draggable cancel="button, input, select, label, .slider">
-                    <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 cursor-move" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
-                        <div className="flex items-center justify-between mb-3 hover:bg-gray-50 p-1 -m-1 rounded">
+                    <Draggable handle=".history-drag-handle">
+                    <div className="absolute top-0 left-14 bg-white rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
+                        {/* Fixed Header (Drag Handle) */}
+                        <div className="history-drag-handle flex items-center justify-between p-4 pb-3 bg-white border-b border-gray-50 cursor-move flex-shrink-0">
                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Track History</h4>
                             {isHistoryLoading && <Loader2 size={14} className="text-brand-500 animate-spin" />}
                         </div>
                         
+                        {/* Scrollable Content */}
+                        <div className="p-4 pt-3 overflow-y-auto custom-scrollbar max-h-[60vh]">
                         {selectedTransmitterIds.length === 0 ? (
                             <p className="text-xs text-gray-500 italic">Please select a PTT to view history.</p>
                         ) : (
@@ -1560,6 +1563,7 @@ export const LiveTracking = () => {
                                 )}
                             </div>
                         )}
+                        </div>
                     </div>
                     </Draggable>
                  )}
