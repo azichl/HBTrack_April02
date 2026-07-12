@@ -1463,7 +1463,7 @@ export const LiveTracking = () => {
                     <History size={20} />
                 </button>
                  {historyOpen && (
-                    <Draggable handle=".history-drag-handle">
+                    <Draggable cancel="button, input, select, label, .overflow-y-auto">
                     <div className="absolute top-0 left-14 bg-white rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
                         {/* Fixed Header (Drag Handle) */}
                         <div className="history-drag-handle flex items-center justify-between p-4 pb-3 bg-white border-b border-gray-50 cursor-move flex-shrink-0">
