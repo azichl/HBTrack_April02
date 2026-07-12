@@ -463,6 +463,17 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                                 <BrainCircuit size={12} /> AI Forecast
                             </button>
                         </div>
+
+                        <div className="mt-2">
+                            <a
+                                href={`https://earth.google.com/web/search/${pos.lat},${pos.lon}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
+                            >
+                                <Globe size={12} /> Google Earth
+                            </a>
+                        </div>
                     </div>
                 )}
             </Popup>
@@ -547,7 +558,9 @@ export const LiveTracking = () => {
       generateLivePositions, 
       selectedTransmitterIds, 
       setSelectedTransmitterIds,
-      timeZone
+      timeZone,
+      activeGeeLayer,
+      setActiveGeeLayer
   } = useAppStore();
   
   // View Mode State
@@ -1471,6 +1484,32 @@ export const LiveTracking = () => {
                                 />
                                 <span className="text-sm text-gray-700">Google Labels</span>
                             </label>
+                        </div>
+
+                        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pt-3 border-t border-gray-100">GEE Satellite Layers</h4>
+                        <div className="flex gap-2">
+                            {(['ndvi', 'savi', 'lst'] as const).map(layer => (
+                                <button
+                                    key={layer}
+                                    onClick={() => {
+                                        if (activeGeeLayer === layer) {
+                                            setActiveGeeLayer(null);
+                                        } else {
+                                            setActiveGeeLayer(layer);
+                                        }
+                                    }}
+                                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-md border transition-all flex items-center justify-center gap-1 ${
+                                        activeGeeLayer === layer
+                                        ? 'bg-brand-50 text-brand-700 border-brand-300'
+                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {layer === 'ndvi' && <Satellite size={12} />}
+                                    {layer === 'savi' && <Satellite size={12} />}
+                                    {layer === 'lst' && <ThermometerSun size={12} />}
+                                    {layer.toUpperCase()}
+                                </button>
+                            ))}
                         </div>
                      </div>
                     </Draggable>
