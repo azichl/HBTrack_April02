@@ -708,6 +708,9 @@ export const LiveTracking = () => {
         // Filter invalid coordinates for marker display
         if (p.lat === 0 && p.lon === 0) return;
 
+        // Filter by historyFixType (Location Type)
+        if (historyFixType !== 'All' && p.locationType !== historyFixType) return;
+
         const currentTs = new Date(p.timestamp).getTime();
         // Skip invalid dates
         if (isNaN(currentTs)) return;
@@ -726,7 +729,7 @@ export const LiveTracking = () => {
     });
 
     return Array.from(latestMap.values());
-  }, [positions, selectedTransmitterIds, selectedStatus, transmitters]);
+  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType]);
   
   // Generate Historical Path (Fetching REAL data from Firestore directly)
   useEffect(() => {
