@@ -571,6 +571,35 @@ export const LiveTracking = () => {
   const measureToolDragStartRef = useRef({ x: 0, y: 0 });
   const measureToolInitialOffsetRef = useRef({ x: 0, y: 0 });
 
+  // History Popup drag state
+  const [historyPopupPos, setHistoryPopupPos] = useState({ x: 0, y: 0 });
+  const isDraggingHistoryRef = useRef(false);
+  const historyDragStartRef = useRef({ x: 0, y: 0 });
+  const historyInitialPosRef = useRef({ x: 0, y: 0 });
+
+  const handleHistoryMouseDown = (e: React.MouseEvent) => {
+    // Only drag from the header, not from interactive children
+    if ((e.target as HTMLElement).closest('button, input, select, label')) return;
+    isDraggingHistoryRef.current = true;
+    historyDragStartRef.current = { x: e.clientX, y: e.clientY };
+    historyInitialPosRef.current = { ...historyPopupPos };
+    e.preventDefault();
+    const onMove = (me: MouseEvent) => {
+      if (!isDraggingHistoryRef.current) return;
+      setHistoryPopupPos({
+        x: historyInitialPosRef.current.x + me.clientX - historyDragStartRef.current.x,
+        y: historyInitialPosRef.current.y + me.clientY - historyDragStartRef.current.y,
+      });
+    };
+    const onUp = () => {
+      isDraggingHistoryRef.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
   // History State
   const [showHistory, setShowHistory] = useState(false);
   const [historyMode, setHistoryMode] = useState<'preset' | 'custom'>('preset');
@@ -1463,10 +1492,16 @@ export const LiveTracking = () => {
                     <History size={20} />
                 </button>
                  {historyOpen && (
-                    <Draggable cancel="button, input, select, label, .overflow-y-auto">
-                    <div className="absolute top-0 left-14 bg-white rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
-                        {/* Fixed Header (Drag Handle) */}
-                        <div className="history-drag-handle flex items-center justify-between p-4 pb-3 bg-white border-b border-gray-50 cursor-move flex-shrink-0">
+                    <div
+                      className="absolute bg-white rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 flex flex-col overflow-hidden"
+                      style={{ zIndex: 1000, pointerEvents: 'auto', top: historyPopupPos.y, left: 56 + historyPopupPos.x }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Drag Handle Header */}
+                        <div
+                          className="flex items-center justify-between p-4 pb-3 bg-white border-b border-gray-50 cursor-move flex-shrink-0 select-none"
+                          onMouseDown={handleHistoryMouseDown}
+                        >
                             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Track History</h4>
                             {isHistoryLoading && <Loader2 size={14} className="text-brand-500 animate-spin" />}
                         </div>
@@ -1565,7 +1600,6 @@ export const LiveTracking = () => {
                         )}
                         </div>
                     </div>
-                    </Draggable>
                  )}
             </div>
 
