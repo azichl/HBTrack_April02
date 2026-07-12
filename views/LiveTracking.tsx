@@ -6,7 +6,7 @@ import { useAppStore } from '../store/appStore';
 import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 import { getHistoricalPositions } from '../services/firestoreService';
-
+import Draggable from 'react-draggable';
 // Use standard colored markers (matching Migration view style)
 const greenIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
@@ -1459,9 +1459,10 @@ export const LiveTracking = () => {
                     <History size={20} />
                 </button>
                  {historyOpen && (
-                    <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-3">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Track History</h4>
+                    <Draggable handle=".drag-handle">
+                    <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
+                        <div className="flex items-center justify-between mb-3 drag-handle cursor-move hover:bg-gray-50 p-1 -m-1 rounded">
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Track History</h4>
                             {isHistoryLoading && <Loader2 size={14} className="text-brand-500 animate-spin" />}
                         </div>
                         
@@ -1556,6 +1557,7 @@ export const LiveTracking = () => {
                             </div>
                         )}
                     </div>
+                    </Draggable>
                  )}
             </div>
 
