@@ -1,5 +1,6 @@
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { logEvent } from 'firebase/analytics';
+import { db, analytics } from '../firebase';
 
 export type ActivityEventType = 
   | 'SESSION_START' 
@@ -15,6 +16,7 @@ export const logUserActivity = async (
   details?: string
 ) => {
   try {
+    // 1. Log to Firestore Database
     const logsRef = collection(db, 'user_activity_logs');
     await addDoc(logsRef, {
       userId,
@@ -24,6 +26,15 @@ export const logUserActivity = async (
       timestamp: serverTimestamp(),
       userAgent: navigator.userAgent
     });
+
+    // 2. Log to Google Analytics (Analytics Dashboard)
+    if (analytics) {
+      logEvent(analytics, eventType, {
+        user_id: userId,
+        user_email: userEmail,
+        details: details || ''
+      });
+    }
   } catch (error) {
     console.error('Failed to log user activity:', error);
   }
