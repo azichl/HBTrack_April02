@@ -2,6 +2,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { useIdleTimeout } from './hooks/useIdleTimeout';
+import { logUserActivity } from './services/activityLogger';
 import { Login } from './views/Login';
 import { Sidebar } from './components/Sidebar';
 import { useAppStore } from './store/appStore';
@@ -286,6 +288,16 @@ const App = () => {
   const liveUnsubRef = useRef<(() => void) | null>(null);
   const firestoreInitialized = useRef(false);
 
+  // Define auto-logout behavior on idle
+  const handleIdle = useCallback(() => {
+    if (currentUser) {
+      logUserActivity(currentUser.uid, currentUser.email || '', 'AUTO_LOGOUT_IDLE', 'Logged out due to 30 mins of inactivity');
+      signOut(auth).catch(console.error);
+    }
+  }, [currentUser]);
+
+  useIdleTimeout({ onIdle: handleIdle, idleTimeMs: 30 * 60 * 1000 }); // 30 minutes
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
@@ -293,6 +305,9 @@ const App = () => {
 
       if (user && !firestoreInitialized.current) {
         firestoreInitialized.current = true;
+        // Log Session Start when user successfully authenticates
+        logUserActivity(user.uid, user.email || '', 'SESSION_START', 'User logged in');
+        
         await initializeFromFirestore();
         liveUnsubRef.current = subscribeToLivePositions();
       }
@@ -313,6 +328,9 @@ const App = () => {
 
   const handleLogout = async () => {
     try {
+      if (currentUser) {
+        await logUserActivity(currentUser.uid, currentUser.email || '', 'SESSION_END', 'User logged out manually');
+      }
       await signOut(auth);
     } catch (error) {
       console.error("Logout error:", error);

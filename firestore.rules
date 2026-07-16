@@ -32,5 +32,9 @@ service cloud.firestore {
     match /support_tickets/{doc} {
       allow read, write: if request.auth != null;
     }
+    // User Activity Logs
+    match /user_activity_logs/{doc} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
