@@ -5,6 +5,7 @@ import { logUserActivity } from '../services/activityLogger';
 import { 
   saveDocument, deleteDocument, savePositions, 
   loadCollection, subscribeToCollection, 
+  loadRecentPositions, subscribeToRecentPositions,
   syncTransmitters, syncBirds, syncAlerts,
   batchWriteArgosPositions, deleteCollection,
   batchWriteDocuments, batchDeleteDocuments,
@@ -691,7 +692,7 @@ export const useAppStore = create<AppState>()(
           const [fsTransmitters, fsBirds, fsPositions, fsAlerts, fsUsers] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
-            loadCollection<Position>('positions'),
+            loadRecentPositions(30),
             loadCollection<Alert>('alerts'),
             loadCollection<User>('users'),
           ]);
@@ -701,15 +702,7 @@ export const useAppStore = create<AppState>()(
           const mergedBirds = fsBirds;
           const mergedAlerts = fsAlerts;
           const mergedUsers = fsUsers;
-
-          // For positions: load last 30 days only for the live map
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          const cutoff = thirtyDaysAgo.getTime();
-          const recentPositions = fsPositions.filter(p => {
-            const t = new Date(p.timestamp).getTime();
-            return !isNaN(t) && t >= cutoff;
-          });
+          const recentPositions = fsPositions;
 
           // Try to load user profile for RBAC
           const currentUser = get().currentUser;
@@ -780,17 +773,13 @@ export const useAppStore = create<AppState>()(
 
       // ─── Real-Time Position Listener ────────────────────────────────────────
       subscribeToLivePositions: () => {
-        return subscribeToCollection<Position>('positions', (firestorePositions) => {
-          // Filter to last 30 days
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          const cutoff = thirtyDaysAgo.getTime();
+        return subscribeToRecentPositions(30, (firestorePositions) => {
+          // Double-check coords locally
           const positions = firestorePositions.filter(p => {
-            const t = new Date(p.timestamp).getTime();
             const latNum = Number(p.lat);
             const lonNum = Number(p.lon);
             const validCoords = !(latNum === 0 && lonNum === 0) && !isNaN(latNum) && !isNaN(lonNum);
-            return !isNaN(t) && t >= cutoff && validCoords;
+            return validCoords;
           });
           set({ positions });
         });

@@ -138,7 +138,54 @@ export const subscribeToCollection = <T>(
     });
     callback(data);
   }, (error) => {
-    console.error(`[Firestore] Listener error on ${collectionName}:`, error);
+    console.error(`[Firestore] Subscription error for ${collectionName}:`, error);
+  });
+  return unsubscribe;
+};
+
+// ─── Optimized Position Queries ────────────────────────────────────────────────
+
+export const loadRecentPositions = async (days: number = 30) => {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffISO = cutoffDate.toISOString();
+
+    const q = query(
+      collection(db, 'positions'),
+      where('timestamp', '>=', cutoffISO)
+    );
+    const snapshot = await getDocs(q);
+    const data: any[] = [];
+    snapshot.forEach((doc) => {
+      data.push({ id: doc.id, ...doc.data() });
+    });
+    console.log(`[Firestore] Loaded ${data.length} recent positions (last ${days} days)`);
+    return data;
+  } catch (error) {
+    console.error(`[Firestore] Error loading recent positions:`, error);
+    return [];
+  }
+};
+
+export const subscribeToRecentPositions = (days: number, callback: (data: any[]) => void) => {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  const cutoffISO = cutoffDate.toISOString();
+
+  const q = query(
+    collection(db, 'positions'),
+    where('timestamp', '>=', cutoffISO)
+  );
+
+  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const data: any[] = [];
+    querySnapshot.forEach((doc) => {
+      data.push({ id: doc.id, ...doc.data() });
+    });
+    callback(data);
+  }, (error) => {
+    console.error(`[Firestore] Subscription error for recent positions:`, error);
   });
   return unsubscribe;
 };
