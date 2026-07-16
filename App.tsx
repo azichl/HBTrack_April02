@@ -298,6 +298,45 @@ const App = () => {
 
   useIdleTimeout({ onIdle: handleIdle, idleTimeMs: 30 * 60 * 1000 }); // 30 minutes
 
+  // --- Tracking: Page Views & Time Spent ---
+  const tabEnteredAt = useRef(Date.now());
+  const prevTab = useRef(activeTab);
+
+  useEffect(() => {
+    if (currentUser && prevTab.current !== activeTab) {
+      const timeSpentSeconds = Math.round((Date.now() - tabEnteredAt.current) / 1000);
+      
+      // Log time spent on the previous page
+      logUserActivity(currentUser.uid, currentUser.email || '', 'TIME_SPENT_ON_PAGE', `Spent ${timeSpentSeconds}s on ${prevTab.current}`);
+      
+      // Log page view for the new page
+      logUserActivity(currentUser.uid, currentUser.email || '', 'PAGE_VIEW', `Viewed ${activeTab}`);
+
+      tabEnteredAt.current = Date.now();
+      prevTab.current = activeTab;
+    }
+  }, [activeTab, currentUser]);
+
+  // --- Tracking: Meaningful Clicks ---
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (!currentUser) return;
+      const target = e.target as HTMLElement;
+      // Find closest button or link
+      const clickable = target.closest('button, a');
+      if (clickable) {
+        const text = clickable.textContent?.trim().slice(0, 50) || clickable.getAttribute('aria-label') || clickable.getAttribute('title') || 'Icon/Element';
+        if (text) {
+          const type = clickable.tagName.toLowerCase();
+          logUserActivity(currentUser.uid, currentUser.email || '', 'USER_CLICK', `Clicked ${type} "${text}"`);
+        }
+      }
+    };
+
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [currentUser]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);

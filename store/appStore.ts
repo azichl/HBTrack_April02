@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice } from '../types';
+import { logUserActivity } from '../services/activityLogger';
 import { 
   saveDocument, deleteDocument, savePositions, 
   loadCollection, subscribeToCollection, 
@@ -164,6 +165,13 @@ const fireAndForget = (fn: () => Promise<any>) => {
   fn().catch(err => console.error('[Firestore Sync]', err));
 };
 
+const logDbAction = (get: any, type: 'DATA_CREATE' | 'DATA_UPDATE' | 'DATA_DELETE', details: string) => {
+  const user = get().currentUser;
+  if (user) {
+    logUserActivity(user.uid, user.email || '', type, details);
+  }
+};
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -317,10 +325,12 @@ export const useAppStore = create<AppState>()(
 
       // ─── Bird CRUD ──────────────────────────────────────────────────────────
       addBird: (bird) => {
+        logDbAction(get, 'DATA_CREATE', `Added Bird ${bird.ring_id}`);
         set((state) => ({ birds: [bird, ...state.birds], lastSaved: new Date().toISOString() }));
         fireAndForget(() => saveDocument('birds', bird.id, bird));
       },
       updateBird: (id, updates) => {
+        logDbAction(get, 'DATA_UPDATE', `Updated Bird ID: ${id}`);
         set((state) => {
           const updatedBirds = state.birds.map(b => b.id === id ? { ...b, ...updates } : b);
           const updated = updatedBirds.find(b => b.id === id);
@@ -329,6 +339,7 @@ export const useAppStore = create<AppState>()(
         });
       },
       deleteBird: (id) => {
+        logDbAction(get, 'DATA_DELETE', `Deleted Bird ID: ${id}`);
         set((state) => ({
           birds: state.birds.filter(b => b.id !== id),
           transmitters: state.transmitters.map(t => t.bird_id === id ? { ...t, bird_id: '' } : t),
@@ -378,6 +389,7 @@ export const useAppStore = create<AppState>()(
 
       // ─── Transmitter CRUD ───────────────────────────────────────────────────
       addTransmitter: (transmitter) => {
+          logDbAction(get, 'DATA_CREATE', `Added Transmitter ${transmitter.platform_id}`);
           set((state) => ({ 
               transmitters: [transmitter, ...state.transmitters],
               lastSaved: new Date().toISOString()
@@ -385,6 +397,7 @@ export const useAppStore = create<AppState>()(
           fireAndForget(() => saveDocument('transmitters', transmitter.id, transmitter));
       },
       updateTransmitter: (id, updates) => {
+        logDbAction(get, 'DATA_UPDATE', `Updated Transmitter ID: ${id}`);
         set((state) => {
           const updated = state.transmitters.map(t => t.id === id ? { ...t, ...updates } : t);
           const t = updated.find(t => t.id === id);
@@ -393,6 +406,7 @@ export const useAppStore = create<AppState>()(
         });
       },
       deleteTransmitter: (id) => {
+          logDbAction(get, 'DATA_DELETE', `Deleted Transmitter ID: ${id}`);
           set((state) => {
             const t = state.transmitters.find(tr => tr.id === id);
             return {

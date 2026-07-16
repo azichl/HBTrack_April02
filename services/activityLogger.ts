@@ -7,7 +7,13 @@ export type ActivityEventType =
   | 'SESSION_END' 
   | 'AUTO_LOGOUT_IDLE' 
   | 'HEARTBEAT'
-  | 'CUSTOM_ACTION';
+  | 'CUSTOM_ACTION'
+  | 'PAGE_VIEW'
+  | 'TIME_SPENT_ON_PAGE'
+  | 'USER_CLICK'
+  | 'DATA_CREATE'
+  | 'DATA_UPDATE'
+  | 'DATA_DELETE';
 
 export const logUserActivity = async (
   userId: string, 
