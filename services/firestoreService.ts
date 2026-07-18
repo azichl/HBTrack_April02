@@ -145,7 +145,7 @@ export const subscribeToCollection = <T>(
 
 // ─── Optimized Position Queries ────────────────────────────────────────────────
 
-export const loadRecentPositions = async (days: number = 30) => {
+export const loadRecentPositions = async (days: number = 7) => {
   try {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
@@ -327,12 +327,31 @@ export const loadArgosPositions = async (options: {
 };
 
 /**
- * Load ALL argos positions from Firebase efficiently without pagination.
+ * Load argos positions from Firebase efficiently without pagination.
  * Use for client-side filtering and bulk operations.
+ * Defaults to the last 7 days to conserve read quota.
  */
-export const loadAllArgosPositions = async (): Promise<any[]> => {
+export const loadAllArgosPositions = async (startDate?: Date, endDate?: Date): Promise<any[]> => {
   try {
-    const snapshot = await getDocs(query(collection(db, 'argos_positions'), orderBy('timestamp', 'desc')));
+    let q;
+    if (startDate && endDate) {
+      q = query(
+        collection(db, 'argos_positions'),
+        where('timestamp', '>=', startDate.toISOString()),
+        where('timestamp', '<=', endDate.toISOString()),
+        orderBy('timestamp', 'desc')
+      );
+    } else {
+      const defaultStart = new Date();
+      defaultStart.setDate(defaultStart.getDate() - 7);
+      q = query(
+        collection(db, 'argos_positions'),
+        where('timestamp', '>=', defaultStart.toISOString()),
+        orderBy('timestamp', 'desc')
+      );
+    }
+
+    const snapshot = await getDocs(q);
     const data: any[] = [];
     snapshot.forEach(docSnap => {
       data.push({ id: docSnap.id, _collection: 'argos_positions', ...docSnap.data() });
@@ -346,11 +365,30 @@ export const loadAllArgosPositions = async (): Promise<any[]> => {
 };
 
 /**
- * Load ALL positions (the collection used by Live Tracking map).
+ * Load positions (the collection used by Live Tracking map and Database UI).
+ * Defaults to the last 7 days to conserve read quota.
  */
-export const loadAllPositions = async (): Promise<any[]> => {
+export const loadAllPositions = async (startDate?: Date, endDate?: Date): Promise<any[]> => {
   try {
-    const snapshot = await getDocs(query(collection(db, 'positions'), orderBy('timestamp', 'desc')));
+    let q;
+    if (startDate && endDate) {
+      q = query(
+        collection(db, 'positions'),
+        where('timestamp', '>=', startDate.toISOString()),
+        where('timestamp', '<=', endDate.toISOString()),
+        orderBy('timestamp', 'desc')
+      );
+    } else {
+      const defaultStart = new Date();
+      defaultStart.setDate(defaultStart.getDate() - 7);
+      q = query(
+        collection(db, 'positions'),
+        where('timestamp', '>=', defaultStart.toISOString()),
+        orderBy('timestamp', 'desc')
+      );
+    }
+
+    const snapshot = await getDocs(q);
     const data: any[] = [];
     snapshot.forEach(docSnap => {
       const d = docSnap.data();

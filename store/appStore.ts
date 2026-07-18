@@ -692,7 +692,7 @@ export const useAppStore = create<AppState>()(
           const [fsTransmitters, fsBirds, fsPositions, fsAlerts, fsUsers] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
-            loadRecentPositions(30),
+            loadRecentPositions(7),
             loadCollection<Alert>('alerts'),
             loadCollection<User>('users'),
           ]);
@@ -773,7 +773,7 @@ export const useAppStore = create<AppState>()(
 
       // ─── Real-Time Position Listener ────────────────────────────────────────
       subscribeToLivePositions: () => {
-        return subscribeToRecentPositions(30, (firestorePositions) => {
+        return subscribeToRecentPositions(7, (firestorePositions) => {
           // Double-check coords locally
           const positions = firestorePositions.filter(p => {
             const latNum = Number(p.lat);

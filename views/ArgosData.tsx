@@ -39,18 +39,42 @@ export const ArgosData = () => {
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isConfirming, setIsConfirming] = useState(false);
 
+  // Date Range Filter State
+  const [dateRange, setDateRange] = useState<'7d' | '30d' | 'custom'>('7d');
+  const [customDates, setCustomDates] = useState({ 
+    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], 
+    end: new Date().toISOString().split('T')[0] 
+  });
+
   // Load data from Firebase
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
       let data: any[] = [];
+      let sDate: Date | undefined;
+      let eDate: Date | undefined;
+
+      if (dateRange === '7d') {
+        sDate = new Date();
+        sDate.setDate(sDate.getDate() - 7);
+        eDate = new Date();
+      } else if (dateRange === '30d') {
+        sDate = new Date();
+        sDate.setDate(sDate.getDate() - 30);
+        eDate = new Date();
+      } else if (dateRange === 'custom' && customDates.start && customDates.end) {
+        sDate = new Date(customDates.start);
+        eDate = new Date(customDates.end);
+        eDate.setHours(23, 59, 59);
+      }
+
       if (collectionMode === 'argos_positions') {
-        data = await loadAllArgosPositions();
+        data = await loadAllArgosPositions(sDate, eDate);
       } else if (collectionMode === 'positions') {
-        data = await loadAllPositions();
+        data = await loadAllPositions(sDate, eDate);
       } else {
         // Load both collections
-        const [argos, pos] = await Promise.all([loadAllArgosPositions(), loadAllPositions()]);
+        const [argos, pos] = await Promise.all([loadAllArgosPositions(sDate, eDate), loadAllPositions(sDate, eDate)]);
         data = [...argos, ...pos];
       }
       setAllData(data);
@@ -59,7 +83,7 @@ export const ArgosData = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [collectionMode]);
+  }, [collectionMode, dateRange, customDates]);
 
   // Load on mount and when collection changes
   useEffect(() => {
@@ -286,6 +310,38 @@ export const ArgosData = () => {
                      Map Positions
                    </button>
                  </div>
+               </div>
+
+               {/* Date Range Filter */}
+               <div className="flex items-center gap-2">
+                 <CustomSelect
+                   value={dateRange}
+                   onChange={(val) => setDateRange(val as '7d' | '30d' | 'custom')}
+                   className="min-w-[140px] text-sm"
+                   buttonClassName="px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
+                   options={[
+                     { value: '7d', label: 'Last 7 Days' },
+                     { value: '30d', label: 'Last 30 Days' },
+                     { value: 'custom', label: 'Custom Range' },
+                   ]}
+                 />
+                 {dateRange === 'custom' && (
+                   <div className="flex items-center gap-2">
+                     <input
+                       type="date"
+                       value={customDates.start}
+                       onChange={e => setCustomDates(p => ({ ...p, start: e.target.value }))}
+                       className="px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900"
+                     />
+                     <span className="text-gray-400 text-sm">to</span>
+                     <input
+                       type="date"
+                       value={customDates.end}
+                       onChange={e => setCustomDates(p => ({ ...p, end: e.target.value }))}
+                       className="px-2 py-1.5 border border-gray-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-900"
+                     />
+                   </div>
+                 )}
                </div>
 
                {/* Search */}
