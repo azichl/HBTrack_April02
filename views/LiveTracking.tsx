@@ -1332,26 +1332,57 @@ export const LiveTracking = () => {
                             pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.1, weight: 1 }} 
                         />
                     )}
-                    {navTarget && (
-                        <>
-                            <Polyline 
-                                positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
-                                pathOptions={{ color: '#10b981', weight: 3, dashArray: '10, 10', opacity: 0.8 }}
-                            />
-                            <Marker 
-                                position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
-                                icon={L.divIcon({ className: 'bg-transparent', html: '<div></div>' })}
-                            >
-                                <Tooltip permanent direction="center" className="!bg-emerald-600 !text-white !border-0 !rounded-lg !px-2 !py-1 !font-bold !shadow-lg">
-                                    {formatDistance((() => {
-                                        const p1 = L.latLng(userLocation.lat, userLocation.lon);
-                                        const p2 = L.latLng(navTarget.lat, navTarget.lon);
-                                        return p1.distanceTo(p2);
-                                    })())}
-                                </Tooltip>
-                            </Marker>
-                        </>
-                    )}
+                    {navTarget && (() => {
+                        const p1 = L.latLng(userLocation.lat, userLocation.lon);
+                        const p2 = L.latLng(navTarget.lat, navTarget.lon);
+                        const distM = p1.distanceTo(p2);
+                        // Arrowhead at 80% toward bird
+                        const arrowLat = userLocation.lat + (navTarget.lat - userLocation.lat) * 0.80;
+                        const arrowLon = userLocation.lon + (navTarget.lon - userLocation.lon) * 0.80;
+                        // Bearing angle for arrow rotation
+                        const dLon = (navTarget.lon - userLocation.lon) * Math.PI / 180;
+                        const lat1 = userLocation.lat * Math.PI / 180;
+                        const lat2 = navTarget.lat * Math.PI / 180;
+                        const y = Math.sin(dLon) * Math.cos(lat2);
+                        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                        const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                        return (
+                            <>
+                                {/* Thick background glow line */}
+                                <Polyline 
+                                    positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
+                                    pathOptions={{ color: '#065f46', weight: 12, opacity: 0.3 }}
+                                />
+                                {/* Main navigation line */}
+                                <Polyline 
+                                    positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
+                                    pathOptions={{ color: '#10b981', weight: 6, opacity: 1.0 }}
+                                />
+                                {/* Arrowhead marker at 80% toward bird */}
+                                <Marker
+                                    position={[arrowLat, arrowLon]}
+                                    icon={L.divIcon({
+                                        className: 'bg-transparent',
+                                        html: `<div style="width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:28px solid #10b981;transform:rotate(${bearing}deg);transform-origin:center bottom;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));margin-top:-14px"></div>`,
+                                        iconSize: [28, 28],
+                                        iconAnchor: [14, 14]
+                                    })}
+                                    zIndexOffset={1500}
+                                />
+                                {/* Distance badge at midpoint */}
+                                <Marker 
+                                    position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
+                                    icon={L.divIcon({
+                                        className: 'bg-transparent',
+                                        html: `<div style="background:#10b981;color:white;font-weight:800;font-size:13px;padding:5px 12px;border-radius:20px;white-space:nowrap;box-shadow:0 3px 12px rgba(0,0,0,0.35);border:2px solid white;transform:translateX(-50%)">${distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(2) + ' km'}</div>`,
+                                        iconSize: [1, 1],
+                                        iconAnchor: [0, 0]
+                                    })}
+                                    zIndexOffset={1600}
+                                />
+                            </>
+                        );
+                    })()}
                 </>
             )}
 
@@ -1812,10 +1843,17 @@ export const LiveTracking = () => {
                         closeAllDropdowns();
                         toggleUserTracking();
                     }}
-                    className={`p-2.5 bg-white rounded-lg shadow-md hover:bg-brand-50 transition-colors ${isTrackingUser ? 'text-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'text-gray-700'}`}
+                    onTouchEnd={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        closeAllDropdowns();
+                        toggleUserTracking();
+                    }}
+                    className={`p-3 bg-white rounded-lg shadow-md active:scale-95 touch-manipulation transition-colors ${isTrackingUser ? 'text-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'text-gray-700'}`}
                     title="Toggle My GPS Position & Navigation"
+                    style={{ minWidth: 44, minHeight: 44 }}
                 >
-                    <Crosshair size={20} />
+                    <Crosshair size={22} />
                 </button>
             </div>
 
