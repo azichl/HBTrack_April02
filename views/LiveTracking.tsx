@@ -1374,7 +1374,7 @@ export const LiveTracking = () => {
                                     position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="background:#10b981;color:white;font-weight:800;font-size:13px;padding:5px 12px;border-radius:20px;white-space:nowrap;box-shadow:0 3px 12px rgba(0,0,0,0.35);border:2px solid white;transform:translateX(-50%)">${distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(2) + ' km'}</div>`,
+                                        html: `<div style="color:white;font-weight:900;font-size:24px;white-space:nowrap;transform:translateX(-50%);text-shadow:-2px -2px 0 #059669, 2px -2px 0 #059669, -2px 2px 0 #059669, 2px 2px 0 #059669, -2px 0 0 #059669, 2px 0 0 #059669, 0 -2px 0 #059669, 0 2px 0 #059669, 0 4px 12px rgba(0,0,0,0.6);letter-spacing:0.5px;">${distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(2) + ' km'}</div>`,
                                         iconSize: [1, 1],
                                         iconAnchor: [0, 0]
                                     })}
