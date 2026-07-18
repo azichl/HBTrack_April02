@@ -602,6 +602,39 @@ export const LiveTracking = () => {
   // Measurement Tool State
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [measurePoints, setMeasurePoints] = useState<L.LatLng[]>([]);
+
+  // GPS Navigation State
+  const [userLocation, setUserLocation] = useState<{lat: number, lon: number, accuracy: number} | null>(null);
+  const [isTrackingUser, setIsTrackingUser] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
+  const [navTarget, setNavTarget] = useState<{id: string, lat: number, lon: number} | null>(null);
+
+  const toggleUserTracking = () => {
+      if (isTrackingUser) {
+          if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+          watchIdRef.current = null;
+          setIsTrackingUser(false);
+          setUserLocation(null);
+          setNavTarget(null);
+      } else {
+          setIsTrackingUser(true);
+          if ('geolocation' in navigator) {
+              watchIdRef.current = navigator.geolocation.watchPosition(
+                  (pos) => setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+                  (err) => { console.error(err); setIsTrackingUser(false); },
+                  { enableHighAccuracy: true, maximumAge: 0 }
+              );
+          } else {
+              setIsTrackingUser(false);
+          }
+      }
+  };
+
+  useEffect(() => {
+      return () => {
+          if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      };
+  }, []);
   const [measureToolOffset, setMeasureToolOffset] = useState({ x: 0, y: 0 });
   const [isDraggingMeasureTool, setIsDraggingMeasureTool] = useState(false);
   const measureToolDragStartRef = useRef({ x: 0, y: 0 });
