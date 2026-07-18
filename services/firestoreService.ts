@@ -150,23 +150,11 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: string[]
     const promises: Promise<any>[] = [];
     
     transmitterIds.forEach(id => {
-      // 1 latest GPS
+      // 1 latest position (whether GPS or Doppler)
       promises.push(
         getDocs(query(
           collection(db, 'positions'),
           where('transmitter_id', '==', id),
-          where('locationType', '==', 'GPS'),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        )).then(snap => snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() })
-      );
-
-      // 1 latest Doppler
-      promises.push(
-        getDocs(query(
-          collection(db, 'positions'),
-          where('transmitter_id', '==', id),
-          where('locationType', '==', 'Doppler'),
           orderBy('timestamp', 'desc'),
           limit(1)
         )).then(snap => snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() })
