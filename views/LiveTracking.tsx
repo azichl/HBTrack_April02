@@ -361,6 +361,8 @@ interface TransmitterMarkerProps {
     timeZone: string;
     setSelectedTransmitterIds: (ids: string[]) => void;
     setShowHistory: (show: boolean) => void;
+    setNavTarget?: (target: {id: string, lat: number, lon: number} | null) => void;
+    isTrackingUser?: boolean;
 }
 
 // Extracted Marker Component to fix Popup data staleness issue
@@ -370,7 +372,9 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     bird, 
     timeZone, 
     setSelectedTransmitterIds, 
-    setShowHistory 
+    setShowHistory,
+    setNavTarget,
+    isTrackingUser
 }) => {
     const { setActiveTab } = useAppStore();
     const [isOpen, setIsOpen] = useState(false);
@@ -396,7 +400,12 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
             position={[pos.lat, pos.lon]}
             icon={getStatusIcon(status)}
             eventHandlers={{
-                popupopen: () => setIsOpen(true),
+                popupopen: () => {
+                    setIsOpen(true);
+                    if (setNavTarget) {
+                        setNavTarget({id: pos.transmitter_id, lat: pos.lat, lon: pos.lon});
+                    }
+                },
                 popupclose: () => setIsOpen(false)
             }}
         >
@@ -1259,9 +1268,59 @@ export const LiveTracking = () => {
                         timeZone={timeZone}
                         setSelectedTransmitterIds={setSelectedTransmitterIds}
                         setShowHistory={setShowHistory}
+                        setNavTarget={setNavTarget}
+                        isTrackingUser={isTrackingUser}
                     />
                 );
             })}
+
+
+            {/* User GPS Location & Navigation Line */}
+            {userLocation && (
+                <>
+                    <Marker 
+                        position={[userLocation.lat, userLocation.lon]}
+                        icon={L.divIcon({
+                            className: 'bg-transparent',
+                            html: `<div class="w-5 h-5 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center animate-pulse">
+                                     <div class="w-2 h-2 bg-white rounded-full"></div>
+                                   </div>`,
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10]
+                        })}
+                        zIndexOffset={2000}
+                    >
+                        <Popup>Your Location</Popup>
+                    </Marker>
+                    {userLocation.accuracy && (
+                        <CircleMarker 
+                            center={[userLocation.lat, userLocation.lon]} 
+                            radius={Math.min(userLocation.accuracy / 2, 100)} 
+                            pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.1, weight: 1 }} 
+                        />
+                    )}
+                    {navTarget && (
+                        <>
+                            <Polyline 
+                                positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
+                                pathOptions={{ color: '#10b981', weight: 3, dashArray: '10, 10', opacity: 0.8 }}
+                            />
+                            <Marker 
+                                position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
+                                icon={L.divIcon({ className: 'bg-transparent', html: '<div></div>' })}
+                            >
+                                <Tooltip permanent direction="center" className="!bg-emerald-600 !text-white !border-0 !rounded-lg !px-2 !py-1 !font-bold !shadow-lg">
+                                    {formatDistance((() => {
+                                        const p1 = L.latLng(userLocation.lat, userLocation.lon);
+                                        const p2 = L.latLng(navTarget.lat, navTarget.lon);
+                                        return p1.distanceTo(p2);
+                                    })())}
+                                </Tooltip>
+                            </Marker>
+                        </>
+                    )}
+                </>
+            )}
 
             {/* Measurement Tool Drawing */}
             {isMeasuring && measurePoints.length > 0 && (
@@ -1709,6 +1768,21 @@ export const LiveTracking = () => {
                     title="Distance Measurement Tool"
                 >
                     <Ruler size={20} />
+                </button>
+            </div>
+
+            {/* GPS Navigation Toggle */}
+            <div className="relative">
+                <button 
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        closeAllDropdowns();
+                        toggleUserTracking();
+                    }}
+                    className={`p-2.5 bg-white rounded-lg shadow-md hover:bg-brand-50 transition-colors ${isTrackingUser ? 'text-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'text-gray-700'}`}
+                    title="Toggle My GPS Position & Navigation"
+                >
+                    <Crosshair size={20} />
                 </button>
             </div>
 
