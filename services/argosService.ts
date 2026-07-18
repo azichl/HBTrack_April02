@@ -63,7 +63,9 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
 
         if (!lc) lc = 'Z'; // fallback
 
-        const ts = item.msgDatetime || item.bestDate || item.date || new Date().toISOString();
+        const gpsDate = item.gpsLocDate || item.location?.locationDate;
+        const msgDate = item.msgDatetime || item.bestDate || item.date || new Date().toISOString();
+        const ts = gpsDate ? gpsDate : msgDate;
         const platformId = item.deviceRef || item.platformId || 'Unknown';
         
         return {
