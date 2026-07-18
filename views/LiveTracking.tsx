@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, Filter } from 'lucide-react';
+import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
@@ -583,7 +583,7 @@ export const LiveTracking = () => {
   // Tracking Map State
   const [layerOpen, setLayerOpen] = useState(false);
   const [weatherOpen, setWeatherOpen] = useState(false);
-  const [filterOpen, setFilterOpen] = useState(false); // Replaces historyOpen
+  const [historyOpen, setHistoryOpen] = useState(false); // New History Dropdown State
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [activeLayer, setActiveLayer] = useState('google_hybrid');
   const [activeWeatherLayer, setActiveWeatherLayer] = useState('none');
@@ -1107,7 +1107,7 @@ export const LiveTracking = () => {
     setLayerOpen(false);
     setWeatherOpen(false);
     setStatusDropdownOpen(false);
-    setFilterOpen(false);
+    setHistoryOpen(false);
     setTempPopup(null); 
     setIsSearchFocused(false);
   };
@@ -1575,220 +1575,126 @@ export const LiveTracking = () => {
                  )}
             </div>
 
-            {/* Filter Control */}
+            {/* History Control */}
             <div className="relative">
                 <button 
-                    onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setFilterOpen(!filterOpen); }}
-                    className={`p-2.5 bg-white rounded-lg shadow-md hover:bg-brand-50 transition-colors relative ${filterOpen ? 'text-brand-600 bg-brand-50' : 'text-gray-700'}`}
-                    title="Filters & History"
+                    onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setHistoryOpen(!historyOpen); }}
+                    className={`p-2.5 bg-white rounded-lg shadow-md hover:bg-brand-50 transition-colors ${historyOpen ? 'text-brand-600 bg-brand-50' : 'text-gray-700'}`}
+                    title="Historical Tracks"
                 >
-                    <Filter size={20} />
-                    {selectedTransmitterIds.length > 0 && (
-                        <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                            {selectedTransmitterIds.length}
-                        </div>
-                    )}
+                    <History size={20} />
                 </button>
-            </div>
-
-            {/* Filter Modal (Dark UI) */}
-            {filterOpen && (
-                <div 
-                    className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 backdrop-blur-sm"
-                    onClick={() => setFilterOpen(false)}
-                >
-                    <div 
-                        className="bg-[#1e293b] w-[450px] rounded-2xl shadow-2xl border border-slate-700 overflow-hidden flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
+                 {historyOpen && (
+                    <div
+                      className="absolute bg-white rounded-xl shadow-xl w-72 border border-gray-100 animate-in fade-in slide-in-from-left-2 flex flex-col overflow-hidden"
+                      style={{ zIndex: 1000, pointerEvents: 'auto', top: historyPopupPos.y, left: 56 + historyPopupPos.x }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                        {/* Header */}
-                        <div className="flex justify-between items-center px-5 py-4 border-b border-slate-700/50">
-                            <h3 className="text-white font-semibold text-lg">Filters</h3>
-                            <button onClick={() => setFilterOpen(false)} className="text-slate-400 hover:text-white transition-colors">
-                                <X size={20} />
-                            </button>
+                        {/* Drag Handle Header */}
+                        <div
+                          className="flex items-center justify-between p-4 pb-3 bg-white border-b border-gray-50 cursor-move flex-shrink-0 select-none"
+                          onMouseDown={handleHistoryMouseDown}
+                        >
+                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Track History</h4>
+                            {isHistoryLoading && <Loader2 size={14} className="text-brand-500 animate-spin" />}
                         </div>
-
-                        {/* Body */}
-                        <div className="p-5 space-y-6 overflow-y-auto max-h-[75vh] custom-scrollbar">
-                            <div className="flex justify-end">
-                                <button 
-                                    onClick={clearSelection}
-                                    className="text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
-                                >
-                                    <Trash2 size={12} /> Reset filters
-                                </button>
-                            </div>
-
-                            {/* Period Section */}
-                            <div className="bg-[#243347] rounded-xl border border-slate-600/50 overflow-hidden">
-                                <div className="px-4 py-3 flex justify-between items-center cursor-pointer border-b border-slate-600/30">
-                                    <div className="flex items-center gap-2 text-slate-200 font-medium text-sm">
-                                        <Calendar size={16} className="text-slate-400" />
-                                        What period do you want to work on? (UTC)
-                                    </div>
-                                    <ChevronDown size={16} className="text-slate-400" />
-                                </div>
-                                <div className="p-4 flex gap-3">
-                                    <select 
-                                        value={historyMode === 'preset' ? historyPreset : 'custom'}
-                                        onChange={(e) => {
-                                            const val = e.target.value;
-                                            if (val === 'custom') setHistoryMode('custom');
-                                            else {
-                                                setHistoryMode('preset');
-                                                setHistoryPreset(val as any);
-                                            }
-                                        }}
-                                        className="bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 outline-none focus:border-brand-500 w-1/3"
+                        
+                        {/* Scrollable Content */}
+                        <div className="p-4 pt-3 overflow-y-auto custom-scrollbar max-h-[60vh]">
+                        {selectedTransmitterIds.length === 0 ? (
+                            <p className="text-xs text-gray-500 italic">Please select a PTT to view history.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                                    <span className="text-xs font-semibold text-gray-700">Show Tracks</span>
+                                    <button 
+                                        onClick={() => setShowHistory(!showHistory)}
+                                        className={`w-9 h-5 rounded-full transition-colors relative ${showHistory ? 'bg-brand-600' : 'bg-gray-300'}`}
                                     >
-                                        <option value="24h">Last 24h</option>
-                                        <option value="7d">Last 7d</option>
-                                        <option value="30d">Last 30d</option>
-                                        <option value="1y">Last 1 Year</option>
-                                        <option value="custom">Custom</option>
-                                    </select>
-                                    
-                                    {historyMode === 'custom' && (
-                                        <div className="flex flex-1 gap-2">
-                                            <input 
-                                                type="date"
-                                                value={customDates.start}
-                                                onChange={(e) => setCustomDates({...customDates, start: e.target.value})}
-                                                className="bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-2 flex-1 outline-none focus:border-brand-500"
-                                            />
-                                            <input 
-                                                type="date"
-                                                value={customDates.end}
-                                                onChange={(e) => setCustomDates({...customDates, end: e.target.value})}
-                                                className="bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-2 flex-1 outline-none focus:border-brand-500"
-                                            />
-                                        </div>
-                                    )}
+                                        <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${showHistory ? 'translate-x-4' : ''}`} />
+                                    </button>
                                 </div>
-                            </div>
+                                
+                                {showHistory && (
+                                    <div className="space-y-3 pt-2">
+                                        <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                            <button 
+                                                onClick={() => setHistoryMode('preset')}
+                                                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${historyMode === 'preset' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+                                            >
+                                                Preset
+                                            </button>
+                                            <button 
+                                                onClick={() => setHistoryMode('custom')}
+                                                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${historyMode === 'custom' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+                                            >
+                                                Custom Date
+                                            </button>
+                                        </div>
 
-                            {/* Devices Section */}
-                            <div className="bg-[#243347] rounded-xl border border-slate-600/50 overflow-hidden">
-                                <div className="px-4 py-3 flex justify-between items-center border-b border-slate-600/30">
-                                    <div className="flex items-center gap-2 text-slate-200 font-medium text-sm">
-                                        <Radio size={16} className="text-slate-400" />
-                                        Devices
-                                    </div>
-                                    <ChevronDown size={16} className="text-slate-400" />
-                                </div>
-                                <div className="p-4 space-y-4">
-                                    <div className="flex bg-[#1e293b] rounded-full p-1 w-max border border-slate-600">
-                                        <button className="px-4 py-1.5 text-sm font-semibold rounded-full bg-emerald-400 text-slate-900 flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-slate-900"></div> Unitary device
-                                        </button>
-                                        <button className="px-4 py-1.5 text-sm font-semibold rounded-full text-slate-400 flex items-center gap-2 hover:text-slate-200">
-                                            <Layers size={14} /> Device group(s)
-                                        </button>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-200 mb-2 block">Choose devices</label>
-                                        <div className="relative">
-                                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-400" />
-                                            <input 
-                                                type="text"
-                                                placeholder="Search or copy and paste a list of device IDs"
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="w-full bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg pl-9 pr-3 py-2.5 outline-none focus:border-brand-500 placeholder-slate-500"
-                                            />
-                                        </div>
-                                        <div className="text-[10px] text-slate-400 mt-2 flex items-center gap-1">
-                                            <div className="w-3 h-3 rounded-full bg-slate-500 flex items-center justify-center text-slate-900 font-bold italic">i</div>
-                                            50 ID max - Allowed separator , and ;
-                                        </div>
-                                        {/* Dropdown for search results */}
-                                        {searchQuery && searchResults.length > 0 && (
-                                            <div className="mt-2 bg-[#1e293b] border border-slate-600 rounded-lg max-h-40 overflow-y-auto">
-                                                {searchResults.map(t => (
-                                                    <div 
-                                                        key={t.id}
-                                                        onClick={() => handleSearchToggle(String(t.platform_id || ''))}
-                                                        className="px-3 py-2 hover:bg-slate-700 cursor-pointer flex items-center justify-between border-b border-slate-700/50 last:border-0"
+                                        {historyMode === 'preset' ? (
+                                            <div className="space-y-1">
+                                                {['24h', '7d', '30d', '1y', '2y'].map(range => (
+                                                    <button
+                                                        key={range}
+                                                        onClick={() => setHistoryPreset(range as any)}
+                                                        className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between ${
+                                                            historyPreset === range 
+                                                                ? 'bg-brand-50 text-brand-700 font-medium' 
+                                                                : 'text-gray-600 hover:bg-gray-50'
+                                                        }`}
                                                     >
-                                                        <span className="text-slate-300 text-sm">PTT {t.platform_id}</span>
-                                                        {selectedTransmitterIds.includes(String(t.platform_id || '')) && <Check size={14} className="text-emerald-400"/>}
-                                                    </div>
+                                                        {range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
+                                                        {historyPreset === range && <CheckCircle2 size={14} className="text-brand-500" />}
+                                                    </button>
                                                 ))}
                                             </div>
-                                        )}
-                                        {/* Selected Badges */}
-                                        {selectedTransmitterIds.length > 0 && (
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {selectedTransmitterIds.map(id => (
-                                                    <div key={id} className="bg-emerald-400/20 border border-emerald-400/30 text-emerald-300 px-2 py-1 rounded text-xs flex items-center gap-1 font-mono">
-                                                        {id}
-                                                        <button onClick={() => handleSearchToggle(id)} className="hover:text-white"><X size={10}/></button>
-                                                    </div>
-                                                ))}
+                                        ) : (
+                                            <div className="space-y-3 p-2 bg-gray-50 rounded-lg">
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Start Date</label>
+                                                    <input 
+                                                        type="date"
+                                                        value={customDates.start}
+                                                        onChange={(e) => setCustomDates({...customDates, start: e.target.value})}
+                                                        className="w-full text-xs p-2 border border-gray-200 rounded outline-none focus:border-brand-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">End Date</label>
+                                                    <input 
+                                                        type="date"
+                                                        value={customDates.end}
+                                                        onChange={(e) => setCustomDates({...customDates, end: e.target.value})}
+                                                        className="w-full text-xs p-2 border border-gray-200 rounded outline-none focus:border-brand-500"
+                                                    />
+                                                </div>
                                             </div>
                                         )}
-                                    </div>
-                                </div>
-                            </div>
 
-                            {/* Location accuracy Section */}
-                            <div className="bg-[#243347] rounded-xl border border-slate-600/50 overflow-hidden">
-                                <div className="px-4 py-3 flex justify-between items-center border-b border-slate-600/30">
-                                    <div className="flex items-center gap-2 text-slate-200 font-medium text-sm">
-                                        <MapPin size={16} className="text-slate-400" />
-                                        Location accuracy
+                                        {/* GPS / Doppler Filter */}
+                                        <div className="pt-2 border-t border-gray-100">
+                                            <label className="text-[10px] uppercase font-bold text-gray-400 mb-2 block">Location Type</label>
+                                            <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                                {['All', 'GPS', 'Doppler'].map(type => (
+                                                    <button 
+                                                        key={type}
+                                                        onClick={() => setHistoryFixType(type as any)}
+                                                        className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all uppercase ${historyFixType === type ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+                                                    >
+                                                        {type}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <ChevronDown size={16} className="text-slate-400" />
-                                </div>
-                                <div className="p-4 space-y-4">
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-200 mb-2 block">Location Type</label>
-                                        <select 
-                                            value={historyFixType}
-                                            onChange={(e) => setHistoryFixType(e.target.value as any)}
-                                            className="w-full bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-brand-500"
-                                        >
-                                            <option value="All">Select... (All)</option>
-                                            <option value="GPS">GPS Only</option>
-                                            <option value="Doppler">Doppler Only</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-semibold text-slate-200 mb-2 block">Error radius (for Doppler positions only)</label>
-                                        <select 
-                                            className="w-full bg-[#1e293b] border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2.5 outline-none focus:border-brand-500"
-                                        >
-                                            <option value="all">All</option>
-                                            <option value="high">High Accuracy (&lt; 250m)</option>
-                                            <option value="medium">Medium Accuracy (250m - 1500m)</option>
-                                        </select>
-                                    </div>
-                                </div>
+                                )}
                             </div>
-                        </div>
-
-                        {/* Footer */}
-                        <div className="p-4 bg-[#1e293b] border-t border-slate-700/50 flex justify-end gap-3">
-                            <button 
-                                onClick={() => setFilterOpen(false)}
-                                className="px-5 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setShowHistory(true);
-                                    setFilterOpen(false);
-                                }}
-                                className="px-5 py-2 rounded-lg text-sm font-bold bg-emerald-400 text-slate-900 hover:bg-emerald-300 transition-colors shadow-lg shadow-emerald-400/20"
-                            >
-                                Apply
-                            </button>
+                        )}
                         </div>
                     </div>
-                </div>
-            )}
+                 )}
+            </div>
 
             {/* Measurement Tool Toggle */}
             <div className="relative">
@@ -1813,6 +1719,86 @@ export const LiveTracking = () => {
             >
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
             </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="absolute top-4 left-16 z-[400]">
+            <div className="relative group">
+                <div className={`flex items-center bg-white rounded-lg shadow-md border border-gray-200 transition-all duration-200 ${isSearchFocused || searchQuery ? 'w-64 ring-2 ring-brand-500 border-transparent' : 'w-56'}`}>
+                    <Search size={18} className="ml-3 text-gray-400 flex-shrink-0" />
+                    <input 
+                        type="text" 
+                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs Selected` : "Search PTT ID..."}
+                        value={searchQuery}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full py-2.5 px-2 text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-700 placeholder-gray-400"
+                    />
+                    {selectedTransmitterIds.length > 0 && (
+                        <button 
+                            onClick={clearSelection}
+                            className="mr-2 text-gray-400 hover:text-red-500 flex-shrink-0"
+                            title="Clear All Selections"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+
+                {isSearchFocused && (
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 max-h-[400px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
+                        <div className="p-2 border-b border-gray-100 flex gap-2 bg-gray-50">
+                            <button 
+                                onClick={selectAllFiltered}
+                                className="flex-1 px-2 py-1.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 rounded transition-colors"
+                            >
+                                Select All Filtered
+                            </button>
+                            <button 
+                                onClick={clearSelection}
+                                className="flex-1 px-2 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded transition-colors"
+                            >
+                                Clear Selection
+                            </button>
+                             <button 
+                                onClick={() => setIsSearchFocused(false)}
+                                className="px-2 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 rounded transition-colors"
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+
+                        <div className="overflow-y-auto flex-1">
+                            {searchResults.length > 0 ? (
+                                searchResults.map(t => {
+                                    const bird = birds.find(b => b.id === t.bird_id);
+                                    const isSelected = selectedTransmitterIds.includes(String(t.platform_id || ''));
+                                    return (
+                                        <div
+                                            key={t.id}
+                                            onClick={() => handleSearchToggle(String(t.platform_id || ''))}
+                                            className={`w-full text-left px-4 py-3 border-b border-gray-50 last:border-none flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
+                                        >
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-brand-500 border-brand-500' : 'border-gray-300 bg-white'}`}>
+                                                    {isSelected && <Check size={12} className="text-white" />}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-sm font-bold text-gray-900 truncate">PTT {t.platform_id}</div>
+                                                    <div className="text-xs text-gray-500 truncate">{bird?.ring_id || 'Unassigned'}</div>
+                                                </div>
+                                            </div>
+                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${t.status === 'active' ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="px-4 py-8 text-sm text-gray-500 text-center italic">No transmitters found</div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
 
         {/* Status Filter Dropdown */}
