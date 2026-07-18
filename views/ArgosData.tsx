@@ -11,6 +11,7 @@ import Draggable from 'react-draggable';
 import { ArgosMessage } from '../types';
 
 type CollectionMode = 'argos_positions' | 'positions' | 'all';
+type DateRangeType = 'latest' | '7d' | '30d' | 'custom';
 
 export const ArgosData = () => {
   const { 
@@ -40,7 +41,7 @@ export const ArgosData = () => {
   const [isConfirming, setIsConfirming] = useState(false);
 
   // Date Range Filter State
-  const [dateRange, setDateRange] = useState<'7d' | '30d' | 'custom'>('7d');
+  const [dateRange, setDateRange] = useState<DateRangeType>('latest');
   const [customDates, setCustomDates] = useState({ 
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], 
     end: new Date().toISOString().split('T')[0] 
@@ -54,29 +55,53 @@ export const ArgosData = () => {
       let sDate: Date | undefined;
       let eDate: Date | undefined;
 
-      if (dateRange === '7d') {
-        sDate = new Date();
-        sDate.setDate(sDate.getDate() - 7);
-        eDate = new Date();
-      } else if (dateRange === '30d') {
-        sDate = new Date();
-        sDate.setDate(sDate.getDate() - 30);
-        eDate = new Date();
-      } else if (dateRange === 'custom' && customDates.start && customDates.end) {
-        sDate = new Date(customDates.start);
-        eDate = new Date(customDates.end);
-        eDate.setHours(23, 59, 59);
+      if (dateRange === 'latest') {
+        const tIds = await getArgosTransmitterIds();
+        if (collectionMode === 'argos_positions') {
+          const { loadLatestArgosPositionsPerTransmitter } = await import('../services/firestoreService');
+          const latestArgos = await loadLatestArgosPositionsPerTransmitter(tIds);
+          data = latestArgos.map(d => ({ _collection: 'argos_positions', ...d }));
+        } else if (collectionMode === 'positions') {
+          const { loadLatestPositionsPerTransmitter } = await import('../services/firestoreService');
+          const latestPos = await loadLatestPositionsPerTransmitter(tIds);
+          data = latestPos.map(d => ({ _collection: 'positions', ...d }));
+        } else {
+          const { loadLatestArgosPositionsPerTransmitter, loadLatestPositionsPerTransmitter } = await import('../services/firestoreService');
+          const [argos, pos] = await Promise.all([
+            loadLatestArgosPositionsPerTransmitter(tIds),
+            loadLatestPositionsPerTransmitter(tIds)
+          ]);
+          data = [
+            ...argos.map(d => ({ _collection: 'argos_positions', ...d })), 
+            ...pos.map(d => ({ _collection: 'positions', ...d }))
+          ];
+        }
+      } else {
+        if (dateRange === '7d') {
+          sDate = new Date();
+          sDate.setDate(sDate.getDate() - 7);
+          eDate = new Date();
+        } else if (dateRange === '30d') {
+          sDate = new Date();
+          sDate.setDate(sDate.getDate() - 30);
+          eDate = new Date();
+        } else if (dateRange === 'custom' && customDates.start && customDates.end) {
+          sDate = new Date(customDates.start);
+          eDate = new Date(customDates.end);
+          eDate.setHours(23, 59, 59);
+        }
+
+        if (collectionMode === 'argos_positions') {
+          data = await loadAllArgosPositions(sDate, eDate);
+        } else if (collectionMode === 'positions') {
+          data = await loadAllPositions(sDate, eDate);
+        } else {
+          // Load both collections
+          const [argos, pos] = await Promise.all([loadAllArgosPositions(sDate, eDate), loadAllPositions(sDate, eDate)]);
+          data = [...argos, ...pos];
+        }
       }
 
-      if (collectionMode === 'argos_positions') {
-        data = await loadAllArgosPositions(sDate, eDate);
-      } else if (collectionMode === 'positions') {
-        data = await loadAllPositions(sDate, eDate);
-      } else {
-        // Load both collections
-        const [argos, pos] = await Promise.all([loadAllArgosPositions(sDate, eDate), loadAllPositions(sDate, eDate)]);
-        data = [...argos, ...pos];
-      }
       setAllData(data);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -315,15 +340,16 @@ export const ArgosData = () => {
                {/* Date Range Filter */}
                <div className="flex items-center gap-2">
                  <CustomSelect
-                   value={dateRange}
-                   onChange={(val) => setDateRange(val as '7d' | '30d' | 'custom')}
-                   className="min-w-[140px] text-sm"
-                   buttonClassName="px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
                    options={[
+                     { value: 'latest', label: 'Latest Only' },
                      { value: '7d', label: 'Last 7 Days' },
                      { value: '30d', label: 'Last 30 Days' },
                      { value: 'custom', label: 'Custom Range' },
                    ]}
+                   value={dateRange}
+                   onChange={(val) => setDateRange(val as any)}
+                   className="min-w-[140px] text-sm"
+                   buttonClassName="px-3 py-2 border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900"
                  />
                  {dateRange === 'custom' && (
                    <div className="flex items-center gap-2">

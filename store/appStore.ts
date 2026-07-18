@@ -6,6 +6,7 @@ import {
   saveDocument, deleteDocument, savePositions, 
   loadCollection, subscribeToCollection, 
   loadRecentPositions, subscribeToRecentPositions,
+  loadLatestPositionsPerTransmitter,
   syncTransmitters, syncBirds, syncAlerts,
   batchWriteArgosPositions, deleteCollection,
   batchWriteDocuments, batchDeleteDocuments,
@@ -689,20 +690,22 @@ export const useAppStore = create<AppState>()(
         try {
           console.log('[AppStore] Loading data from Firestore...');
           
-          const [fsTransmitters, fsBirds, fsPositions, fsAlerts, fsUsers] = await Promise.all([
+          const [fsTransmitters, fsBirds, fsAlerts, fsUsers] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
-            loadRecentPositions(7),
             loadCollection<Alert>('alerts'),
             loadCollection<User>('users'),
           ]);
+
+          // Load only the latest GPS and Doppler position for each transmitter
+          const fsPositions = await loadLatestPositionsPerTransmitter(fsTransmitters.map(t => t.platform_id));
 
           // Firestore is the source of truth — use directly
           const mergedTransmitters = fsTransmitters;
           const mergedBirds = fsBirds;
           const mergedAlerts = fsAlerts;
           const mergedUsers = fsUsers;
-          const recentPositions = fsPositions;
+          const recentPositions = fsPositions as Position[];
 
           // Try to load user profile for RBAC
           const currentUser = get().currentUser;
@@ -773,15 +776,33 @@ export const useAppStore = create<AppState>()(
 
       // ─── Real-Time Position Listener ────────────────────────────────────────
       subscribeToLivePositions: () => {
-        return subscribeToRecentPositions(7, (firestorePositions) => {
-          // Double-check coords locally
-          const positions = firestorePositions.filter(p => {
-            const latNum = Number(p.lat);
-            const lonNum = Number(p.lon);
-            const validCoords = !(latNum === 0 && lonNum === 0) && !isNaN(latNum) && !isNaN(lonNum);
-            return validCoords;
+        // Only listen for new positions generated from today onwards to avoid huge reads
+        return subscribeToRecentPositions(1, (firestorePositions) => {
+          // Merge incoming new positions into the store (retaining older ones loaded initially)
+          set((state) => {
+            const currentPositions = [...state.positions];
+            let changed = false;
+
+            firestorePositions.forEach(p => {
+               const latNum = Number(p.lat);
+               const lonNum = Number(p.lon);
+               const validCoords = !(latNum === 0 && lonNum === 0) && !isNaN(latNum) && !isNaN(lonNum);
+               
+               if (validCoords) {
+                 // Check if it exists or is newer
+                 const existingIndex = currentPositions.findIndex(cp => cp.id === p.id);
+                 if (existingIndex === -1) {
+                   currentPositions.push(p as Position);
+                   changed = true;
+                 } else if (new Date(p.timestamp).getTime() > new Date(currentPositions[existingIndex].timestamp).getTime()) {
+                   currentPositions[existingIndex] = p as Position;
+                   changed = true;
+                 }
+               }
+            });
+
+            return changed ? { positions: currentPositions } : {};
           });
-          set({ positions });
         });
       },
 

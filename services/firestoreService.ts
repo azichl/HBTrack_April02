@@ -145,6 +145,74 @@ export const subscribeToCollection = <T>(
 
 // ─── Optimized Position Queries ────────────────────────────────────────────────
 
+export const loadLatestPositionsPerTransmitter = async (transmitterIds: string[]) => {
+  try {
+    const promises: Promise<any>[] = [];
+    
+    transmitterIds.forEach(id => {
+      // 1 latest GPS
+      promises.push(
+        getDocs(query(
+          collection(db, 'positions'),
+          where('transmitter_id', '==', id),
+          where('locationType', '==', 'GPS'),
+          orderBy('timestamp', 'desc'),
+          limit(1)
+        )).then(snap => snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() })
+      );
+
+      // 1 latest Doppler
+      promises.push(
+        getDocs(query(
+          collection(db, 'positions'),
+          where('transmitter_id', '==', id),
+          where('locationType', '==', 'Doppler'),
+          orderBy('timestamp', 'desc'),
+          limit(1)
+        )).then(snap => snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() })
+      );
+    });
+
+    const results = await Promise.all(promises);
+    const validPositions = results.filter(p => p !== null);
+    
+    console.log(`[Firestore] Loaded ${validPositions.length} latest positions for ${transmitterIds.length} transmitters`);
+    return validPositions;
+  } catch (error) {
+    console.error(`[Firestore] Error loading latest positions per transmitter:`, error);
+    return [];
+  }
+};
+
+export const loadLatestArgosPositionsPerTransmitter = async (transmitterIds: string[]) => {
+  try {
+    const promises: Promise<any>[] = [];
+    
+    transmitterIds.forEach(id => {
+      promises.push(
+        getDocs(query(
+          collection(db, 'argos_positions'),
+          where('platformId', '==', id),
+          orderBy('timestamp', 'desc'),
+          limit(2)
+        )).then(snap => {
+          if (snap.empty) return [];
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        })
+      );
+    });
+
+    const results = await Promise.all(promises);
+    const validPositions = results.flat();
+    
+    console.log(`[Firestore] Loaded ${validPositions.length} latest argos_positions for ${transmitterIds.length} transmitters`);
+    return validPositions;
+  } catch (error) {
+    console.error(`[Firestore] Error loading latest argos_positions per transmitter:`, error);
+    return [];
+  }
+};
+
 export const loadRecentPositions = async (days: number = 7) => {
   try {
     const cutoffDate = new Date();
