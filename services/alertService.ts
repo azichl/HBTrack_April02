@@ -34,8 +34,10 @@ export const analyzePositionsForAlerts = (
     // Filter out 0.0, 0.0 coords and only keep good fixes (error < 1000m: typically LC 3, 2, 1, or GPS)
     const isValidFix = (p: Position) => {
         if (p.lat === 0 && p.lon === 0) return false;
-        if (!['3', '2', '1', 'G'].includes(p.lc)) return false;
-        return true;
+        // GPS fixes or Doppler fixes with accuracy under 500m (LC 3 or 2)
+        if (p.locationType === 'GPS' || p.lc === 'G') return true;
+        if (['3', '2'].includes(p.lc)) return true;
+        return false;
     };
 
     const validNewPositions = newPositions.filter(isValidFix);
