@@ -1112,22 +1112,27 @@ export const LiveTracking = () => {
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    // Try native fullscreen first, fall back to CSS-based for mobile
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    } else if ((document as any).webkitFullscreenElement) {
-      (document as any).webkitExitFullscreen();
+    const el = containerRef.current as any;
+    
+    if (isFullscreen) {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else if ((document as any).webkitFullscreenElement) (document as any).webkitExitFullscreen();
+      setIsFullscreen(false);
     } else {
-      const el = containerRef.current as any;
       if (el.requestFullscreen) {
-        el.requestFullscreen().catch(() => { setIsFullscreen(!isFullscreen); });
+        el.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => setIsFullscreen(true));
       } else if (el.webkitRequestFullscreen) {
         el.webkitRequestFullscreen();
+        setIsFullscreen(true); // iOS Safari often fails silently for divs, force fallback
       } else {
-        // CSS fallback for iOS Safari
-        setIsFullscreen(!isFullscreen);
+        setIsFullscreen(true);
       }
     }
+    
+    // Force Leaflet to recalculate immediately
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+    }, 150);
   };
 
   const handleLegendMouseDown = (e: React.MouseEvent) => {

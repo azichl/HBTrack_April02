@@ -430,7 +430,7 @@ const App = () => {
 
   return (
     <div className={`${darkMode ? 'dark' : ''} h-full`}>
-      <div className="flex h-screen bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300">
+      <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300">
 
         {sidebarOpen && (
           <div
