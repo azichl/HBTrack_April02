@@ -1343,8 +1343,6 @@ export const LiveTracking = () => {
                         const p1 = L.latLng(userLocation.lat, userLocation.lon);
                         const p2 = L.latLng(navTarget.lat, navTarget.lon);
                         const distM = p1.distanceTo(p2);
-                        const arrowLat = userLocation.lat + (navTarget.lat - userLocation.lat) * 0.80;
-                        const arrowLon = userLocation.lon + (navTarget.lon - userLocation.lon) * 0.80;
                         const dLon = (navTarget.lon - userLocation.lon) * Math.PI / 180;
                         const lat1r = userLocation.lat * Math.PI / 180;
                         const lat2r = navTarget.lat * Math.PI / 180;
@@ -1364,25 +1362,28 @@ export const LiveTracking = () => {
                                     positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
                                     pathOptions={{ color: '#10b981', weight: 7, opacity: 0.95 }}
                                 />
-                                {/* Arrowhead */}
+                                {/* Arrowhead (positioned at user, shifted 30px forward along bearing) */}
                                 <Marker
-                                    position={[arrowLat, arrowLon]}
+                                    position={[userLocation.lat, userLocation.lon]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:32px solid #10b981;transform:rotate(${bearing}deg);transform-origin:center bottom;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5));margin-top:-16px"></div>`,
-                                        iconSize: [32, 32],
-                                        iconAnchor: [16, 16]
+                                        html: `<div style="width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:28px solid #10b981;transform:rotate(${bearing}deg) translateY(-36px);transform-origin:center center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5));"></div>`,
+                                        iconSize: [28, 28],
+                                        iconAnchor: [14, 14]
                                     })}
                                     zIndexOffset={1500}
                                 />
-                                {/* Distance text — huge white with green outline */}
+                                {/* Distance text — huge white with thick green stroke via robust SVG */}
                                 <Marker 
                                     position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="background:rgba(5,150,105,0.85);color:white;font-weight:900;font-size:28px;white-space:nowrap;transform:translateX(-50%);padding:6px 18px;border-radius:30px;border:3px solid white;box-shadow:0 4px 16px rgba(0,0,0,0.5);letter-spacing:1px;font-family:Arial Black,sans-serif;">${distText}</div>`,
-                                        iconSize: [1, 1],
-                                        iconAnchor: [0, 20]
+                                        html: `<svg width="300" height="80" style="transform:translate(-50%, -50%);overflow:visible">
+                                                 <text x="150" y="50" text-anchor="middle" fill="none" stroke="#059669" stroke-width="8" stroke-linejoin="round" style="font-size:36px;font-weight:900;font-family:Arial Black, sans-serif;filter:drop-shadow(0px 4px 8px rgba(0,0,0,0.5))">${distText}</text>
+                                                 <text x="150" y="50" text-anchor="middle" fill="white" style="font-size:36px;font-weight:900;font-family:Arial Black, sans-serif;">${distText}</text>
+                                               </svg>`,
+                                        iconSize: [0, 0],
+                                        iconAnchor: [0, 0]
                                     })}
                                     zIndexOffset={1600}
                                 />
