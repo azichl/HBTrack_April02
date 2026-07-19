@@ -1122,8 +1122,12 @@ export const LiveTracking = () => {
       if (el.requestFullscreen) {
         el.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => setIsFullscreen(true));
       } else if (el.webkitRequestFullscreen) {
-        el.webkitRequestFullscreen();
-        setIsFullscreen(true); // iOS Safari often fails silently for divs, force fallback
+        try {
+            el.webkitRequestFullscreen();
+        } catch (e) {
+            console.warn('webkitRequestFullscreen failed, using CSS fallback', e);
+        }
+        setIsFullscreen(true); // Force CSS fallback if native fails or silently does nothing
       } else {
         setIsFullscreen(true);
       }
@@ -2266,7 +2270,7 @@ export const LiveTracking = () => {
         {/* Main Map Area */}
         <div 
             ref={containerRef} 
-            className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? 'fixed inset-0 z-[9999] p-0 rounded-none border-none' : ''}`}
+            className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? '!fixed !inset-0 !z-[9999] !p-0 !m-0 !rounded-none !border-none !w-screen !h-[100dvh] !max-w-none !max-h-none' : ''}`}
         >
             {viewMode === 'tracking' ? renderTrackingMap() : 
              viewMode === 'weather' ? renderWeatherMap() : 
