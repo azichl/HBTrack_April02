@@ -1320,36 +1320,43 @@ export const LiveTracking = () => {
             {/* User GPS Location & Navigation Line */}
             {userLocation && (
                 <>
-                    <Marker 
-                        position={[userLocation.lat, userLocation.lon]}
-                        icon={L.divIcon({
-                            className: 'bg-transparent',
-                            html: `<div style="width:28px;height:28px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px rgba(59,130,246,0.4),0 4px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><div style="width:8px;height:8px;background:white;border-radius:50%"></div></div>`,
-                            iconSize: [28, 28],
-                            iconAnchor: [14, 14]
-                        })}
-                        zIndexOffset={2000}
-                    >
-                        <Popup>Your Location</Popup>
-                    </Marker>
                     {userLocation.accuracy && (
                         <CircleMarker 
                             center={[userLocation.lat, userLocation.lon]} 
                             radius={Math.min(userLocation.accuracy / 2, 100)} 
-                            pathOptions={{ color: '#3b82f6', fillColor: '#3b82f6', fillOpacity: 0.1, weight: 1 }} 
+                            pathOptions={{ color: '#0ea5e9', fillColor: '#0ea5e9', fillOpacity: 0.1, weight: 1 }} 
                         />
                     )}
+                    {(() => {
+                        let bearing = 0;
+                        if (navTarget) {
+                            const dLon = (navTarget.lon - userLocation.lon) * Math.PI / 180;
+                            const lat1r = userLocation.lat * Math.PI / 180;
+                            const lat2r = navTarget.lat * Math.PI / 180;
+                            const yB = Math.sin(dLon) * Math.cos(lat2r);
+                            const xB = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+                            bearing = (Math.atan2(yB, xB) * 180 / Math.PI + 360) % 360;
+                        }
+                        const rotation = userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : bearing;
+
+                        return (
+                            <Marker
+                                position={[userLocation.lat, userLocation.lon]}
+                                icon={L.divIcon({
+                                    className: 'bg-transparent',
+                                    html: `<svg width="40" height="40" viewBox="0 0 40 40" style="transform: rotate(${rotation}deg); transform-origin: center center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); overflow: visible;">
+                                        <path d="M 20 4 L 34 34 L 20 28 L 6 34 Z" fill="#0ea5e9" stroke="#0284c7" stroke-width="2" stroke-linejoin="round" />
+                                    </svg>`,
+                                    iconSize: [40, 40],
+                                    iconAnchor: [20, 20]
+                                })}
+                                zIndexOffset={2000}
+                            >
+                                <Popup>Your Location</Popup>
+                            </Marker>
+                        );
+                    })()}
                     {navTarget && (() => {
-                        const p1 = L.latLng(userLocation.lat, userLocation.lon);
-                        const p2 = L.latLng(navTarget.lat, navTarget.lon);
-                        const distM = p1.distanceTo(p2);
-                        const dLon = (navTarget.lon - userLocation.lon) * Math.PI / 180;
-                        const lat1r = userLocation.lat * Math.PI / 180;
-                        const lat2r = navTarget.lat * Math.PI / 180;
-                        const yB = Math.sin(dLon) * Math.cos(lat2r);
-                        const xB = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
-                        const bearing = (Math.atan2(yB, xB) * 180 / Math.PI + 360) % 360;
-                        const distText = distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(1) + ' km';
                         return (
                             <>
                                 {/* Glow line */}
@@ -1361,42 +1368,6 @@ export const LiveTracking = () => {
                                 <Polyline 
                                     positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
                                     pathOptions={{ color: '#10b981', weight: 7, opacity: 0.95 }}
-                                />
-                                {/* Arrowhead (Garmin-style cyan cursor positioned at user, rotating by heading or bearing) */}
-                                <Marker
-                                    position={[userLocation.lat, userLocation.lon]}
-                                    icon={L.divIcon({
-                                        className: 'bg-transparent',
-                                        html: `<div style="
-                                            width: 0;
-                                            height: 0;
-                                            border-left: 14px solid transparent;
-                                            border-right: 14px solid transparent;
-                                            border-bottom: 32px solid #06b6d4;
-                                            transform: rotate(${userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : bearing}deg);
-                                            transform-origin: center 24px;
-                                            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
-                                            position: relative;
-                                        ">
-                                            <div style="
-                                                position: absolute;
-                                                top: 24px;
-                                                left: -14px;
-                                                width: 0;
-                                                height: 0;
-                                                border-left: 14px solid transparent;
-                                                border-right: 14px solid transparent;
-                                                border-bottom: 12px solid transparent; /* To create the tail cutout effect if needed, but standard CSS triangle is easier */
-                                            "></div>
-                                        </div>`,
-                                        // A better Garmin arrow using SVG to get the exact shape with the cutout tail:
-                                        html: `<svg width="40" height="40" viewBox="0 0 40 40" style="transform: rotate(${userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : bearing}deg); transform-origin: center center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); overflow: visible;">
-                                            <path d="M 20 4 L 34 34 L 20 28 L 6 34 Z" fill="#0ea5e9" stroke="#0284c7" stroke-width="2" stroke-linejoin="round" />
-                                        </svg>`,
-                                        iconSize: [40, 40],
-                                        iconAnchor: [20, 20]
-                                    })}
-                                    zIndexOffset={1500}
                                 />
                             </>
                         );
