@@ -1373,20 +1373,6 @@ export const LiveTracking = () => {
                                     })}
                                     zIndexOffset={1500}
                                 />
-                                {/* Distance text — huge white with thick green stroke via robust SVG */}
-                                <Marker 
-                                    position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
-                                    icon={L.divIcon({
-                                        className: 'bg-transparent',
-                                        html: `<svg width="300" height="80" style="transform:translate(-50%, -50%);overflow:visible">
-                                                 <text x="150" y="50" text-anchor="middle" fill="none" stroke="#059669" stroke-width="8" stroke-linejoin="round" style="font-size:36px;font-weight:900;font-family:Arial Black, sans-serif;filter:drop-shadow(0px 4px 8px rgba(0,0,0,0.5))">${distText}</text>
-                                                 <text x="150" y="50" text-anchor="middle" fill="white" style="font-size:36px;font-weight:900;font-family:Arial Black, sans-serif;">${distText}</text>
-                                               </svg>`,
-                                        iconSize: [0, 0],
-                                        iconAnchor: [0, 0]
-                                    })}
-                                    zIndexOffset={1600}
-                                />
                             </>
                         );
                     })()}
