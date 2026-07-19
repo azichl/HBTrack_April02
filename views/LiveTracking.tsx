@@ -604,7 +604,7 @@ export const LiveTracking = () => {
   const [measurePoints, setMeasurePoints] = useState<L.LatLng[]>([]);
 
   // GPS Navigation State
-  const [userLocation, setUserLocation] = useState<{lat: number, lon: number, accuracy: number} | null>(null);
+  const [userLocation, setUserLocation] = useState<{lat: number, lon: number, accuracy: number, heading?: number | null} | null>(null);
   const [isTrackingUser, setIsTrackingUser] = useState(false);
   const watchIdRef = useRef<number | null>(null);
   const [navTarget, setNavTarget] = useState<{id: string, lat: number, lon: number} | null>(null);
@@ -620,7 +620,7 @@ export const LiveTracking = () => {
           setIsTrackingUser(true);
           if ('geolocation' in navigator) {
               watchIdRef.current = navigator.geolocation.watchPosition(
-                  (pos) => setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+                  (pos) => setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, heading: pos.coords.heading }),
                   (err) => { console.error(err); setIsTrackingUser(false); },
                   { enableHighAccuracy: true, maximumAge: 0 }
               );
@@ -1362,14 +1362,39 @@ export const LiveTracking = () => {
                                     positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
                                     pathOptions={{ color: '#10b981', weight: 7, opacity: 0.95 }}
                                 />
-                                {/* Arrowhead (positioned at user, shifted 30px forward along bearing) */}
+                                {/* Arrowhead (Garmin-style cyan cursor positioned at user, rotating by heading or bearing) */}
                                 <Marker
                                     position={[userLocation.lat, userLocation.lon]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:28px solid #10b981;transform:rotate(${bearing}deg) translateY(-36px);transform-origin:center center;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5));"></div>`,
-                                        iconSize: [28, 28],
-                                        iconAnchor: [14, 14]
+                                        html: `<div style="
+                                            width: 0;
+                                            height: 0;
+                                            border-left: 14px solid transparent;
+                                            border-right: 14px solid transparent;
+                                            border-bottom: 32px solid #06b6d4;
+                                            transform: rotate(${userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : bearing}deg);
+                                            transform-origin: center 24px;
+                                            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.5));
+                                            position: relative;
+                                        ">
+                                            <div style="
+                                                position: absolute;
+                                                top: 24px;
+                                                left: -14px;
+                                                width: 0;
+                                                height: 0;
+                                                border-left: 14px solid transparent;
+                                                border-right: 14px solid transparent;
+                                                border-bottom: 12px solid transparent; /* To create the tail cutout effect if needed, but standard CSS triangle is easier */
+                                            "></div>
+                                        </div>`,
+                                        // A better Garmin arrow using SVG to get the exact shape with the cutout tail:
+                                        html: `<svg width="40" height="40" viewBox="0 0 40 40" style="transform: rotate(${userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : bearing}deg); transform-origin: center center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); overflow: visible;">
+                                            <path d="M 20 4 L 34 34 L 20 28 L 6 34 Z" fill="#0ea5e9" stroke="#0284c7" stroke-width="2" stroke-linejoin="round" />
+                                        </svg>`,
+                                        iconSize: [40, 40],
+                                        iconAnchor: [20, 20]
                                     })}
                                     zIndexOffset={1500}
                                 />
