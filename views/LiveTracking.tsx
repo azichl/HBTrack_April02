@@ -1112,12 +1112,21 @@ export const LiveTracking = () => {
 
   const toggleFullscreen = () => {
     if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().catch(err => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
+    // Try native fullscreen first, fall back to CSS-based for mobile
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else if ((document as any).webkitFullscreenElement) {
+      (document as any).webkitExitFullscreen();
     } else {
-      document.exitFullscreen();
+      const el = containerRef.current as any;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => { setIsFullscreen(!isFullscreen); });
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      } else {
+        // CSS fallback for iOS Safari
+        setIsFullscreen(!isFullscreen);
+      }
     }
   };
 
@@ -1366,14 +1375,14 @@ export const LiveTracking = () => {
                                     })}
                                     zIndexOffset={1500}
                                 />
-                                {/* Distance text — huge white with green stroke, no background */}
+                                {/* Distance text — huge white with green outline */}
                                 <Marker 
                                     position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="color:white;font-weight:900;font-size:36px;white-space:nowrap;transform:translateX(-50%);-webkit-text-stroke:2px #059669;text-shadow:0 0 8px rgba(0,0,0,0.7),0 4px 8px rgba(0,0,0,0.5);letter-spacing:1px;font-family:Arial Black,sans-serif;">${distText}</div>`,
+                                        html: `<div style="background:rgba(5,150,105,0.85);color:white;font-weight:900;font-size:28px;white-space:nowrap;transform:translateX(-50%);padding:6px 18px;border-radius:30px;border:3px solid white;box-shadow:0 4px 16px rgba(0,0,0,0.5);letter-spacing:1px;font-family:Arial Black,sans-serif;">${distText}</div>`,
                                         iconSize: [1, 1],
-                                        iconAnchor: [0, 12]
+                                        iconAnchor: [0, 20]
                                     })}
                                     zIndexOffset={1600}
                                 />
@@ -1620,42 +1629,40 @@ export const LiveTracking = () => {
             const cardinalDirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
             const cardinal = cardinalDirs[Math.round(bearing / 22.5) % 16];
             return (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[500] animate-in fade-in slide-in-from-bottom-4">
-                    <div style={{background:'rgba(0,0,0,0.8)',backdropFilter:'blur(12px)',borderRadius:16,padding:'10px 20px',display:'flex',alignItems:'center',gap:20,border:'1px solid rgba(16,185,129,0.4)',boxShadow:'0 8px 32px rgba(0,0,0,0.5)'}}>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[500] w-[calc(100%-32px)] max-w-md">
+                    <div style={{background:'rgba(0,0,0,0.85)',backdropFilter:'blur(12px)',borderRadius:14,padding:'8px 12px',display:'flex',alignItems:'center',gap:12,border:'1px solid rgba(16,185,129,0.4)',boxShadow:'0 8px 32px rgba(0,0,0,0.5)'}}>
                         {/* Bearing compass mini */}
-                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                            <div style={{width:44,height:44,borderRadius:'50%',border:'2px solid #10b981',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',background:'rgba(16,185,129,0.1)'}}>
-                                <svg width="18" height="28" viewBox="0 0 18 28" style={{transform:`rotate(${bearing}deg)`,transition:'transform 0.3s ease'}}>
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
+                            <div style={{width:36,height:36,borderRadius:'50%',border:'2px solid #10b981',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',background:'rgba(16,185,129,0.1)'}}>
+                                <svg width="14" height="22" viewBox="0 0 18 28" style={{transform:`rotate(${bearing}deg)`,transition:'transform 0.3s ease'}}>
                                     <polygon points="9,0 5,14 9,11 13,14" fill="#10b981" />
                                     <polygon points="9,28 5,14 9,17 13,14" fill="rgba(255,255,255,0.3)" />
                                 </svg>
                             </div>
-                            <span style={{color:'#10b981',fontSize:10,fontWeight:800,marginTop:2}}>{cardinal}</span>
+                            <span style={{color:'#10b981',fontSize:9,fontWeight:800,marginTop:1}}>{cardinal}</span>
                         </div>
                         {/* Bearing degrees */}
-                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Bearing</span>
-                            <span style={{color:'white',fontSize:22,fontWeight:900,lineHeight:1,fontFamily:'Arial Black,sans-serif'}}>{Math.round(bearing)}°</span>
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
+                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:8,fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>Bearing</span>
+                            <span style={{color:'white',fontSize:18,fontWeight:900,lineHeight:1,fontFamily:'Arial Black,sans-serif'}}>{Math.round(bearing)}°</span>
                         </div>
-                        {/* Separator */}
-                        <div style={{width:1,height:36,background:'rgba(255,255,255,0.15)'}} />
+                        <div style={{width:1,height:28,background:'rgba(255,255,255,0.15)',flexShrink:0}} />
                         {/* Distance */}
-                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Distance</span>
-                            <span style={{color:'#10b981',fontSize:22,fontWeight:900,lineHeight:1,fontFamily:'Arial Black,sans-serif'}}>{distText}</span>
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center',flex:1,minWidth:0}}>
+                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:8,fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>Distance</span>
+                            <span style={{color:'#10b981',fontSize:18,fontWeight:900,lineHeight:1,fontFamily:'Arial Black,sans-serif'}}>{distText}</span>
                         </div>
-                        {/* Separator */}
-                        <div style={{width:1,height:36,background:'rgba(255,255,255,0.15)'}} />
+                        <div style={{width:1,height:28,background:'rgba(255,255,255,0.15)',flexShrink:0}} />
                         {/* Target */}
-                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Target</span>
-                            <span style={{color:'white',fontSize:16,fontWeight:800,lineHeight:1}}>{navTarget.id}</span>
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0}}>
+                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:8,fontWeight:700,textTransform:'uppercase',letterSpacing:0.5}}>Target</span>
+                            <span style={{color:'white',fontSize:14,fontWeight:800,lineHeight:1}}>{navTarget.id}</span>
                         </div>
                         {/* Close nav */}
                         <button 
                             onClick={() => setNavTarget(null)}
                             onTouchEnd={(e) => { e.preventDefault(); setNavTarget(null); }}
-                            style={{marginLeft:4,width:28,height:28,borderRadius:'50%',background:'rgba(239,68,68,0.2)',border:'1px solid rgba(239,68,68,0.4)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#ef4444',fontSize:14,fontWeight:900}}
+                            style={{flexShrink:0,width:28,height:28,borderRadius:'50%',background:'rgba(239,68,68,0.2)',border:'1px solid rgba(239,68,68,0.4)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#ef4444',fontSize:14,fontWeight:900,touchAction:'manipulation'}}
                         >✕</button>
                     </div>
                 </div>
@@ -1936,8 +1943,14 @@ export const LiveTracking = () => {
 
             <button 
                 onClick={toggleFullscreen}
+                onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFullscreen();
+                }}
                 className={`p-2.5 bg-white rounded-lg shadow-md hover:bg-brand-50 transition-colors ${isFullscreen ? 'text-brand-600' : 'text-gray-700'}`}
                 title={isFullscreen ? "Exit Fullscreen" : "Maximize Map"}
+                style={{ minWidth: 44, minHeight: 44, touchAction: 'manipulation' }}
             >
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
             </button>
@@ -2226,46 +2239,46 @@ export const LiveTracking = () => {
   return (
     <div className="flex flex-col h-full space-y-4">
         {/* Tab Switcher */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap flex-shrink-0">
             <button
                 onClick={() => setViewMode('tracking')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                     viewMode === 'tracking' 
                     ? 'bg-white text-brand-900 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-                <MapIcon size={16} className={viewMode === 'tracking' ? 'text-brand-500' : 'text-gray-400'} />
-                Live Tracking
+                <MapIcon size={14} className={viewMode === 'tracking' ? 'text-brand-500' : 'text-gray-400'} />
+                <span className="hidden sm:inline">Live</span> Tracking
             </button>
             <button
                 onClick={() => setViewMode('weather')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                     viewMode === 'weather' 
                     ? 'bg-white text-brand-900 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-                <Wind size={16} className={viewMode === 'weather' ? 'text-brand-500' : 'text-gray-400'} />
-                Weather Map (Windy)
+                <Wind size={14} className={viewMode === 'weather' ? 'text-brand-500' : 'text-gray-400'} />
+                <span className="hidden sm:inline">Weather</span> Windy
             </button>
             <button
                 onClick={() => setViewMode('weather2')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                     viewMode === 'weather2' 
                     ? 'bg-white text-brand-900 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
-                <Satellite size={16} className={viewMode === 'weather2' ? 'text-brand-500' : 'text-gray-400'} />
-                Weather Map 2 (Meteoblue)
+                <Satellite size={14} className={viewMode === 'weather2' ? 'text-brand-500' : 'text-gray-400'} />
+                <span className="hidden sm:inline">Weather</span> Meteoblue
             </button>
         </div>
 
         {/* Main Map Area */}
         <div 
             ref={containerRef} 
-            className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? 'p-0 rounded-none border-none' : ''}`}
+            className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? 'fixed inset-0 z-[9999] p-0 rounded-none border-none' : ''}`}
         >
             {viewMode === 'tracking' ? renderTrackingMap() : 
              viewMode === 'weather' ? renderWeatherMap() : 

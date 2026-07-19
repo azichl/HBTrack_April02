@@ -452,8 +452,14 @@ const App = () => {
             <div className="flex items-center gap-4 flex-1">
               <button
                 onClick={toggleSidebar}
+                onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSidebar();
+                }}
                 className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
                 aria-label="Toggle Sidebar"
+                style={{ minWidth: 44, minHeight: 44, touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
               >
                 <Menu size={20} />
               </button>
