@@ -1315,11 +1315,9 @@ export const LiveTracking = () => {
                         position={[userLocation.lat, userLocation.lon]}
                         icon={L.divIcon({
                             className: 'bg-transparent',
-                            html: `<div class="w-5 h-5 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center animate-pulse">
-                                     <div class="w-2 h-2 bg-white rounded-full"></div>
-                                   </div>`,
-                            iconSize: [20, 20],
-                            iconAnchor: [10, 10]
+                            html: `<div style="width:28px;height:28px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px rgba(59,130,246,0.4),0 4px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><div style="width:8px;height:8px;background:white;border-radius:50%"></div></div>`,
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14]
                         })}
                         zIndexOffset={2000}
                     >
@@ -1336,47 +1334,46 @@ export const LiveTracking = () => {
                         const p1 = L.latLng(userLocation.lat, userLocation.lon);
                         const p2 = L.latLng(navTarget.lat, navTarget.lon);
                         const distM = p1.distanceTo(p2);
-                        // Arrowhead at 80% toward bird
                         const arrowLat = userLocation.lat + (navTarget.lat - userLocation.lat) * 0.80;
                         const arrowLon = userLocation.lon + (navTarget.lon - userLocation.lon) * 0.80;
-                        // Bearing angle for arrow rotation
                         const dLon = (navTarget.lon - userLocation.lon) * Math.PI / 180;
-                        const lat1 = userLocation.lat * Math.PI / 180;
-                        const lat2 = navTarget.lat * Math.PI / 180;
-                        const y = Math.sin(dLon) * Math.cos(lat2);
-                        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-                        const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                        const lat1r = userLocation.lat * Math.PI / 180;
+                        const lat2r = navTarget.lat * Math.PI / 180;
+                        const yB = Math.sin(dLon) * Math.cos(lat2r);
+                        const xB = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+                        const bearing = (Math.atan2(yB, xB) * 180 / Math.PI + 360) % 360;
+                        const distText = distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(1) + ' km';
                         return (
                             <>
-                                {/* Thick background glow line */}
+                                {/* Glow line */}
                                 <Polyline 
                                     positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
-                                    pathOptions={{ color: '#065f46', weight: 12, opacity: 0.3 }}
+                                    pathOptions={{ color: '#065f46', weight: 14, opacity: 0.3 }}
                                 />
-                                {/* Main navigation line */}
+                                {/* Main nav line */}
                                 <Polyline 
                                     positions={[[userLocation.lat, userLocation.lon], [navTarget.lat, navTarget.lon]]}
-                                    pathOptions={{ color: '#10b981', weight: 6, opacity: 1.0 }}
+                                    pathOptions={{ color: '#10b981', weight: 7, opacity: 0.95 }}
                                 />
-                                {/* Arrowhead marker at 80% toward bird */}
+                                {/* Arrowhead */}
                                 <Marker
                                     position={[arrowLat, arrowLon]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-bottom:28px solid #10b981;transform:rotate(${bearing}deg);transform-origin:center bottom;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4));margin-top:-14px"></div>`,
-                                        iconSize: [28, 28],
-                                        iconAnchor: [14, 14]
+                                        html: `<div style="width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;border-bottom:32px solid #10b981;transform:rotate(${bearing}deg);transform-origin:center bottom;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.5));margin-top:-16px"></div>`,
+                                        iconSize: [32, 32],
+                                        iconAnchor: [16, 16]
                                     })}
                                     zIndexOffset={1500}
                                 />
-                                {/* Distance badge at midpoint */}
+                                {/* Distance text — huge white with green stroke, no background */}
                                 <Marker 
                                     position={[(userLocation.lat + navTarget.lat)/2, (userLocation.lon + navTarget.lon)/2]}
                                     icon={L.divIcon({
                                         className: 'bg-transparent',
-                                        html: `<div style="color:white;font-weight:900;font-size:24px;white-space:nowrap;transform:translateX(-50%);text-shadow:-2px -2px 0 #059669, 2px -2px 0 #059669, -2px 2px 0 #059669, 2px 2px 0 #059669, -2px 0 0 #059669, 2px 0 0 #059669, 0 -2px 0 #059669, 0 2px 0 #059669, 0 4px 12px rgba(0,0,0,0.6);letter-spacing:0.5px;">${distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(2) + ' km'}</div>`,
+                                        html: `<div style="color:white;font-weight:900;font-size:36px;white-space:nowrap;transform:translateX(-50%);-webkit-text-stroke:2px #059669;text-shadow:0 0 8px rgba(0,0,0,0.7),0 4px 8px rgba(0,0,0,0.5);letter-spacing:1px;font-family:Arial Black,sans-serif;">${distText}</div>`,
                                         iconSize: [1, 1],
-                                        iconAnchor: [0, 0]
+                                        iconAnchor: [0, 12]
                                     })}
                                     zIndexOffset={1600}
                                 />
@@ -1589,6 +1586,81 @@ export const LiveTracking = () => {
              </div>
         </div>
         )}
+
+        {/* Map Controls (Left) */}
+        {/* Compass Widget */}
+        <div className="absolute bottom-28 right-4 z-[500]" style={{width:64,height:64}}>
+            <div style={{width:64,height:64,borderRadius:'50%',background:'rgba(0,0,0,0.6)',backdropFilter:'blur(8px)',border:'2px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.4)',position:'relative'}}>
+                <div style={{position:'absolute',top:4,left:'50%',transform:'translateX(-50%)',color:'#ef4444',fontWeight:900,fontSize:11,lineHeight:1}}>N</div>
+                <div style={{position:'absolute',bottom:4,left:'50%',transform:'translateX(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>S</div>
+                <div style={{position:'absolute',right:5,top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>E</div>
+                <div style={{position:'absolute',left:5,top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>W</div>
+                {/* Compass needle */}
+                <svg width="24" height="40" viewBox="0 0 24 40" style={{position:'absolute'}}>
+                    <polygon points="12,2 8,20 12,17 16,20" fill="#ef4444" />
+                    <polygon points="12,38 8,20 12,23 16,20" fill="white" opacity="0.7" />
+                </svg>
+                {/* Tick marks */}
+                {[0,45,90,135,180,225,270,315].map(deg => (
+                    <div key={deg} style={{position:'absolute',width:deg % 90 === 0 ? 2 : 1,height:deg % 90 === 0 ? 6 : 4,background:deg % 90 === 0 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)',transform:`rotate(${deg}deg) translateY(-27px)`,transformOrigin:'center center'}} />
+                ))}
+            </div>
+        </div>
+
+        {/* Navigation Info Panel — shows bearing, distance, target ID when navigating */}
+        {userLocation && navTarget && (() => {
+            const dLon = (navTarget.lon - userLocation.lon) * Math.PI / 180;
+            const lat1r = userLocation.lat * Math.PI / 180;
+            const lat2r = navTarget.lat * Math.PI / 180;
+            const yB = Math.sin(dLon) * Math.cos(lat2r);
+            const xB = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+            const bearing = (Math.atan2(yB, xB) * 180 / Math.PI + 360) % 360;
+            const distM = L.latLng(userLocation.lat, userLocation.lon).distanceTo(L.latLng(navTarget.lat, navTarget.lon));
+            const distText = distM < 1000 ? Math.round(distM) + ' m' : (distM/1000).toFixed(1) + ' km';
+            const cardinalDirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+            const cardinal = cardinalDirs[Math.round(bearing / 22.5) % 16];
+            return (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[500] animate-in fade-in slide-in-from-bottom-4">
+                    <div style={{background:'rgba(0,0,0,0.8)',backdropFilter:'blur(12px)',borderRadius:16,padding:'10px 20px',display:'flex',alignItems:'center',gap:20,border:'1px solid rgba(16,185,129,0.4)',boxShadow:'0 8px 32px rgba(0,0,0,0.5)'}}>
+                        {/* Bearing compass mini */}
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                            <div style={{width:44,height:44,borderRadius:'50%',border:'2px solid #10b981',display:'flex',alignItems:'center',justifyContent:'center',position:'relative',background:'rgba(16,185,129,0.1)'}}>
+                                <svg width="18" height="28" viewBox="0 0 18 28" style={{transform:`rotate(${bearing}deg)`,transition:'transform 0.3s ease'}}>
+                                    <polygon points="9,0 5,14 9,11 13,14" fill="#10b981" />
+                                    <polygon points="9,28 5,14 9,17 13,14" fill="rgba(255,255,255,0.3)" />
+                                </svg>
+                            </div>
+                            <span style={{color:'#10b981',fontSize:10,fontWeight:800,marginTop:2}}>{cardinal}</span>
+                        </div>
+                        {/* Bearing degrees */}
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Bearing</span>
+                            <span style={{color:'white',fontSize:22,fontWeight:900,lineHeight:1,fontFamily:'Arial Black,sans-serif'}}>{Math.round(bearing)}°</span>
+                        </div>
+                        {/* Separator */}
+                        <div style={{width:1,height:36,background:'rgba(255,255,255,0.15)'}} />
+                        {/* Distance */}
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Distance</span>
+                            <span style={{color:'#10b981',fontSize:22,fontWeight:900,lineHeight:1,fontFamily:'Arial Black,sans-serif'}}>{distText}</span>
+                        </div>
+                        {/* Separator */}
+                        <div style={{width:1,height:36,background:'rgba(255,255,255,0.15)'}} />
+                        {/* Target */}
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                            <span style={{color:'rgba(255,255,255,0.5)',fontSize:9,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Target</span>
+                            <span style={{color:'white',fontSize:16,fontWeight:800,lineHeight:1}}>{navTarget.id}</span>
+                        </div>
+                        {/* Close nav */}
+                        <button 
+                            onClick={() => setNavTarget(null)}
+                            onTouchEnd={(e) => { e.preventDefault(); setNavTarget(null); }}
+                            style={{marginLeft:4,width:28,height:28,borderRadius:'50%',background:'rgba(239,68,68,0.2)',border:'1px solid rgba(239,68,68,0.4)',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#ef4444',fontSize:14,fontWeight:900}}
+                        >✕</button>
+                    </div>
+                </div>
+            );
+        })()}
 
         {/* Map Controls (Left) */}
         <div className="absolute top-4 left-4 flex flex-col gap-2 z-[500]">
@@ -1836,12 +1908,17 @@ export const LiveTracking = () => {
             </div>
 
             {/* GPS Navigation Toggle */}
-            <div className="relative">
+            <div className="relative" style={{WebkitTapHighlightColor:'transparent'}}>
                 <button 
+                    type="button"
                     onClick={(e) => { 
                         e.stopPropagation(); 
+                        e.preventDefault();
                         closeAllDropdowns();
                         toggleUserTracking();
+                    }}
+                    onTouchStart={(e) => {
+                        e.stopPropagation();
                     }}
                     onTouchEnd={(e) => {
                         e.preventDefault();
@@ -1849,11 +1926,11 @@ export const LiveTracking = () => {
                         closeAllDropdowns();
                         toggleUserTracking();
                     }}
-                    className={`p-3 bg-white rounded-lg shadow-md active:scale-95 touch-manipulation transition-colors ${isTrackingUser ? 'text-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'text-gray-700'}`}
+                    className={`bg-white rounded-lg shadow-md active:scale-95 transition-all duration-150 ${isTrackingUser ? 'text-blue-600 bg-blue-50 ring-2 ring-blue-500' : 'text-gray-700 hover:bg-brand-50'}`}
                     title="Toggle My GPS Position & Navigation"
-                    style={{ minWidth: 44, minHeight: 44 }}
+                    style={{ minWidth: 48, minHeight: 48, padding: 12, touchAction: 'manipulation', WebkitTouchCallout: 'none', userSelect: 'none', cursor: 'pointer' }}
                 >
-                    <Crosshair size={22} />
+                    <Crosshair size={24} />
                 </button>
             </div>
 
