@@ -7,45 +7,44 @@ import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
-// Use standard colored markers (matching Migration view style)
-const greenIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-// Use exact user-requested hex colors for the map markers
+// Use exact user-requested hex colors for the map markers, scaled down by 40%
 const createSvgIcon = (colorHex: string) => {
   return L.divIcon({
     className: 'bg-transparent',
-    html: `<div style="position: relative; width: 25px; height: 41px;">
-             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 41px; height: 41px;" />
-             <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
-               <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${colorHex}" stroke="#ffffff" stroke-width="1.5" />
+    html: `<div style="position: relative; width: 15px; height: 25px;">
+             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 25px; height: 25px;" />
+             <svg width="15" height="25" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
+               <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${colorHex}" stroke="#000000" stroke-width="1.5" stroke-opacity="0.3" />
                <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.8" />
              </svg>
            </div>`,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34]
+    iconSize: [15, 25],
+    iconAnchor: [7.5, 25],
+    popupAnchor: [1, -20]
   });
 };
+
+const greenIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconSize: [15, 25],
+  iconAnchor: [7.5, 25],
+  popupAnchor: [1, -20],
+  shadowSize: [25, 25]
+});
 
 const blueIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+  iconSize: [15, 25],
+  iconAnchor: [7.5, 25],
+  popupAnchor: [1, -20],
+  shadowSize: [25, 25]
 });
 
 const redIcon = createSvgIcon('#FF2A00');
 const orangeIcon = createSvgIcon('#FFAA33');
-const yellowIcon = createSvgIcon('#F4F714');
+const yellowIcon = createSvgIcon('#FFEA00');
 
 // Custom Target Icon (White circle with blue border and blue dot)
 const targetIcon = L.divIcon({
@@ -392,12 +391,12 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     let badgeColorClass = 'bg-[#FF2A00]/20 text-[#FF2A00]'; 
     if (status === 'Active' || status === 'active') badgeColorClass = 'bg-green-100 text-green-700';
     if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') badgeColorClass = 'bg-[#FFAA33]/20 text-[#FFAA33]';
-    if (status === 'Static test') badgeColorClass = 'bg-[#F4F714]/20 text-[#F4F714]';
+    if (status === 'Static test') badgeColorClass = 'bg-[#FFEA00]/20 text-[#FFEA00]';
 
     let ticketClass = 'bg-white text-slate-900 border-2 border-[#FF2A00]';
     if (status === 'Active' || status === 'active') ticketClass = 'bg-white text-slate-900 border-2 border-green-500';
     if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFAA33]';
-    if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-[#F4F714]';
+    if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFEA00]';
 
     const handleAIAnalysis = () => {
         setSelectedTransmitterIds([pos.transmitter_id]);
@@ -421,12 +420,12 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
             <Tooltip 
                 permanent 
                 direction="top" 
-                offset={[0, -38]} 
+                offset={[0, -22]} 
                 className="!bg-transparent !border-0 !shadow-none !p-0 before:!hidden"
             >
                 <div 
-                    className={`px-2 py-0 rounded-full shadow-sm text-xs font-bold ${ticketClass}`}
-                    style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+                    className={`px-1.5 py-0 rounded-full shadow-sm text-[10px] font-bold ${ticketClass}`}
+                    style={{ fontFamily: "'Sakkal Majalla', sans-serif", transform: "scale(0.8)", transformOrigin: "bottom center" }}
                 >
                     {pos.transmitter_id}
                 </div>
@@ -2029,7 +2028,7 @@ export const LiveTracking = () => {
                                                 const s = t.derived_status || t.status;
                                                 if (s === 'Active' || s === 'active') return 'bg-green-500';
                                                 if (s === 'Inactive') return 'bg-[#FF2A00]';
-                                                if (s === 'Static test') return 'bg-[#F4F714]';
+                                                if (s === 'Static test') return 'bg-[#FFEA00]';
                                                 return 'bg-[#FFAA33]';
                                             })()}`}></div>
                                         </div>
@@ -2055,7 +2054,7 @@ export const LiveTracking = () => {
                         selectedStatus === 'active' ? 'bg-green-500' : 
                         selectedStatus === 'inactive' ? 'bg-[#FF2A00]' : 
                         selectedStatus === 'mortality' ? 'bg-[#FFAA33]' : 
-                        selectedStatus === 'static' ? 'bg-[#F4F714]' : 'bg-gray-900'
+                        selectedStatus === 'static' ? 'bg-[#FFEA00]' : 'bg-gray-900'
                     }`} />
                     <span className="text-sm font-medium text-gray-700">
                         {selectedStatus === 'all' ? 'All Statuses' : 
@@ -2077,7 +2076,7 @@ export const LiveTracking = () => {
                             { id: 'active', label: 'Active', color: 'bg-green-500' },
                             { id: 'mortality', label: 'Potential Mortality', color: 'bg-[#FFAA33]' },
                             { id: 'inactive', label: 'Inactive', color: 'bg-[#FF2A00]' },
-                            { id: 'static', label: 'Static test', color: 'bg-[#F4F714]' }
+                            { id: 'static', label: 'Static test', color: 'bg-[#FFEA00]' }
                         ].map(option => (
                             <button
                                 key={option.id}

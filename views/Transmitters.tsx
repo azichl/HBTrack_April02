@@ -284,7 +284,7 @@ export const Transmitters = () => {
                       (t.derived_status || t.status) === 'Active' || (t.derived_status || t.status) === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
                       (t.derived_status || t.status) === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
                       (t.derived_status || t.status) === 'Inactive' ? 'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]' :
-                      (t.derived_status || t.status) === 'Static test' ? 'bg-[#F4F714]/20 dark:bg-[#F4F714]/30 text-[#e6b800] dark:text-[#F4F714]' :
+                      (t.derived_status || t.status) === 'Static test' ? 'bg-[#FFEA00]/20 dark:bg-[#FFEA00]/30 text-[#e6b800] dark:text-[#FFEA00]' :
                       'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
                     }`}>
                       {t.derived_status || t.status}

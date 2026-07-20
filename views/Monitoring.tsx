@@ -239,7 +239,7 @@ export const Monitoring = () => {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       (row.status === 'Active' || row.status === 'active') ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
                       row.status === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
-                      row.status === 'Static test' ? 'bg-[#F4F714]/20 dark:bg-[#F4F714]/30 text-[#e6b800] dark:text-[#F4F714]' :
+                      row.status === 'Static test' ? 'bg-[#FFEA00]/20 dark:bg-[#FFEA00]/30 text-[#e6b800] dark:text-[#FFEA00]' :
                       row.status === 'Inactive' ? 'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]' :
                       row.status === 'maintenance' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' :
                       'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]'
