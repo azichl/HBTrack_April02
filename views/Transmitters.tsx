@@ -139,6 +139,26 @@ export const Transmitters = () => {
         </div>
         <div className="flex gap-3">
             <button 
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = 'Calculating...';
+                btn.disabled = true;
+                try {
+                  await useAppStore.getState().recalculateTransmitterStatuses();
+                  alert('Finished calculating statuses!');
+                } catch (err) {
+                  alert('Failed to calculate statuses.');
+                } finally {
+                  btn.innerHTML = originalText;
+                  btn.disabled = false;
+                }
+              }}
+              className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-lg text-sm font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/50 flex items-center gap-2"
+            >
+              Recalculate Statuses
+            </button>
+            <button 
               onClick={handleExport}
               className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-gray-600 dark:text-gray-300"
             >
@@ -227,11 +247,13 @@ export const Transmitters = () => {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      t.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                      t.status === 'maintenance' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
-                      'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                      (t.derived_status || t.status) === 'Active' || (t.derived_status || t.status) === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                      (t.derived_status || t.status) === 'Potential Mortality' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
+                      (t.derived_status || t.status) === 'Inactive' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
+                      (t.derived_status || t.status) === 'Static test' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                      'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
                     }`}>
-                      {t.status}
+                      {t.derived_status || t.status}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 italic border-r border-gray-100 dark:border-slate-700 max-w-[150px] truncate" title={t.comment}>

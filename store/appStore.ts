@@ -154,6 +154,7 @@ interface AppState {
 
   // Firestore Actions
   initializeFromFirestore: () => Promise<void>;
+  recalculateTransmitterStatuses: (onProgress?: (msg: string) => void) => Promise<void>;
   subscribeToLivePositions: () => () => void;
 
   // Danger Zone — Collection Clearing
@@ -847,6 +848,44 @@ export const useAppStore = create<AppState>()(
         } catch (error) {
           console.error('[AppStore] Firestore init error:', error);
           set({ firestoreReady: true });
+        }
+      },
+
+      recalculateTransmitterStatuses: async (onProgress?: (msg: string) => void) => {
+        try {
+          onProgress?.('Calculating derived statuses for all transmitters...');
+          const currentTransmitters = [...get().transmitters];
+          let updated = 0;
+
+          for (const t of currentTransmitters) {
+            try {
+              const q = query(
+                collection(db, 'argos_positions'),
+                where('platformId', '==', String(t.platform_id))
+              );
+              const snapshot = await getDocs(q);
+              const allPositions = snapshot.docs.map(d => d.data());
+              const newStatus = evaluateTransmitterStatus(t, allPositions);
+
+              if (t.derived_status !== newStatus) {
+                await saveDocument('transmitters', t.id, { derived_status: newStatus });
+                updated++;
+              }
+            } catch (err) {
+              console.warn(`[AppStore] Failed to evaluate status for ${t.platform_id}:`, err);
+            }
+          }
+
+          if (updated > 0) {
+            const freshTransmitters = await loadCollection<Transmitter>('transmitters');
+            set({ transmitters: freshTransmitters });
+            onProgress?.(`Updated derived_status for ${updated} transmitters.`);
+          } else {
+            onProgress?.('All transmitter statuses are up to date.');
+          }
+        } catch (err) {
+          console.error('[AppStore] Background status calc error:', err);
+          onProgress?.('Error calculating statuses.');
         }
       },
 
