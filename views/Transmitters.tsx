@@ -145,10 +145,36 @@ export const Transmitters = () => {
                 btn.innerHTML = 'Calculating...';
                 btn.disabled = true;
                 try {
-                  await useAppStore.getState().recalculateTransmitterStatuses();
-                  alert('Finished calculating statuses!');
-                } catch (err) {
-                  alert('Failed to calculate statuses.');
+                  const db = (await import('../firebase')).db;
+                  const { collection, query, where, getDocs } = await import('firebase/firestore');
+                  const { evaluateTransmitterStatus } = await import('../utils/statusCalculator');
+                  const store = useAppStore.getState();
+                  const currentTransmitters = store.transmitters;
+                  
+                  let debugLog = "Evaluation Results:\n";
+                  let numUpdated = 0;
+
+                  for (const t of currentTransmitters) {
+                    const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
+                    const snap = await getDocs(qPos);
+                    const positions = snap.docs.map(d => d.data());
+                    const status = evaluateTransmitterStatus(t, positions);
+                    
+                    if (positions.length > 0) {
+                      debugLog += `${t.platform_id} (${positions.length} pos): ${status}\n`;
+                    }
+                    if (t.derived_status !== status) {
+                      numUpdated++;
+                    }
+                  }
+                  
+                  debugLog += `\nTransmitters needing DB update: ${numUpdated}`;
+                  console.log(debugLog);
+                  alert(debugLog);
+
+                  await store.recalculateTransmitterStatuses();
+                } catch (err: any) {
+                  alert('Failed: ' + err.message);
                 } finally {
                   btn.innerHTML = originalText;
                   btn.disabled = false;
