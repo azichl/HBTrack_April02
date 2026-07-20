@@ -7,39 +7,39 @@ import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
-// Use exact user-requested hex colors for the map markers, scaled down by 40%
+// Use exact user-requested hex colors for the map markers, adjusted size
 const createSvgIcon = (colorHex: string) => {
   return L.divIcon({
     className: 'bg-transparent',
-    html: `<div style="position: relative; width: 15px; height: 25px;">
-             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 25px; height: 25px;" />
-             <svg width="15" height="25" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
+    html: `<div style="position: relative; width: 21px; height: 35px;">
+             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 35px; height: 35px;" />
+             <svg width="21" height="35" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
                <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${colorHex}" stroke="#000000" stroke-width="1.5" stroke-opacity="0.3" />
                <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.8" />
              </svg>
            </div>`,
-    iconSize: [15, 25],
-    iconAnchor: [7.5, 25],
-    popupAnchor: [1, -20]
+    iconSize: [21, 35],
+    iconAnchor: [10.5, 35],
+    popupAnchor: [1, -28]
   });
 };
 
 const greenIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [15, 25],
-  iconAnchor: [7.5, 25],
-  popupAnchor: [1, -20],
-  shadowSize: [25, 25]
+  iconSize: [21, 35],
+  iconAnchor: [10.5, 35],
+  popupAnchor: [1, -28],
+  shadowSize: [35, 35]
 });
 
 const blueIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [15, 25],
-  iconAnchor: [7.5, 25],
-  popupAnchor: [1, -20],
-  shadowSize: [25, 25]
+  iconSize: [21, 35],
+  iconAnchor: [10.5, 35],
+  popupAnchor: [1, -28],
+  shadowSize: [35, 35]
 });
 
 const redIcon = createSvgIcon('#FF2A00');
@@ -420,12 +420,12 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
             <Tooltip 
                 permanent 
                 direction="top" 
-                offset={[0, -22]} 
+                offset={[0, -28]} 
                 className="!bg-transparent !border-0 !shadow-none !p-0 before:!hidden"
             >
                 <div 
-                    className={`px-1.5 py-0 rounded-full shadow-sm text-[10px] font-bold ${ticketClass}`}
-                    style={{ fontFamily: "'Sakkal Majalla', sans-serif", transform: "scale(0.8)", transformOrigin: "bottom center" }}
+                    className={`px-1.5 py-0 rounded-full shadow-sm text-[11px] font-bold ${ticketClass}`}
+                    style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                 >
                     {pos.transmitter_id}
                 </div>
