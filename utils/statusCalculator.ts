@@ -42,12 +42,17 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
   const qualityPositions = positions.filter(p => {
     const locType = (p.locationType || '').toUpperCase();
     if (locType === 'GPS') return true;
+    
+    const lc = String(p.lc || '').toUpperCase().trim();
+    if (lc === 'GPS' || lc === 'G') return true;
+
     // For Doppler, check error radius
     const dopplerErr = parseFloat(p.dopplerError || '0');
     if (dopplerErr > 0 && dopplerErr < 500) return true;
+    
     // Also accept LC classes 1, 2, 3 (which are < 1500m, < 500m, < 250m)
-    const lc = String(p.lc || '').trim();
     if (['1', '2', '3'].includes(lc)) return true;
+    
     return false;
   });
 
