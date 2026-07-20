@@ -238,11 +238,11 @@ export const Monitoring = () => {
                   <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                       (row.status === 'Active' || row.status === 'active') ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                      row.status === 'Potential Mortality' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
-                      row.status === 'Static test' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
-                      row.status === 'Inactive' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
+                      row.status === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
+                      row.status === 'Static test' ? 'bg-[#F4F714]/20 dark:bg-[#F4F714]/30 text-[#e6b800] dark:text-[#F4F714]' :
+                      row.status === 'Inactive' ? 'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]' :
                       row.status === 'maintenance' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' :
-                      'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
+                      'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]'
                     }`}>
                       {row.status}
                     </span>

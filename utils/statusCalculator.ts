@@ -34,6 +34,14 @@ function calculateBarycenter(positions: any[]): { lat: number, lon: number } {
 }
 
 export function evaluateTransmitterStatus(transmitter: Transmitter, positions: any[]): 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' {
+  const isDeployed = transmitter.bird_id && transmitter.bird_id.trim() !== '';
+
+  // Active, Inactive, and Potential Mortality are reserved for deployed transmitters.
+  // Any transmitter not linked to a bird is categorized as a "Static test".
+  if (!isDeployed) {
+    return 'Static test';
+  }
+
   if (!positions || positions.length === 0) {
     return 'Inactive';
   }

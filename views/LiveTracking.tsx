@@ -17,23 +17,22 @@ const greenIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-const redIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const orangeIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Use exact user-requested hex colors for the map markers
+const createSvgIcon = (colorHex: string) => {
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `<div style="position: relative; width: 25px; height: 41px;">
+             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 41px; height: 41px;" />
+             <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
+               <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${colorHex}" stroke="#ffffff" stroke-width="1.5" />
+               <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.8" />
+             </svg>
+           </div>`,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34]
+  });
+};
 
 const blueIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
@@ -44,14 +43,9 @@ const blueIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-const yellowIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+const redIcon = createSvgIcon('#FF2A00');
+const orangeIcon = createSvgIcon('#FFAA33');
+const yellowIcon = createSvgIcon('#F4F714');
 
 // Custom Target Icon (White circle with blue border and blue dot)
 const targetIcon = L.divIcon({
@@ -395,15 +389,15 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     // Props are now passed directly to ensure reactivity
     const status = transmitter?.derived_status || transmitter?.status || 'inactive';
     
-    let badgeColorClass = 'bg-red-100 text-red-700'; 
+    let badgeColorClass = 'bg-[#FF2A00]/20 text-[#FF2A00]'; 
     if (status === 'Active' || status === 'active') badgeColorClass = 'bg-green-100 text-green-700';
-    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') badgeColorClass = 'bg-orange-100 text-orange-700';
-    if (status === 'Static test') badgeColorClass = 'bg-yellow-100 text-yellow-700';
+    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') badgeColorClass = 'bg-[#FFAA33]/20 text-[#FFAA33]';
+    if (status === 'Static test') badgeColorClass = 'bg-[#F4F714]/20 text-[#F4F714]';
 
-    let ticketClass = 'bg-white text-slate-900 border-2 border-red-500';
+    let ticketClass = 'bg-white text-slate-900 border-2 border-[#FF2A00]';
     if (status === 'Active' || status === 'active') ticketClass = 'bg-white text-slate-900 border-2 border-green-500';
-    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') ticketClass = 'bg-white text-slate-900 border-2 border-orange-500';
-    if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-yellow-500';
+    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFAA33]';
+    if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-[#F4F714]';
 
     const handleAIAnalysis = () => {
         setSelectedTransmitterIds([pos.transmitter_id]);
@@ -2034,9 +2028,9 @@ export const LiveTracking = () => {
                                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${(() => {
                                                 const s = t.derived_status || t.status;
                                                 if (s === 'Active' || s === 'active') return 'bg-green-500';
-                                                if (s === 'Inactive') return 'bg-red-500';
-                                                if (s === 'Static test') return 'bg-yellow-500';
-                                                return 'bg-orange-500';
+                                                if (s === 'Inactive') return 'bg-[#FF2A00]';
+                                                if (s === 'Static test') return 'bg-[#F4F714]';
+                                                return 'bg-[#FFAA33]';
                                             })()}`}></div>
                                         </div>
                                     );
@@ -2059,9 +2053,9 @@ export const LiveTracking = () => {
                 >
                     <div className={`w-2.5 h-2.5 rounded-full ${
                         selectedStatus === 'active' ? 'bg-green-500' : 
-                        selectedStatus === 'inactive' ? 'bg-red-500' : 
-                        selectedStatus === 'mortality' ? 'bg-orange-500' : 
-                        selectedStatus === 'static' ? 'bg-yellow-500' : 'bg-gray-900'
+                        selectedStatus === 'inactive' ? 'bg-[#FF2A00]' : 
+                        selectedStatus === 'mortality' ? 'bg-[#FFAA33]' : 
+                        selectedStatus === 'static' ? 'bg-[#F4F714]' : 'bg-gray-900'
                     }`} />
                     <span className="text-sm font-medium text-gray-700">
                         {selectedStatus === 'all' ? 'All Statuses' : 
@@ -2081,9 +2075,9 @@ export const LiveTracking = () => {
                         {[
                             { id: 'all', label: 'All Statuses', color: 'bg-gray-900' },
                             { id: 'active', label: 'Active', color: 'bg-green-500' },
-                            { id: 'mortality', label: 'Potential Mortality', color: 'bg-orange-500' },
-                            { id: 'inactive', label: 'Inactive', color: 'bg-red-500' },
-                            { id: 'static', label: 'Static test', color: 'bg-yellow-500' }
+                            { id: 'mortality', label: 'Potential Mortality', color: 'bg-[#FFAA33]' },
+                            { id: 'inactive', label: 'Inactive', color: 'bg-[#FF2A00]' },
+                            { id: 'static', label: 'Static test', color: 'bg-[#F4F714]' }
                         ].map(option => (
                             <button
                                 key={option.id}

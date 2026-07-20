@@ -282,9 +282,9 @@ export const Transmitters = () => {
                   <td className="px-4 py-3 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
                       (t.derived_status || t.status) === 'Active' || (t.derived_status || t.status) === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                      (t.derived_status || t.status) === 'Potential Mortality' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
-                      (t.derived_status || t.status) === 'Inactive' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
-                      (t.derived_status || t.status) === 'Static test' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                      (t.derived_status || t.status) === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
+                      (t.derived_status || t.status) === 'Inactive' ? 'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]' :
+                      (t.derived_status || t.status) === 'Static test' ? 'bg-[#F4F714]/20 dark:bg-[#F4F714]/30 text-[#e6b800] dark:text-[#F4F714]' :
                       'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
                     }`}>
                       {t.derived_status || t.status}
