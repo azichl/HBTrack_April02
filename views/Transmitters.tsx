@@ -166,8 +166,7 @@ export const Transmitters = () => {
                         const { saveDocument } = await import('../services/firestoreService');
                         await saveDocument('transmitters', t.id, { derived_status: status });
                       } catch (err: any) {
-                        alert(`DB Update Error for ${t.platform_id}: ${err.message}`);
-                        throw err;
+                        console.error(`DB Update Error for ${t.platform_id}: ${err.message}`);
                       }
                     }
                   }
@@ -176,9 +175,12 @@ export const Transmitters = () => {
                     const { loadCollection } = await import('../services/firestoreService');
                     const freshTransmitters = await loadCollection('transmitters');
                     store.transmitters = freshTransmitters as any;
+                    // Force a re-render by updating the store using the set function if available
+                    useAppStore.setState({ transmitters: freshTransmitters as any });
                   }
                   
-                  alert(`Successfully updated ${numUpdated} transmitters in the database!`);
+                  // Run the background update just in case it missed anything
+                  store.recalculateTransmitterStatuses();
                 } catch (err: any) {
                   alert('Failed: ' + err.message);
                 } finally {
