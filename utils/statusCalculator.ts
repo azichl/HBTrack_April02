@@ -38,27 +38,42 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
     return 'Inactive';
   }
 
-  // Filter: only use GPS fixes or Doppler fixes with error under 500m
+  // Filter: only use GPS fixes or Doppler fixes with error under 500m, and valid coordinates
   const qualityPositions = positions.filter(p => {
+    const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+    const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+    // Ignore (0,0) or missing coordinates
+    if (isNaN(pLat) || isNaN(pLon) || (Math.abs(pLat) <= 1 && Math.abs(pLon) <= 1)) {
+        return false;
+    }
+
     const locType = (p.locationType || '').toUpperCase();
     if (locType === 'GPS') return true;
     
     const lc = String(p.lc || '').toUpperCase().trim();
     if (lc === 'GPS' || lc === 'G') return true;
 
-    // For Doppler, check error radius
-    const dopplerErr = parseFloat(p.dopplerError || '0');
-    if (dopplerErr > 0 && dopplerErr < 500) return true;
-    
-    // Also accept LC classes 1, 2, 3 (which are < 1500m, < 500m, < 250m)
-    if (['1', '2', '3'].includes(lc)) return true;
-    
+    // Doppler fixes are excluded from spatial analysis because their inherent 
+    // error (often 250m - 1500m) mathematically breaks the 20m threshold logic 
+    // required for Static Test and Potential Mortality.
     return false;
   });
 
-  // Use ALL positions for timestamp checks (to detect inactivity), 
-  // but only quality positions for spatial analysis
-  const allSorted = [...positions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // Use valid positions for timestamp checks (to detect inactivity)
+  // Even low quality Doppler fixes count as activity, but empty (0,0) messages don't
+  const validPositions = positions.filter(p => {
+    const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+    const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+    return !(isNaN(pLat) || isNaN(pLon) || (Math.abs(pLat) <= 1 && Math.abs(pLon) <= 1));
+  });
+
+  const allSorted = [...validPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  
+  // If no valid positions exist at all, it's inactive
+  if (allSorted.length === 0) {
+    return 'Inactive';
+  }
+
   const latestPos = allSorted[allSorted.length - 1];
   const latestTime = new Date(latestPos.timestamp).getTime();
   const now = new Date().getTime();
