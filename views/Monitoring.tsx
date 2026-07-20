@@ -97,7 +97,7 @@ export const Monitoring = () => {
         platform_id: t.platform_id,
         bird_ring_id: bird?.ring_id || 'Unassigned',
         bird_id: t.bird_id, // for actions
-        status: t.status,
+        status: t.derived_status || t.status,
         model: t.model,
         lat: pos?.lat,
         lon: pos?.lon,
@@ -236,8 +236,11 @@ export const Monitoring = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      row.status === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      (row.status === 'Active' || row.status === 'active') ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                      row.status === 'Potential Mortality' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300' :
+                      row.status === 'Static test' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' :
+                      row.status === 'Inactive' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300' :
                       row.status === 'maintenance' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300' :
                       'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300'
                     }`}>
