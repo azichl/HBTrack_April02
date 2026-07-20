@@ -160,19 +160,25 @@ export const Transmitters = () => {
                     const positions = snap.docs.map(d => d.data());
                     const status = evaluateTransmitterStatus(t, positions);
                     
-                    if (positions.length > 0) {
-                      debugLog += `${t.platform_id} (${positions.length} pos): ${status}\n`;
-                    }
                     if (t.derived_status !== status) {
                       numUpdated++;
+                      try {
+                        const { saveDocument } = await import('../services/firestoreService');
+                        await saveDocument('transmitters', t.id, { derived_status: status });
+                      } catch (err: any) {
+                        alert(`DB Update Error for ${t.platform_id}: ${err.message}`);
+                        throw err;
+                      }
                     }
                   }
                   
-                  debugLog += `\nTransmitters needing DB update: ${numUpdated}`;
-                  console.log(debugLog);
-                  alert(debugLog);
-
-                  await store.recalculateTransmitterStatuses();
+                  if (numUpdated > 0) {
+                    const { loadCollection } = await import('../services/firestoreService');
+                    const freshTransmitters = await loadCollection('transmitters');
+                    store.transmitters = freshTransmitters as any;
+                  }
+                  
+                  alert(`Successfully updated ${numUpdated} transmitters in the database!`);
                 } catch (err: any) {
                   alert('Failed: ' + err.message);
                 } finally {
