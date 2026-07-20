@@ -424,7 +424,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                 className="!bg-transparent !border-0 !shadow-none !p-0 before:!hidden"
             >
                 <div 
-                    className={`px-1.5 py-0 rounded-full shadow-sm text-[11px] font-bold ${ticketClass}`}
+                    className={`px-1.5 py-0 rounded-full shadow-sm text-xs font-bold ${ticketClass}`}
                     style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                 >
                     {pos.transmitter_id}
