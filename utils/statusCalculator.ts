@@ -105,6 +105,11 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
   });
 
   if ((pointsNearGlobalBarycenter / sorted.length) >= 0.70) {
+    // If the transmitter is fitted to a bird, it cannot be a "Static test"
+    // A bird that is completely stationary is Potentially Dead.
+    if (transmitter.bird_id && transmitter.bird_id.trim() !== '') {
+      return 'Potential Mortality';
+    }
     return 'Static test';
   }
 
