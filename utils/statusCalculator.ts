@@ -24,8 +24,8 @@ function calculateBarycenter(positions: any[]): { lat: number, lon: number } {
   let sumLat = 0;
   let sumLon = 0;
   positions.forEach(p => {
-    sumLat += p.lat !== undefined ? p.lat : p.latitude;
-    sumLon += p.lon !== undefined ? p.lon : p.longitude;
+    sumLat += p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+    sumLon += p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
   });
   return {
     lat: sumLat / positions.length,
@@ -96,8 +96,8 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
   const globalBarycenter = calculateBarycenter(sorted);
   let pointsNearGlobalBarycenter = 0;
   sorted.forEach(p => {
-    const pLat = p.lat !== undefined ? p.lat : p.latitude;
-    const pLon = p.lon !== undefined ? p.lon : p.longitude;
+    const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+    const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
     const dist = calculateHaversineDistance(globalBarycenter.lat, globalBarycenter.lon, pLat, pLon);
     if (dist < 20) {
       pointsNearGlobalBarycenter++;
@@ -128,8 +128,8 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
       const recentBarycenter = calculateBarycenter(recentPositions);
       let allStationary = true;
       for (const p of recentPositions) {
-        const pLat = p.lat !== undefined ? p.lat : p.latitude;
-        const pLon = p.lon !== undefined ? p.lon : p.longitude;
+        const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+        const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
         const dist = calculateHaversineDistance(recentBarycenter.lat, recentBarycenter.lon, pLat, pLon);
         if (dist >= 20) {
           allStationary = false;

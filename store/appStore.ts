@@ -859,12 +859,23 @@ export const useAppStore = create<AppState>()(
 
           for (const t of currentTransmitters) {
             try {
-              const q = query(
+              let allPositions: any[] = [];
+              const qStr = query(
                 collection(db, 'argos_positions'),
                 where('platformId', '==', String(t.platform_id))
               );
-              const snapshot = await getDocs(q);
-              const allPositions = snapshot.docs.map(d => d.data());
+              const snapshotStr = await getDocs(qStr);
+              allPositions.push(...snapshotStr.docs.map(d => d.data()));
+
+              if (!isNaN(Number(t.platform_id))) {
+                const qNum = query(
+                  collection(db, 'argos_positions'),
+                  where('platformId', '==', Number(t.platform_id))
+                );
+                const snapshotNum = await getDocs(qNum);
+                allPositions.push(...snapshotNum.docs.map(d => d.data()));
+              }
+
               const newStatus = evaluateTransmitterStatus(t, allPositions);
 
               if (t.derived_status !== newStatus) {
