@@ -44,6 +44,15 @@ const blueIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+const yellowIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 // Custom Target Icon (White circle with blue border and blue dot)
 const targetIcon = L.divIcon({
   className: 'bg-transparent',
@@ -72,9 +81,11 @@ const measureEndIcon = L.divIcon({
 });
 
 // Helper to select icon
-const getStatusIcon = (status: string) => {
-    if (status === 'active') return greenIcon;
-    if (status === 'lost' || status === 'maintenance') return orangeIcon;
+const getStatusIcon = (status: string, derived_status?: string) => {
+    const finalStatus = derived_status || status;
+    if (finalStatus === 'Active' || finalStatus === 'active') return greenIcon;
+    if (finalStatus === 'Potential Mortality' || finalStatus === 'lost' || finalStatus === 'maintenance') return orangeIcon; // We can use orangeIcon but wait, orangeIcon is custom?
+    if (finalStatus === 'Static test') return yellowIcon; // I'll need to define yellowIcon if it doesn't exist
     return redIcon;
 };
 
@@ -380,15 +391,17 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     const [isOpen, setIsOpen] = useState(false);
 
     // Props are now passed directly to ensure reactivity
-    const status = transmitter?.status || 'inactive';
+    const status = transmitter?.derived_status || transmitter?.status || 'inactive';
     
     let badgeColorClass = 'bg-red-100 text-red-700'; 
-    if (status === 'active') badgeColorClass = 'bg-green-100 text-green-700';
-    if (status === 'lost' || status === 'maintenance') badgeColorClass = 'bg-orange-100 text-orange-700';
+    if (status === 'Active' || status === 'active') badgeColorClass = 'bg-green-100 text-green-700';
+    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') badgeColorClass = 'bg-orange-100 text-orange-700';
+    if (status === 'Static test') badgeColorClass = 'bg-yellow-100 text-yellow-700';
 
     let ticketClass = 'bg-white text-slate-900 border-2 border-red-500';
-    if (status === 'active') ticketClass = 'bg-white text-slate-900 border-2 border-green-500';
-    if (status === 'lost' || status === 'maintenance') ticketClass = 'bg-white text-slate-900 border-2 border-orange-500';
+    if (status === 'Active' || status === 'active') ticketClass = 'bg-white text-slate-900 border-2 border-green-500';
+    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') ticketClass = 'bg-white text-slate-900 border-2 border-orange-500';
+    if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-yellow-500';
 
     const handleAIAnalysis = () => {
         setSelectedTransmitterIds([pos.transmitter_id]);
@@ -752,11 +765,12 @@ export const LiveTracking = () => {
   const latestPositions = useMemo(() => {
     // 1. Identify relevant transmitters based on status filter
     const relevantTransmitters = transmitters.filter(t => {
+       const status = t.derived_status || t.status;
        if (selectedStatus === 'all') return true;
-       if (selectedStatus === 'active') return t.status === 'active';
-       if (selectedStatus === 'inactive') return t.status === 'inactive';
-       if (selectedStatus === 'maintenance') return t.status === 'maintenance' || (t.status as any) === 'lost'; 
-       if (selectedStatus === 'lost') return (t.status as any) === 'lost';
+       if (selectedStatus === 'active') return status === 'Active' || status === 'active';
+       if (selectedStatus === 'inactive') return status === 'Inactive';
+       if (selectedStatus === 'mortality') return status === 'Potential Mortality';
+       if (selectedStatus === 'static') return status === 'Static test';
        return true;
     });
     
@@ -2015,7 +2029,13 @@ export const LiveTracking = () => {
                                                     <div className="text-xs text-gray-500 truncate">{bird?.ring_id || 'Unassigned'}</div>
                                                 </div>
                                             </div>
-                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${t.status === 'active' ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${(() => {
+                                                const s = t.derived_status || t.status;
+                                                if (s === 'Active' || s === 'active') return 'bg-green-500';
+                                                if (s === 'Inactive') return 'bg-red-500';
+                                                if (s === 'Static test') return 'bg-yellow-500';
+                                                return 'bg-orange-500';
+                                            })()}`}></div>
                                         </div>
                                     );
                                 })
@@ -2038,11 +2058,14 @@ export const LiveTracking = () => {
                     <div className={`w-2.5 h-2.5 rounded-full ${
                         selectedStatus === 'active' ? 'bg-green-500' : 
                         selectedStatus === 'inactive' ? 'bg-red-500' : 
-                        selectedStatus === 'maintenance' ? 'bg-orange-500' : 
-                        selectedStatus === 'lost' ? 'bg-orange-500' : 'bg-gray-900'
+                        selectedStatus === 'mortality' ? 'bg-orange-500' : 
+                        selectedStatus === 'static' ? 'bg-yellow-500' : 'bg-gray-900'
                     }`} />
                     <span className="text-sm font-medium text-gray-700">
-                        {selectedStatus === 'all' ? 'All Statuses' : selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
+                        {selectedStatus === 'all' ? 'All Statuses' : 
+                         selectedStatus === 'mortality' ? 'Potential Mortality' : 
+                         selectedStatus === 'static' ? 'Static test' : 
+                         selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
                     </span>
                     <ChevronDown size={16} className="text-gray-400" />
                 </button>
@@ -2056,9 +2079,9 @@ export const LiveTracking = () => {
                         {[
                             { id: 'all', label: 'All Statuses', color: 'bg-gray-900' },
                             { id: 'active', label: 'Active', color: 'bg-green-500' },
-                            { id: 'maintenance', label: 'Lost/Maint.', color: 'bg-orange-500' },
+                            { id: 'mortality', label: 'Potential Mortality', color: 'bg-orange-500' },
                             { id: 'inactive', label: 'Inactive', color: 'bg-red-500' },
-                            { id: 'lost', label: 'Lost', color: 'bg-orange-500' }
+                            { id: 'static', label: 'Static test', color: 'bg-yellow-500' }
                         ].map(option => (
                             <button
                                 key={option.id}

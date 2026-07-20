@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice } from '../types';
 import { logUserActivity } from '../services/activityLogger';
+import { evaluateTransmitterStatus } from '../utils/statusCalculator';
 import { 
   saveDocument, deleteDocument, savePositions, 
   loadCollection, subscribeToCollection, 
@@ -639,6 +640,37 @@ export const useAppStore = create<AppState>()(
               await batchWriteArgosPositions(incomingMessages, (written, total) => {
                   onProgress?.(`Firebase: ${written}/${total} records written...`);
               });
+          }
+
+          // 4.5 Evaluate and update derived_status for modified transmitters
+          const modifiedTransmitterIds = new Set(newPositionDocs.map(p => p.transmitter_id));
+          if (modifiedTransmitterIds.size > 0) {
+              onProgress?.(`Evaluating status for ${modifiedTransmitterIds.size} active transmitters...`);
+              let statusUpdated = false;
+              for (let i = 0; i < newTransmitters.length; i++) {
+                  const t = newTransmitters[i];
+                  if (modifiedTransmitterIds.has(t.platform_id)) {
+                      try {
+                          // Fetch all argos_positions for this transmitter to calculate accurate barycenters
+                          const q = query(collection(db, 'argos_positions'), where('platformId', '==', t.platform_id));
+                          const snapshot = await getDocs(q);
+                          const allPositions = snapshot.docs.map(doc => doc.data());
+                          const derived = evaluateTransmitterStatus(t, allPositions);
+                          
+                          if (t.derived_status !== derived) {
+                              newTransmitters[i].derived_status = derived;
+                              statusUpdated = true;
+                              // Also update in DB
+                              await saveDocument('transmitters', t.id, { derived_status: derived });
+                          }
+                      } catch (err) {
+                          console.error(`Error evaluating status for ${t.platform_id}:`, err);
+                      }
+                  }
+              }
+              if (statusUpdated) {
+                  onProgress?.(`Updated derived statuses.`);
+              }
           }
 
           // 5. Update in-memory state with recent data only (for live map)
