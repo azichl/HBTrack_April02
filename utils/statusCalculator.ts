@@ -38,9 +38,23 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
     return 'Inactive';
   }
 
-  // Sort positions by timestamp ascending
-  const sorted = [...positions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const latestPos = sorted[sorted.length - 1];
+  // Filter: only use GPS fixes or Doppler fixes with error under 500m
+  const qualityPositions = positions.filter(p => {
+    const locType = (p.locationType || '').toUpperCase();
+    if (locType === 'GPS') return true;
+    // For Doppler, check error radius
+    const dopplerErr = parseFloat(p.dopplerError || '0');
+    if (dopplerErr > 0 && dopplerErr < 500) return true;
+    // Also accept LC classes 1, 2, 3 (which are < 1500m, < 500m, < 250m)
+    const lc = String(p.lc || '').trim();
+    if (['1', '2', '3'].includes(lc)) return true;
+    return false;
+  });
+
+  // Use ALL positions for timestamp checks (to detect inactivity), 
+  // but only quality positions for spatial analysis
+  const allSorted = [...positions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const latestPos = allSorted[allSorted.length - 1];
   const latestTime = new Date(latestPos.timestamp).getTime();
   const now = new Date().getTime();
 
@@ -50,7 +64,15 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
     return 'Inactive';
   }
 
-  // 2. Check Static Test (70% of ALL points < 20m from global barycenter)
+  // If no quality positions exist, default to Active (we have data but it's all low-quality Doppler)
+  if (qualityPositions.length === 0) {
+    return 'Active';
+  }
+
+  // Sort quality positions by timestamp for spatial analysis
+  const sorted = [...qualityPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // 2. Check Static Test (70% of ALL quality points < 20m from global barycenter)
   const globalBarycenter = calculateBarycenter(sorted);
   let pointsNearGlobalBarycenter = 0;
   sorted.forEach(p => {

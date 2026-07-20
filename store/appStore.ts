@@ -800,6 +800,50 @@ export const useAppStore = create<AppState>()(
           get().cleanupOldAlerts();
 
           console.log(`[AppStore] Firestore init complete: ${mergedTransmitters.length} transmitters, ${mergedBirds.length} birds, ${recentPositions.length} positions, role: ${role}`);
+
+          // ── Background: Calculate derived_status for all transmitters ──────
+          // This runs asynchronously so the app loads instantly.
+          // It checks ALL transmitters and recalculates their derived_status.
+          fireAndForget(async () => {
+            try {
+              console.log('[AppStore] Background: Calculating derived statuses...');
+              const currentTransmitters = [...get().transmitters];
+              let updated = 0;
+
+              for (const t of currentTransmitters) {
+                try {
+                  // Fetch all argos_positions for this transmitter
+                  const q = query(
+                    collection(db, 'argos_positions'),
+                    where('platformId', '==', t.platform_id)
+                  );
+                  const snapshot = await getDocs(q);
+                  const allPositions = snapshot.docs.map(d => d.data());
+                  const newStatus = evaluateTransmitterStatus(t, allPositions);
+
+                  if (t.derived_status !== newStatus) {
+                    // Update in Firestore
+                    await saveDocument('transmitters', t.id, { derived_status: newStatus });
+                    updated++;
+                  }
+                } catch (err) {
+                  console.warn(`[AppStore] Failed to evaluate status for ${t.platform_id}:`, err);
+                }
+              }
+
+              if (updated > 0) {
+                // Re-load transmitters to pick up the new derived_status values
+                const freshTransmitters = await loadCollection<Transmitter>('transmitters');
+                set({ transmitters: freshTransmitters });
+                console.log(`[AppStore] Background: Updated derived_status for ${updated} transmitters.`);
+              } else {
+                console.log('[AppStore] Background: All transmitter statuses are up to date.');
+              }
+            } catch (err) {
+              console.error('[AppStore] Background status calc error:', err);
+            }
+          });
+
         } catch (error) {
           console.error('[AppStore] Firestore init error:', error);
           set({ firestoreReady: true });

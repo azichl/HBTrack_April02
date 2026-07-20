@@ -80,12 +80,14 @@ const measureEndIcon = L.divIcon({
     iconAnchor: [8, 8]
 });
 
-// Helper to select icon
-const getStatusIcon = (status: string, derived_status?: string) => {
-    const finalStatus = derived_status || status;
-    if (finalStatus === 'Active' || finalStatus === 'active') return greenIcon;
-    if (finalStatus === 'Potential Mortality' || finalStatus === 'lost' || finalStatus === 'maintenance') return orangeIcon; // We can use orangeIcon but wait, orangeIcon is custom?
-    if (finalStatus === 'Static test') return yellowIcon; // I'll need to define yellowIcon if it doesn't exist
+// Helper to select icon based on derived or raw status
+const getStatusIcon = (status: string) => {
+    if (status === 'Active' || status === 'active') return greenIcon;
+    if (status === 'Potential Mortality') return orangeIcon;
+    if (status === 'Static test') return yellowIcon;
+    if (status === 'Inactive') return redIcon;
+    // Legacy fallbacks
+    if (status === 'lost' || status === 'maintenance') return orangeIcon;
     return redIcon;
 };
 

@@ -1,11 +1,13 @@
-const admin = require('firebase-admin');
-const fs = require('fs');
-const path = require('path');
+/**
+ * One-time script to calculate and set derived_status for all transmitters.
+ * 
+ * Run from the project root:
+ *   GOOGLE_APPLICATION_CREDENTIALS=path/to/serviceAccountKey.json node scripts/calculate_statuses.cjs
+ * 
+ * OR from an environment with default credentials (e.g., Cloud Shell, or after `gcloud auth application-default login`).
+ */
 
-// Initialize Firebase Admin (make sure you have GOOGLE_APPLICATION_CREDENTIALS set
-// or it's running in an environment with default credentials, OR initialize with service account key)
-// For local testing, we might need a service account key if not set.
-// If you run this script locally, ensure you set the GOOGLE_APPLICATION_CREDENTIALS environment variable.
+const admin = require('../functions/node_modules/firebase-admin');
 
 if (!admin.apps.length) {
     admin.initializeApp();
@@ -18,88 +20,72 @@ function degreesToRadians(degrees) {
 }
 
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371e3; // Earth radius in meters
-  const φ1 = degreesToRadians(lat1);
-  const φ2 = degreesToRadians(lat2);
-  const Δφ = degreesToRadians(lat2 - lat1);
-  const Δλ = degreesToRadians(lon2 - lon1);
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return R * c; // Distance in meters
+  const R = 6371e3;
+  const p1 = degreesToRadians(lat1);
+  const p2 = degreesToRadians(lat2);
+  const dp = degreesToRadians(lat2 - lat1);
+  const dl = degreesToRadians(lon2 - lon1);
+  const a = Math.sin(dp / 2) * Math.sin(dp / 2) +
+            Math.cos(p1) * Math.cos(p2) *
+            Math.sin(dl / 2) * Math.sin(dl / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function calculateBarycenter(positions) {
   if (positions.length === 0) return { lat: 0, lon: 0 };
-  let sumLat = 0;
-  let sumLon = 0;
-  positions.forEach(p => {
-    sumLat += p.lat;
-    sumLon += p.lon;
-  });
-  return {
-    lat: sumLat / positions.length,
-    lon: sumLon / positions.length
-  };
+  let sumLat = 0, sumLon = 0;
+  positions.forEach(p => { sumLat += p.lat; sumLon += p.lon; });
+  return { lat: sumLat / positions.length, lon: sumLon / positions.length };
 }
 
 function evaluateTransmitterStatus(transmitter, positions) {
-  if (!positions || positions.length === 0) {
-    return 'Inactive';
-  }
+  if (!positions || positions.length === 0) return 'Inactive';
 
-  // Sort positions by timestamp ascending
-  const sorted = [...positions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const latestPos = sorted[sorted.length - 1];
-  const latestTime = new Date(latestPos.timestamp).getTime();
-  const now = new Date().getTime();
-
-  // 1. Check Inactive (> 10 days since last transmission)
-  const daysSinceLastFix = (now - latestTime) / (1000 * 60 * 60 * 24);
-  if (daysSinceLastFix > 10) {
-    return 'Inactive';
-  }
-
-  // 2. Check Static Test (70% of ALL points < 20m from global barycenter)
-  const globalBarycenter = calculateBarycenter(sorted);
-  let pointsNearGlobalBarycenter = 0;
-  sorted.forEach(p => {
-    const dist = calculateHaversineDistance(globalBarycenter.lat, globalBarycenter.lon, p.lat, p.lon);
-    if (dist < 20) {
-      pointsNearGlobalBarycenter++;
-    }
+  // Filter: only use GPS fixes or Doppler fixes with error under 500m
+  const qualityPositions = positions.filter(p => {
+    const locType = (p.locationType || '').toUpperCase();
+    if (locType === 'GPS') return true;
+    const dopplerErr = parseFloat(p.dopplerError || '0');
+    if (dopplerErr > 0 && dopplerErr < 500) return true;
+    const lc = String(p.lc || '').trim();
+    if (['1', '2', '3'].includes(lc)) return true;
+    return false;
   });
 
-  if ((pointsNearGlobalBarycenter / sorted.length) >= 0.70) {
-    return 'Static test';
-  }
+  // Use ALL positions for timestamp checks
+  const allSorted = [...positions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const latestPos = allSorted[allSorted.length - 1];
+  const latestTime = new Date(latestPos.timestamp).getTime();
+  const now = Date.now();
 
-  // 3. Check Potential Mortality (fixes over the last 4 days are all < 20m from their barycenter)
+  // 1. Inactive (> 10 days)
+  if ((now - latestTime) / (1000 * 60 * 60 * 24) > 10) return 'Inactive';
+
+  // If no quality positions, default to Active
+  if (qualityPositions.length === 0) return 'Active';
+
+  const sorted = [...qualityPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // 2. Static Test (70% of ALL quality points < 20m from global barycenter)
+  const bc = calculateBarycenter(sorted);
+  let near = 0;
+  sorted.forEach(p => {
+    if (calculateHaversineDistance(bc.lat, bc.lon, p.lat, p.lon) < 20) near++;
+  });
+  if ((near / sorted.length) >= 0.70) return 'Static test';
+
+  // 3. Potential Mortality (last 4 days all < 20m from barycenter, spanning >= 3 days)
   const fourDaysAgo = latestTime - (4 * 24 * 60 * 60 * 1000);
-  const recentPositions = sorted.filter(p => new Date(p.timestamp).getTime() >= fourDaysAgo);
-
-  if (recentPositions.length > 0) {
-    const firstRecentTime = new Date(recentPositions[0].timestamp).getTime();
-    const durationDays = (latestTime - firstRecentTime) / (1000 * 60 * 60 * 24);
-    
-    // Only confidently call it mortality if we have data spanning at least 3 days in this 4-day window
-    if (durationDays >= 3) {
-      const recentBarycenter = calculateBarycenter(recentPositions);
-      let allStationary = true;
-      for (const p of recentPositions) {
-        const dist = calculateHaversineDistance(recentBarycenter.lat, recentBarycenter.lon, p.lat, p.lon);
-        if (dist >= 20) {
-          allStationary = false;
-          break;
-        }
+  const recent = sorted.filter(p => new Date(p.timestamp).getTime() >= fourDaysAgo);
+  if (recent.length > 0) {
+    const first = new Date(recent[0].timestamp).getTime();
+    if ((latestTime - first) / (1000 * 60 * 60 * 24) >= 3) {
+      const rbc = calculateBarycenter(recent);
+      let allNear = true;
+      for (const p of recent) {
+        if (calculateHaversineDistance(rbc.lat, rbc.lon, p.lat, p.lon) >= 20) { allNear = false; break; }
       }
-
-      if (allStationary) {
-        return 'Potential Mortality';
-      }
+      if (allNear) return 'Potential Mortality';
     }
   }
 
@@ -108,37 +94,32 @@ function evaluateTransmitterStatus(transmitter, positions) {
 
 async function run() {
     console.log('Fetching transmitters...');
-    const snapshot = await db.collection('transmitters').get();
+    const tSnap = await db.collection('transmitters').get();
     const transmitters = [];
-    snapshot.forEach(doc => {
-        transmitters.push({ id: doc.id, ...doc.data() });
-    });
-
-    console.log(`Found ${transmitters.length} transmitters. Computing status...`);
+    tSnap.forEach(doc => transmitters.push({ id: doc.id, ...doc.data() }));
+    console.log(`Found ${transmitters.length} transmitters.`);
 
     let updatedCount = 0;
 
     for (const t of transmitters) {
-        // Fetch positions for this transmitter
-        const posSnapshot = await db.collection('argos_positions')
+        const posSnap = await db.collection('argos_positions')
             .where('platformId', '==', t.platform_id)
             .get();
         
         const positions = [];
-        posSnapshot.forEach(doc => positions.push(doc.data()));
+        posSnap.forEach(doc => positions.push(doc.data()));
 
         const newStatus = evaluateTransmitterStatus(t, positions);
         
+        console.log(`  ${t.platform_id}: ${positions.length} positions -> ${newStatus} (was: ${t.derived_status || 'None'})`);
+
         if (t.derived_status !== newStatus) {
-            console.log(`Updating ${t.platform_id}: ${t.derived_status || 'None'} -> ${newStatus}`);
-            await db.collection('transmitters').doc(t.id).update({
-                derived_status: newStatus
-            });
+            await db.collection('transmitters').doc(t.id).update({ derived_status: newStatus });
             updatedCount++;
         }
     }
 
-    console.log(`Finished updating ${updatedCount} transmitters.`);
+    console.log(`\nDone. Updated ${updatedCount} / ${transmitters.length} transmitters.`);
 }
 
 run().catch(console.error).finally(() => process.exit(0));
