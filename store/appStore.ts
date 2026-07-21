@@ -659,6 +659,19 @@ export const useAppStore = create<AppState>()(
                           const derived = evaluateTransmitterStatus(t, allPositions);
                           
                           if (t.derived_status !== derived) {
+                              if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
+                                  const bird = get().birds.find(b => b.id === t.bird_id);
+                                  addAlert({
+                                      id: `status-alert-${t.platform_id}-${Date.now()}`,
+                                      type: derived === 'Inactive' ? 'no_fix' : 'speed_anomaly',
+                                      severity: 'critical',
+                                      transmitter_id: t.platform_id,
+                                      bird_name: bird?.ring_id || 'Unknown',
+                                      message: `CRITICAL: Bird Status changed from Active to ${derived}`,
+                                      timestamp: new Date().toISOString(),
+                                      status: 'active'
+                                  });
+                              }
                               newTransmitters[i].derived_status = derived;
                               statusUpdated = true;
                               // Also update in DB

@@ -28,7 +28,7 @@ export interface Transmitter {
   id: string;
   platform_id: string; // PTT ID
   model: string;
-  status: 'active' | 'inactive' | 'maintenance' | 'lost';
+  status: string;
   derived_status?: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test';
   bird_id: string;
   battery_voltage?: number; // Optional now

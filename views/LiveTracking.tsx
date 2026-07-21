@@ -761,9 +761,14 @@ export const LiveTracking = () => {
     // 1. Identify relevant transmitters based on status filter
     const relevantTransmitters = transmitters.filter(t => {
        const status = t.derived_status || t.status;
+       
+       // Only show the 4 core statuses on the map
+       const allowedStatuses = ['Active', 'active', 'Potential Mortality', 'Inactive', 'inactive', 'Static test'];
+       if (!allowedStatuses.includes(status)) return false;
+
        if (selectedStatus === 'all') return true;
        if (selectedStatus === 'active') return status === 'Active' || status === 'active';
-       if (selectedStatus === 'inactive') return status === 'Inactive';
+       if (selectedStatus === 'inactive') return status === 'Inactive' || status === 'inactive';
        if (selectedStatus === 'mortality') return status === 'Potential Mortality';
        if (selectedStatus === 'static') return status === 'Static test';
        return true;

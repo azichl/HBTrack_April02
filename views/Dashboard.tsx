@@ -95,11 +95,13 @@ export const Dashboard = () => {
   }, [transmitters]);
 
   // Dynamic counts
-  const activeTransmittersCount = transmitters.filter(t => t.status === 'active').length;
-  const maintenanceTransmittersCount = transmitters.filter(t => t.status === 'maintenance').length;
-  const lostTransmittersCount = transmitters.filter(t => (t.status as string) === 'lost').length;
-  
-  const birdsCount = birds.length;
+  const activeBirdIds = transmitters
+    .filter(t => {
+      const s = t.derived_status || t.status;
+      return s === 'Active' || s === 'active';
+    })
+    .map(t => t.bird_id);
+  const activeBirdsCount = birds.filter(b => activeBirdIds.includes(b.id)).length;
   const systemAlerts = alerts.filter(a => a.type !== 'ticket_created');
   const activeAlertsCount = systemAlerts.filter(a => a.status === 'active').length;
   const criticalAlertsCount = systemAlerts.filter(a => a.status === 'active' && a.severity === 'critical').length;
@@ -116,11 +118,23 @@ export const Dashboard = () => {
       ? formatDateTime(new Date(Math.max(...positions.map(d => new Date(d.timestamp).getTime()))).toISOString(), timeZone)
       : 'No Data';
 
-  // Pie chart data
+  // Transmitters Status Data
+  const allStatuses = transmitters.reduce((acc, t) => {
+    const s = t.derived_status || t.status || 'Unknown';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const CHART_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
+  const transmitterStatusData = Object.entries(allStatuses).map(([name, value], i) => ({
+    name, value, color: CHART_COLORS[i % CHART_COLORS.length]
+  }));
+  
+  // Keep original statusData for the side panel Network Status pie chart
   const statusData = [
-    { name: 'Active', value: activeTransmittersCount, color: '#10b981' },
-    { name: 'Maintenance', value: maintenanceTransmittersCount, color: '#f59e0b' },
-    { name: 'Lost', value: lostTransmittersCount, color: '#ef4444' }
+    { name: 'Active', value: transmitters.filter(t => t.status === 'active').length, color: '#10b981' },
+    { name: 'Maintenance', value: transmitters.filter(t => t.status === 'maintenance').length, color: '#f59e0b' },
+    { name: 'Lost', value: transmitters.filter(t => (t.status as string) === 'lost').length, color: '#ef4444' }
   ].filter(d => d.value > 0);
 
   // Fleet Overview (Top 5 recent)
@@ -147,15 +161,28 @@ export const Dashboard = () => {
       {/* Top Level KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
         
-        <div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Radio size={80} className="text-slate-600" />
-          </div>
-          <div className="relative z-10">
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 mb-1 flex items-center gap-2"><Radio size={16}/> Active Transmitters</p>
-            <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{activeTransmittersCount}</h3>
-            <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
-              <span>{transmitters.length} Total Deployed</span>
+        <div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col justify-between">
+          <div className="relative z-10 flex justify-between items-start">
+            <div>
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 mb-1 flex items-center gap-2"><Radio size={16}/> Transmitters Status</p>
+              <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{transmitters.length}</h3>
+              <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
+                <span>Total Transmitters</span>
+              </div>
+            </div>
+            <div className="h-24 w-24">
+               {transmitterStatusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={transmitterStatusData} cx="50%" cy="50%" innerRadius={25} outerRadius={45} paddingAngle={2} dataKey="value" stroke="none">
+                      {transmitterStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip contentStyle={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'rgba(30, 41, 59, 0.95)', border: 'none', color: '#fff' }} itemStyle={{ color: '#fff' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : null}
             </div>
           </div>
         </div>
@@ -169,11 +196,11 @@ export const Dashboard = () => {
                 <HoubaraIcon size={40} color="currentColor" className="text-brand-700 dark:text-brand-400 flex-shrink-0" /> 
                 <div className="flex flex-col justify-center">
                     <p className="text-sm font-semibold text-brand-700 dark:text-brand-400 leading-tight">Birds Tracked</p>
-                    <h3 className="text-4xl font-black text-gray-900 dark:text-white leading-tight mt-0.5">{birdsCount}</h3>
+                    <h3 className="text-4xl font-black text-gray-900 dark:text-white leading-tight mt-0.5">{activeBirdsCount}</h3>
                 </div>
             </div>
             <div className="flex items-center gap-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded mt-2">
-              <span>{birdsCount > 0 ? "Fleet tracking active" : "No birds registered"}</span>
+              <span>{activeBirdsCount > 0 ? "Fleet tracking active" : "No birds registered"}</span>
             </div>
           </div>
         </div>

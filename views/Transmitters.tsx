@@ -163,6 +163,19 @@ export const Transmitters = () => {
                     if (t.derived_status !== status) {
                       numUpdated++;
                       try {
+                        if (t.derived_status === 'Active' && (status === 'Potential Mortality' || status === 'Inactive')) {
+                           const bird = store.birds.find(b => b.id === t.bird_id);
+                           store.addAlert({
+                              id: `status-alert-${t.platform_id}-${Date.now()}`,
+                              type: status === 'Inactive' ? 'no_fix' : 'speed_anomaly',
+                              severity: 'critical',
+                              transmitter_id: t.platform_id,
+                              bird_name: bird?.ring_id || 'Unknown',
+                              message: `CRITICAL: Bird Status changed from Active to ${status}`,
+                              timestamp: new Date().toISOString(),
+                              status: 'active'
+                           });
+                        }
                         const { saveDocument } = await import('../services/firestoreService');
                         await saveDocument('transmitters', t.id, { derived_status: status });
                       } catch (err: any) {
@@ -362,17 +375,20 @@ export const Transmitters = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                      <CustomSelect 
-                        value={formData.status} 
-                        onChange={(val) => setFormData({...formData, status: val as any})} 
-                        className="w-full font-sans"
-                        buttonClassName="p-2 border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-900"
-                        options={[
-                          { value: 'active', label: 'Active' },
-                          { value: 'inactive', label: 'Inactive' },
-                          { value: 'maintenance', label: 'Maintenance' }
-                        ]}
+                      <input 
+                        type="text" 
+                        list="status-options"
+                        value={formData.status || ''} 
+                        onChange={e => setFormData({...formData, status: e.target.value})} 
+                        className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" 
+                        placeholder="e.g. active, inactive, maintenance..."
                       />
+                      <datalist id="status-options">
+                        <option value="active" />
+                        <option value="inactive" />
+                        <option value="maintenance" />
+                        <option value="lost" />
+                      </datalist>
                     </div>
                   </div>
                 </div>
