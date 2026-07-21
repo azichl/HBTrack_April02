@@ -820,33 +820,34 @@ export const useAppStore = create<AppState>()(
 
           console.log(`[AppStore] Firestore init complete: ${mergedTransmitters.length} transmitters, ${mergedBirds.length} birds, ${recentPositions.length} positions, role: ${role}`);
 
-          // ── Background: Calculate derived_status for all transmitters ──────
-          // This runs asynchronously so the app loads instantly.
-          // It checks ALL transmitters and recalculates their derived_status.
+          // ── Background: Quick check for inactivity ──────
+          // Instead of fetching all positions for all transmitters on every refresh (which causes massive reads),
+          // we only check if the last_fix is older than 10 days to mark them as Inactive.
+          // Full spatial evaluation (Potential Mortality) is done during data ingestion.
           fireAndForget(async () => {
             try {
-              console.log('[AppStore] Background: Calculating derived statuses...');
               const currentTransmitters = [...get().transmitters];
               let updated = 0;
+              const now = new Date().getTime();
 
               for (const t of currentTransmitters) {
                 try {
-                  // Fetch all argos_positions for this transmitter
-                  const q = query(
-                    collection(db, 'argos_positions'),
-                    where('platformId', '==', t.platform_id)
-                  );
-                  const snapshot = await getDocs(q);
-                  const allPositions = snapshot.docs.map(d => d.data());
-                  const newStatus = evaluateTransmitterStatus(t, allPositions);
+                  const isDeployed = t.bird_id && t.bird_id.trim() !== '';
+                  if (!isDeployed) continue;
 
-                  if (t.derived_status !== newStatus) {
-                    // Update in Firestore
-                    await saveDocument('transmitters', t.id, { derived_status: newStatus });
+                  if (t.last_fix) {
+                    const daysSinceLastFix = (now - new Date(t.last_fix).getTime()) / (1000 * 60 * 60 * 24);
+                    if (daysSinceLastFix > 10 && t.derived_status !== 'Inactive') {
+                      await saveDocument('transmitters', t.id, { derived_status: 'Inactive' });
+                      updated++;
+                    }
+                  } else if (t.derived_status !== 'Inactive') {
+                    // No fix at all means inactive
+                    await saveDocument('transmitters', t.id, { derived_status: 'Inactive' });
                     updated++;
                   }
                 } catch (err) {
-                  console.warn(`[AppStore] Failed to evaluate status for ${t.platform_id}:`, err);
+                  console.warn(`[AppStore] Failed to evaluate inactivity for ${t.platform_id}:`, err);
                 }
               }
 
@@ -854,12 +855,10 @@ export const useAppStore = create<AppState>()(
                 // Re-load transmitters to pick up the new derived_status values
                 const freshTransmitters = await loadCollection<Transmitter>('transmitters');
                 set({ transmitters: freshTransmitters });
-                console.log(`[AppStore] Background: Updated derived_status for ${updated} transmitters.`);
-              } else {
-                console.log('[AppStore] Background: All transmitter statuses are up to date.');
+                console.log(`[AppStore] Background: Updated derived_status to Inactive for ${updated} transmitters.`);
               }
             } catch (err) {
-              console.error('[AppStore] Background status calc error:', err);
+              console.error('[AppStore] Background inactivity check error:', err);
             }
           });
 
