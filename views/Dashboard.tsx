@@ -12,6 +12,47 @@ import {
 } from 'recharts';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 
+const renderCustomizedLabel = (props: any) => {
+  const { cx, cy, midAngle, innerRadius, outerRadius, value, name, x, y } = props;
+  const RADIAN = Math.PI / 180;
+  
+  // Inner text position (number)
+  const insideRadius = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const xInside = cx + insideRadius * Math.cos(-midAngle * RADIAN);
+  const yInside = cy + insideRadius * Math.sin(-midAngle * RADIAN);
+
+  // Exclude 0 values to avoid clutter
+  if (value === 0) return null;
+
+  return (
+    <g>
+      <text 
+        x={x} 
+        y={y} 
+        fill="currentColor" 
+        className="text-slate-700 dark:text-slate-300" 
+        textAnchor={x > cx ? 'start' : 'end'} 
+        dominantBaseline="central" 
+        fontSize={11} 
+        fontWeight="600"
+      >
+        {name}
+      </text>
+      <text 
+        x={xInside} 
+        y={yInside} 
+        fill="#ffffff" 
+        textAnchor="middle" 
+        dominantBaseline="central" 
+        fontSize={14} 
+        fontWeight="bold"
+      >
+        {value}
+      </text>
+    </g>
+  );
+};
+
 export const Dashboard = () => {
   const { transmitters, birds, alerts, positions, timeZone, setActiveTab } = useAppStore();
 
@@ -173,11 +214,22 @@ export const Dashboard = () => {
           </div>
           <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 w-full text-center mb-1 flex items-center justify-center gap-2 z-10"><Radio size={16}/> Transmitters Status</p>
           
-          <div className="h-32 w-full z-10 my-2">
+          <div className="h-44 w-full z-10 my-2">
              {transmitterStatusData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={transmitterStatusData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={2} dataKey="value" stroke="none">
+                  <Pie 
+                    data={transmitterStatusData} 
+                    cx="50%" 
+                    cy="50%" 
+                    innerRadius={30} 
+                    outerRadius={55} 
+                    paddingAngle={2} 
+                    dataKey="value" 
+                    stroke="none"
+                    labelLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                    label={renderCustomizedLabel}
+                  >
                     {transmitterStatusData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
