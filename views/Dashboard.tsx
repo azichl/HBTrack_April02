@@ -196,46 +196,46 @@ export const Dashboard = () => {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-brand-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-brand-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+        <div className="bg-gradient-to-br from-brand-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-brand-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col justify-center">
           <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
             <HoubaraIcon size={80} color="#b79355" />
           </div>
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-2">
+          <div className="relative z-10 flex flex-col justify-center gap-2">
+            <div className="flex items-center gap-3">
                 <HoubaraIcon size={40} color="currentColor" className="text-brand-700 dark:text-brand-400 flex-shrink-0" /> 
                 <div className="flex flex-col justify-center">
                     <p className="text-sm font-semibold text-brand-700 dark:text-brand-400 leading-tight">Birds Tracked</p>
                     <h3 className="text-4xl font-black text-gray-900 dark:text-white leading-tight mt-0.5">{activeBirdsCount}</h3>
                 </div>
             </div>
-            <div className="flex items-center gap-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded mt-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
               <span>{activeBirdsCount > 0 ? "Fleet tracking active" : "No birds registered"}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm relative overflow-hidden group">
+        <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col justify-center">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Navigation size={80} className="text-blue-600" />
           </div>
-          <div className="relative z-10">
-            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-1 flex items-center gap-2"><Navigation size={16}/> 24h Activity Fixes</p>
-            <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{fixesLast24h}</h3>
+          <div className="relative z-10 flex flex-col justify-center gap-2">
+            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-2"><Navigation size={16}/> 24h Activity Fixes</p>
+            <h3 className="text-4xl font-black text-gray-900 dark:text-white">{fixesLast24h}</h3>
             <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
               <Activity size={12} /> High throughput
             </div>
           </div>
         </div>
 
-        <div className={`bg-gradient-to-br ${criticalAlertsCount > 0 ? 'from-red-50 border-red-200' : 'from-emerald-50 border-emerald-200'} to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm relative overflow-hidden group`}>
+        <div className={`bg-gradient-to-br ${criticalAlertsCount > 0 ? 'from-red-50 border-red-200' : 'from-emerald-50 border-emerald-200'} to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col justify-center`}>
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <ShieldAlert size={80} className={criticalAlertsCount > 0 ? "text-red-600" : "text-emerald-600"} />
           </div>
-          <div className="relative z-10">
-            <p className={`text-sm font-semibold mb-1 flex items-center gap-2 ${criticalAlertsCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+          <div className="relative z-10 flex flex-col justify-center gap-2">
+            <p className={`text-sm font-semibold flex items-center gap-2 ${criticalAlertsCount > 0 ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
               <AlertTriangle size={16}/> Active Alerts
             </p>
-            <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{activeAlertsCount}</h3>
+            <h3 className="text-4xl font-black text-gray-900 dark:text-white">{activeAlertsCount}</h3>
             <div className={`flex items-center gap-2 text-xs font-medium w-fit px-2 py-1 rounded ${criticalAlertsCount > 0 ? 'text-red-700 bg-red-100/50 dark:bg-slate-700 dark:text-red-400' : 'text-emerald-700 bg-emerald-100/50 dark:bg-slate-700 dark:text-emerald-400'}`}>
               <span>{activeAlertsCount === 0 ? "System completely healthy" : `${criticalAlertsCount} critical alerts`}</span>
             </div>
