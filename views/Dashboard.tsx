@@ -208,13 +208,13 @@ export const Dashboard = () => {
       {/* Top Level KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
         
-        <div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col items-center justify-between">
+        <div className="col-span-1 md:col-span-2 xl:col-span-2 bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col items-center justify-between">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
             <Radio size={80} className="text-slate-600" />
           </div>
           <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 w-full text-center mb-1 flex items-center justify-center gap-2 z-10"><Radio size={16}/> Transmitters Status</p>
           
-          <div className="h-44 w-full z-10 my-2">
+          <div className="h-56 w-full z-10 my-2">
              {transmitterStatusData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -222,8 +222,8 @@ export const Dashboard = () => {
                     data={transmitterStatusData} 
                     cx="50%" 
                     cy="50%" 
-                    innerRadius={30} 
-                    outerRadius={55} 
+                    innerRadius={45} 
+                    outerRadius={80} 
                     paddingAngle={2} 
                     dataKey="value" 
                     stroke="none"
@@ -262,19 +262,6 @@ export const Dashboard = () => {
             </div>
             <div className="flex items-center gap-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
               <span>{activeBirdsCount > 0 ? "Fleet tracking active" : "No birds registered"}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-blue-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col justify-center">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Navigation size={80} className="text-blue-600" />
-          </div>
-          <div className="relative z-10 flex flex-col justify-center gap-2">
-            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-2"><Navigation size={16}/> 24h Activity Fixes</p>
-            <h3 className="text-4xl font-black text-gray-900 dark:text-white">{fixesLast24h}</h3>
-            <div className="flex items-center gap-2 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
-              <Activity size={12} /> High throughput
             </div>
           </div>
         </div>
