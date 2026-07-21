@@ -35,7 +35,7 @@ export const analyzePositionsForAlerts = (
     const isValidFix = (p: Position) => {
         if (p.lat === 0 && p.lon === 0) return false;
         // GPS fixes or Doppler fixes with accuracy under 500m (LC 3 or 2)
-        if (p.locationType === 'GPS' || p.lc === 'G') return true;
+        if (p.locationType === 'GPS' || p.lc === ('G' as any)) return true;
         if (['3', '2'].includes(p.lc)) return true;
         return false;
     };

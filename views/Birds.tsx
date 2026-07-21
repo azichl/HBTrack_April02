@@ -232,7 +232,7 @@ export const Birds = () => {
                 return (
                 <tr 
                   key={bird.id} 
-                  onClick={(e) => handleRowClick(e, bird.id)}
+                  onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'BUTTON') { toggleSelection(bird.id); } }}
                   className={`transition-colors cursor-pointer group ${isSelected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
                 >
                   <td className="px-4 py-3 border-r border-gray-100 dark:border-slate-700">

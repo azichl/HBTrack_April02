@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
+const DraggableComponent = Draggable as any;
 // Use exact user-requested hex colors for the map markers, adjusted size
 const createSvgIcon = (colorHex: string) => {
   return L.divIcon({
@@ -1687,7 +1688,7 @@ export const LiveTracking = () => {
                     <Layers size={20} />
                 </button>
                 {layerOpen && (
-                    <Draggable cancel="button, input, select, label">
+                    <DraggableComponent cancel="button, input, select, label">
                     <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-56 border border-gray-100 animate-in fade-in slide-in-from-left-2 cursor-move" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Map Layers</h4>
                         <div className="space-y-1 mb-4">
@@ -1745,7 +1746,7 @@ export const LiveTracking = () => {
                             ))}
                         </div>
                      </div>
-                    </Draggable>
+                    </DraggableComponent>
                 )}
             </div>
 
@@ -1759,7 +1760,7 @@ export const LiveTracking = () => {
                     <CloudSun size={20} />
                 </button>
                  {weatherOpen && (
-                    <Draggable cancel="button, input, select, label">
+                    <DraggableComponent cancel="button, input, select, label">
                     <div className="absolute top-0 left-14 bg-white p-4 rounded-xl shadow-xl w-56 border border-gray-100 animate-in fade-in slide-in-from-left-2 cursor-move" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1000, pointerEvents: 'auto' }}>
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1"><GripHorizontal size={14} className="text-gray-300"/> Weather Layers</h4>
                          <div className="space-y-1">
@@ -1779,7 +1780,7 @@ export const LiveTracking = () => {
                             ))}
                         </div>
                      </div>
-                    </Draggable>
+                    </DraggableComponent>
                  )}
             </div>
 

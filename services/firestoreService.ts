@@ -410,7 +410,7 @@ export const loadAllArgosPositions = async (startDate?: Date, endDate?: Date): P
     const snapshot = await getDocs(q);
     const data: any[] = [];
     snapshot.forEach(docSnap => {
-      data.push({ id: docSnap.id, _collection: 'argos_positions', ...docSnap.data() });
+      data.push({ id: docSnap.id, _collection: 'argos_positions', ...(docSnap.data() as any) });
     });
     console.log(`[Firestore] Loaded ${data.length} total argos positions.`);
     return data;
@@ -447,7 +447,7 @@ export const loadAllPositions = async (startDate?: Date, endDate?: Date): Promis
     const snapshot = await getDocs(q);
     const data: any[] = [];
     snapshot.forEach(docSnap => {
-      const d = docSnap.data();
+      const d = docSnap.data() as any;
       data.push({
         id: docSnap.id,
         _collection: 'positions',

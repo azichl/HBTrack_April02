@@ -8,6 +8,7 @@ import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime } from '../utils/formatting';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
+import { bulkDeleteRecords } from '../services/firestoreService';
 
 type TransmitterTableRow = Transmitter & {
   bird_species: string;
@@ -263,7 +264,7 @@ export const Transmitters = () => {
                 return (
                 <tr 
                   key={t.id} 
-                  onClick={(e) => handleRowClick(e, t.id)}
+                  onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'BUTTON') { toggleSelection(t.id); } }}
                   className={`transition-colors cursor-pointer group ${isSelected ? 'bg-sky-50 dark:bg-sky-900/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
                 >
                   <td className="px-4 py-3 border-r border-gray-100 dark:border-slate-700">
@@ -311,7 +312,7 @@ export const Transmitters = () => {
                       <button onClick={() => handleOpenModal(t)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded-md" title="Edit">
                         <Edit size={16} />
                       </button>
-                      <button onClick={() => handleDelete(t.id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md" title="Delete">
+                      <button onClick={() => { if(window.confirm('Delete transmitter?')) { bulkDeleteRecords('transmitters', [t.id]); } }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md" title="Delete">
                         <Trash2 size={16} />
                       </button>
                     </div>

@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice } from '../types';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
 import { evaluateTransmitterStatus } from '../utils/statusCalculator';
 import { 
@@ -183,6 +185,9 @@ export const useAppStore = create<AppState>()(
       toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
       sidebarPinned: true,
       toggleSidebarPinned: () => set((state) => ({ sidebarPinned: !state.sidebarPinned })),
+
+      theme: 'light',
+      setTheme: (theme) => set({ theme }),
 
       activeTab: 'Dashboard',
       setActiveTab: (tab) => set({ activeTab: tab }),

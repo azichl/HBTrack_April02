@@ -8,6 +8,7 @@ import { formatDateTime } from '../utils/formatting';
 import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
+const DraggableComponent = Draggable as any;
 import { ArgosMessage } from '../types';
 
 type CollectionMode = 'argos_positions' | 'positions' | 'all';
@@ -584,7 +585,7 @@ export const ArgosData = () => {
       {/* Filter Modal */}
       {isFilterOpen && (
         <div className="fixed inset-0 z-[400] flex items-center justify-center pointer-events-none">
-          <Draggable handle=".modal-handle" nodeRef={nodeRef}>
+          <DraggableComponent handle=".modal-handle" nodeRef={nodeRef}>
             <div ref={nodeRef} className="pointer-events-auto w-full max-w-md bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700/50 flex flex-col font-sans overflow-hidden relative z-[500]">
               <div className="modal-handle flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700/50 bg-gray-50 dark:bg-slate-900 cursor-move">
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white select-none">Filters</h3>
@@ -751,14 +752,13 @@ export const ArgosData = () => {
                   </button>
               </div>
             </div>
-          </Draggable>
+          </DraggableComponent>
         </div>
       )}
        {/* Add/Edit Argos Modal */}
        {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 backdrop-blur-sm">
-          {/* @ts-ignore */}
-          <Draggable handle=".modal-handle" nodeRef={nodeRef}>
+          <DraggableComponent handle=".modal-handle" nodeRef={nodeRef}>
             <div ref={nodeRef} className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden flex flex-col">
               <div className="modal-handle cursor-move px-6 py-4 bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700 flex justify-between items-center">
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{editingRecordId ? 'Edit Argos Record' : 'Add Manual Argos Record'}</h3>
@@ -813,7 +813,7 @@ export const ArgosData = () => {
                   </button>
               </div>
             </div>
-          </Draggable>
+          </DraggableComponent>
         </div>
       )}
     </div>
