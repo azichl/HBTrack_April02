@@ -125,10 +125,16 @@ export const Dashboard = () => {
     return acc;
   }, {} as Record<string, number>);
   
-  const CHART_COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'];
-  const transmitterStatusData = Object.entries(allStatuses).map(([name, value], i) => ({
-    name, value, color: CHART_COLORS[i % CHART_COLORS.length]
-  }));
+  const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1', '#a855f7', '#d946ef'];
+  const transmitterStatusData = Object.entries(allStatuses).map(([name, value], i) => {
+    let color = CHART_COLORS[i % CHART_COLORS.length];
+    if (name.toLowerCase() === 'active') color = '#10b981'; // Green
+    else if (name.toLowerCase() === 'static test') color = '#eab308'; // Yellow
+    else if (name.toLowerCase() === 'potential mortality') color = '#f97316'; // Orange
+    else if (name.toLowerCase() === 'inactive') color = '#ef4444'; // Red
+    
+    return { name, value, color };
+  });
   
   // Keep original statusData for the side panel Network Status pie chart
   const statusData = [
@@ -161,28 +167,31 @@ export const Dashboard = () => {
       {/* Top Level KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
         
-        <div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col justify-between">
-          <div className="relative z-10 flex justify-between items-start">
-            <div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 mb-1 flex items-center gap-2"><Radio size={16}/> Transmitters Status</p>
-              <h3 className="text-4xl font-black text-gray-900 dark:text-white mb-2">{transmitters.length}</h3>
-              <div className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 w-fit px-2 py-1 rounded">
-                <span>Total Transmitters</span>
-              </div>
-            </div>
-            <div className="h-24 w-24">
-               {transmitterStatusData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={transmitterStatusData} cx="50%" cy="50%" innerRadius={25} outerRadius={45} paddingAngle={2} dataKey="value" stroke="none">
-                      {transmitterStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip contentStyle={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'rgba(30, 41, 59, 0.95)', border: 'none', color: '#fff' }} itemStyle={{ color: '#fff' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : null}
+        <div className="bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col items-center justify-between">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
+            <Radio size={80} className="text-slate-600" />
+          </div>
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 w-full text-center mb-1 flex items-center justify-center gap-2 z-10"><Radio size={16}/> Transmitters Status</p>
+          
+          <div className="h-32 w-full z-10 my-2">
+             {transmitterStatusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={transmitterStatusData} cx="50%" cy="50%" innerRadius={35} outerRadius={60} paddingAngle={2} dataKey="value" stroke="none">
+                    {transmitterStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip contentStyle={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'rgba(30, 41, 59, 0.95)', border: 'none', color: '#fff' }} itemStyle={{ color: '#fff' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : null}
+          </div>
+
+          <div className="flex flex-col items-center justify-center z-10 mt-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 px-3 py-1.5 rounded-full">
+              <span>Total Transmitters:</span>
+              <strong className="text-gray-900 dark:text-white text-sm">{transmitters.length}</strong>
             </div>
           </div>
         </div>
