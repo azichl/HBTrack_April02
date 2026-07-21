@@ -241,9 +241,9 @@ export const Dashboard = () => {
           </div>
 
           <div className="flex flex-col items-center justify-center z-10 mt-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 px-3 py-1.5 rounded-full">
+            <div className="flex items-center gap-2 text-base font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 px-4 py-2 rounded-full">
               <span>Total Transmitters:</span>
-              <strong className="text-gray-900 dark:text-white text-sm">{transmitters.length}</strong>
+              <strong className="text-gray-900 dark:text-white text-xl">{transmitters.length}</strong>
             </div>
           </div>
         </div>
