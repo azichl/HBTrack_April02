@@ -33,7 +33,7 @@ const renderCustomizedLabel = (props: any) => {
         className="text-slate-700 dark:text-slate-300" 
         textAnchor={x > cx ? 'start' : 'end'} 
         dominantBaseline="central" 
-        fontSize={11} 
+        fontSize={16} 
         fontWeight="600"
       >
         {name}
