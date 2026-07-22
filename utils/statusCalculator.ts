@@ -35,8 +35,8 @@ function calculateMedianCenter(positions: any[]): { lat: number, lon: number } {
 }
 
 /**
- * Pure statistical decision algorithm based on R script parameters:
- * PercPos, Mov50, Mov95, dmax, CopyPasteRate (identical fix ratio), Nday (cluster duration)
+ * Transmitter Status Evaluation
+ * Incorporates 3-day mortality threshold + diurnal incubation & foraging schedule analysis.
  */
 export function evaluateTransmitterStatus(
   transmitter: Transmitter, 
@@ -54,11 +54,10 @@ export function evaluateTransmitterStatus(
     return { status: 'Inactive', isNesting: false };
   }
 
-  // Filter: only use GPS fixes with valid coordinates for spatial analysis
+  // Filter: only use GPS quality fixes for spatial analysis
   const qualityPositions = positions.filter(p => {
     const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
     const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-    // Ignore (0,0) or missing coordinates
     if (isNaN(pLat) || isNaN(pLon) || (Math.abs(pLat) <= 1 && Math.abs(pLon) <= 1)) {
         return false;
     }
@@ -69,12 +68,10 @@ export function evaluateTransmitterStatus(
     const lc = String(p.lc || '').toUpperCase().trim();
     if (lc === 'GPS' || lc === 'G') return true;
 
-    // Doppler fixes are excluded from spatial cluster analysis because their inherent 
-    // error (often 250m - 1500m) mathematically skews exact spatial clustering.
     return false;
   });
 
-  // Use valid positions for timestamp checks (to detect inactivity)
+  // Valid positions for timestamp check
   const validPositions = positions.filter(p => {
     const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
     const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
@@ -83,7 +80,6 @@ export function evaluateTransmitterStatus(
 
   const allSorted = [...validPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   
-  // If no valid positions exist at all, it's inactive
   if (allSorted.length === 0) {
     return { status: 'Inactive', isNesting: false };
   }
@@ -98,15 +94,13 @@ export function evaluateTransmitterStatus(
     return { status: 'Inactive', isNesting: false };
   }
 
-  // If no quality positions exist, default to Active (we have data but it's all Doppler)
   if (qualityPositions.length === 0) {
     return { status: 'Active', isNesting: false };
   }
 
-  // Sort quality positions by timestamp for spatial analysis
   const sorted = [...qualityPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-  // 2. Check Static Test (70% of ALL quality points < 20m from global barycenter)
+  // 2. Global Static Test Check (>70% of points < 20m from global center)
   let sumLat = 0, sumLon = 0;
   sorted.forEach(p => {
     sumLat += p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
@@ -130,84 +124,87 @@ export function evaluateTransmitterStatus(
     return { status: 'Static test', isNesting: false };
   }
 
-  // 3. DBSCAN-inspired spatial cluster evaluation around latest active location
-  const latestFix = sorted[sorted.length - 1];
-  const latestFixLat = latestFix.lat !== undefined ? parseFloat(latestFix.lat) : parseFloat(latestFix.latitude);
-  const latestFixLon = latestFix.lon !== undefined ? parseFloat(latestFix.lon) : parseFloat(latestFix.longitude);
+  // 3. 3-Day Minimum Threshold + Diurnal Incubation/Foraging Schedule Evaluation
+  const latestGpsTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
+  const windowStart = latestGpsTime - (10 * 24 * 60 * 60 * 1000); // 10-day lookback window
+  const recentPositions = sorted.filter(p => new Date(p.timestamp).getTime() >= windowStart);
 
-  // Cluster points near latest fix (500m radius around recent location)
-  const clusterPoints = sorted.filter(p => {
-    const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
-    const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-    return calculateHaversineDistance(latestFixLat, latestFixLon, pLat, pLon) <= 500;
-  });
+  if (recentPositions.length >= 3) {
+    const firstRecentTime = new Date(recentPositions[0].timestamp).getTime();
+    const durationDays = (latestGpsTime - firstRecentTime) / (1000 * 60 * 60 * 24);
 
-  if (clusterPoints.length >= 3) {
-    const clusterSorted = [...clusterPoints].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    const startT = new Date(clusterSorted[0].timestamp).getTime();
-    const endT = new Date(clusterSorted[clusterSorted.length - 1].timestamp).getTime();
-    const nDay = (endT - startT) / (1000 * 60 * 60 * 24);
+    // Rule: Detect Mortality after 3 full days of stationary data
+    if (durationDays >= 3.0) {
+      const robustCenter = calculateMedianCenter(recentPositions);
 
-    const robustCenter = calculateMedianCenter(clusterPoints);
+      const distances = recentPositions.map(p => {
+        const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+        const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+        return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
+      }).sort((a, b) => a - b);
 
-    // Positions across the full time window of this cluster (startT to endT)
-    const windowPositions = sorted.filter(p => {
-      const t = new Date(p.timestamp).getTime();
-      return t >= startT && t <= endT;
-    });
+      const mov50 = distances[Math.floor(distances.length * 0.50)];
+      const mov95 = distances[Math.floor(distances.length * 0.95)];
 
-    const percPos = windowPositions.length > 0 ? clusterPoints.length / windowPositions.length : 1.0;
+      let inside30m = 0;
+      distances.forEach(d => { if (d <= 30) inside30m++; });
+      const percPos = inside30m / distances.length;
 
-    const distances = windowPositions.map(p => {
-      const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
-      const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-      return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
-    }).sort((a, b) => a - b);
-
-    const mov50 = distances[Math.floor(distances.length * 0.50)];
-    const mov95 = distances[Math.floor(distances.length * 0.95)];
-
-    // Copy/paste rate: consecutive points within 1m
-    let copyPasteCount = 0;
-    for (let i = 1; i < windowPositions.length; i++) {
-      const p1Lat = windowPositions[i-1].lat !== undefined ? parseFloat(windowPositions[i-1].lat) : parseFloat(windowPositions[i-1].latitude);
-      const p1Lon = windowPositions[i-1].lon !== undefined ? parseFloat(windowPositions[i-1].lon) : parseFloat(windowPositions[i-1].longitude);
-      const p2Lat = windowPositions[i].lat !== undefined ? parseFloat(windowPositions[i].lat) : parseFloat(windowPositions[i].latitude);
-      const p2Lon = windowPositions[i].lon !== undefined ? parseFloat(windowPositions[i].lon) : parseFloat(windowPositions[i].longitude);
-      if (calculateHaversineDistance(p1Lat, p1Lon, p2Lat, p2Lon) < 1) {
-        copyPasteCount++;
+      // Copy/paste rate: consecutive points < 1m
+      let copyPasteCount = 0;
+      for (let i = 1; i < recentPositions.length; i++) {
+        const p1Lat = recentPositions[i-1].lat !== undefined ? parseFloat(recentPositions[i-1].lat) : parseFloat(recentPositions[i-1].latitude);
+        const p1Lon = recentPositions[i-1].lon !== undefined ? parseFloat(recentPositions[i-1].lon) : parseFloat(recentPositions[i-1].longitude);
+        const p2Lat = recentPositions[i].lat !== undefined ? parseFloat(recentPositions[i].lat) : parseFloat(recentPositions[i].latitude);
+        const p2Lon = recentPositions[i].lon !== undefined ? parseFloat(recentPositions[i].lon) : parseFloat(recentPositions[i].longitude);
+        if (calculateHaversineDistance(p1Lat, p1Lon, p2Lat, p2Lon) < 1) {
+          copyPasteCount++;
+        }
       }
-    }
-    const copyPasteRate = windowPositions.length > 1 ? copyPasteCount / (windowPositions.length - 1) : 0;
+      const copyPasteRate = recentPositions.length > 1 ? copyPasteCount / (recentPositions.length - 1) : 0;
 
-    // ── R SCRIPT STATISTICAL / BIOLOGICAL RULES ──
-    if (mov50 <= 30) {
-      // Indicator 1: Cluster duration > 25 days -> DEATH
-      // Incubating eggs takes max 21-25 days. Continuous cluster > 25 days is biologically impossible for a nest.
-      if (nDay >= 25 && percPos >= 0.70) {
-        return { status: 'Potential Mortality', isNesting: false };
-      }
+      // ── DIURNAL FORAGING vs INCUBATION SCHEDULE ──
+      // Estimate local timezone offset from longitude (lon / 15)
+      const localOffsetHours = Math.round(robustCenter.lon / 15);
+      let foragingFixesCount = 0;
+      let foragingFlightsCount = 0; // fixes > 350m away during foraging hours
 
-      // Indicator 2: High attendance rate (PercPos >= 85%) -> DEATH
-      // A dead bird never leaves the cluster. Nesting females leave daily to forage.
-      if (percPos >= 0.85) {
-        return { status: 'Potential Mortality', isNesting: false };
-      }
+      recentPositions.forEach(p => {
+        const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+        const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+        const dist = calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
 
-      // Indicator 3: High repetition of exact coordinates (CopyPasteRate >= 25% or Mov50 < 1m) -> DEATH
-      // Stationary transmitter on the ground repeating exact coordinate strings.
-      if (copyPasteRate >= 0.25 || mov50 < 1.0) {
-        return { status: 'Potential Mortality', isNesting: false };
-      }
+        const utcDate = new Date(p.timestamp);
+        const localHour = (utcDate.getUTCHours() + localOffsetHours + 24) % 24;
 
-      // Indicator 4: Nesting signature
-      // Duration 3-25 days, attendance 50-85%, foraging range Mov95 100-2000m.
-      if (nDay >= 3 && nDay < 25 && percPos >= 0.50 && mov95 >= 100 && mov95 <= 2000) {
-        return { status: 'Active', isNesting: true };
-      }
+        // User Defined Schedule:
+        // Foraging Hours: 05:00-10:00 (morning) or 17:00-20:00 (evening before sunset)
+        // Incubation Hours: 10:00-16:00 (midday) or 20:00-04:00 (night)
+        const isForagingHour = (localHour >= 5 && localHour < 10) || (localHour >= 17 && localHour < 20);
 
-      // Indicator 5: Any other tight cluster with duration >= 3 days -> Potential Mortality
-      if (nDay >= 3) {
+        if (isForagingHour) {
+          foragingFixesCount++;
+          if (dist > 350) {
+            foragingFlightsCount++;
+          }
+        }
+      });
+
+      // True Nesting requires active foraging flights (>350m) during 5-10 AM or 5-8 PM
+      const hasForagingFlights = foragingFixesCount > 0 && (foragingFlightsCount / foragingFixesCount) >= 0.20;
+
+      if (mov50 <= 30) {
+        // High attendance (>=80%), tight max spread (mov95 <= 350m), or high repetition -> Potential Mortality
+        if (percPos >= 0.80 || mov95 <= 350 || copyPasteRate >= 0.25) {
+          return { status: 'Potential Mortality', isNesting: false };
+        }
+
+        // Nesting check: Nesting female incubates midday & night, but makes foraging flights (>350m) during morning/evening
+        if (hasForagingFlights && mov95 <= 2000) {
+          return { status: 'Active', isNesting: true };
+        }
+
+        // Default to Potential Mortality after 3+ days if no foraging flights occur
         return { status: 'Potential Mortality', isNesting: false };
       }
     }
