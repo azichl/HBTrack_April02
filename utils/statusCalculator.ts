@@ -19,20 +19,6 @@ function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lo
   return R * c; // Distance in meters
 }
 
-function calculateBarycenter(positions: any[]): { lat: number, lon: number } {
-  if (positions.length === 0) return { lat: 0, lon: 0 };
-  let sumLat = 0;
-  let sumLon = 0;
-  positions.forEach(p => {
-    sumLat += p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
-    sumLon += p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-  });
-  return {
-    lat: sumLat / positions.length,
-    lon: sumLon / positions.length
-  };
-}
-
 function calculateMedianCenter(positions: any[]): { lat: number, lon: number } {
   if (positions.length === 0) return { lat: 0, lon: 0 };
   
@@ -49,29 +35,9 @@ function calculateMedianCenter(positions: any[]): { lat: number, lon: number } {
 }
 
 /**
- * Determines if a bird is in Asia based on its GPS coordinates.
- * Asia range: roughly longitude > 50° (Central Asia, Kazakhstan, Uzbekistan, etc.)
+ * Pure statistical decision algorithm based on R script parameters:
+ * PercPos, Mov50, Mov95, dmax, CopyPasteRate (identical fix ratio), Nday (cluster duration)
  */
-function isInAsiaRegion(center: { lat: number, lon: number }): boolean {
-  return center.lon > 50;
-}
-
-/**
- * Checks if the current date falls within the reproduction season for a given region.
- * In Asia: March 1 to June 10 (approximate).
- * Outside Asia: nesting can happen year-round (no seasonal restriction applied).
- */
-function isReproductionSeason(isAsia: boolean): boolean {
-  if (!isAsia) return true; // No seasonal restriction outside Asia
-  const now = new Date();
-  const month = now.getMonth() + 1; // 1-indexed
-  const day = now.getDate();
-  // March 1 to June 10
-  if (month >= 3 && month <= 5) return true;
-  if (month === 6 && day <= 10) return true;
-  return false;
-}
-
 export function evaluateTransmitterStatus(
   transmitter: Transmitter, 
   positions: any[]
@@ -103,14 +69,12 @@ export function evaluateTransmitterStatus(
     const lc = String(p.lc || '').toUpperCase().trim();
     if (lc === 'GPS' || lc === 'G') return true;
 
-    // Doppler fixes are excluded from spatial analysis because their inherent 
-    // error (often 250m - 1500m) mathematically breaks the 20m threshold logic 
-    // required for Static Test and Potential Mortality.
+    // Doppler fixes are excluded from spatial cluster analysis because their inherent 
+    // error (often 250m - 1500m) mathematically skews exact spatial clustering.
     return false;
   });
 
   // Use valid positions for timestamp checks (to detect inactivity)
-  // Even low quality Doppler fixes count as activity, but empty (0,0) messages don't
   const validPositions = positions.filter(p => {
     const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
     const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
@@ -134,7 +98,7 @@ export function evaluateTransmitterStatus(
     return { status: 'Inactive', isNesting: false };
   }
 
-  // If no quality positions exist, default to Active (we have data but it's all low-quality Doppler)
+  // If no quality positions exist, default to Active (we have data but it's all Doppler)
   if (qualityPositions.length === 0) {
     return { status: 'Active', isNesting: false };
   }
@@ -143,96 +107,108 @@ export function evaluateTransmitterStatus(
   const sorted = [...qualityPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
   // 2. Check Static Test (70% of ALL quality points < 20m from global barycenter)
-  const globalBarycenter = calculateBarycenter(sorted);
+  let sumLat = 0, sumLon = 0;
+  sorted.forEach(p => {
+    sumLat += p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+    sumLon += p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+  });
+  const globalCenter = { lat: sumLat / sorted.length, lon: sumLon / sorted.length };
   let pointsNearGlobalBarycenter = 0;
   sorted.forEach(p => {
     const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
     const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-    const dist = calculateHaversineDistance(globalBarycenter.lat, globalBarycenter.lon, pLat, pLon);
+    const dist = calculateHaversineDistance(globalCenter.lat, globalCenter.lon, pLat, pLon);
     if (dist < 20) {
       pointsNearGlobalBarycenter++;
     }
   });
 
   if ((pointsNearGlobalBarycenter / sorted.length) >= 0.70) {
-    // If the transmitter is fitted to a bird, it cannot be a "Static test"
-    // A bird that is completely stationary is Potentially Dead.
     if (transmitter.bird_id && transmitter.bird_id.trim() !== '') {
       return { status: 'Potential Mortality', isNesting: false };
     }
     return { status: 'Static test', isNesting: false };
   }
 
-  // 3. Check Potential Mortality and Nesting (statistical approach)
-  // We look at the last 10 days of data leading up to the latest GPS fix.
-  // Use the latest GPS fix timestamp (not the latest Doppler) as the window anchor.
-  const latestGpsTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
-  const windowStart = latestGpsTime - (10 * 24 * 60 * 60 * 1000);
-  const recentPositions = sorted.filter(p => new Date(p.timestamp).getTime() >= windowStart);
+  // 3. DBSCAN-inspired spatial cluster evaluation around latest active location
+  const latestFix = sorted[sorted.length - 1];
+  const latestFixLat = latestFix.lat !== undefined ? parseFloat(latestFix.lat) : parseFloat(latestFix.latitude);
+  const latestFixLon = latestFix.lon !== undefined ? parseFloat(latestFix.lon) : parseFloat(latestFix.longitude);
 
-  if (recentPositions.length > 0) {
-    const firstRecentTime = new Date(recentPositions[0].timestamp).getTime();
-    const durationDays = (latestGpsTime - firstRecentTime) / (1000 * 60 * 60 * 24);
-    
-    // Only confidently analyze if we have data spanning at least 3 days
-    if (durationDays >= 3) {
-      // Use a robust Median Center instead of Barycenter (mean) to completely ignore GPS outliers
-      const robustCenter = calculateMedianCenter(recentPositions);
-      
-      const distances = recentPositions.map(p => {
-        const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
-        const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-        return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
-      }).sort((a, b) => a - b);
+  // Cluster points near latest fix (500m radius around recent location)
+  const clusterPoints = sorted.filter(p => {
+    const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+    const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+    return calculateHaversineDistance(latestFixLat, latestFixLon, pLat, pLon) <= 500;
+  });
 
-      if (distances.length >= 3) {
-        const mov50 = distances[Math.floor(distances.length * 0.50)];
-        const mov95 = distances[Math.floor(distances.length * 0.95)];
-        
-        let inside30m = 0;
-        for (const d of distances) {
-          if (d <= 30) inside30m++;
-        }
-        const percPos = inside30m / distances.length;
+  if (clusterPoints.length >= 3) {
+    const clusterSorted = [...clusterPoints].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const startT = new Date(clusterSorted[0].timestamp).getTime();
+    const endT = new Date(clusterSorted[clusterSorted.length - 1].timestamp).getTime();
+    const nDay = (endT - startT) / (1000 * 60 * 60 * 24);
 
-        // Determine geographic region for seasonal nesting rules
-        const inAsia = isInAsiaRegion(robustCenter);
-        const nestingSeason = isReproductionSeason(inAsia);
+    const robustCenter = calculateMedianCenter(clusterPoints);
 
-        // ── DECISION LOGIC ──
-        // A stationary bird (mov50 tight) is either dead, nesting, or a GPS-error case.
-        if (mov50 <= 25) {
-          // Case 1: Very high attendance → clearly stationary → Potential Mortality
-          if (percPos >= 0.85) {
-            return { status: 'Potential Mortality', isNesting: false };
-          }
+    // Positions across the full time window of this cluster (startT to endT)
+    const windowPositions = sorted.filter(p => {
+      const t = new Date(p.timestamp).getTime();
+      return t >= startT && t <= endT;
+    });
 
-          // Case 2: Moderate attendance (50-85%) — needs disambiguation
-          if (percPos >= 0.50) {
-            // If it's outside reproduction season in Asia, nesting is biologically impossible.
-            // Any stationary behavior outside the season is Potential Mortality.
-            if (!nestingSeason) {
-              return { status: 'Potential Mortality', isNesting: false };
-            }
+    const percPos = windowPositions.length > 0 ? clusterPoints.length / windowPositions.length : 1.0;
 
-            // Inside reproduction season: check if outliers are GPS errors or foraging
-            if (mov95 > 3000) {
-              // Outliers are massive GPS errors (> 3km), typical of a flipped dead transmitter
-              return { status: 'Potential Mortality', isNesting: false };
-            } else {
-              // Outliers are within a normal foraging range during breeding season
-              return { status: 'Active', isNesting: true };
-            }
-          }
+    const distances = windowPositions.map(p => {
+      const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+      const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+      return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
+    }).sort((a, b) => a - b);
 
-          // Case 3: Low attendance (<50%) but tight core — still suspicious
-          // If the bird has a tight median cluster but very low attendance,
-          // it's likely dead with lots of error fixes. Flag as mortality.
-          // (A living bird with <50% attendance would have mov50 >> 25m from daily movements)
-          if (!nestingSeason) {
-            return { status: 'Potential Mortality', isNesting: false };
-          }
-        }
+    const mov50 = distances[Math.floor(distances.length * 0.50)];
+    const mov95 = distances[Math.floor(distances.length * 0.95)];
+
+    // Copy/paste rate: consecutive points within 1m
+    let copyPasteCount = 0;
+    for (let i = 1; i < windowPositions.length; i++) {
+      const p1Lat = windowPositions[i-1].lat !== undefined ? parseFloat(windowPositions[i-1].lat) : parseFloat(windowPositions[i-1].latitude);
+      const p1Lon = windowPositions[i-1].lon !== undefined ? parseFloat(windowPositions[i-1].lon) : parseFloat(windowPositions[i-1].longitude);
+      const p2Lat = windowPositions[i].lat !== undefined ? parseFloat(windowPositions[i].lat) : parseFloat(windowPositions[i].latitude);
+      const p2Lon = windowPositions[i].lon !== undefined ? parseFloat(windowPositions[i].lon) : parseFloat(windowPositions[i].longitude);
+      if (calculateHaversineDistance(p1Lat, p1Lon, p2Lat, p2Lon) < 1) {
+        copyPasteCount++;
+      }
+    }
+    const copyPasteRate = windowPositions.length > 1 ? copyPasteCount / (windowPositions.length - 1) : 0;
+
+    // ── R SCRIPT STATISTICAL / BIOLOGICAL RULES ──
+    if (mov50 <= 30) {
+      // Indicator 1: Cluster duration > 25 days -> DEATH
+      // Incubating eggs takes max 21-25 days. Continuous cluster > 25 days is biologically impossible for a nest.
+      if (nDay >= 25 && percPos >= 0.70) {
+        return { status: 'Potential Mortality', isNesting: false };
+      }
+
+      // Indicator 2: High attendance rate (PercPos >= 85%) -> DEATH
+      // A dead bird never leaves the cluster. Nesting females leave daily to forage.
+      if (percPos >= 0.85) {
+        return { status: 'Potential Mortality', isNesting: false };
+      }
+
+      // Indicator 3: High repetition of exact coordinates (CopyPasteRate >= 25% or Mov50 < 1m) -> DEATH
+      // Stationary transmitter on the ground repeating exact coordinate strings.
+      if (copyPasteRate >= 0.25 || mov50 < 1.0) {
+        return { status: 'Potential Mortality', isNesting: false };
+      }
+
+      // Indicator 4: Nesting signature
+      // Duration 3-25 days, attendance 50-85%, foraging range Mov95 100-2000m.
+      if (nDay >= 3 && nDay < 25 && percPos >= 0.50 && mov95 >= 100 && mov95 <= 2000) {
+        return { status: 'Active', isNesting: true };
+      }
+
+      // Indicator 5: Any other tight cluster with duration >= 3 days -> Potential Mortality
+      if (nDay >= 3) {
+        return { status: 'Potential Mortality', isNesting: false };
       }
     }
   }
