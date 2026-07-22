@@ -834,47 +834,9 @@ export const useAppStore = create<AppState>()(
 
           console.log(`[AppStore] Firestore init complete: ${mergedTransmitters.length} transmitters, ${mergedBirds.length} birds, ${recentPositions.length} positions, role: ${role}`);
 
-          // ── Background: Quick check for inactivity ──────
-          // Instead of fetching all positions for all transmitters on every refresh (which causes massive reads),
-          // we only check if the last_fix is older than 10 days to mark them as Inactive.
-          // Full spatial evaluation (Potential Mortality) is done during data ingestion.
-          fireAndForget(async () => {
-            try {
-              const currentTransmitters = [...get().transmitters];
-              let updated = 0;
-              const now = new Date().getTime();
-
-              for (const t of currentTransmitters) {
-                try {
-                  const isDeployed = t.bird_id && t.bird_id.trim() !== '';
-                  if (!isDeployed) continue;
-
-                  if (t.last_fix) {
-                    const daysSinceLastFix = (now - new Date(t.last_fix).getTime()) / (1000 * 60 * 60 * 24);
-                    if (daysSinceLastFix > 10 && t.derived_status !== 'Inactive') {
-                      await saveDocument('transmitters', t.id, { derived_status: 'Inactive' });
-                      updated++;
-                    }
-                  } else if (t.derived_status !== 'Inactive') {
-                    // No fix at all means inactive
-                    await saveDocument('transmitters', t.id, { derived_status: 'Inactive' });
-                    updated++;
-                  }
-                } catch (err) {
-                  console.warn(`[AppStore] Failed to evaluate inactivity for ${t.platform_id}:`, err);
-                }
-              }
-
-              if (updated > 0) {
-                // Re-load transmitters to pick up the new derived_status values
-                const freshTransmitters = await loadCollection<Transmitter>('transmitters');
-                set({ transmitters: freshTransmitters });
-                console.log(`[AppStore] Background: Updated derived_status to Inactive for ${updated} transmitters.`);
-              }
-            } catch (err) {
-              console.error('[AppStore] Background inactivity check error:', err);
-            }
-          });
+          // Note: Automatic background status evaluation has been completely removed to prevent
+          // Firebase read spikes and unexpected live map changes on app load.
+          // Status updates are strictly manual via the "Recalculate Statuses" button in the Transmitters table.
 
         } catch (error) {
           console.error('[AppStore] Firestore init error:', error);
