@@ -160,7 +160,7 @@ export function evaluateTransmitterStatus(
           return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
         }).sort((a, b) => a - b);
 
-        if (distances.length > 5) { // Ensure we have enough statistical points
+        if (distances.length >= 3) { // Lowered to 3 to catch failing transmitters
           const mov50 = distances[Math.floor(distances.length * 0.50)];
           const mov95 = distances[Math.floor(distances.length * 0.95)];
           
@@ -170,18 +170,21 @@ export function evaluateTransmitterStatus(
           }
           const percPos = inside30m / distances.length;
 
-          // A dead bird should have a very tight cluster core and high attendance.
-          // We completely ignore Mov95 here because a dead bird flipped on its back 
-          // can generate highly inaccurate error fixes, inflating the 95th percentile.
-          // If 85% of all fixes are within 30m of the median, it is almost certainly dead.
-          if (mov50 <= 15 && percPos >= 0.85) {
-            return { status: 'Potential Mortality', isNesting: false };
-          }
-
-          // A nesting bird has a tight core (Mov50 low) but leaves occasionally to forage.
-          // Attendance is lower (50% to 85%), and Mov95 reflects foraging flights (up to 3km).
-          if (mov95 <= 3000 && mov50 <= 25 && percPos >= 0.50 && percPos < 0.85) {
-            return { status: 'Active', isNesting: true };
+          // If the median distance is very tight, it's either dead or nesting
+          if (mov50 <= 25) {
+            if (percPos >= 0.85) {
+              // Very high attendance (clean data or few errors) -> Dead
+              return { status: 'Potential Mortality', isNesting: false };
+            } else if (percPos >= 0.50) {
+              // Moderate attendance (50% to 85%). Are the outliers foraging flights or GPS errors?
+              if (mov95 > 3000) {
+                 // Outliers are massive GPS errors (e.g., > 3km), typical of a flipped dead transmitter
+                 return { status: 'Potential Mortality', isNesting: false };
+              } else {
+                 // Outliers are within a normal foraging range
+                 return { status: 'Active', isNesting: true };
+              }
+            }
           }
         }
       }
