@@ -48,6 +48,30 @@ function calculateMedianCenter(positions: any[]): { lat: number, lon: number } {
   return { lat: medianLat, lon: medianLon };
 }
 
+/**
+ * Determines if a bird is in Asia based on its GPS coordinates.
+ * Asia range: roughly longitude > 50° (Central Asia, Kazakhstan, Uzbekistan, etc.)
+ */
+function isInAsiaRegion(center: { lat: number, lon: number }): boolean {
+  return center.lon > 50;
+}
+
+/**
+ * Checks if the current date falls within the reproduction season for a given region.
+ * In Asia: March 1 to June 10 (approximate).
+ * Outside Asia: nesting can happen year-round (no seasonal restriction applied).
+ */
+function isReproductionSeason(isAsia: boolean): boolean {
+  if (!isAsia) return true; // No seasonal restriction outside Asia
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-indexed
+  const day = now.getDate();
+  // March 1 to June 10
+  if (month >= 3 && month <= 5) return true;
+  if (month === 6 && day <= 10) return true;
+  return false;
+}
+
 export function evaluateTransmitterStatus(
   transmitter: Transmitter, 
   positions: any[]
@@ -64,7 +88,7 @@ export function evaluateTransmitterStatus(
     return { status: 'Inactive', isNesting: false };
   }
 
-  // Filter: only use GPS fixes or Doppler fixes with error under 500m, and valid coordinates
+  // Filter: only use GPS fixes with valid coordinates for spatial analysis
   const qualityPositions = positions.filter(p => {
     const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
     const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
@@ -140,54 +164,77 @@ export function evaluateTransmitterStatus(
   }
 
   // 3. Check Potential Mortality and Nesting (statistical approach)
-  // We look at the last 10 days of data leading up to the latest fix to gather enough points for statistical analysis.
-  // The user script uses larger temporal windows for DBSCAN clustering.
-  const windowStart = latestTime - (10 * 24 * 60 * 60 * 1000);
+  // We look at the last 10 days of data leading up to the latest GPS fix.
+  // Use the latest GPS fix timestamp (not the latest Doppler) as the window anchor.
+  const latestGpsTime = new Date(sorted[sorted.length - 1].timestamp).getTime();
+  const windowStart = latestGpsTime - (10 * 24 * 60 * 60 * 1000);
   const recentPositions = sorted.filter(p => new Date(p.timestamp).getTime() >= windowStart);
 
   if (recentPositions.length > 0) {
     const firstRecentTime = new Date(recentPositions[0].timestamp).getTime();
-    const durationDays = (latestTime - firstRecentTime) / (1000 * 60 * 60 * 24);
+    const durationDays = (latestGpsTime - firstRecentTime) / (1000 * 60 * 60 * 24);
     
-      // Only confidently analyze if we have data spanning at least 3 days
-      if (durationDays >= 3) {
-        // Use a robust Median Center instead of Barycenter (mean) to completely ignore GPS outliers
-        const robustCenter = calculateMedianCenter(recentPositions);
+    // Only confidently analyze if we have data spanning at least 3 days
+    if (durationDays >= 3) {
+      // Use a robust Median Center instead of Barycenter (mean) to completely ignore GPS outliers
+      const robustCenter = calculateMedianCenter(recentPositions);
+      
+      const distances = recentPositions.map(p => {
+        const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+        const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+        return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
+      }).sort((a, b) => a - b);
+
+      if (distances.length >= 3) {
+        const mov50 = distances[Math.floor(distances.length * 0.50)];
+        const mov95 = distances[Math.floor(distances.length * 0.95)];
         
-        const distances = recentPositions.map(p => {
-          const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
-          const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-          return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
-        }).sort((a, b) => a - b);
+        let inside30m = 0;
+        for (const d of distances) {
+          if (d <= 30) inside30m++;
+        }
+        const percPos = inside30m / distances.length;
 
-        if (distances.length >= 3) { // Lowered to 3 to catch failing transmitters
-          const mov50 = distances[Math.floor(distances.length * 0.50)];
-          const mov95 = distances[Math.floor(distances.length * 0.95)];
-          
-          let inside30m = 0;
-          for (const d of distances) {
-            if (d <= 30) inside30m++;
+        // Determine geographic region for seasonal nesting rules
+        const inAsia = isInAsiaRegion(robustCenter);
+        const nestingSeason = isReproductionSeason(inAsia);
+
+        // ── DECISION LOGIC ──
+        // A stationary bird (mov50 tight) is either dead, nesting, or a GPS-error case.
+        if (mov50 <= 25) {
+          // Case 1: Very high attendance → clearly stationary → Potential Mortality
+          if (percPos >= 0.85) {
+            return { status: 'Potential Mortality', isNesting: false };
           }
-          const percPos = inside30m / distances.length;
 
-          // If the median distance is very tight, it's either dead or nesting
-          if (mov50 <= 25) {
-            if (percPos >= 0.85) {
-              // Very high attendance (clean data or few errors) -> Dead
+          // Case 2: Moderate attendance (50-85%) — needs disambiguation
+          if (percPos >= 0.50) {
+            // If it's outside reproduction season in Asia, nesting is biologically impossible.
+            // Any stationary behavior outside the season is Potential Mortality.
+            if (!nestingSeason) {
               return { status: 'Potential Mortality', isNesting: false };
-            } else if (percPos >= 0.50) {
-              // Moderate attendance (50% to 85%). Are the outliers foraging flights or GPS errors?
-              if (mov95 > 3000) {
-                 // Outliers are massive GPS errors (e.g., > 3km), typical of a flipped dead transmitter
-                 return { status: 'Potential Mortality', isNesting: false };
-              } else {
-                 // Outliers are within a normal foraging range
-                 return { status: 'Active', isNesting: true };
-              }
             }
+
+            // Inside reproduction season: check if outliers are GPS errors or foraging
+            if (mov95 > 3000) {
+              // Outliers are massive GPS errors (> 3km), typical of a flipped dead transmitter
+              return { status: 'Potential Mortality', isNesting: false };
+            } else {
+              // Outliers are within a normal foraging range during breeding season
+              return { status: 'Active', isNesting: true };
+            }
+          }
+
+          // Case 3: Low attendance (<50%) but tight core — still suspicious
+          // If the bird has a tight median cluster but very low attendance,
+          // it's likely dead with lots of error fixes. Flag as mortality.
+          // (A living bird with <50% attendance would have mov50 >> 25m from daily movements)
+          if (!nestingSeason) {
+            return { status: 'Potential Mortality', isNesting: false };
           }
         }
       }
+    }
   }
 
   // 4. Default to Active
