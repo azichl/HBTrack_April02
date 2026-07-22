@@ -33,6 +33,21 @@ function calculateBarycenter(positions: any[]): { lat: number, lon: number } {
   };
 }
 
+function calculateMedianCenter(positions: any[]): { lat: number, lon: number } {
+  if (positions.length === 0) return { lat: 0, lon: 0 };
+  
+  const lats = positions.map(p => p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude)).sort((a,b) => a - b);
+  const lons = positions.map(p => p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude)).sort((a,b) => a - b);
+  
+  const midLat = Math.floor(lats.length / 2);
+  const medianLat = lats.length % 2 !== 0 ? lats[midLat] : (lats[midLat - 1] + lats[midLat]) / 2;
+  
+  const midLon = Math.floor(lons.length / 2);
+  const medianLon = lons.length % 2 !== 0 ? lons[midLon] : (lons[midLon - 1] + lons[midLon]) / 2;
+  
+  return { lat: medianLat, lon: medianLon };
+}
+
 export function evaluateTransmitterStatus(
   transmitter: Transmitter, 
   positions: any[]
@@ -134,38 +149,42 @@ export function evaluateTransmitterStatus(
     const firstRecentTime = new Date(recentPositions[0].timestamp).getTime();
     const durationDays = (latestTime - firstRecentTime) / (1000 * 60 * 60 * 24);
     
-    // Only confidently analyze if we have data spanning at least 3 days
-    if (durationDays >= 3) {
-      const recentBarycenter = calculateBarycenter(recentPositions);
-      
-      const distances = recentPositions.map(p => {
-        const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
-        const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-        return calculateHaversineDistance(recentBarycenter.lat, recentBarycenter.lon, pLat, pLon);
-      }).sort((a, b) => a - b);
-
-      if (distances.length > 5) { // Ensure we have enough statistical points
-        const mov50 = distances[Math.floor(distances.length * 0.50)];
-        const mov95 = distances[Math.floor(distances.length * 0.95)];
+      // Only confidently analyze if we have data spanning at least 3 days
+      if (durationDays >= 3) {
+        // Use a robust Median Center instead of Barycenter (mean) to completely ignore GPS outliers
+        const robustCenter = calculateMedianCenter(recentPositions);
         
-        let inside30m = 0;
-        for (const d of distances) {
-          if (d <= 30) inside30m++;
-        }
-        const percPos = inside30m / distances.length;
+        const distances = recentPositions.map(p => {
+          const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
+          const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
+          return calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
+        }).sort((a, b) => a - b);
 
-        // A dead bird should have a very tight cluster, allowing up to 15% outliers or error fixes
-        if (mov95 <= 100 && mov50 <= 15 && percPos >= 0.85) {
-          return { status: 'Potential Mortality', isNesting: false };
-        }
+        if (distances.length > 5) { // Ensure we have enough statistical points
+          const mov50 = distances[Math.floor(distances.length * 0.50)];
+          const mov95 = distances[Math.floor(distances.length * 0.95)];
+          
+          let inside30m = 0;
+          for (const d of distances) {
+            if (d <= 30) inside30m++;
+          }
+          const percPos = inside30m / distances.length;
 
-        // A nesting bird has a tight core (Mov50 low) but leaves occasionally (Mov95 higher, PercPos slightly lower)
-        // Only females nest, but since sex isn't strictly guaranteed here, we flag behaviorally
-        if (mov95 > 100 && mov95 <= 3000 && mov50 <= 25 && percPos >= 0.50 && percPos < 0.85) {
-          return { status: 'Active', isNesting: true };
+          // A dead bird should have a very tight cluster core and high attendance.
+          // We completely ignore Mov95 here because a dead bird flipped on its back 
+          // can generate highly inaccurate error fixes, inflating the 95th percentile.
+          // If 85% of all fixes are within 30m of the median, it is almost certainly dead.
+          if (mov50 <= 15 && percPos >= 0.85) {
+            return { status: 'Potential Mortality', isNesting: false };
+          }
+
+          // A nesting bird has a tight core (Mov50 low) but leaves occasionally to forage.
+          // Attendance is lower (50% to 85%), and Mov95 reflects foraging flights (up to 3km).
+          if (mov95 <= 3000 && mov50 <= 25 && percPos >= 0.50 && percPos < 0.85) {
+            return { status: 'Active', isNesting: true };
+          }
         }
       }
-    }
   }
 
   // 4. Default to Active
