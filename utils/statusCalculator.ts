@@ -33,17 +33,20 @@ function calculateBarycenter(positions: any[]): { lat: number, lon: number } {
   };
 }
 
-export function evaluateTransmitterStatus(transmitter: Transmitter, positions: any[]): 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' {
+export function evaluateTransmitterStatus(
+  transmitter: Transmitter, 
+  positions: any[]
+): { status: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test', isNesting: boolean } {
   const isDeployed = transmitter.bird_id && transmitter.bird_id.trim() !== '';
 
   // Active, Inactive, and Potential Mortality are reserved for deployed transmitters.
   // Any transmitter not linked to a bird is categorized as a "Static test".
   if (!isDeployed) {
-    return 'Static test';
+    return { status: 'Static test', isNesting: false };
   }
 
   if (!positions || positions.length === 0) {
-    return 'Inactive';
+    return { status: 'Inactive', isNesting: false };
   }
 
   // Filter: only use GPS fixes or Doppler fixes with error under 500m, and valid coordinates
@@ -79,7 +82,7 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
   
   // If no valid positions exist at all, it's inactive
   if (allSorted.length === 0) {
-    return 'Inactive';
+    return { status: 'Inactive', isNesting: false };
   }
 
   const latestPos = allSorted[allSorted.length - 1];
@@ -89,12 +92,12 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
   // 1. Check Inactive (> 10 days since last transmission)
   const daysSinceLastFix = (now - latestTime) / (1000 * 60 * 60 * 24);
   if (daysSinceLastFix > 10) {
-    return 'Inactive';
+    return { status: 'Inactive', isNesting: false };
   }
 
   // If no quality positions exist, default to Active (we have data but it's all low-quality Doppler)
   if (qualityPositions.length === 0) {
-    return 'Active';
+    return { status: 'Active', isNesting: false };
   }
 
   // Sort quality positions by timestamp for spatial analysis
@@ -116,41 +119,55 @@ export function evaluateTransmitterStatus(transmitter: Transmitter, positions: a
     // If the transmitter is fitted to a bird, it cannot be a "Static test"
     // A bird that is completely stationary is Potentially Dead.
     if (transmitter.bird_id && transmitter.bird_id.trim() !== '') {
-      return 'Potential Mortality';
+      return { status: 'Potential Mortality', isNesting: false };
     }
-    return 'Static test';
+    return { status: 'Static test', isNesting: false };
   }
 
-  // 3. Check Potential Mortality (fixes over the last 4 days are all < 20m from their barycenter)
-  // We look at the last 4 days of data leading up to the latest fix.
-  const fourDaysAgo = latestTime - (4 * 24 * 60 * 60 * 1000);
-  const recentPositions = sorted.filter(p => new Date(p.timestamp).getTime() >= fourDaysAgo);
+  // 3. Check Potential Mortality and Nesting (statistical approach)
+  // We look at the last 10 days of data leading up to the latest fix to gather enough points for statistical analysis.
+  // The user script uses larger temporal windows for DBSCAN clustering.
+  const windowStart = latestTime - (10 * 24 * 60 * 60 * 1000);
+  const recentPositions = sorted.filter(p => new Date(p.timestamp).getTime() >= windowStart);
 
   if (recentPositions.length > 0) {
     const firstRecentTime = new Date(recentPositions[0].timestamp).getTime();
     const durationDays = (latestTime - firstRecentTime) / (1000 * 60 * 60 * 24);
     
-    // Only confidently call it mortality if we have data spanning at least 3 days in this 4-day window
-    // Otherwise a bird could have just rested for 12 hours and we call it dead.
+    // Only confidently analyze if we have data spanning at least 3 days
     if (durationDays >= 3) {
       const recentBarycenter = calculateBarycenter(recentPositions);
-      let allStationary = true;
-      for (const p of recentPositions) {
+      
+      const distances = recentPositions.map(p => {
         const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
         const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-        const dist = calculateHaversineDistance(recentBarycenter.lat, recentBarycenter.lon, pLat, pLon);
-        if (dist >= 20) {
-          allStationary = false;
-          break;
-        }
-      }
+        return calculateHaversineDistance(recentBarycenter.lat, recentBarycenter.lon, pLat, pLon);
+      }).sort((a, b) => a - b);
 
-      if (allStationary) {
-        return 'Potential Mortality';
+      if (distances.length > 5) { // Ensure we have enough statistical points
+        const mov50 = distances[Math.floor(distances.length * 0.50)];
+        const mov95 = distances[Math.floor(distances.length * 0.95)];
+        
+        let inside30m = 0;
+        for (const d of distances) {
+          if (d <= 30) inside30m++;
+        }
+        const percPos = inside30m / distances.length;
+
+        // A dead bird should have a very tight cluster, allowing up to 15% outliers or error fixes
+        if (mov95 <= 100 && mov50 <= 15 && percPos >= 0.85) {
+          return { status: 'Potential Mortality', isNesting: false };
+        }
+
+        // A nesting bird has a tight core (Mov50 low) but leaves occasionally (Mov95 higher, PercPos slightly lower)
+        // Only females nest, but since sex isn't strictly guaranteed here, we flag behaviorally
+        if (mov95 > 100 && mov95 <= 3000 && mov50 <= 25 && percPos >= 0.50 && percPos < 0.85) {
+          return { status: 'Active', isNesting: true };
+        }
       }
     }
   }
 
   // 4. Default to Active
-  return 'Active';
+  return { status: 'Active', isNesting: false };
 }

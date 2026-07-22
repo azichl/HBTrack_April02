@@ -661,7 +661,7 @@ export const useAppStore = create<AppState>()(
                           const q = query(collection(db, 'argos_positions'), where('platformId', '==', t.platform_id));
                           const snapshot = await getDocs(q);
                           const allPositions = snapshot.docs.map(doc => doc.data());
-                          const derived = evaluateTransmitterStatus(t, allPositions);
+                          const { status: derived, isNesting } = evaluateTransmitterStatus(t, allPositions);
                           
                           if (t.derived_status !== derived) {
                               if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
@@ -681,6 +681,20 @@ export const useAppStore = create<AppState>()(
                               statusUpdated = true;
                               // Also update in DB
                               await saveDocument('transmitters', t.id, { derived_status: derived });
+                          }
+
+                          if (isNesting) {
+                              const bird = get().birds.find(b => b.id === t.bird_id);
+                              addAlert({
+                                  id: `nesting-alert-${t.platform_id}-${Date.now()}`,
+                                  type: 'nesting',
+                                  severity: 'info',
+                                  transmitter_id: t.platform_id,
+                                  bird_name: bird?.ring_id || 'Unknown',
+                                  message: `Nesting Behavior Detected for bird ${bird?.ring_id || t.platform_id}`,
+                                  timestamp: new Date().toISOString(),
+                                  status: 'active'
+                              });
                           }
                       } catch (err) {
                           console.error(`Error evaluating status for ${t.platform_id}:`, err);
@@ -883,11 +897,25 @@ export const useAppStore = create<AppState>()(
               const snapshotPos = await getDocs(qPos);
               const allPositions = snapshotPos.docs.map(d => d.data());
 
-              const newStatus = evaluateTransmitterStatus(t, allPositions);
+              const { status: newStatus, isNesting } = evaluateTransmitterStatus(t, allPositions);
 
               if (t.derived_status !== newStatus) {
                 await saveDocument('transmitters', t.id, { derived_status: newStatus });
                 updated++;
+              }
+
+              if (isNesting) {
+                 const bird = get().birds.find(b => b.id === t.bird_id);
+                 get().addAlert({
+                     id: `nesting-alert-${t.platform_id}-${Date.now()}`,
+                     type: 'nesting',
+                     severity: 'info',
+                     transmitter_id: t.platform_id,
+                     bird_name: bird?.ring_id || 'Unknown',
+                     message: `Nesting Behavior Detected for bird ${bird?.ring_id || t.platform_id}`,
+                     timestamp: new Date().toISOString(),
+                     status: 'active'
+                 });
               }
             } catch (err) {
               console.warn(`[AppStore] Failed to evaluate status for ${t.platform_id}:`, err);

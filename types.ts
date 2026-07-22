@@ -62,7 +62,7 @@ export interface Position {
 
 export interface Alert {
   id: string;
-  type: 'geofence' | 'border' | 'distance' | 'battery_low' | 'no_fix' | 'speed_anomaly' | 'temp_anomaly' | 'ticket_created';
+  type: 'geofence' | 'border' | 'distance' | 'battery_low' | 'no_fix' | 'speed_anomaly' | 'temp_anomaly' | 'ticket_created' | 'nesting';
   severity: 'critical' | 'warning' | 'info';
   transmitter_id?: string;
   bird_name?: string;

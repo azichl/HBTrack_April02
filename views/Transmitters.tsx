@@ -159,7 +159,7 @@ export const Transmitters = () => {
                     const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
                     const snap = await getDocs(qPos);
                     const positions = snap.docs.map(d => d.data());
-                    const status = evaluateTransmitterStatus(t, positions);
+                    const { status, isNesting } = evaluateTransmitterStatus(t, positions);
                     
                     if (t.derived_status !== status) {
                       numUpdated++;
