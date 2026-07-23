@@ -263,13 +263,32 @@ export const Dashboard = () => {
       {/* Top Level KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6">
         
-        <div className="col-span-1 md:col-span-2 xl:col-span-2 bg-gradient-to-br from-slate-50 to-white dark:from-slate-800 dark:to-slate-800 p-4 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm relative overflow-hidden group flex flex-col items-center justify-between">
-          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
-            <Radio size={80} className="text-slate-600" />
+        {/* Transmitters Network Status Card */}
+        <div className="col-span-1 md:col-span-2 xl:col-span-2 bg-gradient-to-br from-slate-50 via-white to-slate-50/50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 p-6 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-md relative overflow-hidden group flex flex-col justify-between">
+          <div className="absolute -top-4 -right-4 p-6 opacity-5 group-hover:opacity-15 transition-opacity pointer-events-none">
+            <Radio size={140} className="text-brand-600 dark:text-brand-400" />
           </div>
-          <p className="text-sm font-semibold text-slate-700 dark:text-slate-400 w-full text-center mb-1 flex items-center justify-center gap-2 z-10"><Radio size={16}/> Transmitters Status</p>
+
+          {/* Card Header */}
+          <div className="flex items-center justify-between w-full z-10 mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-brand-50 dark:bg-brand-900/30 rounded-xl border border-brand-100 dark:border-brand-800/50">
+                <Radio size={20} className="text-brand-600 dark:text-brand-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">Transmitters Status Breakdown</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Real-time health & operational status of deployed PTTs</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700/80 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-600">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total:</span>
+              <strong className="text-slate-900 dark:text-white font-bold text-sm">{transmitters.length}</strong>
+            </div>
+          </div>
           
-          <div className="h-56 w-full z-10 my-2">
+          {/* Main Donut Chart Container */}
+          <div className="h-[280px] w-full z-10 my-1 relative flex items-center justify-center">
              {transmitterStatusData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -277,29 +296,50 @@ export const Dashboard = () => {
                     data={transmitterStatusData} 
                     cx="50%" 
                     cy="50%" 
-                    innerRadius={45} 
-                    outerRadius={80} 
-                    paddingAngle={2} 
+                    innerRadius={65} 
+                    outerRadius={110} 
+                    paddingAngle={3} 
                     dataKey="value" 
-                    stroke="none"
-                    labelLine={{ stroke: '#9ca3af', strokeWidth: 1 }}
+                    stroke="#ffffff"
+                    strokeWidth={2}
+                    labelLine={{ stroke: '#9ca3af', strokeWidth: 1.5 }}
                     label={renderCustomizedLabel}
+                    animationDuration={1200}
                   >
                     {transmitterStatusData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <RechartsTooltip contentStyle={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'rgba(30, 41, 59, 0.95)', border: 'none', color: '#fff' }} itemStyle={{ color: '#fff' }} />
+                  {/* Center Donut Label */}
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-900 dark:fill-white font-black text-2xl">
+                    {transmitters.length}
+                  </text>
+                  <text x="50%" y="57%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-400 dark:fill-gray-500 font-bold text-[10px] uppercase tracking-wider">
+                    Units
+                  </text>
+                  <RechartsTooltip 
+                    contentStyle={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid #334155', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }} 
+                    itemStyle={{ color: '#fff', fontWeight: 600 }} 
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : null}
           </div>
 
-          <div className="flex flex-col items-center justify-center z-10 mt-1">
-            <div className="flex items-center gap-2 text-base font-medium text-slate-600 dark:text-slate-400 bg-slate-100/50 dark:bg-slate-700 px-4 py-2 rounded-full">
-              <span>Total Transmitters:</span>
-              <strong className="text-gray-900 dark:text-white text-xl">{transmitters.length}</strong>
-            </div>
+          {/* Status Breakdown Pills */}
+          <div className="z-10 mt-2 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-center flex-wrap gap-2.5">
+            {transmitterStatusData.map((st) => (
+              <div 
+                key={st.name} 
+                className="flex items-center gap-2 bg-white dark:bg-slate-750 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all"
+              >
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.color }} />
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{st.name}:</span>
+                <span className="text-xs font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white">
+                  {st.value}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
