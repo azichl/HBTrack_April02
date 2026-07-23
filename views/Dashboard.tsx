@@ -326,16 +326,18 @@ export const Dashboard = () => {
             ) : null}
           </div>
 
-          {/* Status Breakdown Pills */}
-          <div className="z-10 mt-2 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-center flex-wrap gap-2.5">
+          {/* Status Breakdown Pills - Adaptable Full-Width Grid */}
+          <div className="z-10 mt-2 pt-3 border-t border-slate-100 dark:border-slate-700/60 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 w-full">
             {transmitterStatusData.map((st) => (
               <div 
                 key={st.name} 
-                className="flex items-center gap-2 bg-white dark:bg-slate-750 px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all"
+                className="flex items-center justify-between gap-1.5 bg-white dark:bg-slate-750 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs hover:shadow-xs transition-all w-full min-w-0"
               >
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.color }} />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{st.name}:</span>
-                <span className="text-xs font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white">
+                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.color }} />
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{st.name}:</span>
+                </div>
+                <span className="text-xs font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white flex-shrink-0">
                   {st.value}
                 </span>
               </div>
