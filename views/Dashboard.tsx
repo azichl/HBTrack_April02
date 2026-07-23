@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { KPICard } from '../components/KPICard';
-import { Radio, AlertTriangle, Battery, Navigation, Activity, Satellite, Clock, ShieldAlert, Zap } from 'lucide-react';
+import { Radio, AlertTriangle, Battery, Navigation, Activity, Satellite, Clock, ShieldAlert, Zap, Maximize, Minimize } from 'lucide-react';
 import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
 import { 
@@ -55,6 +55,41 @@ const renderCustomizedLabel = (props: any) => {
 
 export const Dashboard = () => {
   const { transmitters, birds, alerts, positions, timeZone, setActiveTab } = useAppStore();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFSChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFSChange);
+    document.addEventListener('webkitfullscreenchange', handleFSChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFSChange);
+      document.removeEventListener('webkitfullscreenchange', handleFSChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current || document.documentElement;
+    if (isFullscreen) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitFullscreenElement) {
+        (document as any).webkitExitFullscreen();
+      }
+      setIsFullscreen(false);
+    } else {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => setIsFullscreen(true));
+      } else if ((el as any).webkitRequestFullscreen) {
+        (el as any).webkitRequestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        setIsFullscreen(true);
+      }
+    }
+  };
 
   // 1. Generate chart data from real positions for the last 7 days (Volume - Area Chart)
   const chartData = useMemo(() => {
@@ -193,15 +228,35 @@ export const Dashboard = () => {
   }, [transmitters]);
 
   return (
-    <div className="space-y-6 animate-fade-in pb-8">
-      <div className="flex justify-between items-center">
+    <div 
+      ref={containerRef}
+      className={`space-y-6 animate-fade-in pb-8 transition-all duration-300 ${
+        isFullscreen ? 'p-6 bg-slate-50 dark:bg-slate-900 overflow-y-auto h-screen w-screen fixed top-0 left-0 z-50' : ''
+      }`}
+    >
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Global Command Center</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">Asian Houbara Satellite Tracking Dashboard</p>
         </div>
-        <div className="text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-slate-800 py-2 px-4 rounded-full border border-gray-200 dark:border-slate-700 shadow-md flex items-center gap-2">
-          <Activity size={16} className="text-brand-600 animate-pulse" />
-          Last Ingest: <span className="font-semibold text-gray-900 dark:text-gray-200 tracking-wide" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{lastIngestDate}</span>
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-slate-800 py-2 px-4 rounded-full border border-gray-200 dark:border-slate-700 shadow-md flex items-center gap-2">
+            <Activity size={16} className="text-brand-600 animate-pulse" />
+            Last Ingest: <span className="font-semibold text-gray-900 dark:text-gray-200 tracking-wide" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{lastIngestDate}</span>
+          </div>
+
+          <button
+            onClick={toggleFullscreen}
+            className={`py-2 px-4.5 rounded-full border border-gray-200 dark:border-slate-700 shadow-md flex items-center gap-2 text-xs font-bold transition-all ${
+              isFullscreen 
+                ? 'bg-brand-600 text-white border-brand-600 hover:bg-brand-700' 
+                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+            }`}
+            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen View"}
+          >
+            {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+            <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+          </button>
         </div>
       </div>
 
