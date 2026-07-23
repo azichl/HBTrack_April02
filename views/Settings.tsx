@@ -3,10 +3,11 @@ import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 import { 
   User, Bell, Moon, Globe, Shield, Save, RotateCcw, 
-  Mail, Smartphone, Monitor, Lock, Check, Languages, CheckCircle2, Loader2 
+  Mail, Smartphone, Monitor, Lock, Check, Languages, CheckCircle2, Loader2, Trash2
 } from 'lucide-react';
 import { getAuth, updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { saveDocument } from '../services/firestoreService';
+import { clearAllUserActivityLogs } from '../services/activityLogger';
 import { CustomSelect } from '../components/CustomSelect';
 
 export const Settings = () => {
@@ -19,7 +20,25 @@ export const Settings = () => {
 
   const [activeTab, setActiveTab] = useState('profile');
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const handleClearLogs = async () => {
+    if (!window.confirm("Are you sure you want to clear ALL user activity logs in Firebase ('user_activity_logs')? This action cannot be undone.")) {
+      return;
+    }
+    setIsClearingLogs(true);
+    setSaveMessage(null);
+    try {
+      const count = await clearAllUserActivityLogs();
+      setSaveMessage(`Successfully cleared ${count} user activity logs from Firebase!`);
+      setTimeout(() => setSaveMessage(null), 5000);
+    } catch (err: any) {
+      setSaveMessage(`Error: ${err.message || 'Failed to clear activity logs'}`);
+    } finally {
+      setIsClearingLogs(false);
+    }
+  };
 
   const firebaseUser = getAuth().currentUser;
 
@@ -406,6 +425,23 @@ export const Settings = () => {
                       <input type="checkbox" checked={security.twoFactor} onChange={() => setSecurity({...security, twoFactor: !security.twoFactor})} className="sr-only peer" />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-brand-300 dark:peer-focus:ring-brand-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-brand-600"></div>
                     </label>
+                 </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-100 dark:border-slate-700">
+                 <div className="flex items-center justify-between">
+                    <div>
+                       <h4 className="font-bold text-gray-900 dark:text-white text-sm">User Activity Audit Logs</h4>
+                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Delete all user activity log records stored in Firebase Firestore (<code className="text-amber-600 dark:text-amber-400">user_activity_logs</code>)</p>
+                    </div>
+                    <button
+                      onClick={handleClearLogs}
+                      disabled={isClearingLogs}
+                      className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+                    >
+                      {isClearingLogs ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      <span>{isClearingLogs ? 'Clearing Logs...' : 'Clear User Activity Logs'}</span>
+                    </button>
                  </div>
               </div>
            </div>

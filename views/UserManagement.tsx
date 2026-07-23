@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Users, UserPlus, Shield, CheckCircle2, User, Key, X, Search, Mail, Filter, Database, Lock, Loader2, AlertCircle } from 'lucide-react';
+import { Users, UserPlus, Shield, CheckCircle2, User, Key, X, Search, Mail, Filter, Database, Lock, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import { User as UserType, Role } from '../types';
 import { listUsers, createUser, updateUserProfile, deleteUserAccount, AppUser } from '../services/authService';
+import { clearAllUserActivityLogs } from '../services/activityLogger';
 import { getAuth } from 'firebase/auth';
 import { CustomSelect } from '../components/CustomSelect';
 
@@ -53,8 +54,30 @@ export const UserManagement = () => {
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isClearingLogs, setIsClearingLogs] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
+
+  const handleClearActivityLogs = async () => {
+    if (!window.confirm("Are you sure you want to clear ALL user activity logs from Firebase ('user_activity_logs')? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsClearingLogs(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const deletedCount = await clearAllUserActivityLogs();
+      setSuccessMsg(`Successfully cleared ${deletedCount} user activity log records from Firebase!`);
+      setTimeout(() => setSuccessMsg(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to clear user activity logs:', err);
+      setError(err.message || 'Failed to clear activity logs from Firebase.');
+    } finally {
+      setIsClearingLogs(false);
+    }
+  };
 
   // Load users from Firebase Auth on mount
   useEffect(() => {
@@ -258,18 +281,41 @@ export const UserManagement = () => {
           </button>
         </div>
       )}
+      {/* Success Banner */}
+      {successMsg && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-sm animate-fade-in">
+          <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400" />
+          <span className="font-medium">{successMsg}</span>
+          <button onClick={() => setSuccessMsg(null)} className="ml-auto text-emerald-500 hover:text-emerald-700">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h2>
           <p className="text-gray-500 dark:text-gray-400 mt-1">Manage user accounts, roles, and granular permissions</p>
         </div>
-        <button 
-          onClick={() => handleOpenModal()}
-          className="px-6 py-2.5 bg-brand-700 text-white rounded-lg text-sm font-semibold hover:bg-brand-800 flex items-center gap-2 shadow-sm transition-colors"
-        >
-          <UserPlus size={18} /> Add User
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button 
+            onClick={handleClearActivityLogs}
+            disabled={isClearingLogs}
+            className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+            title="Clear all user activity logs in Firebase ('user_activity_logs')"
+          >
+            {isClearingLogs ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+            <span>{isClearingLogs ? 'Clearing Logs...' : 'Clear Activity Logs'}</span>
+          </button>
+
+          <button 
+            onClick={() => handleOpenModal()}
+            className="px-6 py-2.5 bg-brand-700 text-white rounded-lg text-sm font-semibold hover:bg-brand-800 flex items-center gap-2 shadow-sm transition-colors"
+          >
+            <UserPlus size={18} /> Add User
+          </button>
+        </div>
       </div>
 
       {/* Stats Cards */}

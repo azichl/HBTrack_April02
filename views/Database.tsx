@@ -7,13 +7,13 @@ import { Monitoring } from './Monitoring';
 import { ArgosData } from './ArgosData';
 import {
   Radio, Bird, UploadCloud, Monitor, FileSpreadsheet,
-  Maximize, Minimize, Trash2, AlertTriangle,
+  Maximize, Minimize, Trash2, AlertTriangle, Clock,
   ShieldAlert, CheckCircle2, Loader2, X, Database as DbIcon, Plus
 } from 'lucide-react';
 
 // ─── Danger Zone ──────────────────────────────────────────────────────────────
 
-type ClearTarget = 'transmitters' | 'birds' | 'positions' | 'argos_positions' | 'alerts' | 'all';
+type ClearTarget = 'transmitters' | 'birds' | 'positions' | 'argos_positions' | 'alerts' | 'user_activity_logs' | 'all';
 
 interface TableConfig {
   id: ClearTarget;
@@ -61,6 +61,15 @@ const TABLE_CONFIGS: TableConfig[] = [
     bg: 'bg-orange-50 dark:bg-orange-900/20',
     border: 'border-orange-200 dark:border-orange-800',
     icon: <FileSpreadsheet size={16} />,
+  },
+  {
+    id: 'user_activity_logs',
+    label: 'User Activity Logs',
+    description: 'All user session and audit log records',
+    color: 'text-amber-700 dark:text-amber-300',
+    bg: 'bg-amber-50 dark:bg-amber-900/20',
+    border: 'border-amber-200 dark:border-amber-800',
+    icon: <Clock size={16} />,
   },
   {
     id: 'alerts',

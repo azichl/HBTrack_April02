@@ -45,3 +45,11 @@ export const logUserActivity = async (
     console.error('Failed to log user activity:', error);
   }
 };
+
+/**
+ * Clears all user activity logs in Firebase Firestore ('user_activity_logs' collection)
+ */
+export const clearAllUserActivityLogs = async (onProgress?: (deleted: number) => void): Promise<number> => {
+  const { deleteCollection } = await import('./firestoreService');
+  return await deleteCollection('user_activity_logs', onProgress);
+};

@@ -160,7 +160,7 @@ interface AppState {
   subscribeToLivePositions: () => () => void;
 
   // Danger Zone — Collection Clearing
-  clearTable: (table: 'transmitters' | 'birds' | 'positions' | 'argos_positions' | 'alerts' | 'all', onProgress?: (msg: string) => void) => Promise<void>;
+  clearTable: (table: 'transmitters' | 'birds' | 'positions' | 'argos_positions' | 'alerts' | 'user_activity_logs' | 'all', onProgress?: (msg: string) => void) => Promise<void>;
 
   // Simulation Actions
   generateLivePositions: () => void;
@@ -730,7 +730,7 @@ export const useAppStore = create<AppState>()(
       // ─── Danger Zone: Clear Collections ────────────────────────────────────
       clearTable: async (table, onProgress) => {
         const tables = table === 'all'
-          ? ['transmitters', 'birds', 'positions', 'argos_positions', 'alerts']
+          ? ['transmitters', 'birds', 'positions', 'argos_positions', 'alerts', 'user_activity_logs']
           : [table];
 
         for (const t of tables) {
