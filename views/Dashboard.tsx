@@ -430,42 +430,7 @@ export const Dashboard = () => {
         {/* Right Column - Side Panels */}
         <div className="space-y-6">
           
-          {/* Status Donut (Moved to Sidebar) */}
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Network Status</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Current state of all deployed units</p>
-            <div className="h-44 w-full flex justify-center items-center">
-              {statusData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={statusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={75}
-                      paddingAngle={4}
-                      dataKey="value"
-                      animationDuration={1000}
-                    >
-                      {statusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip 
-                      contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
-                      itemStyle={{ color: '#f8fafc', fontWeight: 600 }}
-                    />
-                    <Legend verticalAlign="bottom" height={20} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 500 }}/>
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-gray-400 text-sm">No transmitter data</div>
-              )}
-            </div>
-          </div>
-
-          {/* Recent Alerts Feed */}
+          {/* Recent Alerts Feed (Moved to Top) */}
           <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col h-[380px]">
             <div className="flex justify-between items-center mb-4">
                <div>
@@ -499,6 +464,41 @@ export const Dashboard = () => {
                   </div>
                   <span className="text-sm font-semibold">No anomalies detected</span>
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Status Donut (Moved to Bottom) */}
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm flex flex-col">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Network Status</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Current state of all deployed units</p>
+            <div className="h-44 w-full flex justify-center items-center">
+              {statusData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={statusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={75}
+                      paddingAngle={4}
+                      dataKey="value"
+                      animationDuration={1000}
+                    >
+                      {statusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip 
+                      contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
+                      itemStyle={{ color: '#f8fafc', fontWeight: 600 }}
+                    />
+                    <Legend verticalAlign="bottom" height={20} iconType="circle" wrapperStyle={{ fontSize: '12px', fontWeight: 500 }}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-gray-400 text-sm">No transmitter data</div>
               )}
             </div>
           </div>
