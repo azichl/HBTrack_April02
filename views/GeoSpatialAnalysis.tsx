@@ -43,15 +43,44 @@ const MapResizer = () => {
   return null;
 };
 
-// Colors mapping for Leaflet Markers
+// Colors mapping for Leaflet Markers (matching Live Tracking & Dashboard)
+const createSvgIcon = (colorHex: string) => {
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `<div style="position: relative; width: 21px; height: 35px;">
+             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 35px; height: 35px;" />
+             <svg width="21" height="35" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
+               <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${colorHex}" stroke="#000000" stroke-width="1.5" stroke-opacity="0.3" />
+               <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.8" />
+             </svg>
+           </div>`,
+    iconSize: [21, 35],
+    iconAnchor: [10.5, 35],
+    popupAnchor: [1, -28]
+  });
+};
+
 const greenIcon = new L.Icon({
   iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
+  iconSize: [21, 35],
+  iconAnchor: [10.5, 35],
+  popupAnchor: [1, -28],
+  shadowSize: [35, 35]
 });
+
+const redIcon = createSvgIcon('#FF2A00');
+const orangeIcon = createSvgIcon('#FFAA33');
+const yellowIcon = createSvgIcon('#FFEA00');
+
+const getStatusIcon = (status: string) => {
+    if (status === 'Active' || status === 'active') return greenIcon;
+    if (status === 'Potential Mortality') return orangeIcon;
+    if (status === 'Static test') return yellowIcon;
+    if (status === 'Inactive') return redIcon;
+    if (status === 'lost' || status === 'maintenance') return orangeIcon;
+    return redIcon;
+};
 
 export const GeoSpatialAnalysis = () => {
     const { 
@@ -124,7 +153,8 @@ export const GeoSpatialAnalysis = () => {
       .map(t => {
         const bird = birds.find(b => b.id === t.bird_id);
         const lastPos = positions.find(p => p.transmitter_id === t.platform_id);
-        return { transmitter: t, bird, lastPos };
+        const status = t.derived_status || t.status || 'Active';
+        return { transmitter: t, bird, lastPos, status };
       })
       .filter(item => !!item.lastPos);
   }, [transmitters, birds, positions]);
@@ -391,10 +421,10 @@ export const GeoSpatialAnalysis = () => {
                       className="w-full text-xs"
                       buttonClassName="py-2 px-3 border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 rounded-xl"
                       options={[
-                          { value: 'all', label: 'All Active Transmitters (Global BBox)' },
+                          { value: 'all', label: 'All Monitored Transmitters (Global BBox)' },
                           ...activeAssets.map(item => ({
                               value: item.transmitter.platform_id,
-                              label: `PTT ${item.transmitter.platform_id} (${item.bird?.name || 'Unnamed'})`
+                              label: `[${item.status}] PTT ${item.transmitter.platform_id} (${item.bird?.name || item.bird?.ring_id || 'Unnamed'})`
                           }))
                       ]}
                   />
@@ -530,22 +560,44 @@ export const GeoSpatialAnalysis = () => {
               <ZoomControl position="bottomright" />
               <ScaleControl position="bottomleft" />
 
-              {/* Active Subject Markers */}
-              {activeAssets.map(item => (
-                  <Marker
-                      key={item.transmitter.platform_id}
-                      position={[item.lastPos.lat, item.lastPos.lon]}
-                      icon={greenIcon}
-                  >
-                      <Popup>
-                          <div className="p-1 space-y-1 text-slate-800">
-                              <h4 className="text-xs font-bold text-brand-600 m-0">PTT {item.transmitter.platform_id}</h4>
-                              <p className="text-[10px] m-0"><b>Subject:</b> {item.bird?.name || 'Unnamed'}</p>
-                              <p className="text-[10px] m-0"><b>Lat/Lon:</b> {item.lastPos.lat.toFixed(5)}, {item.lastPos.lon.toFixed(5)}</p>
-                          </div>
-                      </Popup>
-                  </Marker>
-              ))}
+              {/* Subject Markers connected to live transmitter status */}
+              {activeAssets.map(item => {
+                  const status = item.status;
+                  return (
+                      <Marker
+                          key={item.transmitter.platform_id}
+                          position={[item.lastPos.lat, item.lastPos.lon]}
+                          icon={getStatusIcon(status)}
+                          eventHandlers={{
+                              click: () => {
+                                  setSelectedTransmitterId(item.transmitter.platform_id);
+                              }
+                          }}
+                      >
+                          <Popup>
+                              <div className="p-1.5 space-y-1 text-slate-800 min-w-[180px]">
+                                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
+                                      <h4 className="text-xs font-bold text-brand-600 m-0">PTT {item.transmitter.platform_id}</h4>
+                                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                                          status === 'Active' ? 'bg-green-100 text-green-800 border border-green-300' :
+                                          status === 'Potential Mortality' ? 'bg-amber-100 text-amber-900 border border-amber-400 font-extrabold' :
+                                          status === 'Static test' ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                                          'bg-red-100 text-red-800 border border-red-300'
+                                      }`}>
+                                          {status}
+                                      </span>
+                                  </div>
+                                  <p className="text-[10px] m-0"><b>Subject:</b> {item.bird?.name || item.bird?.ring_id || 'Unnamed'}</p>
+                                  <p className="text-[10px] m-0"><b>Region:</b> {item.transmitter.program_region || 'Central Asia'}</p>
+                                  <p className="text-[10px] m-0"><b>Lat/Lon:</b> {item.lastPos.lat.toFixed(5)}, {item.lastPos.lon.toFixed(5)}</p>
+                                  <p className="text-[9px] text-gray-500 m-0 pt-0.5 border-t border-slate-100">
+                                      <b>Last Fix:</b> {new Date(item.lastPos.timestamp).toLocaleString()}
+                                  </p>
+                              </div>
+                          </Popup>
+                      </Marker>
+                  );
+              })}
           </MapContainer>
       </div>
 
