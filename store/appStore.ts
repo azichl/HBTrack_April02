@@ -534,7 +534,7 @@ export const useAppStore = create<AppState>()(
                       status: device.active ? 'active' : 'inactive',
                       bird_id: '',
                       battery_voltage: undefined,
-                      last_fix: new Date().toISOString(),
+                      last_fix: '',
                       duty_cycle: 'Unknown',
                       manufacturer: device.manufacturer,
                       program_region: device.programRef,
@@ -574,19 +574,13 @@ export const useAppStore = create<AppState>()(
                   tIndex = newTransmitters.length - 1;
                   tUpdated++;
               } else {
-                  // Update existing transmitter with new battery and last_fix if this message is newer
+                  // Update existing transmitter with new battery if message is as new as current last_fix
                   const t = newTransmitters[tIndex];
-                  // If we found a battery voltage, and this message is at least as new as the last_fix (or there is no last_fix), update it.
                   if (decodedBattery !== undefined && (!t.last_fix || new Date(msg.timestamp) >= new Date(t.last_fix))) {
                       newTransmitters[tIndex] = {
                           ...t,
                           battery_voltage: decodedBattery
                       };
-                      tUpdated++;
-                  }
-                  // Update last_fix if it's strictly newer
-                  if (!t.last_fix || new Date(msg.timestamp) > new Date(t.last_fix)) {
-                      newTransmitters[tIndex].last_fix = msg.timestamp;
                       tUpdated++;
                   }
               }
@@ -612,16 +606,34 @@ export const useAppStore = create<AppState>()(
                       pCreated++;
                   }
               }
+          });
 
-              if (tIndex >= 0) {
-                  const currentLastFix = new Date(newTransmitters[tIndex].last_fix).getTime();
-                  const msgTime = new Date(msg.timestamp).getTime();
-                  if (msgTime > currentLastFix) {
-                      newTransmitters[tIndex] = {
-                          ...newTransmitters[tIndex],
-                          last_fix: msg.timestamp,
-                          status: 'active'
-                      };
+          // 3. Recalculate true max timestamp (last_fix) for each transmitter from position messages
+          const nowMs = Date.now();
+          newTransmitters.forEach((t, i) => {
+              const pid = String(t.platform_id);
+              const pttPositions = [
+                  ...positions.filter(p => String(p.transmitter_id || (p as any).platform_id) === pid),
+                  ...newPositionDocs.filter(p => String(p.transmitter_id) === pid),
+                  ...incomingMessages.filter(m => String(m.platformId) === pid)
+              ];
+
+              if (pttPositions.length > 0) {
+                  const timestamps = pttPositions
+                      .map(p => new Date((p as any).timestamp).getTime())
+                      .filter(ts => !isNaN(ts));
+
+                  if (timestamps.length > 0) {
+                      const maxTs = Math.max(...timestamps);
+                      const maxIso = new Date(maxTs).toISOString();
+                      newTransmitters[i].last_fix = maxIso;
+
+                      // Evaluate Inactive status (> 10 days since latest fix)
+                      const daysSilence = (nowMs - maxTs) / (1000 * 60 * 60 * 24);
+                      if (daysSilence > 10) {
+                          newTransmitters[i].status = 'inactive';
+                          newTransmitters[i].derived_status = 'Inactive';
+                      }
                       tUpdated++;
                   }
               }

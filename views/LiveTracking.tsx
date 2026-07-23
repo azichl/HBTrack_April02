@@ -241,12 +241,34 @@ const MapEventsHandler = ({
 const LocationTimestamp = ({ timestamp, lat, lon, fallbackTimeZone }: { timestamp: string, lat: number, lon: number, fallbackTimeZone: string }) => {
     const [timeData, setTimeData] = useState<{ formatted: string, tz: string } | null>(null);
 
+    // Compute instant geographic solar local time from longitude coordinates
+    const getSolarLocalTime = (ts: string, longitude: number) => {
+        try {
+            let parsed = ts;
+            if (!parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                parsed = parsed.replace(' ', 'T') + 'Z';
+            }
+            const dt = new Date(parsed);
+            if (isNaN(dt.getTime())) return { formatted: '-', label: 'UTC' };
+
+            const offsetHours = Math.round(longitude / 15);
+            const localMs = dt.getTime() + (offsetHours * 3600000);
+            const localDt = new Date(localMs);
+
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const formatted = `${pad(localDt.getUTCDate())}/${pad(localDt.getUTCMonth() + 1)}/${localDt.getUTCFullYear()} ${pad(localDt.getUTCHours())}:${pad(localDt.getUTCMinutes())}:${pad(localDt.getUTCSeconds())}`;
+            const sign = offsetHours >= 0 ? '+' : '';
+            const label = `Local (UTC${sign}${offsetHours})`;
+            return { formatted, label };
+        } catch {
+            return { formatted: '-', label: 'UTC' };
+        }
+    };
+
     useEffect(() => {
         let mounted = true;
         const fetchLocalTime = async () => {
             try {
-                // Fetch just the timezone info. We request 'temperature_2m' just to satisfy the API 'current' parameter requirement, 
-                // but we really want '&timezone=auto' to get the detected timezone.
                 const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m&timezone=auto`);
                 const data = await response.json();
                 
@@ -257,7 +279,7 @@ const LocationTimestamp = ({ timestamp, lat, lon, fallbackTimeZone }: { timestam
                     });
                 }
             } catch (e) {
-                // Fallback will be used
+                // Fallback to solar calculation
             }
         };
         
@@ -265,19 +287,14 @@ const LocationTimestamp = ({ timestamp, lat, lon, fallbackTimeZone }: { timestam
         return () => { mounted = false; };
     }, [timestamp, lat, lon]);
 
-    if (!timeData) {
-        return (
-            <div className="flex items-center">
-                <span className="font-medium text-gray-800">{formatDateTime(timestamp, fallbackTimeZone)}</span>
-                <span className="text-[9px] text-gray-400 ml-1 italic">(Loading local time...)</span>
-            </div>
-        );
-    }
+    const solarTime = getSolarLocalTime(timestamp, lon);
+    const displayFormatted = timeData ? timeData.formatted : solarTime.formatted;
+    const displayLabel = timeData ? `Local: ${timeData.tz.replace('_', ' ')}` : solarTime.label;
 
     return (
         <div className="flex flex-col items-end leading-tight">
-            <span className="font-medium text-gray-800">{timeData.formatted}</span>
-            <span className="text-[9px] text-brand-600 font-medium tracking-tight">Local: {timeData.tz.replace('_', ' ')}</span>
+            <span className="font-medium text-gray-800">{displayFormatted}</span>
+            <span className="text-[9px] text-brand-600 font-medium tracking-tight">{displayLabel}</span>
         </div>
     );
 };
