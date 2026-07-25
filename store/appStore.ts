@@ -628,12 +628,8 @@ export const useAppStore = create<AppState>()(
                       const maxIso = new Date(maxTs).toISOString();
                       newTransmitters[i].last_fix = maxIso;
 
-                      // Evaluate Inactive status (> 10 days since latest fix)
-                      const daysSilence = (nowMs - maxTs) / (1000 * 60 * 60 * 24);
-                      if (daysSilence > 10) {
-                          newTransmitters[i].status = 'inactive';
-                          newTransmitters[i].derived_status = 'Inactive';
-                      }
+                      // Biological rules are handled by evaluateTransmitterStatus
+                      // We removed the hardcoded >10 days 'inactive' rule here so that biological rules always apply.
                       tUpdated++;
                   }
               }
@@ -660,16 +656,14 @@ export const useAppStore = create<AppState>()(
               });
           }
 
-          // 4.5 Evaluate and update derived_status for modified transmitters
-          const modifiedTransmitterIds = new Set(newPositionDocs.map(p => p.transmitter_id));
-          if (modifiedTransmitterIds.size > 0) {
-              onProgress?.(`Evaluating status for ${modifiedTransmitterIds.size} active transmitters...`);
-              let statusUpdated = false;
-              for (let i = 0; i < newTransmitters.length; i++) {
-                  const t = newTransmitters[i];
-                  if (modifiedTransmitterIds.has(t.platform_id)) {
-                      try {
-                          // Fetch all argos_positions for this transmitter to calculate accurate barycenters
+          // 4.5 Evaluate and update derived_status for ALL transmitters
+          // This ensures that all transmitters, even those without new positions, are evaluated correctly (e.g. for pattern dead or inactive rules).
+          onProgress?.(`Evaluating status for ${newTransmitters.length} transmitters...`);
+          let statusUpdated = false;
+          for (let i = 0; i < newTransmitters.length; i++) {
+              const t = newTransmitters[i];
+              try {
+                  // Fetch all argos_positions for this transmitter to calculate accurate barycenters
                           const q = query(collection(db, 'argos_positions'), where('platformId', '==', t.platform_id));
                           const snapshot = await getDocs(q);
                           const allPositions = snapshot.docs.map(doc => doc.data());
@@ -711,12 +705,10 @@ export const useAppStore = create<AppState>()(
                       } catch (err) {
                           console.error(`Error evaluating status for ${t.platform_id}:`, err);
                       }
-                  }
               }
               if (statusUpdated) {
                   onProgress?.(`Updated derived statuses.`);
               }
-          }
 
           // 5. Update in-memory state with recent data only (for live map)
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;

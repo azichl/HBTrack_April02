@@ -265,35 +265,16 @@ const LocationTimestamp = ({ timestamp, lat, lon, fallbackTimeZone }: { timestam
         }
     };
 
-    useEffect(() => {
-        let mounted = true;
-        const fetchLocalTime = async () => {
-            try {
-                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m&timezone=auto`);
-                const data = await response.json();
-                
-                if (mounted && data.timezone) {
-                    setTimeData({
-                        formatted: formatDateTime(timestamp, data.timezone),
-                        tz: data.timezone
-                    });
-                }
-            } catch (e) {
-                // Fallback to solar calculation
-            }
-        };
-        
-        fetchLocalTime();
-        return () => { mounted = false; };
-    }, [timestamp, lat, lon]);
-
     const solarTime = getSolarLocalTime(timestamp, lon);
-    const displayFormatted = timeData ? timeData.formatted : solarTime.formatted;
-    const displayLabel = timeData ? `Local: ${timeData.tz.replace('_', ' ')}` : solarTime.label;
+    
+    // Convert to local time explicitly
+    const offsetHours = Math.round(lon / 15);
+    const tzSign = offsetHours >= 0 ? '+' : '-';
+    const displayLabel = `Local: UTC${tzSign}${Math.abs(offsetHours)}`;
 
     return (
-        <div className="flex flex-col items-end leading-tight">
-            <span className="font-medium text-gray-800">{displayFormatted}</span>
+        <div className="flex flex-col items-end leading-tight min-w-[120px]">
+            <span className="font-medium text-gray-800">{solarTime.formatted}</span>
             <span className="text-[9px] text-brand-600 font-medium tracking-tight">{displayLabel}</span>
         </div>
     );

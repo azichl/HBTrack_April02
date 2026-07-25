@@ -224,9 +224,10 @@ export const Dashboard = () => {
   
   // Keep original statusData for the side panel Network Status pie chart
   const statusData = [
-    { name: 'Active', value: transmitters.filter(t => t.status === 'active').length, color: '#10b981' },
-    { name: 'Maintenance', value: transmitters.filter(t => t.status === 'maintenance').length, color: '#f59e0b' },
-    { name: 'Lost', value: transmitters.filter(t => (t.status as string) === 'lost').length, color: '#ef4444' }
+    { name: 'Active', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Active').length, color: '#10b981' },
+    { name: 'Static test', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Static test').length, color: '#eab308' },
+    { name: 'Potential Mortality', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Potential Mortality').length, color: '#f97316' },
+    { name: 'Inactive', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Inactive').length, color: '#ef4444' }
   ].filter(d => d.value > 0);
 
   // Fleet Overview (Top 5 recent)
