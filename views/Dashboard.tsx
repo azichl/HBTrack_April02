@@ -195,8 +195,18 @@ export const Dashboard = () => {
       : 'No Data';
 
   // Transmitters Status Data
+  const normalizeStatus = (raw?: string): string => {
+    if (!raw) return 'Unknown';
+    const trimmed = raw.trim().toLowerCase();
+    if (trimmed === 'active') return 'Active';
+    if (trimmed === 'inactive') return 'Inactive';
+    if (trimmed === 'potential mortality' || trimmed === 'potential_mortality') return 'Potential Mortality';
+    if (trimmed === 'static test' || trimmed === 'static_test') return 'Static test';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  };
+
   const allStatuses = transmitters.reduce((acc, t) => {
-    const s = t.derived_status || t.status || 'Unknown';
+    const s = normalizeStatus(t.derived_status || t.status);
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
