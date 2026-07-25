@@ -66,6 +66,33 @@
         filter: invert(1) brightness(2);
         mix-blend-mode: screen !important;
       }
+
+      /* Permanent Leaflet Popup Width Fix - Prevents First-Click Clipping/Cropping */
+      .leaflet-popup-content-wrapper,
+      .custom-popup .leaflet-popup-content-wrapper {
+        min-width: 320px !important;
+        width: 320px !important;
+        max-width: 340px !important;
+        padding: 12px 14px !important;
+        border-radius: 16px !important;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.12) !important;
+        background: #ffffff !important;
+      }
+      .dark .leaflet-popup-content-wrapper,
+      .dark .custom-popup .leaflet-popup-content-wrapper {
+        background: #1e293b !important;
+        color: #f8fafc !important;
+      }
+      .leaflet-popup-content,
+      .custom-popup .leaflet-popup-content {
+        min-width: 290px !important;
+        width: 100% !important;
+        margin: 0 !important;
+        line-height: 1.4 !important;
+      }
+      .leaflet-popup-tip-container {
+        overflow: visible !important;
+      }
     </style>
     <script>
       tailwind.config = {

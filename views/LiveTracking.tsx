@@ -472,79 +472,77 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                 </div>
             </Tooltip>
 
-            <Popup className="custom-popup">
-                {isOpen && (
-                    <div className="p-1 min-w-[200px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
-                        <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                            <h3 className="font-bold text-brand-900 text-base">PTT {pos.transmitter_id}</h3>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${badgeColorClass}`}>
-                                {status}
+            <Popup className="custom-popup" minWidth={310} maxWidth={330} autoPan={true}>
+                <div className="p-1 w-[290px] min-w-[290px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+                    <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-slate-700">
+                        <h3 className="font-bold text-brand-900 dark:text-white text-base">PTT {pos.transmitter_id}</h3>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${badgeColorClass}`}>
+                            {status}
+                        </span>
+                    </div>
+                    
+                    <div className="space-y-2 text-xs">
+                        <div className="flex justify-between items-center">
+                            <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Bird</span>
+                            <span className="font-medium text-gray-800 dark:text-gray-200">{bird?.ring_id || 'Unassigned'}</span>
+                        </div>
+                        <div className="flex justify-between items-start">
+                            <span className="text-gray-500 flex items-center gap-1 mt-0.5"><Clock size={12}/> Last Fix</span>
+                            <LocationTimestamp timestamp={pos.timestamp} lat={pos.lat} lon={pos.lon} fallbackTimeZone={timeZone} />
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-gray-500 flex items-center gap-1"><Battery size={12}/> Battery</span>
+                            <span className={`font-medium ${
+                                (transmitter?.battery_voltage || 0) < 3.5 && (transmitter?.battery_voltage || 0) > 0 
+                                ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                                {formatBattery(transmitter?.battery_voltage)}
                             </span>
                         </div>
-                        
-                        <div className="space-y-2 text-xs">
+                        {pos.locationType && (
                             <div className="flex justify-between items-center">
-                                <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Bird</span>
-                                <span className="font-medium text-gray-800">{bird?.ring_id || 'Unassigned'}</span>
-                            </div>
-                            <div className="flex justify-between items-start">
-                                <span className="text-gray-500 flex items-center gap-1 mt-0.5"><Clock size={12}/> Last Fix</span>
-                                <LocationTimestamp timestamp={pos.timestamp} lat={pos.lat} lon={pos.lon} fallbackTimeZone={timeZone} />
-                            </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-500 flex items-center gap-1"><Battery size={12}/> Battery</span>
-                                <span className={`font-medium ${
-                                    (transmitter?.battery_voltage || 0) < 3.5 && (transmitter?.battery_voltage || 0) > 0 
-                                    ? 'text-red-600' : 'text-green-600'
-                                }`}>
-                                    {formatBattery(transmitter?.battery_voltage)}
+                                <span className="text-gray-500 flex items-center gap-1"><Navigation size={12}/> Type</span>
+                                <span className="font-medium text-blue-600">
+                                    {pos.locationType}
                                 </span>
                             </div>
-                            {pos.locationType && (
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-500 flex items-center gap-1"><Navigation size={12}/> Type</span>
-                                    <span className="font-medium text-blue-600">
-                                        {pos.locationType}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between text-xs text-gray-400">
-                            <span>Lat: {pos.lat?.toFixed(4)}</span>
-                            <span>Lon: {pos.lon?.toFixed(4)}</span>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2 mt-3">
-                            <button 
-                                onClick={() => {
-                                    setSelectedTransmitterIds([pos.transmitter_id]);
-                                    setShowHistory(true);
-                                }}
-                                className="py-1.5 bg-brand-50 text-brand-700 font-semibold rounded hover:bg-brand-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
-                            >
-                                <History size={12} /> Focus & History
-                            </button>
-                            <button 
-                                onClick={handleAIAnalysis}
-                                className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
-                            >
-                                <BrainCircuit size={12} /> AI Forecast
-                            </button>
-                        </div>
-
-                        <div className="mt-2">
-                            <a
-                                href={`https://earth.google.com/web/search/${pos.lat},${pos.lon}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
-                            >
-                                <Globe size={12} /> Google Earth
-                            </a>
-                        </div>
+                        )}
                     </div>
-                )}
+
+                    <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700 flex justify-between text-xs text-gray-400">
+                        <span>Lat: {pos.lat?.toFixed(4)}</span>
+                        <span>Lon: {pos.lon?.toFixed(4)}</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 mt-3">
+                        <button 
+                            onClick={() => {
+                                setSelectedTransmitterIds([pos.transmitter_id]);
+                                setShowHistory(true);
+                            }}
+                            className="py-1.5 bg-brand-50 text-brand-700 font-semibold rounded hover:bg-brand-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
+                        >
+                            <History size={12} /> Focus & History
+                        </button>
+                        <button 
+                            onClick={handleAIAnalysis}
+                            className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
+                        >
+                            <BrainCircuit size={12} /> AI Forecast
+                        </button>
+                    </div>
+
+                    <div className="mt-2">
+                        <a
+                            href={`https://earth.google.com/web/search/${pos.lat},${pos.lon}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
+                        >
+                            <Globe size={12} /> Google Earth
+                        </a>
+                    </div>
+                </div>
             </Popup>
         </Marker>
     );
