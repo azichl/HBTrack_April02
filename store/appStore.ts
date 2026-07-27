@@ -689,24 +689,29 @@ export const useAppStore = create<AppState>()(
                           const snapshot = await getDocs(q);
                           const allPositions = snapshot.docs.map(doc => doc.data());
                           
-                          // Recalculate true last_fix here from the database to fix any historically stuck timestamps
+                          // ALWAYS recalculate last_fix from the full Firebase argos_positions database.
+                          // The in-memory t.last_fix can be stale or in wrong format — don't trust it.
+                          let correctedLastFix = t.last_fix;
                           if (allPositions.length > 0) {
-                              const timestamps = allPositions
+                              const allTimestamps = allPositions
                                   .map(p => safeParseDate(p.timestamp || p.locationDate))
-                                  .filter(ts => !isNaN(ts));
-                              if (timestamps.length > 0) {
-                                  const maxTs = Math.max(...timestamps);
+                                  .filter(ts => !isNaN(ts) && ts > 0);
+                              if (allTimestamps.length > 0) {
+                                  const maxTs = Math.max(...allTimestamps);
                                   const maxIso = new Date(maxTs).toISOString();
-                                  if (!t.last_fix || new Date(t.last_fix).getTime() < maxTs) {
+                                  const currentTs = safeParseDate(t.last_fix);
+                                  // Write if we don't have a valid current timestamp, or database has something newer
+                                  if (isNaN(currentTs) || maxTs > currentTs) {
+                                      correctedLastFix = maxIso;
                                       t.last_fix = maxIso;
                                       newTransmitters[i].last_fix = maxIso;
-                                      statusUpdated = true;
                                       await saveDocument('transmitters', t.id, { last_fix: maxIso });
+                                      statusUpdated = true;
                                   }
                               }
                           }
 
-                          const { status: derived, isNesting } = evaluateTransmitterStatus(t, allPositions);
+                          const { status: derived, isNesting } = evaluateTransmitterStatus({ ...t, last_fix: correctedLastFix }, allPositions);
                           
                           if (t.derived_status !== derived) {
                               if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
