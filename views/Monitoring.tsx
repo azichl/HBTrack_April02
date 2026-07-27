@@ -6,9 +6,28 @@ import { useSortableTable, SortableHeader } from '../components/TableComponents'
 import { Position } from '../types';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 import Draggable from 'react-draggable';
-import { saveDocument } from '../services/firestoreService';
+import { saveDocument, deleteCoordinateRecord } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
-import { deleteCoordinateRecord } from '../services/firestoreService';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
+
+// Safely parse dates including DD/MM/YYYY HH:mm:ss format from Argos API
+const safeParseDate = (ts: any): number => {
+    if (!ts) return NaN;
+    if (typeof ts === 'number') return ts;
+    const str = String(ts);
+    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (dmyMatch) {
+        const [_, d, m, y, h, min, s] = dmyMatch;
+        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+    }
+    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch2) {
+        const [_, d, m, y] = dmyMatch2;
+        return Date.UTC(Number(y), Number(m)-1, Number(d));
+    }
+    return new Date(str).getTime();
+};
 
 interface MonitoringTableRow {
     id: string;
@@ -42,6 +61,8 @@ export const Monitoring = () => {
   const [formData, setFormData] = useState<Partial<Position>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const nodeRef = useRef<HTMLDivElement>(null);
+  // Direct Firebase last_fix for transmitters with no recent in-memory position
+  const [argosLastFix, setArgosLastFix] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (isModalOpen) {
@@ -88,6 +109,34 @@ export const Monitoring = () => {
     return map;
   }, [positions]);
 
+  // For transmitters with no recent in-memory position, query argos_positions directly in Firebase
+  // This fixes the 7-day memory cache limitation and shows the true last fix date
+  useEffect(() => {
+    const fetchDirectLastFix = async () => {
+      const map = new Map<string, string>();
+      for (const t of transmitters) {
+        const pid = String(t.platform_id);
+        if (!latestPositions.has(pid)) {
+          try {
+            const q = query(collection(db, 'argos_positions'), where('platformId', '==', pid));
+            const snapshot = await getDocs(q);
+            const allTimestamps = snapshot.docs
+              .map(d => safeParseDate(d.data().timestamp))
+              .filter(ts => !isNaN(ts) && ts > 0);
+            if (allTimestamps.length > 0) {
+              const maxTs = Math.max(...allTimestamps);
+              map.set(pid, new Date(maxTs).toISOString());
+            }
+          } catch (e) {
+            // ignore - will fall back to t.last_fix
+          }
+        }
+      }
+      setArgosLastFix(map);
+    };
+    fetchDirectLastFix();
+  }, [transmitters, latestPositions]);
+
   const tableData = useMemo<MonitoringTableRow[]>(() => {
     return transmitters.map(t => {
       const bird = birds.find(b => b.id === t.bird_id);
@@ -105,7 +154,8 @@ export const Monitoring = () => {
         speed: pos?.speed_kmh,
         // Use the position timestamp if available, otherwise fall back to the transmitter's last_fix
         // (positions are only cached for 7 days in memory; last_fix always reflects true last position)
-        timestamp: pos?.timestamp || t.last_fix,
+        // Priority: recent in-memory pos → direct Firebase argos_positions → transmitter last_fix
+        timestamp: pos?.timestamp || argosLastFix.get(t.platform_id) || t.last_fix,
         hasPos: !!pos
       };
     });
