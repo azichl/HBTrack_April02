@@ -688,6 +688,24 @@ export const useAppStore = create<AppState>()(
                           const q = query(collection(db, 'argos_positions'), where('platformId', '==', t.platform_id));
                           const snapshot = await getDocs(q);
                           const allPositions = snapshot.docs.map(doc => doc.data());
+                          
+                          // Recalculate true last_fix here from the database to fix any historically stuck timestamps
+                          if (allPositions.length > 0) {
+                              const timestamps = allPositions
+                                  .map(p => safeParseDate(p.timestamp || p.locationDate))
+                                  .filter(ts => !isNaN(ts));
+                              if (timestamps.length > 0) {
+                                  const maxTs = Math.max(...timestamps);
+                                  const maxIso = new Date(maxTs).toISOString();
+                                  if (!t.last_fix || new Date(t.last_fix).getTime() < maxTs) {
+                                      t.last_fix = maxIso;
+                                      newTransmitters[i].last_fix = maxIso;
+                                      statusUpdated = true;
+                                      await saveDocument('transmitters', t.id, { last_fix: maxIso });
+                                  }
+                              }
+                          }
+
                           const { status: derived, isNesting } = evaluateTransmitterStatus(t, allPositions);
                           
                           if (t.derived_status !== derived) {
