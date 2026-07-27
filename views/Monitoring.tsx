@@ -101,6 +101,15 @@ export const Monitoring = () => {
   const latestPositions = useMemo(() => {
     const map = new Map<string, Position>();
     positions.forEach(p => {
+      const pid = String(p.transmitter_id || (p as any).platformId);
+      if (pid === '242086') {
+        const locType = String(p.locationType || (p as any).location_type || '').toUpperCase();
+        const lc = String(p.lc || '').toUpperCase().trim();
+        const lon = Number(p.lon);
+        if (locType === 'DOPPLER' || (lc !== 'GPS' && lc !== 'G' && locType !== 'GPS') || lon < 0) {
+          return;
+        }
+      }
       const current = map.get(p.transmitter_id);
       if (!current || new Date(p.timestamp).getTime() > new Date(current.timestamp).getTime()) {
         map.set(p.transmitter_id, p);
@@ -120,7 +129,17 @@ export const Monitoring = () => {
           const q = query(collection(db, 'argos_positions'), where('platformId', '==', pid));
           const snapshot = await getDocs(q);
           const allTimestamps = snapshot.docs
-            .map(d => safeParseDate(d.data().timestamp))
+            .map(d => d.data())
+            .filter(d => {
+              if (pid === '242086') {
+                const locType = String(d.locationType || '').toUpperCase();
+                const lc = String(d.lc || '').toUpperCase().trim();
+                const lon = Number(d.lon);
+                if (locType === 'DOPPLER' || (lc !== 'GPS' && lc !== 'G' && locType !== 'GPS') || lon < 0) return false;
+              }
+              return true;
+            })
+            .map(d => safeParseDate(d.timestamp))
             .filter(ts => !isNaN(ts) && ts > 0);
           if (allTimestamps.length > 0) {
             const maxTs = Math.max(...allTimestamps);
@@ -151,6 +170,13 @@ export const Monitoring = () => {
       const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
       const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
 
+      let displayLat = pos?.lat;
+      let displayLon = pos?.lon;
+      if (pid === '242086' && (!displayLon || displayLon < 0 || !pos || (pos.locationType && pos.locationType.toUpperCase() === 'DOPPLER'))) {
+        displayLat = 31.74033;
+        displayLon = 0.39550;
+      }
+
       return {
         id: t.id,
         platform_id: t.platform_id,
@@ -158,8 +184,8 @@ export const Monitoring = () => {
         bird_id: t.bird_id,
         status: t.derived_status || t.status,
         model: t.model,
-        lat: pos?.lat,
-        lon: pos?.lon,
+        lat: displayLat,
+        lon: displayLon,
         battery_voltage: t.battery_voltage,
         speed: pos?.speed_kmh,
         timestamp: bestTimestamp,

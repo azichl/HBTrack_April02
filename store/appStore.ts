@@ -693,7 +693,15 @@ export const useAppStore = create<AppState>()(
                           const snapPos = await getDocs(qPos);
                           const manualPositions = snapPos.docs.map(doc => doc.data());
 
-                          const allPositions = [...argosPositions, ...manualPositions];
+                          let allPositions = [...argosPositions, ...manualPositions];
+                          if (String(t.platform_id) === '242086') {
+                            allPositions = allPositions.filter(p => {
+                              const locType = String(p.locationType || p.location_type || '').toUpperCase();
+                              const lc = String(p.lc || '').toUpperCase().trim();
+                              const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
+                              return (locType === 'GPS' || lc === 'GPS' || lc === 'G') && lon > 0;
+                            });
+                          }
                           
                           // ALWAYS recalculate last_fix from the full Firebase database (argos_positions + positions).
                           let correctedLastFix = t.last_fix;
@@ -915,7 +923,15 @@ export const useAppStore = create<AppState>()(
               const snapPos = await getDocs(qPos);
               const manualPositions = snapPos.docs.map(doc => doc.data());
 
-              const allPositions = [...argosPositions, ...manualPositions];
+              let allPositions = [...argosPositions, ...manualPositions];
+              if (pidStr === '242086') {
+                allPositions = allPositions.filter(p => {
+                  const locType = String(p.locationType || p.location_type || '').toUpperCase();
+                  const lc = String(p.lc || '').toUpperCase().trim();
+                  const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
+                  return (locType === 'GPS' || lc === 'GPS' || lc === 'G') && lon > 0;
+                });
+              }
 
               let correctedLastFix = t.last_fix;
               if (allPositions.length > 0) {
