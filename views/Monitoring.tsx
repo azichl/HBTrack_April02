@@ -109,57 +109,64 @@ export const Monitoring = () => {
     return map;
   }, [positions]);
 
-  // For transmitters with no recent in-memory position, query argos_positions directly in Firebase
-  // This fixes the 7-day memory cache limitation and shows the true last fix date
+  // Query argos_positions in Firebase for ALL transmitters to get the true latest timestamp.
+  // The in-memory positions cache can be stale or incomplete.
   useEffect(() => {
     const fetchDirectLastFix = async () => {
       const map = new Map<string, string>();
       for (const t of transmitters) {
         const pid = String(t.platform_id);
-        if (!latestPositions.has(pid)) {
-          try {
-            const q = query(collection(db, 'argos_positions'), where('platformId', '==', pid));
-            const snapshot = await getDocs(q);
-            const allTimestamps = snapshot.docs
-              .map(d => safeParseDate(d.data().timestamp))
-              .filter(ts => !isNaN(ts) && ts > 0);
-            if (allTimestamps.length > 0) {
-              const maxTs = Math.max(...allTimestamps);
-              map.set(pid, new Date(maxTs).toISOString());
-            }
-          } catch (e) {
-            // ignore - will fall back to t.last_fix
+        try {
+          const q = query(collection(db, 'argos_positions'), where('platformId', '==', pid));
+          const snapshot = await getDocs(q);
+          const allTimestamps = snapshot.docs
+            .map(d => safeParseDate(d.data().timestamp))
+            .filter(ts => !isNaN(ts) && ts > 0);
+          if (allTimestamps.length > 0) {
+            const maxTs = Math.max(...allTimestamps);
+            map.set(pid, new Date(maxTs).toISOString());
           }
+        } catch (e) {
+          // ignore - will fall back to pos or t.last_fix
         }
       }
       setArgosLastFix(map);
     };
     fetchDirectLastFix();
-  }, [transmitters, latestPositions]);
+  }, [transmitters]);
 
   const tableData = useMemo<MonitoringTableRow[]>(() => {
     return transmitters.map(t => {
       const bird = birds.find(b => b.id === t.bird_id);
       const pos = latestPositions.get(t.platform_id);
+      const pid = String(t.platform_id);
+
+      // Determine the true latest timestamp by comparing all sources
+      const posTs = pos ? safeParseDate(pos.timestamp) : NaN;
+      const argosTs = argosLastFix.has(pid) ? safeParseDate(argosLastFix.get(pid)!) : NaN;
+      const lastFixTs = safeParseDate(t.last_fix);
+
+      // Pick the maximum valid timestamp from any source
+      const candidates = [posTs, argosTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
+      const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
+      const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
+
       return {
         id: t.id,
         platform_id: t.platform_id,
         bird_ring_id: bird?.ring_id || 'Unassigned',
-        bird_id: t.bird_id, // for actions
+        bird_id: t.bird_id,
         status: t.derived_status || t.status,
         model: t.model,
         lat: pos?.lat,
         lon: pos?.lon,
         battery_voltage: t.battery_voltage,
         speed: pos?.speed_kmh,
-        // Use the position timestamp if available, otherwise fall back to the transmitter's last_fix
-        // (positions are only cached for 7 days in memory; last_fix always reflects true last position)
-        // Priority: recent in-memory pos → direct Firebase argos_positions → transmitter last_fix
-        timestamp: pos?.timestamp || argosLastFix.get(t.platform_id) || t.last_fix,
+        timestamp: bestTimestamp,
         hasPos: !!pos
       };
     });
-  }, [transmitters, birds, latestPositions]);
+  }, [transmitters, birds, latestPositions, argosLastFix]);
 
   // Client-side search filtering
   const filteredData = useMemo(() => {
