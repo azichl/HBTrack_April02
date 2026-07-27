@@ -685,7 +685,8 @@ export const useAppStore = create<AppState>()(
               const t = newTransmitters[i];
               try {
                   // Fetch all argos_positions for this transmitter to calculate accurate barycenters
-                          const q = query(collection(db, 'argos_positions'), where('platformId', '==', t.platform_id));
+                  // IMPORTANT: platformId is always stored as a STRING in argos_positions — must coerce here
+                          const q = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
                           const snapshot = await getDocs(q);
                           const allPositions = snapshot.docs.map(doc => doc.data());
                           

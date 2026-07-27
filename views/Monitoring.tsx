@@ -103,7 +103,9 @@ export const Monitoring = () => {
         lon: pos?.lon,
         battery_voltage: t.battery_voltage,
         speed: pos?.speed_kmh,
-        timestamp: pos?.timestamp,
+        // Use the position timestamp if available, otherwise fall back to the transmitter's last_fix
+        // (positions are only cached for 7 days in memory; last_fix always reflects true last position)
+        timestamp: pos?.timestamp || t.last_fix,
         hasPos: !!pos
       };
     });
