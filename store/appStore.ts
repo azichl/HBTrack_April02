@@ -503,6 +503,23 @@ export const useAppStore = create<AppState>()(
       // Argos API → mapArgosApiData() → syncArgosToFirebase() → Firebase
       // NO data is stored in zustand state arrays. NO LocalStorage.
       syncArgosToFirebase: async (incomingMessages, incomingDevices = [], onProgress) => {
+          const safeParseDate = (ts: any): number => {
+              if (!ts) return NaN;
+              if (typeof ts === 'number') return ts;
+              const str = String(ts);
+              const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+              if (dmyMatch) {
+                  const [_, d, m, y, h, min, s] = dmyMatch;
+                  return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+              }
+              const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+              if (dmyMatch2) {
+                  const [_, d, m, y] = dmyMatch2;
+                  return Date.UTC(Number(y), Number(m)-1, Number(d));
+              }
+              return new Date(str).getTime();
+          };
+
           const { transmitters, positions, addAlert } = get();
           let newTransmitters = [...transmitters];
           let tUpdated = 0;
@@ -559,6 +576,9 @@ export const useAppStore = create<AppState>()(
 
               let tIndex = newTransmitters.findIndex(t => String(t.platform_id) === pid);
               
+              const parsedMsgTs = safeParseDate(msg.timestamp);
+              const msgIsoTimestamp = !isNaN(parsedMsgTs) ? new Date(parsedMsgTs).toISOString() : msg.timestamp;
+
               if (tIndex === -1) {
                   newTransmitters.push({
                       id: `trans-${pid}`,
@@ -567,7 +587,7 @@ export const useAppStore = create<AppState>()(
                       status: 'active',
                       bird_id: '',
                       battery_voltage: decodedBattery,
-                      last_fix: msg.timestamp,
+                      last_fix: msgIsoTimestamp,
                       duty_cycle: 'Unknown',
                       deployed: true
                   });
@@ -576,7 +596,8 @@ export const useAppStore = create<AppState>()(
               } else {
                   // Update existing transmitter with new battery if message is as new as current last_fix
                   const t = newTransmitters[tIndex];
-                  if (decodedBattery !== undefined && (!t.last_fix || new Date(msg.timestamp) >= new Date(t.last_fix))) {
+                  const parsedLastFix = safeParseDate(t.last_fix);
+                  if (decodedBattery !== undefined && (isNaN(parsedLastFix) || parsedMsgTs >= parsedLastFix)) {
                       newTransmitters[tIndex] = {
                           ...t,
                           battery_voltage: decodedBattery
@@ -586,13 +607,13 @@ export const useAppStore = create<AppState>()(
               }
 
               if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) > 1 && Math.abs(lon) > 1) {
-                  const key = `${pid}|${msg.timestamp}|${lat}|${lon}`;
+                  const key = `${pid}|${msgIsoTimestamp}|${lat}|${lon}`;
                   if (!existingPosKeys.has(key)) {
                       existingPosKeys.add(key);
                       const newPos: Position = {
                           id: `pos-${msg.id}`,
                           transmitter_id: pid,
-                          timestamp: msg.timestamp,
+                          timestamp: msgIsoTimestamp,
                           lat: lat,
                           lon: lon,
                           lc: msg.lc as any,
@@ -620,7 +641,7 @@ export const useAppStore = create<AppState>()(
 
               if (pttPositions.length > 0) {
                   const timestamps = pttPositions
-                      .map(p => new Date((p as any).timestamp).getTime())
+                      .map(p => safeParseDate((p as any).timestamp))
                       .filter(ts => !isNaN(ts));
 
                   if (timestamps.length > 0) {
