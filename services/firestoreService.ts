@@ -145,26 +145,86 @@ export const subscribeToCollection = <T>(
 
 // ─── Optimized Position Queries ────────────────────────────────────────────────
 
+const safeParseDate = (ts: any): number => {
+    if (!ts) return NaN;
+    if (typeof ts === 'number') return ts;
+    const str = String(ts);
+    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (dmyMatch) {
+        const [_, d, m, y, h, min, s] = dmyMatch;
+        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+    }
+    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch2) {
+        const [_, d, m, y] = dmyMatch2;
+        return Date.UTC(Number(y), Number(m)-1, Number(d));
+    }
+    return new Date(str).getTime();
+};
+
 export const loadLatestPositionsPerTransmitter = async (transmitterIds: string[]) => {
   try {
     const promises: Promise<any>[] = [];
     
-    transmitterIds.forEach(id => {
-      // 1 latest position (whether GPS or Doppler)
-      promises.push(
-        getDocs(query(
-          collection(db, 'positions'),
-          where('transmitter_id', '==', id),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        )).then(snap => snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() })
-      );
+    transmitterIds.forEach(rawId => {
+      const id = String(rawId);
+      
+      const p1 = getDocs(query(
+        collection(db, 'positions'),
+        where('transmitter_id', '==', id),
+        orderBy('timestamp', 'desc'),
+        limit(5)
+      )).then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      const p2 = getDocs(query(
+        collection(db, 'argos_positions'),
+        where('platformId', '==', id),
+        orderBy('timestamp', 'desc'),
+        limit(5)
+      )).then(snap => snap.docs.map(d => {
+        const data = d.data();
+        let numLon = Number(data.lon);
+        if (id === '242086' && !isNaN(numLon) && numLon < 0) {
+          numLon = Math.abs(numLon);
+        }
+        return {
+          id: d.id,
+          transmitter_id: String(data.platformId || id),
+          timestamp: data.timestamp,
+          lat: Number(data.lat),
+          lon: numLon,
+          lc: data.lc || 'Z',
+          is_kalman: false,
+          speed_kmh: 0,
+          course: 0,
+          satellite: data.satellite || 'UNK',
+          locationType: data.locationType || 'Doppler'
+        };
+      }));
+
+      promises.push(Promise.all([p1, p2]).then(([posList, argosList]) => {
+        const combined: any[] = [...posList, ...argosList];
+        if (combined.length === 0) return null;
+
+        combined.sort((a: any, b: any) => {
+          const tsA = safeParseDate(a.timestamp);
+          const tsB = safeParseDate(b.timestamp);
+          return (isNaN(tsB) ? 0 : tsB) - (isNaN(tsA) ? 0 : tsA);
+        });
+
+        const best: any = combined[0];
+        if (String(best.transmitter_id) === '242086' && Number(best.lon) < 0) {
+          best.lon = Math.abs(Number(best.lon));
+        }
+
+        return best;
+      }));
     });
 
     const results = await Promise.all(promises);
     const validPositions = results.filter(p => p !== null);
     
-    console.log(`[Firestore] Loaded ${validPositions.length} latest positions for ${transmitterIds.length} transmitters`);
+    console.log(`[Firestore] Loaded ${validPositions.length} latest positions (from positions + argos_positions) for ${transmitterIds.length} transmitters`);
     return validPositions;
   } catch (error) {
     console.error(`[Firestore] Error loading latest positions per transmitter:`, error);
