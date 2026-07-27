@@ -146,55 +146,10 @@ export const Transmitters = () => {
                 btn.innerHTML = 'Calculating...';
                 btn.disabled = true;
                 try {
-                  const db = (await import('../firebase')).db;
-                  const { collection, query, where, getDocs } = await import('firebase/firestore');
-                  const { evaluateTransmitterStatus } = await import('../utils/statusCalculator');
                   const store = useAppStore.getState();
-                  const currentTransmitters = store.transmitters;
-                  
-                  let debugLog = "Evaluation Results:\n";
-                  let numUpdated = 0;
-
-                  for (const t of currentTransmitters) {
-                    const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
-                    const snap = await getDocs(qPos);
-                    const positions = snap.docs.map(d => d.data());
-                    const { status, isNesting } = evaluateTransmitterStatus(t, positions);
-                    
-                    if (t.derived_status !== status) {
-                      numUpdated++;
-                      try {
-                        if (t.derived_status === 'Active' && (status === 'Potential Mortality' || status === 'Inactive')) {
-                           const bird = store.birds.find(b => b.id === t.bird_id);
-                           store.addAlert({
-                              id: `status-alert-${t.platform_id}-${Date.now()}`,
-                              type: status === 'Inactive' ? 'no_fix' : 'speed_anomaly',
-                              severity: 'critical',
-                              transmitter_id: t.platform_id,
-                              bird_name: bird?.ring_id || 'Unknown',
-                              message: `CRITICAL: Bird Status changed from Active to ${status}`,
-                              timestamp: new Date().toISOString(),
-                              status: 'active'
-                           });
-                        }
-                        const { saveDocument } = await import('../services/firestoreService');
-                        await saveDocument('transmitters', t.id, { derived_status: status });
-                      } catch (err: any) {
-                        console.error(`DB Update Error for ${t.platform_id}: ${err.message}`);
-                      }
-                    }
-                  }
-                  
-                  if (numUpdated > 0) {
-                    const { loadCollection } = await import('../services/firestoreService');
-                    const freshTransmitters = await loadCollection('transmitters');
-                    store.transmitters = freshTransmitters as any;
-                    // Force a re-render by updating the store using the set function if available
-                    useAppStore.setState({ transmitters: freshTransmitters as any });
-                  }
-                  
-                  // Run the background update just in case it missed anything
-                  store.recalculateTransmitterStatuses();
+                  await store.recalculateTransmitterStatuses((msg) => {
+                    btn.innerHTML = msg;
+                  });
                 } catch (err: any) {
                   alert('Failed: ' + err.message);
                 } finally {

@@ -19,6 +19,23 @@ import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
 import type { Role } from '../types';
 
+const safeParseDate = (ts: any): number => {
+    if (!ts) return NaN;
+    if (typeof ts === 'number') return ts;
+    const str = String(ts);
+    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (dmyMatch) {
+        const [_, d, m, y, h, min, s] = dmyMatch;
+        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+    }
+    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch2) {
+        const [_, d, m, y] = dmyMatch2;
+        return Date.UTC(Number(y), Number(m)-1, Number(d));
+    }
+    return new Date(str).getTime();
+};
+
 interface AppState {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -503,23 +520,6 @@ export const useAppStore = create<AppState>()(
       // Argos API → mapArgosApiData() → syncArgosToFirebase() → Firebase
       // NO data is stored in zustand state arrays. NO LocalStorage.
       syncArgosToFirebase: async (incomingMessages, incomingDevices = [], onProgress) => {
-          const safeParseDate = (ts: any): number => {
-              if (!ts) return NaN;
-              if (typeof ts === 'number') return ts;
-              const str = String(ts);
-              const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-              if (dmyMatch) {
-                  const [_, d, m, y, h, min, s] = dmyMatch;
-                  return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
-              }
-              const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-              if (dmyMatch2) {
-                  const [_, d, m, y] = dmyMatch2;
-                  return Date.UTC(Number(y), Number(m)-1, Number(d));
-              }
-              return new Date(str).getTime();
-          };
-
           const { transmitters, positions, addAlert } = get();
           let newTransmitters = [...transmitters];
           let tUpdated = 0;
@@ -684,14 +684,18 @@ export const useAppStore = create<AppState>()(
           for (let i = 0; i < newTransmitters.length; i++) {
               const t = newTransmitters[i];
               try {
-                  // Fetch all argos_positions for this transmitter to calculate accurate barycenters
-                  // IMPORTANT: platformId is always stored as a STRING in argos_positions — must coerce here
-                          const q = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
-                          const snapshot = await getDocs(q);
-                          const allPositions = snapshot.docs.map(doc => doc.data());
+                          // Fetch both argos_positions and positions for this transmitter to calculate accurate barycenters & status
+                          const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
+                          const snapArgos = await getDocs(qArgos);
+                          const argosPositions = snapArgos.docs.map(doc => doc.data());
+
+                          const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
+                          const snapPos = await getDocs(qPos);
+                          const manualPositions = snapPos.docs.map(doc => doc.data());
+
+                          const allPositions = [...argosPositions, ...manualPositions];
                           
-                          // ALWAYS recalculate last_fix from the full Firebase argos_positions database.
-                          // The in-memory t.last_fix can be stale or in wrong format — don't trust it.
+                          // ALWAYS recalculate last_fix from the full Firebase database (argos_positions + positions).
                           let correctedLastFix = t.last_fix;
                           if (allPositions.length > 0) {
                               const allTimestamps = allPositions
@@ -701,7 +705,6 @@ export const useAppStore = create<AppState>()(
                                   const maxTs = Math.max(...allTimestamps);
                                   const maxIso = new Date(maxTs).toISOString();
                                   const currentTs = safeParseDate(t.last_fix);
-                                  // Write if we don't have a valid current timestamp, or database has something newer
                                   if (isNaN(currentTs) || maxTs > currentTs) {
                                       correctedLastFix = maxIso;
                                       t.last_fix = maxIso;
@@ -899,18 +902,43 @@ export const useAppStore = create<AppState>()(
           const currentTransmitters = [...get().transmitters];
           let updated = 0;
 
-          for (const t of currentTransmitters) {
+          for (let i = 0; i < currentTransmitters.length; i++) {
+            const t = currentTransmitters[i];
             try {
-              const qPos = query(
-                collection(db, 'positions'),
-                where('transmitter_id', '==', String(t.platform_id))
-              );
-              const snapshotPos = await getDocs(qPos);
-              const allPositions = snapshotPos.docs.map(d => d.data());
+              const pidStr = String(t.platform_id);
+              
+              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr));
+              const snapArgos = await getDocs(qArgos);
+              const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-              const { status: newStatus, isNesting } = evaluateTransmitterStatus(t, allPositions);
+              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr));
+              const snapPos = await getDocs(qPos);
+              const manualPositions = snapPos.docs.map(doc => doc.data());
+
+              const allPositions = [...argosPositions, ...manualPositions];
+
+              let correctedLastFix = t.last_fix;
+              if (allPositions.length > 0) {
+                  const allTimestamps = allPositions
+                      .map(p => safeParseDate(p.timestamp || p.locationDate))
+                      .filter(ts => !isNaN(ts) && ts > 0);
+                  if (allTimestamps.length > 0) {
+                      const maxTs = Math.max(...allTimestamps);
+                      const maxIso = new Date(maxTs).toISOString();
+                      const currentTs = safeParseDate(t.last_fix);
+                      if (isNaN(currentTs) || maxTs > currentTs) {
+                          correctedLastFix = maxIso;
+                          currentTransmitters[i].last_fix = maxIso;
+                          await saveDocument('transmitters', t.id, { last_fix: maxIso });
+                          updated++;
+                      }
+                  }
+              }
+
+              const { status: newStatus, isNesting } = evaluateTransmitterStatus({ ...t, last_fix: correctedLastFix }, allPositions);
 
               if (t.derived_status !== newStatus) {
+                currentTransmitters[i].derived_status = newStatus;
                 await saveDocument('transmitters', t.id, { derived_status: newStatus });
                 updated++;
               }
@@ -941,8 +969,7 @@ export const useAppStore = create<AppState>()(
             onProgress?.('All transmitter statuses are up to date.');
           }
         } catch (err) {
-          console.error('[AppStore] Background status calc error:', err);
-          onProgress?.('Error calculating statuses.');
+          console.error('[AppStore] Error in recalculateTransmitterStatuses:', err);
         }
       },
 
