@@ -4,6 +4,23 @@ function degreesToRadians(degrees: number) {
   return degrees * (Math.PI / 180);
 }
 
+// Safely parse dates including DD/MM/YYYY HH:mm:ss format from Argos API
+function safeParseTimestamp(ts: any): number {
+    if (!ts) return NaN;
+    if (typeof ts === 'number') return ts;
+    const str = String(ts);
+    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (dmyMatch) {
+        const [_, d, m, y, h, min, s] = dmyMatch;
+        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+    }
+    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch2) {
+        const [_, d, m, y] = dmyMatch2;
+        return Date.UTC(Number(y), Number(m)-1, Number(d));
+    }
+    return new Date(str).getTime();
+}
 function calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters
   const φ1 = degreesToRadians(lat1);
@@ -78,14 +95,14 @@ export function evaluateTransmitterStatus(
     return !(isNaN(pLat) || isNaN(pLon) || (Math.abs(pLat) <= 1 && Math.abs(pLon) <= 1));
   });
 
-  const allSorted = [...validPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const allSorted = [...validPositions].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
   
   if (allSorted.length === 0) {
     return { status: 'Inactive', isNesting: false };
   }
 
   const latestPos = allSorted[allSorted.length - 1];
-  const latestTime = new Date(latestPos.timestamp).getTime();
+  const latestTime = safeParseTimestamp(latestPos.timestamp);
   const now = new Date().getTime();
 
   // 1. Check Inactive (> 10 days since last transmission)
@@ -98,7 +115,7 @@ export function evaluateTransmitterStatus(
     return { status: 'Active', isNesting: false };
   }
 
-  const sorted = [...qualityPositions].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const sorted = [...qualityPositions].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
   // 2. Global Static Test Check (>70% of points < 20m from global center)
   let sumLat = 0, sumLon = 0;
@@ -137,9 +154,9 @@ export function evaluateTransmitterStatus(
   });
 
   if (clusterPositions.length >= 3) {
-    const clusterSorted = [...clusterPositions].sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-    const firstClusterTime = new Date(clusterSorted[0].timestamp).getTime();
-    const latestGpsTime = new Date(clusterSorted[clusterSorted.length - 1].timestamp).getTime();
+    const clusterSorted = [...clusterPositions].sort((a,b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+    const firstClusterTime = safeParseTimestamp(clusterSorted[0].timestamp);
+    const latestGpsTime = safeParseTimestamp(clusterSorted[clusterSorted.length - 1].timestamp);
     const durationDays = (latestGpsTime - firstClusterTime) / (1000 * 60 * 60 * 24);
 
     // Rule: Early mortality detection starts as early as 3.0 days, and continues indefinitely
@@ -148,7 +165,7 @@ export function evaluateTransmitterStatus(
 
       // Positions across the full time window of this cluster (firstClusterTime to latestGpsTime)
       const windowPositions = sorted.filter(p => {
-        const t = new Date(p.timestamp).getTime();
+        const t = safeParseTimestamp(p.timestamp);
         return t >= firstClusterTime && t <= latestGpsTime;
       });
 
@@ -186,7 +203,14 @@ export function evaluateTransmitterStatus(
         const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
         const dist = calculateHaversineDistance(robustCenter.lat, robustCenter.lon, pLat, pLon);
 
-        const utcDate = new Date(p.timestamp);
+        // Fallback to Date if timestamp is ISO, or parse DD/MM/YYYY
+        let utcDate: Date;
+        if (typeof p.timestamp === 'string' && p.timestamp.includes('/')) {
+            utcDate = new Date(safeParseTimestamp(p.timestamp));
+        } else {
+            utcDate = new Date(p.timestamp);
+        }
+        
         const localHour = (utcDate.getUTCHours() + localOffsetHours + 24) % 24;
 
         // Foraging Hours: 05:00-10:00 (morning) or 17:00-20:00 (evening)
