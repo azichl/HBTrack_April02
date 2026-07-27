@@ -66,15 +66,22 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         const gpsDate = item.gpsLocDate || item.location?.locationDate;
         const msgDate = item.msgDatetime || item.bestDate || item.date || new Date().toISOString();
         const ts = gpsDate ? gpsDate : msgDate;
-        const platformId = item.deviceRef || item.platformId || 'Unknown';
+        const platformId = String(item.deviceRef || item.platformId || 'Unknown');
+        let numLat = Number(lat);
+        let numLon = Number(lon);
         
+        // Auto-correct negative longitude to positive for transmitter 242086
+        if (platformId === '242086' && !isNaN(numLon) && numLon < 0) {
+            numLon = Math.abs(numLon);
+        }
+
         return {
             id: `msg-${item.deviceMsgUid || Math.random().toString(36).substr(2,9)}`,
             programId: item.programRef || item.programNumber || 'Unknown',
             platformId: platformId,
             timestamp: ts,
-            lat: Number(lat).toFixed(4),
-            lon: Number(lon).toFixed(4),
+            lat: numLat.toFixed(4),
+            lon: numLon.toFixed(4),
             lc: String(lc),
             msgType: 'DS', 
             satellite: item.kineisMetadata?.sat || 'UNK',

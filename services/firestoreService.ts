@@ -282,15 +282,21 @@ export const batchWriteArgosPositions = async (
     const chunk = messages.slice(i, i + BATCH_LIMIT);
     
     chunk.forEach(msg => {
-      const lat = parseFloat(msg.lat);
-      const lon = parseFloat(msg.lon);
+      const pidStr = String(msg.platformId);
+      let lat = parseFloat(msg.lat);
+      let lon = parseFloat(msg.lon);
       if (isNaN(lat) || isNaN(lon)) return; // skip invalid coords
       
-      const docId = makeArgosDocId(String(msg.platformId), lat, lon, msg.timestamp);
+      // Auto-correct negative longitude to positive for transmitter 242086
+      if (pidStr === '242086' && lon < 0) {
+        lon = Math.abs(lon);
+      }
+
+      const docId = makeArgosDocId(pidStr, lat, lon, msg.timestamp);
       const ref = doc(db, 'argos_positions', docId);
       
       batch.set(ref, {
-        platformId: String(msg.platformId),
+        platformId: pidStr,
         programId: String(msg.programId || ''),
         lat: lat,
         lon: lon,

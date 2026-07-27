@@ -101,18 +101,14 @@ export const Monitoring = () => {
   const latestPositions = useMemo(() => {
     const map = new Map<string, Position>();
     positions.forEach(p => {
+      let currentPos = p;
       const pid = String(p.transmitter_id || (p as any).platformId);
-      if (pid === '242086') {
-        const locType = String(p.locationType || (p as any).location_type || '').toUpperCase();
-        const lc = String(p.lc || '').toUpperCase().trim();
-        const lon = Number(p.lon);
-        if (locType === 'DOPPLER' || (lc !== 'GPS' && lc !== 'G' && locType !== 'GPS') || lon < 0) {
-          return;
-        }
+      if (pid === '242086' && Number(p.lon) < 0) {
+        currentPos = { ...p, lon: Math.abs(Number(p.lon)) };
       }
-      const current = map.get(p.transmitter_id);
-      if (!current || new Date(p.timestamp).getTime() > new Date(current.timestamp).getTime()) {
-        map.set(p.transmitter_id, p);
+      const current = map.get(pid);
+      if (!current || new Date(currentPos.timestamp).getTime() > new Date(current.timestamp).getTime()) {
+        map.set(pid, currentPos);
       }
     });
     return map;
@@ -130,15 +126,6 @@ export const Monitoring = () => {
           const snapshot = await getDocs(q);
           const allTimestamps = snapshot.docs
             .map(d => d.data())
-            .filter(d => {
-              if (pid === '242086') {
-                const locType = String(d.locationType || '').toUpperCase();
-                const lc = String(d.lc || '').toUpperCase().trim();
-                const lon = Number(d.lon);
-                if (locType === 'DOPPLER' || (lc !== 'GPS' && lc !== 'G' && locType !== 'GPS') || lon < 0) return false;
-              }
-              return true;
-            })
             .map(d => safeParseDate(d.timestamp))
             .filter(ts => !isNaN(ts) && ts > 0);
           if (allTimestamps.length > 0) {
@@ -172,9 +159,8 @@ export const Monitoring = () => {
 
       let displayLat = pos?.lat;
       let displayLon = pos?.lon;
-      if (pid === '242086' && (!displayLon || displayLon < 0 || !pos || (pos.locationType && pos.locationType.toUpperCase() === 'DOPPLER'))) {
-        displayLat = 31.74033;
-        displayLon = 0.39550;
+      if (pid === '242086' && displayLon !== undefined && displayLon < 0) {
+        displayLon = Math.abs(displayLon);
       }
 
       return {

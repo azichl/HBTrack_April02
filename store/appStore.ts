@@ -695,11 +695,20 @@ export const useAppStore = create<AppState>()(
 
                           let allPositions = [...argosPositions, ...manualPositions];
                           if (String(t.platform_id) === '242086') {
-                            allPositions = allPositions.filter(p => {
-                              const locType = String(p.locationType || p.location_type || '').toUpperCase();
-                              const lc = String(p.lc || '').toUpperCase().trim();
+                            allPositions = allPositions.map(p => {
                               const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
-                              return (locType === 'GPS' || lc === 'GPS' || lc === 'G') && lon > 0;
+                              if (!isNaN(lon) && lon < 0) {
+                                return { ...p, lon: Math.abs(lon), longitude: Math.abs(lon) };
+                              }
+                              return p;
+                            });
+
+                            // Fix negative lon docs in Firebase argos_positions
+                            snapArgos.docs.forEach(async (docSnap) => {
+                              const data = docSnap.data();
+                              if (Number(data.lon) < 0) {
+                                await saveDocument('argos_positions', docSnap.id, { lon: Math.abs(Number(data.lon)) });
+                              }
                             });
                           }
                           
@@ -925,11 +934,20 @@ export const useAppStore = create<AppState>()(
 
               let allPositions = [...argosPositions, ...manualPositions];
               if (pidStr === '242086') {
-                allPositions = allPositions.filter(p => {
-                  const locType = String(p.locationType || p.location_type || '').toUpperCase();
-                  const lc = String(p.lc || '').toUpperCase().trim();
+                allPositions = allPositions.map(p => {
                   const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
-                  return (locType === 'GPS' || lc === 'GPS' || lc === 'G') && lon > 0;
+                  if (!isNaN(lon) && lon < 0) {
+                    return { ...p, lon: Math.abs(lon), longitude: Math.abs(lon) };
+                  }
+                  return p;
+                });
+
+                // Fix negative lon docs in Firebase argos_positions
+                snapArgos.docs.forEach(async (docSnap) => {
+                  const data = docSnap.data();
+                  if (Number(data.lon) < 0) {
+                    await saveDocument('argos_positions', docSnap.id, { lon: Math.abs(Number(data.lon)) });
+                  }
                 });
               }
 

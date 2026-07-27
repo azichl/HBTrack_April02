@@ -61,17 +61,19 @@ export function evaluateTransmitterStatus(
   transmitter: Transmitter, 
   positions: any[]
 ): { status: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test', isNesting: boolean } {
-  // Specific fix for transmitter 242086: ignore Doppler / negative longitude points
+  // Specific fix for transmitter 242086: convert all negative longitudes to positive longitudes
   if (String(transmitter.platform_id) === '242086' && positions && positions.length > 0) {
-    positions = positions.filter(p => {
-      const locType = String(p.locationType || p.location_type || '').toUpperCase();
-      const lc = String(p.lc || '').toUpperCase().trim();
-      const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
-      // Keep only GPS points with positive longitude
-      if (locType === 'DOPPLER' || (lc !== 'GPS' && lc !== 'G' && locType !== 'GPS') || pLon < 0) {
-        return false;
+    positions = positions.map(p => {
+      const pLon = p.lon !== undefined ? parseFloat(p.lon) : (p.longitude !== undefined ? parseFloat(p.longitude) : NaN);
+      if (!isNaN(pLon) && pLon < 0) {
+        const positiveLon = Math.abs(pLon);
+        return {
+          ...p,
+          lon: p.lon !== undefined ? positiveLon : p.lon,
+          longitude: p.longitude !== undefined ? positiveLon : p.longitude
+        };
       }
-      return true;
+      return p;
     });
   }
 
