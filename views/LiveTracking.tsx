@@ -976,8 +976,8 @@ export const LiveTracking = () => {
             return;
         }
 
-        // Filter by historyFixType (Location Type)
-        if (historyFixType !== 'All' && p.locationType !== historyFixType) return;
+        // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
+        if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && p.locationType !== historyFixType) return;
 
         const currentTs = safeParseTimestamp(p.timestamp);
         // Skip invalid dates
@@ -1157,6 +1157,7 @@ export const LiveTracking = () => {
       setSelectedTransmitterIds([]);
       setSearchQuery("");
       setShowHistory(false); 
+      setHistoryFixType('All');
   };
   
   const selectAllFiltered = () => {
