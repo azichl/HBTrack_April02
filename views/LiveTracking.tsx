@@ -8,6 +8,23 @@ import { formatDateTime, formatBattery } from '../utils/formatting';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
+
+const safeParseTimestamp = (ts: any): number => {
+    if (!ts) return NaN;
+    if (typeof ts === 'number') return ts;
+    const str = String(ts);
+    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (dmyMatch) {
+        const [_, d, m, y, h, min, s] = dmyMatch;
+        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+    }
+    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch2) {
+        const [_, d, m, y] = dmyMatch2;
+        return Date.UTC(Number(y), Number(m)-1, Number(d));
+    }
+    return new Date(str).getTime();
+};
 // Use exact user-requested hex colors for the map markers, adjusted size
 const createSvgIcon = (colorHex: string) => {
   return L.divIcon({
@@ -800,11 +817,13 @@ export const LiveTracking = () => {
     const latestMap = new Map<string, typeof positions[0]>();
     
     positions.forEach(p => {
+        const pid = String(p.transmitter_id);
+
         // Filter by transmitter status validity
-        if (!relevantIds.has(p.transmitter_id)) return;
+        if (!relevantIds.has(pid)) return;
 
         // Filter by selection (if any selection is active in search)
-        if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(p.transmitter_id)) {
+        if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(pid)) {
             return;
         }
 
@@ -814,21 +833,50 @@ export const LiveTracking = () => {
         // Filter by historyFixType (Location Type)
         if (historyFixType !== 'All' && p.locationType !== historyFixType) return;
 
-        const currentTs = new Date(p.timestamp).getTime();
+        const currentTs = safeParseTimestamp(p.timestamp);
         // Skip invalid dates
-        if (isNaN(currentTs)) return;
+        if (isNaN(currentTs) || currentTs <= 0) return;
 
-        const existing = latestMap.get(p.transmitter_id);
+        const existing = latestMap.get(pid);
         
         // Strict Time Comparison: Keep the one with greater timestamp
         if (!existing) {
-            latestMap.set(p.transmitter_id, p);
+            latestMap.set(pid, p);
         } else {
-             const existingTs = new Date(existing.timestamp).getTime();
+             const existingTs = safeParseTimestamp(existing.timestamp);
              if (currentTs > existingTs) {
-                 latestMap.set(p.transmitter_id, p);
+                 latestMap.set(pid, p);
              }
         }
+    });
+
+    // Fallback: For transmitters with no position in 7-day memory cache, use transmitter's last_fix & coords
+    relevantTransmitters.forEach(t => {
+      const pid = String(t.platform_id);
+      if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(pid)) return;
+      if (!latestMap.has(pid)) {
+        const rawLat = (t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat;
+        const rawLon = (t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon;
+        let displayLon = Number(rawLon || 0);
+        if (pid === '242086' && displayLon < 0) {
+          displayLon = Math.abs(displayLon);
+        }
+        if (rawLat || t.last_fix) {
+          latestMap.set(pid, {
+            id: `fallback-pos-${t.id}`,
+            transmitter_id: pid,
+            timestamp: t.last_fix || new Date().toISOString(),
+            lat: Number(rawLat || 0),
+            lon: displayLon,
+            lc: 'GPS',
+            is_kalman: false,
+            speed_kmh: 0,
+            course: 0,
+            satellite: 'GPS',
+            locationType: 'GPS'
+          } as any);
+        }
+      }
     });
 
     // OVERRIDE WITH HISTORY IF ACTIVE
