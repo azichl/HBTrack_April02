@@ -133,7 +133,7 @@ export function evaluateTransmitterStatus(
 
   const sorted = [...qualityPositions].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
-  // 2. Global Static Test Check (>70% of points < 20m from global center)
+  // 2. Global Static Test Check (>=80% of points <= 20m from global center)
   let sumLat = 0, sumLon = 0;
   sorted.forEach(p => {
     sumLat += p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
@@ -145,12 +145,12 @@ export function evaluateTransmitterStatus(
     const pLat = p.lat !== undefined ? parseFloat(p.lat) : parseFloat(p.latitude);
     const pLon = p.lon !== undefined ? parseFloat(p.lon) : parseFloat(p.longitude);
     const dist = calculateHaversineDistance(globalCenter.lat, globalCenter.lon, pLat, pLon);
-    if (dist < 20) {
+    if (dist <= 20) {
       pointsNearGlobalBarycenter++;
     }
   });
 
-  if ((pointsNearGlobalBarycenter / sorted.length) >= 0.70) {
+  if ((pointsNearGlobalBarycenter / sorted.length) >= 0.80) {
     if (transmitter.bird_id && transmitter.bird_id.trim() !== '') {
       return { status: 'Potential Mortality', isNesting: false };
     }
@@ -242,9 +242,9 @@ export function evaluateTransmitterStatus(
 
       const hasForagingFlights = foragingFixesCount > 0 && (foragingFlightsCount / foragingFixesCount) >= 0.20;
 
-      if (mov50 <= 30) {
-        // High attendance (>=80%), tight max spread (mov95 <= 350m), or high repetition -> Potential Mortality
-        if (percPos >= 0.80 || mov95 <= 350 || copyPasteRate >= 0.25) {
+      if (mov50 <= 20) {
+        // High attendance (>=80%), tight max spread (mov95 <= 20m), or high repetition -> Potential Mortality
+        if (percPos >= 0.80 || mov95 <= 20 || copyPasteRate >= 0.25) {
           return { status: 'Potential Mortality', isNesting: false };
         }
 
