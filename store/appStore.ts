@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice } from '../types';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
 import { evaluateTransmitterStatus } from '../utils/statusCalculator';
@@ -173,6 +173,7 @@ interface AppState {
 
   // Firestore Actions
   initializeFromFirestore: () => Promise<void>;
+  purgeZeroCoordinates: () => Promise<void>;
   recalculateTransmitterStatuses: (onProgress?: (msg: string) => void) => Promise<void>;
   subscribeToLivePositions: () => () => void;
 
@@ -818,11 +819,55 @@ export const useAppStore = create<AppState>()(
         onProgress?.('✅ Done.');
       },
 
+      purgeZeroCoordinates: async () => {
+        try {
+          console.log('[AppStore] Purging zero coordinates from Firebase...');
+          const [posSnap, argosSnap] = await Promise.all([
+            getDocs(collection(db, 'positions')),
+            getDocs(collection(db, 'argos_positions'))
+          ]);
+
+          const docsToDelete: any[] = [];
+
+          posSnap.forEach((docSnap) => {
+            const data = docSnap.data();
+            const lat = Number(data.lat !== undefined ? data.lat : data.latitude);
+            const lon = Number(data.lon !== undefined ? data.lon : data.longitude);
+            if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) {
+              docsToDelete.push(docSnap.ref);
+            }
+          });
+
+          argosSnap.forEach((docSnap) => {
+            const data = docSnap.data();
+            const lat = Number(data.lat !== undefined ? data.lat : data.latitude);
+            const lon = Number(data.lon !== undefined ? data.lon : data.longitude);
+            if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) {
+              docsToDelete.push(docSnap.ref);
+            }
+          });
+
+          if (docsToDelete.length > 0) {
+            console.log(`[AppStore] Purging ${docsToDelete.length} zero coordinate documents from Firebase...`);
+            for (let i = 0; i < docsToDelete.length; i += 400) {
+              const chunk = docsToDelete.slice(i, i + 400);
+              const b = writeBatch(db);
+              chunk.forEach(ref => b.delete(ref));
+              await b.commit();
+            }
+            console.log('[AppStore] Purge zero coordinates complete!');
+          }
+        } catch (err) {
+          console.warn('[AppStore] Error purging zero coordinates:', err);
+        }
+      },
+
       // ─── Firestore Initialization ──────────────────────────────────────────
       initializeFromFirestore: async () => {
 
         try {
           console.log('[AppStore] Loading data from Firestore...');
+          get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
           const [fsTransmitters, fsBirds, fsAlerts, fsUsers] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),

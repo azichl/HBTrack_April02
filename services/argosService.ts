@@ -70,8 +70,13 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         let numLat = Number(lat);
         let numLon = Number(lon);
         
+        // Reject zero/invalid coordinates at ingestion
+        if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
+            return null;
+        }
+
         // Auto-correct negative longitude to positive for transmitter 242086
-        if (platformId === '242086' && !isNaN(numLon) && numLon < 0) {
+        if (platformId === '242086' && numLon < 0) {
             numLon = Math.abs(numLon);
         }
 

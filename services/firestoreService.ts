@@ -203,7 +203,11 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: string[]
       }));
 
       promises.push(Promise.all([p1, p2]).then(([posList, argosList]) => {
-        const combined: any[] = [...posList, ...argosList];
+        const combined: any[] = [...posList, ...argosList].filter((item: any) => {
+          const numLat = Number(item.lat);
+          const numLon = Number(item.lon);
+          return !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
+        });
         if (combined.length === 0) return null;
 
         combined.sort((a: any, b: any) => {
@@ -345,7 +349,7 @@ export const batchWriteArgosPositions = async (
       const pidStr = String(msg.platformId);
       let lat = parseFloat(msg.lat);
       let lon = parseFloat(msg.lon);
-      if (isNaN(lat) || isNaN(lon)) return; // skip invalid coords
+      if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return; // skip zero coords
       
       // Auto-correct negative longitude to positive for transmitter 242086
       if (pidStr === '242086' && lon < 0) {

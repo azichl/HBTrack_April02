@@ -827,8 +827,12 @@ export const LiveTracking = () => {
             return;
         }
 
-        // Filter invalid coordinates for marker display
-        if (p.lat === 0 && p.lon === 0) return;
+        // Filter invalid zero coordinates for marker display
+        const numLat = Number(p.lat);
+        const numLon = Number(p.lon);
+        if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
+            return;
+        }
 
         // Filter by historyFixType (Location Type)
         if (historyFixType !== 'All' && p.locationType !== historyFixType) return;
@@ -857,17 +861,26 @@ export const LiveTracking = () => {
       if (!latestMap.has(pid)) {
         const rawLat = (t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat;
         const rawLon = (t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon;
-        let displayLon = Number(rawLon || 0);
-        if (pid === '242086' && displayLon < 0) {
-          displayLon = Math.abs(displayLon);
+        const numLat = Number(rawLat || 0);
+        let numLon = Number(rawLon || 0);
+
+        // Auto-correct negative longitude for 242086
+        if (pid === '242086' && numLon < 0) {
+          numLon = Math.abs(numLon);
         }
-        if (rawLat || t.last_fix) {
+
+        // NEVER render fallback marker if coordinates are zero / invalid!
+        if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
+            return;
+        }
+
+        if (t.last_fix) {
           latestMap.set(pid, {
             id: `fallback-pos-${t.id}`,
             transmitter_id: pid,
             timestamp: t.last_fix || new Date().toISOString(),
-            lat: Number(rawLat || 0),
-            lon: displayLon,
+            lat: numLat,
+            lon: numLon,
             lc: 'GPS',
             is_kalman: false,
             speed_kmh: 0,
