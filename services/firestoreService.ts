@@ -124,6 +124,62 @@ export const loadCollection = async <T>(collectionName: string): Promise<T[]> =>
   }
 };
 
+/**
+ * Load only RECENT alerts: active (unresolved) + resolved within last 7 days.
+ * This avoids reading 900+ archived alert documents on every refresh.
+ */
+export const loadRecentAlerts = async <T>(): Promise<T[]> => {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const cutoffISO = sevenDaysAgo.toISOString();
+
+    // Query 1: All active (unresolved) alerts
+    const activeQuery = query(
+      collection(db, 'alerts'),
+      where('status', '!=', 'resolved')
+    );
+
+    // Query 2: Recently resolved alerts (last 7 days only)
+    const recentResolvedQuery = query(
+      collection(db, 'alerts'),
+      where('status', '==', 'resolved'),
+      where('timestamp', '>=', cutoffISO),
+      limit(200)
+    );
+
+    const [activeSnap, recentSnap] = await Promise.all([
+      getDocs(activeQuery),
+      getDocs(recentResolvedQuery)
+    ]);
+
+    const data: T[] = [];
+    const seenIds = new Set<string>();
+
+    activeSnap.forEach((doc) => {
+      if (!seenIds.has(doc.id)) {
+        seenIds.add(doc.id);
+        data.push({ id: doc.id, ...doc.data() } as unknown as T);
+      }
+    });
+
+    recentSnap.forEach((doc) => {
+      if (!seenIds.has(doc.id)) {
+        seenIds.add(doc.id);
+        data.push({ id: doc.id, ...doc.data() } as unknown as T);
+      }
+    });
+
+    console.log(`[Firestore] Loaded ${data.length} recent alerts (${activeSnap.size} active + ${recentSnap.size} recent resolved)`);
+    return data;
+  } catch (error) {
+    console.error(`[Firestore] Error loading recent alerts:`, error);
+    // Fallback: load all alerts if the optimized query fails (e.g., missing index)
+    console.warn('[Firestore] Falling back to loading all alerts...');
+    return loadCollection<T>('alerts');
+  }
+};
+
 // ─── Real-Time Listeners ──────────────────────────────────────────────────────
 
 export const subscribeToCollection = <T>(

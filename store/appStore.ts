@@ -7,7 +7,7 @@ import { logUserActivity } from '../services/activityLogger';
 import { evaluateTransmitterStatus } from '../utils/statusCalculator';
 import { 
   saveDocument, deleteDocument, savePositions, 
-  loadCollection, subscribeToCollection, 
+  loadCollection, loadRecentAlerts, subscribeToCollection, 
   loadRecentPositions, subscribeToRecentPositions,
   loadLatestPositionsPerTransmitter,
   syncTransmitters, syncBirds, syncAlerts,
@@ -331,13 +331,13 @@ export const useAppStore = create<AppState>()(
       },
       cleanupOldAlerts: () => {
         set((state) => {
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          const sevenDaysAgo = new Date();
+          sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
           
           const oldResolvedAlerts = state.alerts.filter(a => {
             if (a.status !== 'resolved') return false;
             const alertDate = new Date(a.timestamp);
-            return alertDate < thirtyDaysAgo;
+            return alertDate < sevenDaysAgo;
           });
           
           if (oldResolvedAlerts.length === 0) return state;
@@ -345,6 +345,7 @@ export const useAppStore = create<AppState>()(
           const idsToDelete = oldResolvedAlerts.map(a => a.id);
           const keptAlerts = state.alerts.filter(a => !idsToDelete.includes(a.id));
           
+          console.log(`[AppStore] Cleaning up ${idsToDelete.length} old resolved alerts (>7 days)`);
           fireAndForget(() => batchDeleteDocuments('alerts', idsToDelete));
           return { alerts: keptAlerts, lastSaved: new Date().toISOString() };
         });
@@ -837,7 +838,7 @@ export const useAppStore = create<AppState>()(
           const [fsTransmitters, fsBirds, fsAlerts, fsUsers] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
-            loadCollection<Alert>('alerts'),
+            loadRecentAlerts<Alert>(),
             loadCollection<User>('users'),
           ]);
 
@@ -908,8 +909,44 @@ export const useAppStore = create<AppState>()(
             lastSaved: new Date().toISOString()
           });
           
-          // Cleanup old resolved alerts (older than 30 days)
+          // Cleanup old resolved alerts (older than 7 days) from in-memory state
           get().cleanupOldAlerts();
+
+          // One-time background Firestore cleanup: delete archived resolved alerts >7 days old
+          // This cleans up the ~800+ old alerts that loadRecentAlerts no longer loads
+          fireAndForget(async () => {
+            try {
+              const sevenDaysAgo = new Date();
+              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+              const cutoffISO = sevenDaysAgo.toISOString();
+
+              const oldResolvedQuery = query(
+                collection(db, 'alerts'),
+                where('status', '==', 'resolved'),
+                where('timestamp', '<', cutoffISO)
+              );
+              const oldSnap = await getDocs(oldResolvedQuery);
+              if (oldSnap.size > 0) {
+                console.log(`[AppStore] Deleting ${oldSnap.size} old archived alerts from Firestore...`);
+                const batch = writeBatch(db);
+                let ops = 0;
+                const batches = [batch];
+                oldSnap.forEach(docSnap => {
+                  batches[batches.length - 1].delete(docSnap.ref);
+                  ops++;
+                  if (ops % 400 === 0) {
+                    batches.push(writeBatch(db));
+                  }
+                });
+                for (const b of batches) {
+                  await b.commit();
+                }
+                console.log(`[AppStore] Deleted ${oldSnap.size} old archived alerts from Firestore.`);
+              }
+            } catch (err) {
+              console.warn('[AppStore] Error cleaning up old Firestore alerts:', err);
+            }
+          });
 
           console.log(`[AppStore] Firestore init complete: ${mergedTransmitters.length} transmitters, ${mergedBirds.length} birds, ${recentPositions.length} positions, role: ${role}`);
 
