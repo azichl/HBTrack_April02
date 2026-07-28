@@ -666,37 +666,36 @@ export const bulkUpdateRecords = async (collectionName: string, docIds: string[]
 
 // ─── Position-Specific Operations ─────────────────────────────────────────────
 
-/** Fetch historical positions for specific transmitters within a date range.
- *  Queries argos_positions (primary data store) using platformId.
- *  Falls back to the processed positions collection if needed.
- */
 export const getHistoricalPositions = async (transmitterIds: string[], startDate: Date, endDate: Date) => {
-  console.log('[Firestore] getHistoricalPositions called with:', { transmitterIds, startDate, endDate });
+  console.log('[Firestore] getHistoricalPositions called for PTTs:', transmitterIds, { startDate, endDate });
   if (!transmitterIds || transmitterIds.length === 0) {
-    console.log('[Firestore] getHistoricalPositions: No transmitter IDs provided.');
     return [];
   }
 
   const startMs = startDate.getTime();
   const endMs   = endDate.getTime();
+  const combinedHistory: any[] = [];
 
-  // ── 1. Query argos_positions (primary source, always has data) ─────────────
   try {
-    let allArgosPositions: any[] = [];
-
     for (let i = 0; i < transmitterIds.length; i += 10) {
       const chunk = transmitterIds.slice(i, i + 10);
 
       for (const pttId of chunk) {
-        console.log(`[Firestore] Querying argos_positions for PTT: ${pttId}`);
-        const q = query(
-          collection(db, 'argos_positions'),
-          where('platformId', '==', String(pttId)),
-          limit(3000)
-        );
-        const snap = await getDocs(q);
-        console.log(`[Firestore] PTT ${pttId} returned ${snap.size} documents from argos_positions`);
-        snap.forEach(docSnap => {
+        const pidStr = String(pttId);
+
+        // Fetch from both positions and argos_positions in parallel
+        const q1 = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr));
+        const q2 = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr));
+
+        const [snap1, snap2] = await Promise.all([
+          getDocs(q1).catch(() => ({ forEach: () => {} } as any)),
+          getDocs(q2).catch(() => ({ forEach: () => {} } as any))
+        ]);
+
+        const pttDocs: any[] = [];
+        const seenKeys = new Set<string>();
+
+        const processDoc = (docSnap: any) => {
           const d = docSnap.data();
           const docTs = safeParseDate(d.timestamp);
           if (isNaN(docTs) || docTs < startMs || docTs > endMs) return;
@@ -705,9 +704,14 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
           let lon = Number(d.lon);
           if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return;
 
-          if (String(pttId) === '242086' && lon < 0) {
+          if (pidStr === '242086' && lon < 0) {
             lon = Math.abs(lon);
           }
+
+          // Deduplicate by timestamp and coordinate
+          const dedupeKey = `${docTs}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
+          if (seenKeys.has(dedupeKey)) return;
+          seenKeys.add(dedupeKey);
 
           const lcStr = String(d.lc || '').toUpperCase();
           const rawLocType = String(d.locationType || '').toUpperCase();
@@ -720,10 +724,10 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
             locType = 'GPS';
           }
 
-          allArgosPositions.push({
+          pttDocs.push({
             id: docSnap.id,
-            transmitter_id: String(d.platformId || pttId),
-            platformId: String(d.platformId || pttId),
+            transmitter_id: pidStr,
+            platformId: pidStr,
             lat: lat,
             lon: lon,
             timestamp: d.timestamp,
@@ -732,82 +736,19 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
             locationType: locType,
             speed_kmh: d.speed_kmh || 0,
           });
-        });
+        };
+        snap1.forEach((d: any) => processDoc(d));
+        snap2.forEach((d: any) => processDoc(d));
+
+        combinedHistory.push(...pttDocs);
       }
     }
 
-    if (allArgosPositions.length > 0) {
-      allArgosPositions.sort((a, b) =>
-        safeParseDate(a.timestamp) - safeParseDate(b.timestamp)
-      );
-      console.log(`[Firestore] Loaded ${allArgosPositions.length} historical positions from argos_positions`);
-      return allArgosPositions;
-    } else {
-      console.log('[Firestore] No positions found in argos_positions, falling back to positions.');
-    }
+    combinedHistory.sort((a, b) => safeParseDate(a.timestamp) - safeParseDate(b.timestamp));
+    console.log(`[Firestore] getHistoricalPositions returning ${combinedHistory.length} total combined records`);
+    return combinedHistory;
   } catch (error) {
-    console.warn('[Firestore] argos_positions query failed, falling back to positions:', error);
-  }
-
-  // ── 2. Fallback: query processed positions collection ──────────────────────
-  try {
-    let allPositions: any[] = [];
-
-    for (let i = 0; i < transmitterIds.length; i += 10) {
-      const chunk = transmitterIds.slice(i, i + 10);
-
-      for (const pttId of chunk) {
-        console.log(`[Firestore] Fallback query: positions for PTT: ${pttId}`);
-        const q = query(
-          collection(db, 'positions'),
-          where('transmitter_id', '==', String(pttId)),
-          limit(3000)
-        );
-        const snap = await getDocs(q);
-        console.log(`[Firestore] Fallback PTT ${pttId} returned ${snap.size} documents from positions`);
-        snap.forEach(docSnap => {
-          const d = docSnap.data();
-          const docTs = safeParseDate(d.timestamp);
-          if (isNaN(docTs) || docTs < startMs || docTs > endMs) return;
-
-          const lat = Number(d.lat);
-          let lon = Number(d.lon);
-          if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return;
-
-          if (String(pttId) === '242086' && lon < 0) {
-            lon = Math.abs(lon);
-          }
-
-          const lcStr = String(d.lc || '').toUpperCase();
-          const rawLocType = String(d.locationType || '').toUpperCase();
-          let locType: 'GPS' | 'Doppler' = 'Doppler';
-          if (rawLocType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
-            locType = 'GPS';
-          } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
-            locType = 'Doppler';
-          } else if (rawLocType === 'GPS') {
-            locType = 'GPS';
-          }
-
-          allPositions.push({
-            id: docSnap.id,
-            ...d,
-            transmitter_id: String(d.transmitter_id || pttId),
-            lon: Number(d.lon),
-            timestamp: d.timestamp,
-            locationType: d.locationType || 'Doppler',
-          });
-        });
-      }
-    }
-
-    allPositions.sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    console.log(`[Firestore] Loaded ${allPositions.length} historical positions from positions (fallback)`);
-    return allPositions;
-  } catch (error) {
-    console.error('[Firestore] Error fetching historical positions fallback:', error);
+    console.error('[Firestore] Error in getHistoricalPositions:', error);
     return [];
   }
 };
