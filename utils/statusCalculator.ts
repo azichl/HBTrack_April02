@@ -248,6 +248,12 @@ export function evaluateTransmitterStatus(
           return { status: 'Potential Mortality', isNesting: false };
         }
 
+        // Biological Cap: Houbara female incubation lasts at most 21-24 days.
+        // A cluster persisting at the same location for >= 30 days CANNOT be nesting -> Potential Mortality.
+        if (durationDays >= 30.0) {
+          return { status: 'Potential Mortality', isNesting: false };
+        }
+
         // Nesting check: Nesting female incubates midday & night, but makes foraging flights (>350m) during morning/evening
         if (hasForagingFlights && mov95 <= 2000) {
           return { status: 'Active', isNesting: true };
