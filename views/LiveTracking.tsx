@@ -399,6 +399,16 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
   );
 };
 
+const haversineDistMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 interface TransmitterMarkerProps {
     pos: any;
     transmitter: any;
@@ -408,9 +418,12 @@ interface TransmitterMarkerProps {
     setShowHistory: (show: boolean) => void;
     setNavTarget?: (target: {id: string, lat: number, lon: number} | null) => void;
     isTrackingUser?: boolean;
+    latestPositions?: any[];
+    transmitters?: any[];
+    birds?: any[];
 }
 
-// Extracted Marker Component to fix Popup data staleness issue
+// Extracted Marker Component to fix Popup data staleness issue & support Group Selection for overlapping markers
 const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({ 
     pos, 
     transmitter, 
@@ -419,13 +432,34 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     setSelectedTransmitterIds, 
     setShowHistory,
     setNavTarget,
-    isTrackingUser
+    isTrackingUser,
+    latestPositions = [],
+    transmitters = [],
+    birds = []
 }) => {
     const { setActiveTab } = useAppStore();
     const [isOpen, setIsOpen] = useState(false);
+    const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
+    const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
+
+    // Compute overlapping positions within 300 meters
+    const overlappingPositions = useMemo(() => {
+        if (!latestPositions || latestPositions.length === 0) return [pos];
+        return latestPositions.filter(p => {
+            const dist = haversineDistMeters(pos.lat, pos.lon, p.lat, p.lon);
+            return dist <= 300;
+        });
+    }, [latestPositions, pos.lat, pos.lon]);
+
+    const isGroup = overlappingPositions.length > 1;
+
+    // Use current active single pos (either initial pos or user-clicked item in list)
+    const currentPos = selectedSinglePos || pos;
+    const currentTransmitter = transmitters.find(t => String(t.platform_id) === String(currentPos.transmitter_id)) || transmitter;
+    const currentBird = birds.find(b => b.id === currentTransmitter?.bird_id) || bird;
 
     // Props are now passed directly to ensure reactivity
-    const status = transmitter?.derived_status || transmitter?.status || 'inactive';
+    const status = currentTransmitter?.derived_status || currentTransmitter?.status || 'inactive';
     
     let badgeColorClass = 'bg-[#FF2A00]/20 text-[#FF2A00]'; 
     if (status === 'Active' || status === 'active') badgeColorClass = 'bg-green-100 text-green-700';
@@ -438,7 +472,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFEA00]';
 
     const handleAIAnalysis = () => {
-        setSelectedTransmitterIds([pos.transmitter_id]);
+        setSelectedTransmitterIds([currentPos.transmitter_id]);
         setActiveTab('AI Predictions');
     };
 
@@ -449,6 +483,11 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
             eventHandlers={{
                 popupopen: () => {
                     setIsOpen(true);
+                    if (overlappingPositions.length > 1) {
+                        setActiveTabMode('group');
+                    } else {
+                        setActiveTabMode('single');
+                    }
                     if (setNavTarget) {
                         setNavTarget({id: pos.transmitter_id, lat: pos.lat, lon: pos.lon});
                     }
@@ -463,83 +502,186 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                 className="!bg-transparent !border-0 !shadow-none !p-0 before:!hidden"
             >
                 <div 
-                    className={`px-1.5 py-0 rounded-full shadow-sm text-xs font-bold ${ticketClass}`}
+                    className={`px-1.5 py-0 rounded-full shadow-sm text-xs font-bold flex items-center gap-1 ${ticketClass}`}
                     style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                 >
-                    {pos.transmitter_id}
+                    {isGroup ? (
+                        <>
+                            <Layers size={10} className="text-brand-600" />
+                            <span>Group ({overlappingPositions.length})</span>
+                        </>
+                    ) : (
+                        <span>{pos.transmitter_id}</span>
+                    )}
                 </div>
             </Tooltip>
 
-            <Popup className="custom-popup" minWidth={310} maxWidth={330} autoPan={true}>
-                <div className="p-1 w-[290px] min-w-[290px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
-                    <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-slate-700">
-                        <h3 className="font-bold text-brand-900 dark:text-white text-base">PTT {pos.transmitter_id}</h3>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${badgeColorClass}`}>
-                            {status}
-                        </span>
-                    </div>
-                    
-                    <div className="space-y-2 text-xs">
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Bird</span>
-                            <span className="font-medium text-gray-800 dark:text-gray-200">{bird?.ring_id || 'Unassigned'}</span>
+            <Popup className="custom-popup" minWidth={310} maxWidth={340} autoPan={true}>
+                <div className="p-1 w-[300px] min-w-[300px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+                    {isGroup && (
+                        <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg mb-2 text.11px font-bold">
+                            <button
+                                onClick={() => setActiveTabMode('group')}
+                                className={`flex-1 py-1 rounded-md transition-all flex items-center justify-center gap-1 ${
+                                    activeTabMode === 'group' 
+                                    ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-900'
+                                }`}
+                            >
+                                <Layers size={12} /> Group List ({overlappingPositions.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTabMode('single')}
+                                className={`flex-1 py-1 rounded-md transition-all flex items-center justify-center gap-1 ${
+                                    activeTabMode === 'single' 
+                                    ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-900'
+                                }`}
+                            >
+                                <CircleDot size={12} /> PTT {currentPos.transmitter_id} Details
+                            </button>
                         </div>
-                        <div className="flex justify-between items-start">
-                            <span className="text-gray-500 flex items-center gap-1 mt-0.5"><Clock size={12}/> Last Fix</span>
-                            <LocationTimestamp timestamp={pos.timestamp} lat={pos.lat} lon={pos.lon} fallbackTimeZone={timeZone} />
+                    )}
+
+                    {activeTabMode === 'group' && isGroup ? (
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between pb-1.5 border-b border-gray-100 dark:border-slate-700">
+                                <span className="font-bold text-gray-900 dark:text-white text-xs">
+                                    {overlappingPositions.length} Transmitters at Location
+                                </span>
+                                <button
+                                    onClick={() => {
+                                        const pttIds = overlappingPositions.map(p => String(p.transmitter_id));
+                                        setSelectedTransmitterIds(pttIds);
+                                        setShowHistory(true);
+                                    }}
+                                    className="text-[10px] bg-brand-600 hover:bg-brand-700 text-white font-bold px-2 py-1 rounded-md transition-colors shadow-sm flex items-center gap-1"
+                                >
+                                    <CheckCircle2 size={11} /> Select All ({overlappingPositions.length})
+                                </button>
+                            </div>
+
+                            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                                {overlappingPositions.map(itemPos => {
+                                    const itemT = transmitters.find(t => String(t.platform_id) === String(itemPos.transmitter_id));
+                                    const itemB = birds.find(b => b.id === itemT?.bird_id);
+                                    const itemStatus = itemT?.derived_status || itemT?.status || 'inactive';
+                                    
+                                    let sBadge = 'bg-red-100 text-red-700';
+                                    if (itemStatus === 'Active' || itemStatus === 'active') sBadge = 'bg-green-100 text-green-700';
+                                    if (itemStatus === 'Potential Mortality') sBadge = 'bg-[#FFAA33]/20 text-[#FFAA33]';
+                                    if (itemStatus === 'Static test') sBadge = 'bg-[#FFEA00]/20 text-[#e6b800]';
+
+                                    const isCurrentSelected = String(itemPos.transmitter_id) === String(currentPos.transmitter_id);
+
+                                    return (
+                                        <div 
+                                            key={itemPos.transmitter_id}
+                                            onClick={() => {
+                                                setSelectedSinglePos(itemPos);
+                                                setActiveTabMode('single');
+                                            }}
+                                            className={`p-2 rounded-lg border transition-all flex items-center justify-between cursor-pointer ${
+                                                isCurrentSelected 
+                                                ? 'bg-brand-50/90 dark:bg-brand-900/30 border-brand-300 dark:border-brand-700' 
+                                                : 'bg-gray-50/80 dark:bg-slate-800 border-gray-100 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700'
+                                            }`}
+                                        >
+                                            <div>
+                                                <div className="font-bold text-gray-900 dark:text-white text-xs">PTT {itemPos.transmitter_id}</div>
+                                                <div className="text-[10px] text-gray-500 dark:text-gray-400">{itemB ? `Bird: ${itemB.ring_id}` : 'Unassigned'}</div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sBadge}`}>{itemStatus}</span>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedTransmitterIds([String(itemPos.transmitter_id)]);
+                                                        setShowHistory(true);
+                                                    }}
+                                                    className="p-1 text-brand-600 hover:text-brand-700 hover:bg-brand-100 rounded transition-colors"
+                                                    title="Focus & Show History"
+                                                >
+                                                    <History size={12} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-gray-500 flex items-center gap-1"><Battery size={12}/> Battery</span>
-                            <span className={`font-medium ${
-                                (transmitter?.battery_voltage || 0) < 3.5 && (transmitter?.battery_voltage || 0) > 0 
-                                ? 'text-red-600' : 'text-green-600'
-                            }`}>
-                                {formatBattery(transmitter?.battery_voltage)}
-                            </span>
-                        </div>
-                        {pos.locationType && (
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-500 flex items-center gap-1"><Navigation size={12}/> Type</span>
-                                <span className="font-medium text-blue-600">
-                                    {pos.locationType}
+                    ) : (
+                        <div>
+                            <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-slate-700">
+                                <h3 className="font-bold text-brand-900 dark:text-white text-base">PTT {currentPos.transmitter_id}</h3>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${badgeColorClass}`}>
+                                    {status}
                                 </span>
                             </div>
-                        )}
-                    </div>
+                            
+                            <div className="space-y-2 text-xs">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Bird</span>
+                                    <span className="font-medium text-gray-800 dark:text-gray-200">{currentBird?.ring_id || 'Unassigned'}</span>
+                                </div>
+                                <div className="flex justify-between items-start">
+                                    <span className="text-gray-500 flex items-center gap-1 mt-0.5"><Clock size={12}/> Last Fix</span>
+                                    <LocationTimestamp timestamp={currentPos.timestamp} lat={currentPos.lat} lon={currentPos.lon} fallbackTimeZone={timeZone} />
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500 flex items-center gap-1"><Battery size={12}/> Battery</span>
+                                    <span className={`font-medium ${
+                                        (currentTransmitter?.battery_voltage || 0) < 3.5 && (currentTransmitter?.battery_voltage || 0) > 0 
+                                        ? 'text-red-600' : 'text-green-600'
+                                    }`}>
+                                        {formatBattery(currentTransmitter?.battery_voltage)}
+                                    </span>
+                                </div>
+                                {currentPos.locationType && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500 flex items-center gap-1"><Navigation size={12}/> Type</span>
+                                        <span className="font-medium text-blue-600">
+                                            {currentPos.locationType}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
 
-                    <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700 flex justify-between text-xs text-gray-400">
-                        <span>Lat: {pos.lat?.toFixed(4)}</span>
-                        <span>Lon: {pos.lon?.toFixed(4)}</span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 mt-3">
-                        <button 
-                            onClick={() => {
-                                setSelectedTransmitterIds([pos.transmitter_id]);
-                                setShowHistory(true);
-                            }}
-                            className="py-1.5 bg-brand-50 text-brand-700 font-semibold rounded hover:bg-brand-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
-                        >
-                            <History size={12} /> Focus & History
-                        </button>
-                        <button 
-                            onClick={handleAIAnalysis}
-                            className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
-                        >
-                            <BrainCircuit size={12} /> AI Forecast
-                        </button>
-                    </div>
+                            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700 flex justify-between text-xs text-gray-400">
+                                <span>Lat: {currentPos.lat?.toFixed(4)}</span>
+                                <span>Lon: {currentPos.lon?.toFixed(4)}</span>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-2 mt-3">
+                                <button 
+                                    onClick={() => {
+                                        setSelectedTransmitterIds([currentPos.transmitter_id]);
+                                        setShowHistory(true);
+                                    }}
+                                    className="py-1.5 bg-brand-50 text-brand-700 font-semibold rounded hover:bg-brand-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
+                                >
+                                    <History size={12} /> Focus & History
+                                </button>
+                                <button 
+                                    onClick={handleAIAnalysis}
+                                    className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
+                                >
+                                    <BrainCircuit size={12} /> AI Forecast
+                                </button>
+                            </div>
 
-                    <div className="mt-2">
-                        <a
-                            href={`https://earth.google.com/web/search/${pos.lat},${pos.lon}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
-                        >
-                            <Globe size={12} /> Google Earth
-                        </a>
-                    </div>
+                            <div className="mt-2">
+                                <a
+                                    href={`https://earth.google.com/web/search/${currentPos.lat},${currentPos.lon}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
+                                >
+                                    <Globe size={12} /> Google Earth
+                                </a>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </Popup>
         </Marker>
@@ -1416,6 +1558,9 @@ export const LiveTracking = () => {
                         setShowHistory={setShowHistory}
                         setNavTarget={setNavTarget}
                         isTrackingUser={isTrackingUser}
+                        latestPositions={latestPositions}
+                        transmitters={transmitters}
+                        birds={birds}
                     />
                 );
             })}
