@@ -677,43 +677,59 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
     return [];
   }
 
-  const startISO = startDate.toISOString();
-  const endISO   = endDate.toISOString();
-  console.log('[Firestore] query time range (ISO):', { startISO, endISO });
+  const startMs = startDate.getTime();
+  const endMs   = endDate.getTime();
 
   // ── 1. Query argos_positions (primary source, always has data) ─────────────
   try {
     let allArgosPositions: any[] = [];
 
-    // Firestore 'in' supports max 30 values; chunk if needed
     for (let i = 0; i < transmitterIds.length; i += 10) {
       const chunk = transmitterIds.slice(i, i + 10);
 
-      // Query per PTT to avoid needing a composite index on 'in' + range
       for (const pttId of chunk) {
         console.log(`[Firestore] Querying argos_positions for PTT: ${pttId}`);
         const q = query(
           collection(db, 'argos_positions'),
           where('platformId', '==', String(pttId)),
-          where('timestamp', '>=', startISO),
-          where('timestamp', '<=', endISO),
-          orderBy('timestamp', 'asc'),
-          limit(5000)
+          limit(3000)
         );
         const snap = await getDocs(q);
         console.log(`[Firestore] PTT ${pttId} returned ${snap.size} documents from argos_positions`);
         snap.forEach(docSnap => {
           const d = docSnap.data();
+          const docTs = safeParseDate(d.timestamp);
+          if (isNaN(docTs) || docTs < startMs || docTs > endMs) return;
+
+          const lat = Number(d.lat);
+          let lon = Number(d.lon);
+          if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return;
+
+          if (String(pttId) === '242086' && lon < 0) {
+            lon = Math.abs(lon);
+          }
+
+          const lcStr = String(d.lc || '').toUpperCase();
+          const rawLocType = String(d.locationType || '').toUpperCase();
+          let locType: 'GPS' | 'Doppler' = 'Doppler';
+          if (rawLocType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
+            locType = 'GPS';
+          } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
+            locType = 'Doppler';
+          } else if (rawLocType === 'GPS') {
+            locType = 'GPS';
+          }
+
           allArgosPositions.push({
             id: docSnap.id,
-            transmitter_id: String(d.platformId || pttId), // normalise field name
+            transmitter_id: String(d.platformId || pttId),
             platformId: String(d.platformId || pttId),
-            lat: Number(d.lat),
-            lon: Number(d.lon),
+            lat: lat,
+            lon: lon,
             timestamp: d.timestamp,
             lc: d.lc || '',
             satellite: d.satellite || '',
-            locationType: d.locationType || 'Doppler',
+            locationType: locType,
             speed_kmh: d.speed_kmh || 0,
           });
         });
@@ -722,7 +738,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
 
     if (allArgosPositions.length > 0) {
       allArgosPositions.sort((a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        safeParseDate(a.timestamp) - safeParseDate(b.timestamp)
       );
       console.log(`[Firestore] Loaded ${allArgosPositions.length} historical positions from argos_positions`);
       return allArgosPositions;
@@ -745,20 +761,38 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         const q = query(
           collection(db, 'positions'),
           where('transmitter_id', '==', String(pttId)),
-          where('timestamp', '>=', startISO),
-          where('timestamp', '<=', endISO),
-          orderBy('timestamp', 'asc'),
-          limit(5000)
+          limit(3000)
         );
         const snap = await getDocs(q);
         console.log(`[Firestore] Fallback PTT ${pttId} returned ${snap.size} documents from positions`);
         snap.forEach(docSnap => {
           const d = docSnap.data();
+          const docTs = safeParseDate(d.timestamp);
+          if (isNaN(docTs) || docTs < startMs || docTs > endMs) return;
+
+          const lat = Number(d.lat);
+          let lon = Number(d.lon);
+          if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return;
+
+          if (String(pttId) === '242086' && lon < 0) {
+            lon = Math.abs(lon);
+          }
+
+          const lcStr = String(d.lc || '').toUpperCase();
+          const rawLocType = String(d.locationType || '').toUpperCase();
+          let locType: 'GPS' | 'Doppler' = 'Doppler';
+          if (rawLocType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
+            locType = 'GPS';
+          } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
+            locType = 'Doppler';
+          } else if (rawLocType === 'GPS') {
+            locType = 'GPS';
+          }
+
           allPositions.push({
             id: docSnap.id,
             ...d,
             transmitter_id: String(d.transmitter_id || pttId),
-            lat: Number(d.lat),
             lon: Number(d.lon),
             timestamp: d.timestamp,
             locationType: d.locationType || 'Doppler',

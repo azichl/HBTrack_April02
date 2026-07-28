@@ -1099,8 +1099,24 @@ export const LiveTracking = () => {
             let track = rawPositions.filter(p => p.transmitter_id === pttId);
 
             track = track.filter(p => {
-                const validCoords = (p.lat !== 0 || p.lon !== 0) && !isNaN(p.lat) && !isNaN(p.lon);
-                const validType = historyFixType === 'All' || p.locationType === historyFixType;
+                const numLat = Number(p.lat);
+                const numLon = Number(p.lon);
+                const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
+
+                // Compute exact location type (GPS vs Doppler)
+                const lcStr = String(p.lc || '').toUpperCase();
+                const rawType = String(p.locationType || '').toUpperCase();
+                let fixType: 'GPS' | 'Doppler' = 'Doppler';
+                if (rawType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
+                    fixType = 'GPS';
+                } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
+                    fixType = 'Doppler';
+                } else if (rawType === 'GPS') {
+                    fixType = 'GPS';
+                }
+
+                p.locationType = fixType;
+                const validType = historyFixType === 'All' || fixType === historyFixType;
                 return validCoords && validType;
             });
 
