@@ -1063,78 +1063,100 @@ export const LiveTracking = () => {
     return Array.from(latestMap.values());
   }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType, showHistory, historyPaths]);
   
-  // Generate Historical Path (Fetching REAL data from Firestore directly)
+  // ── Cache raw history so changing GPS/Doppler filter does NOT re-fetch from Firestore ──
+  const rawHistoryCache = useRef<any[]>([]);
+  const rawHistoryCacheKey = useRef('');
+
+  // Phase 1: Fetch from Firestore ONLY when date range or selected PTTs change
   useEffect(() => {
     if (!showHistory || selectedTransmitterIds.length === 0) {
+        rawHistoryCache.current = [];
+        rawHistoryCacheKey.current = '';
         setHistoryPaths([]);
+        return;
+    }
+
+    let startDate = new Date();
+    let endDate = new Date();
+    const now = new Date();
+
+    if (historyMode === 'preset') {
+        if (historyPreset === '24h') startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        else if (historyPreset === '7d') startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        else if (historyPreset === '30d') startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        else if (historyPreset === '1y') startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        else if (historyPreset === '2y') startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
+        else startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    } else {
+         startDate = new Date(customDates.start);
+         endDate = new Date(customDates.end);
+         endDate.setHours(23,59,59);
+    }
+
+    const cacheKey = `${selectedTransmitterIds.join(',')}_${startDate.getTime()}_${endDate.getTime()}`;
+    if (cacheKey === rawHistoryCacheKey.current && rawHistoryCache.current.length > 0) {
+        // Data already cached, skip Firestore fetch
         return;
     }
 
     const loadHistory = async () => {
         setIsHistoryLoading(true);
-        
-        let startDate = new Date();
-        let endDate = new Date();
-        const now = new Date();
-
-        if (historyMode === 'preset') {
-            if (historyPreset === '24h') startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            else if (historyPreset === '7d') startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            else if (historyPreset === '30d') startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            else if (historyPreset === '1y') startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-            else if (historyPreset === '2y') startDate = new Date(now.getTime() - 730 * 24 * 60 * 60 * 1000);
-            else startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        } else {
-             startDate = new Date(customDates.start);
-             endDate = new Date(customDates.end);
-             endDate.setHours(23,59,59);
-        }
-
         const rawPositions = await getHistoricalPositions(selectedTransmitterIds, startDate, endDate);
-        
-        const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, color: string}> = [];
-        const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
-
-        selectedTransmitterIds.forEach((pttId, index) => {
-            let track = rawPositions.filter(p => p.transmitter_id === pttId);
-
-            track = track.filter(p => {
-                const numLat = Number(p.lat);
-                const numLon = Number(p.lon);
-                const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
-
-                // Compute exact location type (GPS vs Doppler)
-                const lcStr = String(p.lc || '').toUpperCase();
-                const rawType = String(p.locationType || '').toUpperCase();
-                let fixType: 'GPS' | 'Doppler' = 'Doppler';
-                if (rawType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
-                    fixType = 'GPS';
-                } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
-                    fixType = 'Doppler';
-                } else if (rawType === 'GPS') {
-                    fixType = 'GPS';
-                }
-
-                p.locationType = fixType;
-                const validType = historyFixType === 'All' || fixType === historyFixType;
-                return validCoords && validType;
-            });
-
-            if (track.length > 0) {
-                 newPaths.push({
-                     id: pttId,
-                     path: track.map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp, type: p.locationType })),
-                     color: colors[index % colors.length]
-                 });
-            }
-        });
-        
-        setHistoryPaths(newPaths);
+        rawHistoryCache.current = rawPositions;
+        rawHistoryCacheKey.current = cacheKey;
         setIsHistoryLoading(false);
     };
 
     loadHistory();
-  }, [showHistory, historyMode, historyPreset, customDates, historyFixType, selectedTransmitterIds]);
+  }, [showHistory, historyMode, historyPreset, customDates, selectedTransmitterIds]);
+
+  // Phase 2: Filter cached raw data by GPS/Doppler type (NO Firestore reads)
+  useEffect(() => {
+    if (!showHistory || selectedTransmitterIds.length === 0 || rawHistoryCache.current.length === 0) {
+        if (!showHistory || selectedTransmitterIds.length === 0) setHistoryPaths([]);
+        return;
+    }
+
+    const rawPositions = rawHistoryCache.current;
+    const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, color: string}> = [];
+    const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
+
+    selectedTransmitterIds.forEach((pttId, index) => {
+        let track = rawPositions.filter(p => p.transmitter_id === pttId);
+
+        track = track.filter(p => {
+            const numLat = Number(p.lat);
+            const numLon = Number(p.lon);
+            const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
+
+            // Compute exact location type (GPS vs Doppler)
+            const lcStr = String(p.lc || '').toUpperCase();
+            const rawType = String(p.locationType || '').toUpperCase();
+            let fixType: 'GPS' | 'Doppler' = 'Doppler';
+            if (rawType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
+                fixType = 'GPS';
+            } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
+                fixType = 'Doppler';
+            } else if (rawType === 'GPS') {
+                fixType = 'GPS';
+            }
+
+            p.locationType = fixType;
+            const validType = historyFixType === 'All' || fixType === historyFixType;
+            return validCoords && validType;
+        });
+
+        if (track.length > 0) {
+             newPaths.push({
+                 id: pttId,
+                 path: track.map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp, type: p.locationType })),
+                 color: colors[index % colors.length]
+             });
+        }
+    });
+    
+    setHistoryPaths(newPaths);
+  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current]);
 
   // Filter transmitters for search suggestion
   const searchResults = useMemo(() => {

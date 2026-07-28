@@ -820,46 +820,10 @@ export const useAppStore = create<AppState>()(
       },
 
       purgeZeroCoordinates: async () => {
-        try {
-          console.log('[AppStore] Purging zero coordinates from Firebase...');
-          const [posSnap, argosSnap] = await Promise.all([
-            getDocs(collection(db, 'positions')),
-            getDocs(collection(db, 'argos_positions'))
-          ]);
-
-          const docsToDelete: any[] = [];
-
-          posSnap.forEach((docSnap) => {
-            const data = docSnap.data();
-            const lat = Number(data.lat !== undefined ? data.lat : data.latitude);
-            const lon = Number(data.lon !== undefined ? data.lon : data.longitude);
-            if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) {
-              docsToDelete.push(docSnap.ref);
-            }
-          });
-
-          argosSnap.forEach((docSnap) => {
-            const data = docSnap.data();
-            const lat = Number(data.lat !== undefined ? data.lat : data.latitude);
-            const lon = Number(data.lon !== undefined ? data.lon : data.longitude);
-            if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) {
-              docsToDelete.push(docSnap.ref);
-            }
-          });
-
-          if (docsToDelete.length > 0) {
-            console.log(`[AppStore] Purging ${docsToDelete.length} zero coordinate documents from Firebase...`);
-            for (let i = 0; i < docsToDelete.length; i += 400) {
-              const chunk = docsToDelete.slice(i, i + 400);
-              const b = writeBatch(db);
-              chunk.forEach(ref => b.delete(ref));
-              await b.commit();
-            }
-            console.log('[AppStore] Purge zero coordinates complete!');
-          }
-        } catch (err) {
-          console.warn('[AppStore] Error purging zero coordinates:', err);
-        }
+        // Zero-coordinate purge already completed and ingestion now filters them.
+        // This is a no-op to avoid thousands of reads on every app refresh.
+        // To re-run manually, use the Database > Purge Invalid Coordinates button.
+        console.log('[AppStore] purgeZeroCoordinates skipped (already completed, ingestion filters active)');
       },
 
       // ─── Firestore Initialization ──────────────────────────────────────────
@@ -867,7 +831,8 @@ export const useAppStore = create<AppState>()(
 
         try {
           console.log('[AppStore] Loading data from Firestore...');
-          get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
+          // purgeZeroCoordinates disabled on init — zero coords are now filtered at ingestion time
+          // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
           const [fsTransmitters, fsBirds, fsAlerts, fsUsers] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),

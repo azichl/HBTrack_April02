@@ -667,86 +667,99 @@ export const bulkUpdateRecords = async (collectionName: string, docIds: string[]
 // ─── Position-Specific Operations ─────────────────────────────────────────────
 
 export const getHistoricalPositions = async (transmitterIds: string[], startDate: Date, endDate: Date) => {
-  console.log('[Firestore] getHistoricalPositions called for PTTs:', transmitterIds, { startDate, endDate });
+  console.log('[Firestore] getHistoricalPositions called for PTTs:', transmitterIds.length);
   if (!transmitterIds || transmitterIds.length === 0) {
     return [];
   }
 
   const startMs = startDate.getTime();
   const endMs   = endDate.getTime();
-  const combinedHistory: any[] = [];
+  const allResults: any[] = [];
+
+  // Helper: classify locationType from lc field
+  const classifyLocType = (lc: string, rawLocType: string): 'GPS' | 'Doppler' => {
+    const lcUp = lc.toUpperCase();
+    const rtUp = rawLocType.toUpperCase();
+    if (rtUp === 'GPS' || lcUp === 'GPS' || lcUp === 'G') return 'GPS';
+    if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcUp)) return 'Doppler';
+    return 'Doppler';
+  };
+
+  // Helper: process a Firestore doc snapshot into a position record
+  const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
+    const d = docSnap.data();
+    const docTs = safeParseDate(d.timestamp);
+    if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
+
+    const lat = Number(d.lat);
+    let lon = Number(d.lon);
+    if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return null;
+
+    if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
+
+    const dedupeKey = `${docTs}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
+    if (seenKeys.has(dedupeKey)) return null;
+    seenKeys.add(dedupeKey);
+
+    return {
+      id: docSnap.id,
+      transmitter_id: pidStr,
+      platformId: pidStr,
+      lat, lon,
+      timestamp: d.timestamp,
+      lc: d.lc || '',
+      satellite: d.satellite || '',
+      locationType: classifyLocType(String(d.lc || ''), String(d.locationType || '')),
+      speed_kmh: d.speed_kmh || 0,
+    };
+  };
 
   try {
-    for (let i = 0; i < transmitterIds.length; i += 10) {
-      const chunk = transmitterIds.slice(i, i + 10);
+    for (const pttId of transmitterIds) {
+      const pidStr = String(pttId);
+      const seenKeys = new Set<string>();
+      let pttDocs: any[] = [];
 
-      for (const pttId of chunk) {
-        const pidStr = String(pttId);
-
-        // Fetch from both positions and argos_positions in parallel
-        const q1 = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr));
-        const q2 = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr));
-
-        const [snap1, snap2] = await Promise.all([
-          getDocs(q1).catch(() => ({ forEach: () => {} } as any)),
-          getDocs(q2).catch(() => ({ forEach: () => {} } as any))
-        ]);
-
-        const pttDocs: any[] = [];
-        const seenKeys = new Set<string>();
-
-        const processDoc = (docSnap: any) => {
-          const d = docSnap.data();
-          const docTs = safeParseDate(d.timestamp);
-          if (isNaN(docTs) || docTs < startMs || docTs > endMs) return;
-
-          const lat = Number(d.lat);
-          let lon = Number(d.lon);
-          if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return;
-
-          if (pidStr === '242086' && lon < 0) {
-            lon = Math.abs(lon);
-          }
-
-          // Deduplicate by timestamp and coordinate
-          const dedupeKey = `${docTs}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
-          if (seenKeys.has(dedupeKey)) return;
-          seenKeys.add(dedupeKey);
-
-          const lcStr = String(d.lc || '').toUpperCase();
-          const rawLocType = String(d.locationType || '').toUpperCase();
-          let locType: 'GPS' | 'Doppler' = 'Doppler';
-          if (rawLocType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
-            locType = 'GPS';
-          } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
-            locType = 'Doppler';
-          } else if (rawLocType === 'GPS') {
-            locType = 'GPS';
-          }
-
-          pttDocs.push({
-            id: docSnap.id,
-            transmitter_id: pidStr,
-            platformId: pidStr,
-            lat: lat,
-            lon: lon,
-            timestamp: d.timestamp,
-            lc: d.lc || '',
-            satellite: d.satellite || '',
-            locationType: locType,
-            speed_kmh: d.speed_kmh || 0,
-          });
-        };
-        snap1.forEach((d: any) => processDoc(d));
-        snap2.forEach((d: any) => processDoc(d));
-
-        combinedHistory.push(...pttDocs);
+      // ── Primary: query argos_positions (limit 5000 per PTT to cap reads) ──
+      try {
+        const qArgos = query(
+          collection(db, 'argos_positions'),
+          where('platformId', '==', pidStr),
+          limit(5000)
+        );
+        const snap = await getDocs(qArgos);
+        snap.forEach((ds: any) => {
+          const rec = processDoc(ds, pidStr, seenKeys);
+          if (rec) pttDocs.push(rec);
+        });
+      } catch (e) {
+        console.warn(`[Firestore] argos_positions query failed for ${pidStr}:`, e);
       }
+
+      // ── Fallback: only query positions if argos_positions returned nothing ──
+      if (pttDocs.length === 0) {
+        try {
+          const qPos = query(
+            collection(db, 'positions'),
+            where('transmitter_id', '==', pidStr),
+            limit(5000)
+          );
+          const snap = await getDocs(qPos);
+          snap.forEach((ds: any) => {
+            const rec = processDoc(ds, pidStr, seenKeys);
+            if (rec) pttDocs.push(rec);
+          });
+        } catch (e) {
+          console.warn(`[Firestore] positions query failed for ${pidStr}:`, e);
+        }
+      }
+
+      allResults.push(...pttDocs);
     }
 
-    combinedHistory.sort((a, b) => safeParseDate(a.timestamp) - safeParseDate(b.timestamp));
-    console.log(`[Firestore] getHistoricalPositions returning ${combinedHistory.length} total combined records`);
-    return combinedHistory;
+    allResults.sort((a, b) => safeParseDate(a.timestamp) - safeParseDate(b.timestamp));
+    console.log(`[Firestore] getHistoricalPositions returning ${allResults.length} records`);
+    return allResults;
   } catch (error) {
     console.error('[Firestore] Error in getHistoricalPositions:', error);
     return [];
