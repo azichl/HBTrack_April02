@@ -159,8 +159,8 @@ export const RealTimeAlerts = () => {
                   <div className="text-xs text-gray-400 pl-6">{formatDateTime(alert.timestamp, timeZone).split(' ')[0] || '-'}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="text-sm font-semibold text-gray-900 dark:text-white">{alert.bird_name}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">PTT {alert.transmitter_id}</div>
+                  <div className="text-sm font-bold text-gray-900 dark:text-white">PTT {alert.transmitter_id}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{alert.bird_name ? `Bird: ${alert.bird_name}` : 'Unassigned'}</div>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
                   {alert.message}

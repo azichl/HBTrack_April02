@@ -743,7 +743,7 @@ export const useAppStore = create<AppState>()(
                                       severity: 'critical',
                                       transmitter_id: t.platform_id,
                                       bird_name: bird?.ring_id || 'Unknown',
-                                      message: `CRITICAL: Bird Status changed from Active to ${derived}`,
+                                      message: `CRITICAL: PTT ${t.platform_id} status changed from Active to ${derived}`,
                                       timestamp: new Date().toISOString(),
                                       status: 'active'
                                   });

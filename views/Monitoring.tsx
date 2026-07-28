@@ -289,19 +289,18 @@ export const Monitoring = () => {
                       </div>
                       <div>
                         <button 
-                          onClick={() => setDatabaseActiveTab('Birds')} 
-                          className="font-bold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 hover:underline text-left block transition-colors"
-                          title="View Bird Details"
-                          style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
-                        >
-                          {row.bird_ring_id}
-                        </button>
-                        <button 
                             onClick={() => setDatabaseActiveTab('Transmitters')}
-                            className="text-xs text-gray-500 dark:text-gray-400 font-mono hover:text-brand-600 dark:hover:text-brand-400 hover:underline text-left block transition-colors"
+                            className="font-bold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 hover:underline text-left block transition-colors"
                             title="View PTT Details"
                         >
                           PTT {row.platform_id}
+                        </button>
+                        <button 
+                          onClick={() => setDatabaseActiveTab('Birds')} 
+                          className="text-xs text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:underline text-left block transition-colors"
+                          title="View Bird Details"
+                        >
+                          {row.bird_ring_id !== 'Unassigned' ? `Bird: ${row.bird_ring_id}` : 'Unassigned'}
                         </button>
                       </div>
                     </div>
