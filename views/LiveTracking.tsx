@@ -473,7 +473,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                     {isGroup ? (
                         <>
                             <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
-                            <span>{overlappingPositions.length} Transmitters</span>
+                            <span>{overlappingPositions.length} PTTs</span>
                         </>
                     ) : (
                         <span>{pos.transmitter_id}</span>
@@ -650,7 +650,226 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                 </div>
             </Popup>
         </Marker>
-    );;
+    );
+};
+
+interface ClusterMarkerProps {
+    cluster: { lat: number; lon: number; positions: any[] };
+    transmitters: any[];
+    birds: any[];
+    timeZone: string;
+    setSelectedTransmitterIds: (ids: string[]) => void;
+    setShowHistory: (show: boolean) => void;
+}
+
+const ClusterMarker: React.FC<ClusterMarkerProps> = ({
+    cluster,
+    transmitters,
+    birds,
+    timeZone,
+    setSelectedTransmitterIds,
+    setShowHistory
+}) => {
+    const map = useMap();
+    const count = cluster.positions.length;
+
+    const statuses = cluster.positions.map(p => {
+        const t = transmitters.find(tr => String(tr.platform_id) === String(p.transmitter_id));
+        return t?.derived_status || t?.status || 'Active';
+    });
+
+    let borderClass = 'border-emerald-500 text-slate-900';
+    let ringBg = 'bg-emerald-500';
+    if (statuses.includes('Dead')) {
+        borderClass = 'border-red-600 text-red-700';
+        ringBg = 'bg-red-600';
+    } else if (statuses.includes('Potential Mortality')) {
+        borderClass = 'border-[#FFAA33] text-amber-800';
+        ringBg = 'bg-[#FFAA33]';
+    } else if (statuses.includes('Inactive')) {
+        borderClass = 'border-slate-900 text-slate-900';
+        ringBg = 'bg-slate-900';
+    }
+
+    const clusterHtml = `
+        <div class="px-2.5 py-0.5 rounded-full shadow-md text-xs font-bold flex items-center gap-1.5 bg-white text-slate-900 border-2 ${borderClass} cursor-pointer transition-transform hover:scale-105" style="font-family: 'Sakkal Majalla', sans-serif; white-space: nowrap;">
+            <span class="w-2.5 h-2.5 rounded-full ${ringBg} animate-ping"></span>
+            <span class="font-extrabold">${count} PTTs</span>
+        </div>
+    `;
+
+    const clusterIcon = L.divIcon({
+        className: 'custom-cluster-icon',
+        html: clusterHtml,
+        iconSize: [85, 26],
+        iconAnchor: [42, 13]
+    });
+
+    return (
+        <Marker
+            position={[cluster.lat, cluster.lon]}
+            icon={clusterIcon}
+            eventHandlers={{
+                click: () => {
+                    if (map.getZoom() < 14) {
+                        map.flyTo([cluster.lat, cluster.lon], Math.min(map.getZoom() + 3, 14));
+                    }
+                }
+            }}
+        >
+            <Popup closeButton={false} minWidth={240}>
+                <div className="p-1" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+                    <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-700">
+                        <div className="font-bold text-gray-900 dark:text-white text-sm">
+                            {count} PTTs in Cluster
+                        </div>
+                        <button
+                            onClick={() => {
+                                map.flyTo([cluster.lat, cluster.lon], Math.min(map.getZoom() + 3, 14));
+                            }}
+                            className="text-[10px] bg-brand-600 hover:bg-brand-700 text-white font-bold px-2 py-0.5 rounded transition-colors"
+                        >
+                            Zoom In
+                        </button>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 mt-2">
+                        {cluster.positions.map(p => {
+                            const itemT = transmitters.find(t => String(t.platform_id) === String(p.transmitter_id));
+                            const itemB = birds.find(b => b.id === itemT?.bird_id);
+                            const itemStatus = itemT?.derived_status || itemT?.status || 'inactive';
+                            
+                            let sBadge = 'bg-slate-900 text-white';
+                            if (itemStatus === 'Active' || itemStatus === 'active') sBadge = 'bg-green-100 text-green-700';
+                            if (itemStatus === 'Potential Mortality') sBadge = 'bg-[#FFAA33]/20 text-[#FFAA33]';
+                            if (itemStatus === 'Static test') sBadge = 'bg-[#FFEA00]/20 text-[#e6b800]';
+                            if (itemStatus === 'Dead' || itemStatus === 'dead') sBadge = 'bg-red-600 text-white';
+
+                            return (
+                                <div 
+                                    key={p.transmitter_id}
+                                    onClick={() => {
+                                        setSelectedTransmitterIds([String(p.transmitter_id)]);
+                                        setShowHistory(true);
+                                    }}
+                                    className="p-2 rounded-lg border border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer transition-colors"
+                                >
+                                    <div>
+                                        <div className="font-bold text-gray-900 dark:text-white text-xs">{p.transmitter_id}</div>
+                                        <div className="text-[10px] text-gray-500 dark:text-gray-400">{itemB ? `Bird: ${itemB.ring_id}` : 'Unassigned'}</div>
+                                    </div>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sBadge}`}>{itemStatus}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </Popup>
+        </Marker>
+    );
+};
+
+interface MapClusteredMarkersProps {
+    latestPositions: any[];
+    transmitters: any[];
+    birds: any[];
+    timeZone: string;
+    setSelectedTransmitterIds: (ids: string[]) => void;
+    setShowHistory: (show: boolean) => void;
+    setNavTarget?: (target: {id: string, lat: number, lon: number} | null) => void;
+    isTrackingUser?: boolean;
+}
+
+const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
+    latestPositions,
+    transmitters,
+    birds,
+    timeZone,
+    setSelectedTransmitterIds,
+    setShowHistory,
+    setNavTarget,
+    isTrackingUser
+}) => {
+    const map = useMap();
+    const [mapVersion, setMapVersion] = useState(0);
+
+    useMapEvents({
+        zoomend: () => setMapVersion(v => v + 1),
+        moveend: () => setMapVersion(v => v + 1)
+    });
+
+    const clusters = useMemo(() => {
+        if (!latestPositions || latestPositions.length === 0) return [];
+        
+        const result: { lat: number; lon: number; positions: any[] }[] = [];
+        const CLUSTER_PIXEL_RADIUS = 50;
+
+        latestPositions.forEach(pos => {
+            const pPoint = map.latLngToLayerPoint([pos.lat, pos.lon]);
+            
+            let targetCluster = result.find(c => {
+                const cPoint = map.latLngToLayerPoint([c.lat, c.lon]);
+                const dx = pPoint.x - cPoint.x;
+                const dy = pPoint.y - cPoint.y;
+                return (dx * dx + dy * dy) <= (CLUSTER_PIXEL_RADIUS * CLUSTER_PIXEL_RADIUS);
+            });
+
+            if (targetCluster) {
+                targetCluster.positions.push(pos);
+                const len = targetCluster.positions.length;
+                targetCluster.lat = targetCluster.positions.reduce((sum, p) => sum + p.lat, 0) / len;
+                targetCluster.lon = targetCluster.positions.reduce((sum, p) => sum + p.lon, 0) / len;
+            } else {
+                result.push({
+                    lat: pos.lat,
+                    lon: pos.lon,
+                    positions: [pos]
+                });
+            }
+        });
+
+        return result;
+    }, [latestPositions, map, mapVersion]);
+
+    return (
+        <>
+            {clusters.map((c, idx) => {
+                if (c.positions.length === 1) {
+                    const pos = c.positions[0];
+                    const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));
+                    const bird = birds.find(b => b.id === transmitter?.bird_id);
+                    return (
+                        <TransmitterMarker 
+                            key={pos.id || `single-${idx}`} 
+                            pos={pos}
+                            transmitter={transmitter}
+                            bird={bird}
+                            timeZone={timeZone}
+                            setSelectedTransmitterIds={setSelectedTransmitterIds}
+                            setShowHistory={setShowHistory}
+                            setNavTarget={setNavTarget}
+                            isTrackingUser={isTrackingUser}
+                            latestPositions={latestPositions}
+                            transmitters={transmitters}
+                            birds={birds}
+                        />
+                    );
+                }
+
+                return (
+                    <ClusterMarker
+                        key={`cluster-${c.positions.map(p => p.transmitter_id).join('-')}-${idx}`}
+                        cluster={c}
+                        transmitters={transmitters}
+                        birds={birds}
+                        timeZone={timeZone}
+                        setSelectedTransmitterIds={setSelectedTransmitterIds}
+                        setShowHistory={setShowHistory}
+                    />
+                );
+            })}
+        </>
+    );
 };
 
 interface HistoricalMarkerProps {
@@ -1566,28 +1785,17 @@ export const LiveTracking = () => {
             <ZoomControl position="bottomright" />
             <ScaleControl position="bottomleft" />
 
-            {/* Bird Markers (LATEST POSITIONS ONLY) */}
-            {latestPositions.map((pos) => {
-                const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));
-                const bird = birds.find(b => b.id === transmitter?.bird_id);
-                
-                return (
-                    <TransmitterMarker 
-                        key={pos.id} 
-                        pos={pos}
-                        transmitter={transmitter}
-                        bird={bird}
-                        timeZone={timeZone}
-                        setSelectedTransmitterIds={setSelectedTransmitterIds}
-                        setShowHistory={setShowHistory}
-                        setNavTarget={setNavTarget}
-                        isTrackingUser={isTrackingUser}
-                        latestPositions={latestPositions}
-                        transmitters={transmitters}
-                        birds={birds}
-                    />
-                );
-            })}
+            {/* Bird Markers (DYNAMICALLY CLUSTERED BY ZOOM & PIXEL DISTANCE) */}
+            <MapClusteredMarkers 
+                latestPositions={latestPositions}
+                transmitters={transmitters}
+                birds={birds}
+                timeZone={timeZone}
+                setSelectedTransmitterIds={setSelectedTransmitterIds}
+                setShowHistory={setShowHistory}
+                setNavTarget={setNavTarget}
+                isTrackingUser={isTrackingUser}
+            />
 
 
             {/* User GPS Location & Navigation Line */}
@@ -2219,7 +2427,7 @@ export const LiveTracking = () => {
                     <Search size={18} className="ml-3 text-gray-400 flex-shrink-0" />
                     <input 
                         type="text" 
-                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} Selected` : "Search ID..."}
+                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs Selected` : "Search ID..."}
                         value={searchQuery}
                         onFocus={() => setIsSearchFocused(true)}
                         onChange={(e) => setSearchQuery(e.target.value)}
