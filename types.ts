@@ -29,7 +29,11 @@ export interface Transmitter {
   platform_id: string; // PTT ID
   model: string;
   status: string;
-  derived_status?: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test';
+  derived_status?: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead';
+  manual_status_override?: 'Dead' | null;
+  manual_status_set_by?: string;
+  manual_status_set_at?: string;
+  inactive_since?: string;
   bird_id: string;
   battery_voltage?: number; // Optional now
   last_fix: string; // ISO Date
@@ -44,6 +48,19 @@ export interface Transmitter {
   radio_time?: string;
   comment?: string;
   deployed?: boolean;
+}
+
+export interface StaticTestPeriod {
+  id: string;
+  transmitter_id: string;
+  platform_id: string;
+  start_date: string;
+  end_date: string;
+  fix_count: number;
+  days_on_test: number;
+  archived_at?: string;
+  active: boolean;
+  expiry_alert_sent?: boolean;
 }
 
 export interface Position {
@@ -62,7 +79,7 @@ export interface Position {
 
 export interface Alert {
   id: string;
-  type: 'geofence' | 'border' | 'distance' | 'battery_low' | 'no_fix' | 'speed_anomaly' | 'temp_anomaly' | 'ticket_created' | 'nesting';
+  type: 'geofence' | 'border' | 'distance' | 'battery_low' | 'no_fix' | 'speed_anomaly' | 'temp_anomaly' | 'ticket_created' | 'nesting' | 'static_test_expiring';
   severity: 'critical' | 'warning' | 'info';
   transmitter_id?: string;
   bird_name?: string;

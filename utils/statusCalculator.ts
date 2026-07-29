@@ -60,7 +60,12 @@ function calculateMedianCenter(positions: any[]): { lat: number, lon: number } {
 export function evaluateTransmitterStatus(
   transmitter: Transmitter, 
   positions: any[]
-): { status: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test', isNesting: boolean } {
+): { status: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead', isNesting: boolean } {
+  // Precedence rule: manual_status_override === 'Dead' short-circuits evaluation
+  if (transmitter.manual_status_override === 'Dead') {
+    return { status: 'Dead', isNesting: false };
+  }
+
   // Specific fix for transmitter 242086: convert all negative longitudes to positive longitudes
   if (String(transmitter.platform_id) === '242086' && positions && positions.length > 0) {
     positions = positions.map(p => {

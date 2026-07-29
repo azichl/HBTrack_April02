@@ -202,6 +202,7 @@ export const Dashboard = () => {
     if (trimmed === 'inactive') return 'Inactive';
     if (trimmed === 'potential mortality' || trimmed === 'potential_mortality') return 'Potential Mortality';
     if (trimmed === 'static test' || trimmed === 'static_test') return 'Static test';
+    if (trimmed === 'dead') return 'Dead';
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   };
 
@@ -217,7 +218,8 @@ export const Dashboard = () => {
     if (name.toLowerCase() === 'active') color = '#10b981'; // Green
     else if (name.toLowerCase() === 'static test') color = '#eab308'; // Yellow
     else if (name.toLowerCase() === 'potential mortality') color = '#f97316'; // Orange
-    else if (name.toLowerCase() === 'inactive') color = '#ef4444'; // Red
+    else if (name.toLowerCase() === 'inactive') color = '#0f172a'; // Slate-900 / Near-black
+    else if (name.toLowerCase() === 'dead') color = '#dc2626'; // Red
     
     return { name, value, color };
   });
@@ -227,7 +229,8 @@ export const Dashboard = () => {
     { name: 'Active', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Active').length, color: '#10b981' },
     { name: 'Static test', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Static test').length, color: '#eab308' },
     { name: 'Potential Mortality', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Potential Mortality').length, color: '#f97316' },
-    { name: 'Inactive', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Inactive').length, color: '#ef4444' }
+    { name: 'Inactive', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Inactive').length, color: '#0f172a' },
+    { name: 'Dead', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Dead').length, color: '#dc2626' }
   ].filter(d => d.value > 0);
 
   // Fleet Overview (Top 5 recent)

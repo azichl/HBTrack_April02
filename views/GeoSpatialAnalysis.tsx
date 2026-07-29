@@ -80,13 +80,22 @@ const redIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
+const blackIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 const getStatusIcon = (status: string) => {
     if (status === 'Active' || status === 'active') return greenIcon;
     if (status === 'Potential Mortality') return orangeIcon;
     if (status === 'Static test') return yellowIcon;
-    if (status === 'Inactive') return redIcon;
-    if (status === 'lost' || status === 'maintenance') return orangeIcon;
-    return redIcon;
+    if (status === 'Inactive' || status === 'inactive') return blackIcon;
+    if (status === 'Dead' || status === 'dead') return redIcon;
+    return blackIcon;
 };
 
 export const GeoSpatialAnalysis = () => {
@@ -586,10 +595,12 @@ export const GeoSpatialAnalysis = () => {
                                   <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
                                       <h4 className="text-xs font-bold text-brand-600 m-0">PTT {item.transmitter.platform_id}</h4>
                                       <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
-                                          status === 'Active' ? 'bg-green-100 text-green-800 border border-green-300' :
+                                          status === 'Active' || status === 'active' ? 'bg-green-100 text-green-800 border border-green-300' :
                                           status === 'Potential Mortality' ? 'bg-amber-100 text-amber-900 border border-amber-400 font-extrabold' :
                                           status === 'Static test' ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
-                                          'bg-red-100 text-red-800 border border-red-300'
+                                          status === 'Inactive' || status === 'inactive' ? 'bg-slate-900 text-white border border-slate-700' :
+                                          status === 'Dead' || status === 'dead' ? 'bg-red-600 text-white border border-red-700' :
+                                          'bg-gray-100 text-gray-800 border border-gray-300'
                                       }`}>
                                           {status}
                                       </span>

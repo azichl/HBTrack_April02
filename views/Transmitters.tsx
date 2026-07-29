@@ -23,13 +23,28 @@ export const Transmitters = () => {
     isTransmitterModalOpen: isModalOpen,
     setIsTransmitterModalOpen: setIsModalOpen,
     editingRecordId,
-    setEditingRecordId
+    setEditingRecordId,
+    markTransmitterDead,
+    unmarkTransmitterDead,
+    staticTestPeriods,
+    loadStaticTestArchive,
+    currentUserRole,
+    currentUserPermissions,
+    currentUser
   } = useAppStore();
 
   const editingTransmitter = transmitters.find(t => t.id === editingRecordId) || null;
 
+  const [activeTab, setActiveTab] = useState<'transmitters' | 'archive'>('transmitters');
+  const [confirmDeadTransmitter, setConfirmDeadTransmitter] = useState<Transmitter | null>(null);
   const [formData, setFormData] = useState<Partial<Transmitter>>({});
   const nodeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (activeTab === 'archive') {
+      loadStaticTestArchive();
+    }
+  }, [activeTab, loadStaticTestArchive]);
 
   // 1. Prepare Flattened Data
   const tableData = useMemo<TransmitterTableRow[]>(() => {
@@ -176,6 +191,72 @@ export const Transmitters = () => {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
+        <button
+          onClick={() => setActiveTab('transmitters')}
+          className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === 'transmitters'
+              ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          All Transmitters ({transmitters.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('archive')}
+          className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${
+            activeTab === 'archive'
+              ? 'border-brand-600 text-brand-600 dark:text-brand-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          }`}
+        >
+          Static Test Archive ({staticTestPeriods.length})
+        </button>
+      </div>
+
+      {activeTab === 'archive' ? (
+        <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden flex-1">
+          <div className="overflow-auto flex-1">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-sky-200 dark:bg-sky-900 border-b border-sky-300 dark:border-sky-800 text-slate-800 dark:text-sky-100">
+                  <th className="px-4 py-3 text-xs font-bold uppercase">PTT ID</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">Start Date</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">End Date</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">Fix Count</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">Days on Test</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">Archived At</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                {staticTestPeriods.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-500 italic">No archived static test periods found</td>
+                  </tr>
+                ) : (
+                  staticTestPeriods.map(period => (
+                    <tr key={period.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50">
+                      <td className="px-4 py-3 text-sm font-bold text-brand-900 dark:text-brand-100">{period.platform_id}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{formatDateTime(period.start_date, timeZone)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{formatDateTime(period.end_date, timeZone)}</td>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{period.fix_count}</td>
+                      <td className="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">{period.days_on_test}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">{period.archived_at ? formatDateTime(period.archived_at, timeZone) : '-'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${period.active ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>
+                          {period.active ? 'Active Test' : 'Archived'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden flex-1">
         <div className="overflow-auto flex-1">
           <table className="w-full text-left border-collapse">
@@ -216,6 +297,7 @@ export const Transmitters = () => {
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {sortedData.map((t) => {
                 const isSelected = selectedIds.has(t.id);
+                const derivedStatus = t.derived_status || t.status;
                 return (
                 <tr 
                   key={t.id} 
@@ -250,25 +332,53 @@ export const Transmitters = () => {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      (t.derived_status || t.status) === 'Active' || (t.derived_status || t.status) === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                      (t.derived_status || t.status) === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
-                      (t.derived_status || t.status) === 'Inactive' ? 'bg-[#FF2A00]/20 dark:bg-[#FF2A00]/30 text-[#FF2A00]' :
-                      (t.derived_status || t.status) === 'Static test' ? 'bg-[#FFEA00]/20 dark:bg-[#FFEA00]/30 text-[#e6b800] dark:text-[#FFEA00]' :
+                      derivedStatus === 'Active' || derivedStatus === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
+                      derivedStatus === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
+                      derivedStatus === 'Static test' ? 'bg-[#FFEA00]/20 dark:bg-[#FFEA00]/30 text-[#e6b800] dark:text-[#FFEA00]' :
+                      derivedStatus === 'Inactive' || derivedStatus === 'inactive' ? 'bg-slate-900 text-white' :
+                      derivedStatus === 'Dead' || derivedStatus === 'dead' ? 'bg-red-600 text-white' :
                       'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
                     }`}>
-                      {t.derived_status || t.status}
+                      {derivedStatus}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 italic border-r border-gray-100 dark:border-slate-700 max-w-[150px] truncate" title={t.comment}>
                     {t.comment || '-'}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <button onClick={() => handleOpenModal(t)} className="p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded-md" title="Edit">
-                        <Edit size={16} />
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button onClick={() => handleOpenModal(t)} className="p-1 text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30 rounded-md" title="Edit">
+                        <Edit size={15} />
                       </button>
-                      <button onClick={() => { if(window.confirm('Delete transmitter?')) { bulkDeleteRecords('transmitters', [t.id]); } }} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md" title="Delete">
-                        <Trash2 size={16} />
+                      {t.derived_status === 'Dead' ? (
+                        currentUserRole === 'Administrator' && (
+                          <button 
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await unmarkTransmitterDead(t.id);
+                            }} 
+                            className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 rounded text-[10px] font-bold" 
+                            title="Unmark as Dead"
+                          >
+                            Unmark
+                          </button>
+                        )
+                      ) : (
+                        (currentUserRole === 'Administrator' || currentUserRole === 'Researcher' || currentUserRole === 'Field Coordinator') && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setConfirmDeadTransmitter(t);
+                            }} 
+                            className="px-2 py-0.5 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-100 rounded text-[10px] font-bold" 
+                            title="Mark as Dead"
+                          >
+                            Mark Dead
+                          </button>
+                        )
+                      )}
+                      <button onClick={() => { if(window.confirm('Delete transmitter?')) { bulkDeleteRecords('transmitters', [t.id]); } }} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md" title="Delete">
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>
@@ -282,6 +392,7 @@ export const Transmitters = () => {
           {/* Pagination could be added here if needed */}
         </div>
       </div>
+      )}
 
        {/* Add/Edit Modal */}
        {isModalOpen && (
@@ -415,6 +526,50 @@ export const Transmitters = () => {
             </div>
           </div>
           </Draggable>
+        </div>
+      )}
+      {/* Mark as Dead Confirmation Modal */}
+      {confirmDeadTransmitter && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-100 dark:border-slate-700 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-red-600 dark:text-red-400 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                <X size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Confirm Mark as Dead</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Manual Status Override</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+              This will permanently mark PTT <strong>{confirmDeadTransmitter.platform_id}</strong> as <strong>Dead</strong>. This cannot be automatically reversed. Continue?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeadTransmitter(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const userProfile = {
+                    id: currentUser?.uid || 'user',
+                    name: currentUser?.displayName || currentUser?.email || 'User',
+                    email: currentUser?.email || '',
+                    role: currentUserRole,
+                    status: 'active' as const,
+                    permissions: currentUserPermissions
+                  };
+                  await markTransmitterDead(confirmDeadTransmitter.id, userProfile);
+                  setConfirmDeadTransmitter(null);
+                }}
+                className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-md transition-colors"
+              >
+                Confirm Mark as Dead
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

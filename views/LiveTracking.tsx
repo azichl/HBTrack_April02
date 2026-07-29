@@ -3,6 +3,7 @@ import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, 
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
+import { Transmitter } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -42,50 +43,22 @@ const createSvgIcon = (colorHex: string) => {
   });
 };
 
-const greenIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+const greenIcon = createSvgIcon('#22c55e');
+const orangeIcon = createSvgIcon('#f97316');
+const yellowIcon = createSvgIcon('#eab308');
+const blackIcon = createSvgIcon('#0f172a');
+const redIcon = createSvgIcon('#dc2626');
+const blueIcon = createSvgIcon('#3b82f6');
 
-const blueIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const orangeIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const yellowIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const redIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Helper to select icon based on derived_status
+const getStatusIcon = (status: string) => {
+    if (status === 'Active' || status === 'active') return greenIcon;
+    if (status === 'Potential Mortality') return orangeIcon;
+    if (status === 'Static test') return yellowIcon;
+    if (status === 'Inactive' || status === 'inactive') return blackIcon;
+    if (status === 'Dead' || status === 'dead') return redIcon;
+    return blackIcon;
+};
 
 // Custom Target Icon (White circle with blue border and blue dot)
 const targetIcon = L.divIcon({
@@ -113,17 +86,6 @@ const measureEndIcon = L.divIcon({
     iconSize: [16, 16],
     iconAnchor: [8, 8]
 });
-
-// Helper to select icon based on derived or raw status
-const getStatusIcon = (status: string) => {
-    if (status === 'Active' || status === 'active') return greenIcon;
-    if (status === 'Potential Mortality') return orangeIcon;
-    if (status === 'Static test') return yellowIcon;
-    if (status === 'Inactive') return redIcon;
-    // Legacy fallbacks
-    if (status === 'lost' || status === 'maintenance') return orangeIcon;
-    return redIcon;
-};
 
 // Helper to parse various coordinate formats (HDD, HDMM, HDMS)
 const parseFlexibleCoordinates = (input: string): { lat: number, lon: number } | null => {
@@ -437,7 +399,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     transmitters = [],
     birds = []
 }) => {
-    const { setActiveTab } = useAppStore();
+    const { setActiveTab, currentUserRole, unmarkTransmitterDead, markTransmitterDead, currentUser, currentUserPermissions } = useAppStore();
     const [isOpen, setIsOpen] = useState(false);
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
@@ -460,16 +422,19 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
 
     // Props are now passed directly to ensure reactivity
     const status = currentTransmitter?.derived_status || currentTransmitter?.status || 'inactive';
-    
-    let badgeColorClass = 'bg-[#FF2A00]/20 text-[#FF2A00]'; 
+        let badgeColorClass = 'bg-slate-900 text-white'; 
     if (status === 'Active' || status === 'active') badgeColorClass = 'bg-green-100 text-green-700';
-    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') badgeColorClass = 'bg-[#FFAA33]/20 text-[#FFAA33]';
-    if (status === 'Static test') badgeColorClass = 'bg-[#FFEA00]/20 text-[#FFEA00]';
+    if (status === 'Potential Mortality') badgeColorClass = 'bg-[#FFAA33]/20 text-[#FFAA33]';
+    if (status === 'Static test') badgeColorClass = 'bg-[#FFEA00]/20 text-[#e6b800]';
+    if (status === 'Inactive' || status === 'inactive') badgeColorClass = 'bg-slate-900 text-white';
+    if (status === 'Dead' || status === 'dead') badgeColorClass = 'bg-red-600 text-white';
 
-    let ticketClass = 'bg-white text-slate-900 border-2 border-[#FF2A00]';
+    let ticketClass = 'bg-white text-slate-900 border-2 border-slate-900';
     if (status === 'Active' || status === 'active') ticketClass = 'bg-white text-slate-900 border-2 border-green-500';
-    if (status === 'Potential Mortality' || status === 'lost' || status === 'maintenance') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFAA33]';
+    if (status === 'Potential Mortality') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFAA33]';
     if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFEA00]';
+    if (status === 'Inactive' || status === 'inactive') ticketClass = 'bg-white text-slate-900 border-2 border-slate-900';
+    if (status === 'Dead' || status === 'dead') ticketClass = 'bg-white text-slate-900 border-2 border-red-600';
 
     const handleAIAnalysis = () => {
         setSelectedTransmitterIds([currentPos.transmitter_id]);
@@ -507,72 +472,51 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                 >
                     {isGroup ? (
                         <>
-                            <Layers size={10} className="text-brand-600" />
-                            <span>Group ({overlappingPositions.length})</span>
+                            <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
+                            <span>{overlappingPositions.length} PTTs</span>
                         </>
                     ) : (
-                        <span>{pos.transmitter_id}</span>
+                        <span>PTT {pos.transmitter_id}</span>
                     )}
                 </div>
             </Tooltip>
-
-            <Popup className="custom-popup" minWidth={310} maxWidth={340} autoPan={true}>
-                <div className="p-1 w-[300px] min-w-[300px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
-                    {isGroup && (
-                        <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg mb-2 text.11px font-bold">
+            <Popup closeButton={false} minWidth={240}>
+                <div className="p-1">
+                    {/* Header Tabs for Overlapping Markers */}
+                    {overlappingPositions.length > 1 && (
+                        <div className="flex border-b border-gray-100 dark:border-slate-700 mb-3 bg-gray-50 dark:bg-slate-900 rounded-t p-1">
                             <button
                                 onClick={() => setActiveTabMode('group')}
-                                className={`flex-1 py-1 rounded-md transition-all flex items-center justify-center gap-1 ${
-                                    activeTabMode === 'group' 
-                                    ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' 
-                                    : 'text-gray-500 hover:text-gray-900'
-                                }`}
+                                className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${activeTabMode === 'group' ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
-                                <Layers size={12} /> Group List ({overlappingPositions.length})
+                                All ({overlappingPositions.length})
                             </button>
                             <button
                                 onClick={() => setActiveTabMode('single')}
-                                className={`flex-1 py-1 rounded-md transition-all flex items-center justify-center gap-1 ${
-                                    activeTabMode === 'single' 
-                                    ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm' 
-                                    : 'text-gray-500 hover:text-gray-900'
-                                }`}
+                                className={`flex-1 py-1 text-[10px] font-bold rounded transition-colors ${activeTabMode === 'single' ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
-                                <CircleDot size={12} /> PTT {currentPos.transmitter_id} Details
+                                Selected
                             </button>
                         </div>
                     )}
 
-                    {activeTabMode === 'group' && isGroup ? (
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between pb-1.5 border-b border-gray-100 dark:border-slate-700">
-                                <span className="font-bold text-gray-900 dark:text-white text-xs">
-                                    {overlappingPositions.length} Transmitters at Location
-                                </span>
-                                <button
-                                    onClick={() => {
-                                        const pttIds = overlappingPositions.map(p => String(p.transmitter_id));
-                                        setSelectedTransmitterIds(pttIds);
-                                        setShowHistory(true);
-                                    }}
-                                    className="text-[10px] bg-brand-600 hover:bg-brand-700 text-white font-bold px-2 py-1 rounded-md transition-colors shadow-sm flex items-center gap-1"
-                                >
-                                    <CheckCircle2 size={11} /> Select All ({overlappingPositions.length})
-                                </button>
+                    {activeTabMode === 'group' && overlappingPositions.length > 1 ? (
+                        <div>
+                            <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">
+                                {overlappingPositions.length} Transmitters at this Location
                             </div>
-
-                            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                                 {overlappingPositions.map(itemPos => {
                                     const itemT = transmitters.find(t => String(t.platform_id) === String(itemPos.transmitter_id));
                                     const itemB = birds.find(b => b.id === itemT?.bird_id);
                                     const itemStatus = itemT?.derived_status || itemT?.status || 'inactive';
+                                    const isItemSel = currentPos.transmitter_id === itemPos.transmitter_id;
                                     
-                                    let sBadge = 'bg-red-100 text-red-700';
+                                    let sBadge = 'bg-slate-900 text-white';
                                     if (itemStatus === 'Active' || itemStatus === 'active') sBadge = 'bg-green-100 text-green-700';
                                     if (itemStatus === 'Potential Mortality') sBadge = 'bg-[#FFAA33]/20 text-[#FFAA33]';
                                     if (itemStatus === 'Static test') sBadge = 'bg-[#FFEA00]/20 text-[#e6b800]';
-
-                                    const isCurrentSelected = String(itemPos.transmitter_id) === String(currentPos.transmitter_id);
+                                    if (itemStatus === 'Dead' || itemStatus === 'dead') sBadge = 'bg-red-600 text-white';
 
                                     return (
                                         <div 
@@ -581,30 +525,13 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                                                 setSelectedSinglePos(itemPos);
                                                 setActiveTabMode('single');
                                             }}
-                                            className={`p-2 rounded-lg border transition-all flex items-center justify-between cursor-pointer ${
-                                                isCurrentSelected 
-                                                ? 'bg-brand-50/90 dark:bg-brand-900/30 border-brand-300 dark:border-brand-700' 
-                                                : 'bg-gray-50/80 dark:bg-slate-800 border-gray-100 dark:border-slate-700 hover:bg-gray-100 dark:hover:bg-slate-700'
-                                            }`}
+                                            className={`p-2 rounded-lg border transition-all flex items-center justify-between cursor-pointer ${isItemSel ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/20' : 'border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
                                         >
                                             <div>
                                                 <div className="font-bold text-gray-900 dark:text-white text-xs">PTT {itemPos.transmitter_id}</div>
                                                 <div className="text-[10px] text-gray-500 dark:text-gray-400">{itemB ? `Bird: ${itemB.ring_id}` : 'Unassigned'}</div>
                                             </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sBadge}`}>{itemStatus}</span>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedTransmitterIds([String(itemPos.transmitter_id)]);
-                                                        setShowHistory(true);
-                                                    }}
-                                                    className="p-1 text-brand-600 hover:text-brand-700 hover:bg-brand-100 rounded transition-colors"
-                                                    title="Focus & Show History"
-                                                >
-                                                    <History size={12} />
-                                                </button>
-                                            </div>
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sBadge}`}>{itemStatus}</span>
                                         </div>
                                     );
                                 })}
@@ -680,12 +607,50 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                                     <Globe size={12} /> Google Earth
                                 </a>
                             </div>
+
+                            {currentTransmitter && (
+                                <div className="mt-2">
+                                    {currentTransmitter.derived_status === 'Dead' ? (
+                                        currentUserRole === 'Administrator' && (
+                                            <button
+                                                onClick={async () => {
+                                                    await unmarkTransmitterDead(currentTransmitter.id);
+                                                }}
+                                                className="w-full py-1.5 bg-emerald-50 text-emerald-700 font-semibold rounded hover:bg-emerald-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-emerald-200"
+                                            >
+                                                Unmark as Dead
+                                            </button>
+                                        )
+                                    ) : (
+                                        (currentUserRole === 'Administrator' || currentUserRole === 'Researcher' || currentUserRole === 'Field Coordinator') && (
+                                            <button
+                                                onClick={async () => {
+                                                    if (window.confirm(`This will permanently mark PTT ${currentTransmitter.platform_id} as Dead. This cannot be automatically reversed. Continue?`)) {
+                                                        const userProfile = {
+                                                            id: currentUser?.uid || 'user',
+                                                            name: currentUser?.displayName || currentUser?.email || 'User',
+                                                            email: currentUser?.email || '',
+                                                            role: currentUserRole,
+                                                            status: 'active' as const,
+                                                            permissions: currentUserPermissions
+                                                        };
+                                                        await markTransmitterDead(currentTransmitter.id, userProfile);
+                                                    }
+                                                }}
+                                                className="w-full py-1.5 bg-red-50 text-red-700 font-semibold rounded hover:bg-red-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-red-200"
+                                            >
+                                                Mark as Dead
+                                            </button>
+                                        )
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
             </Popup>
         </Marker>
-    );
+    );;
 };
 
 interface HistoricalMarkerProps {
@@ -770,8 +735,15 @@ export const LiveTracking = () => {
       setActiveGeeLayer,
       geeNdviTileUrl,
       geeLstTileUrl,
-      geeSaviTileUrl
+      geeSaviTileUrl,
+      markTransmitterDead,
+      unmarkTransmitterDead,
+      currentUserRole,
+      currentUserPermissions,
+      currentUser
   } = useAppStore();
+  
+  const [confirmDeadTransmitter, setConfirmDeadTransmitter] = useState<Transmitter | null>(null);
   
   // View Mode State
   const [viewMode, setViewMode] = useState<'tracking' | 'weather' | 'weather2'>('tracking');
@@ -939,17 +911,30 @@ export const LiveTracking = () => {
   const latestPositions = useMemo(() => {
     // 1. Identify relevant transmitters based on status filter
     const relevantTransmitters = transmitters.filter(t => {
-       const status = t.derived_status || t.status;
+       const status = t.derived_status || t.status || 'Active';
        
-       // Only show the 4 core statuses on the map
-       const allowedStatuses = ['Active', 'active', 'Potential Mortality', 'Inactive', 'inactive', 'Static test'];
+       const allowedStatuses = ['Active', 'active', 'Potential Mortality', 'Inactive', 'inactive', 'Static test', 'Dead', 'dead'];
        if (!allowedStatuses.includes(status)) return false;
 
-       if (selectedStatus === 'all') return true;
+       if (selectedStatus === 'all') {
+         // Auto-hide Inactive transmitters 30 days after inactive_since on default map view
+         if (status === 'Inactive' || status === 'inactive') {
+           if (t.inactive_since) {
+             const inactiveTime = new Date(t.inactive_since).getTime();
+             const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+             if (!isNaN(inactiveTime) && (Date.now() - inactiveTime) > thirtyDaysMs) {
+               return false;
+             }
+           }
+         }
+         return true;
+       }
+
        if (selectedStatus === 'active') return status === 'Active' || status === 'active';
        if (selectedStatus === 'inactive') return status === 'Inactive' || status === 'inactive';
        if (selectedStatus === 'mortality') return status === 'Potential Mortality';
        if (selectedStatus === 'static') return status === 'Static test';
+       if (selectedStatus === 'dead') return status === 'Dead' || status === 'dead';
        return true;
     });
     
@@ -2564,6 +2549,51 @@ export const LiveTracking = () => {
              viewMode === 'weather' ? renderWeatherMap() : 
              renderWeatherMap2()}
         </div>
+
+        {/* Mark as Dead Confirmation Modal */}
+        {confirmDeadTransmitter && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-100 dark:border-slate-700 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                  <X size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Confirm Mark as Dead</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Manual Status Override</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+                This will permanently mark PTT <strong>{confirmDeadTransmitter.platform_id}</strong> as <strong>Dead</strong>. This cannot be automatically reversed. Continue?
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setConfirmDeadTransmitter(null)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    const userProfile = {
+                      id: currentUser?.uid || 'user',
+                      name: currentUser?.displayName || currentUser?.email || 'User',
+                      email: currentUser?.email || '',
+                      role: currentUserRole,
+                      status: 'active' as const,
+                      permissions: currentUserPermissions
+                    };
+                    await markTransmitterDead(confirmDeadTransmitter.id, userProfile);
+                    setConfirmDeadTransmitter(null);
+                  }}
+                  className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-md transition-colors"
+                >
+                  Confirm Mark as Dead
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

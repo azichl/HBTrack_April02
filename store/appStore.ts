@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice } from '../types';
+import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod } from '../types';
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
@@ -101,6 +101,7 @@ interface AppState {
   alerts: Alert[];
   positions: Position[];
   users: User[];
+  staticTestPeriods: StaticTestPeriod[];
   
   // Authentication State
   currentUser: any | null;
@@ -153,6 +154,9 @@ interface AppState {
   bulkDeleteTransmitters: (ids: string[]) => Promise<void>;
   bulkUpdateTransmitters: (ids: string[], updates: Partial<Transmitter>) => Promise<void>;
   importTransmitters: (transmitters: Transmitter[]) => void;
+  markTransmitterDead: (transmitterId: string, user: User) => Promise<void>;
+  unmarkTransmitterDead: (transmitterId: string) => Promise<void>;
+  loadStaticTestArchive: () => Promise<void>;
   
   // User Actions
   addUser: (user: User) => void;
@@ -194,6 +198,175 @@ const logDbAction = (get: any, type: 'DATA_CREATE' | 'DATA_UPDATE' | 'DATA_DELET
   if (user) {
     logUserActivity(user.uid, user.email || '', type, details);
   }
+};
+
+const processTransmitterStatusUpdates = async (
+  t: Transmitter,
+  derived: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead',
+  isNesting: boolean,
+  allPositions: any[],
+  addAlert: (alert: Alert) => void,
+  getBirds: () => Bird[]
+): Promise<Partial<Transmitter>> => {
+  const updates: Partial<Transmitter> = {};
+
+  if (t.derived_status !== derived) {
+    if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
+      const bird = getBirds().find(b => b.id === t.bird_id);
+      addAlert({
+        id: `status-alert-${t.platform_id}-${Date.now()}`,
+        type: derived === 'Inactive' ? 'no_fix' : 'speed_anomaly',
+        severity: 'critical',
+        transmitter_id: t.platform_id,
+        bird_name: bird?.ring_id || 'Unknown',
+        message: `CRITICAL: PTT ${t.platform_id} status changed from Active to ${derived}`,
+        timestamp: new Date().toISOString(),
+        status: 'active'
+      });
+    }
+    updates.derived_status = derived;
+  }
+
+  // Track inactive_since timestamp
+  if (derived === 'Inactive') {
+    if (!t.inactive_since) {
+      const iso = new Date().toISOString();
+      updates.inactive_since = iso;
+    }
+  } else if (derived !== 'Dead' && t.inactive_since) {
+    updates.inactive_since = null as any;
+  }
+
+  // Handle Static Test Period auto-archival and expiry alerts
+  try {
+    const qStatic = query(collection(db, 'static_test_periods'), where('platform_id', '==', String(t.platform_id)));
+    const snapStatic = await getDocs(qStatic);
+    const staticPeriods = snapStatic.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() } as StaticTestPeriod));
+    const activePeriod = staticPeriods.find(p => p.active);
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+    const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
+
+    if (derived === 'Static test') {
+      const validTimestamps = allPositions
+        .map(p => safeParseDate(p.timestamp || p.locationDate))
+        .filter(ts => !isNaN(ts) && ts > 0);
+      const latestFixTs = validTimestamps.length > 0 ? Math.max(...validTimestamps) : Date.now();
+      const latestFixDate = new Date(latestFixTs);
+      const latestFixIso = latestFixDate.toISOString();
+      const fixMonthKey = `${latestFixDate.getFullYear()}-${String(latestFixDate.getMonth() + 1).padStart(2, '0')}`;
+
+      if (!activePeriod) {
+        const newPeriodId = `stp_${t.platform_id}_${Date.now()}`;
+        const newPeriod: StaticTestPeriod = {
+          id: newPeriodId,
+          transmitter_id: String(t.platform_id),
+          platform_id: String(t.platform_id),
+          start_date: latestFixIso,
+          end_date: latestFixIso,
+          fix_count: validTimestamps.length,
+          days_on_test: 1,
+          active: true,
+          expiry_alert_sent: false
+        };
+        await saveDocument('static_test_periods', newPeriodId, newPeriod);
+      } else {
+        const activeStartDate = new Date(activePeriod.start_date);
+        const activeMonthKey = `${activeStartDate.getFullYear()}-${String(activeStartDate.getMonth() + 1).padStart(2, '0')}`;
+
+        if (activeMonthKey !== fixMonthKey && currentMonthKey > activeMonthKey) {
+          // Boundary crossed! Archive month M period at 00:00 on 1st of month M+1
+          const yearM = activeStartDate.getFullYear();
+          const monthM = activeStartDate.getMonth();
+          const archivedAt = new Date(Date.UTC(yearM, monthM + 1, 1, 0, 0, 0)).toISOString();
+          const lastDayOfM = new Date(Date.UTC(yearM, monthM + 1, 0, 23, 59, 59)).toISOString();
+
+          await saveDocument('static_test_periods', activePeriod.id, {
+            active: false,
+            end_date: activePeriod.end_date || lastDayOfM,
+            archived_at: archivedAt
+          });
+
+          // Open distinct new period for the new month M+1
+          const newPeriodId = `stp_${t.platform_id}_${Date.now()}`;
+          const newPeriod: StaticTestPeriod = {
+            id: newPeriodId,
+            transmitter_id: String(t.platform_id),
+            platform_id: String(t.platform_id),
+            start_date: latestFixIso,
+            end_date: latestFixIso,
+            fix_count: validTimestamps.filter(ts => {
+              const d = new Date(ts);
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === fixMonthKey;
+            }).length,
+            days_on_test: 1,
+            active: true,
+            expiry_alert_sent: false
+          };
+          await saveDocument('static_test_periods', newPeriodId, newPeriod);
+        } else {
+          // Same month: update end_date, fix_count, days_on_test
+          const startMs = safeParseDate(activePeriod.start_date);
+          const daysOnTest = Math.max(1, Math.ceil((latestFixTs - startMs) / (1000 * 60 * 60 * 24)));
+          await saveDocument('static_test_periods', activePeriod.id, {
+            end_date: latestFixIso,
+            fix_count: validTimestamps.length,
+            days_on_test: daysOnTest
+          });
+
+          // Pre-month-end alert check (3 days lead time)
+          const lastDayOfCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+          const daysRemaining = lastDayOfCurrentMonth - now.getDate();
+          if (daysRemaining <= 3 && !activePeriod.expiry_alert_sent) {
+            const lastSafeDateStr = `${lastDayOfCurrentMonth}/${String(currentMonth + 1).padStart(2, '0')}/${currentYear}`;
+            const nextMonthStart = new Date(currentYear, currentMonth + 1, 1);
+            const nextMonthStr = nextMonthStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            const bird = getBirds().find(b => b.id === t.bird_id);
+
+            addAlert({
+              id: `static-alert-${t.platform_id}-${currentMonthKey}`,
+              type: 'static_test_expiring',
+              severity: 'critical',
+              transmitter_id: t.platform_id,
+              bird_name: bird?.ring_id || 'Unknown',
+              message: `PTT ${t.platform_id} is on Static Test and will roll into a new Argos billing month on ${nextMonthStr} if still transmitting. Power off before ${lastSafeDateStr} to avoid an extra month's subscription.`,
+              timestamp: new Date().toISOString(),
+              status: 'active'
+            });
+
+            await saveDocument('static_test_periods', activePeriod.id, { expiry_alert_sent: true });
+          }
+        }
+      }
+    } else if (activePeriod) {
+      // Exit Static test -> archive active static test period
+      await saveDocument('static_test_periods', activePeriod.id, {
+        active: false,
+        archived_at: new Date().toISOString()
+      });
+    }
+  } catch (err) {
+    console.warn(`[AppStore] Static test period processing error for PTT ${t.platform_id}:`, err);
+  }
+
+  // Handle Nesting behavior alert
+  if (isNesting) {
+    const bird = getBirds().find(b => b.id === t.bird_id);
+    addAlert({
+      id: `nesting-alert-${t.platform_id}-${Date.now()}`,
+      type: 'nesting',
+      severity: 'info',
+      transmitter_id: t.platform_id,
+      bird_name: bird?.ring_id || 'Unknown',
+      message: `Nesting Behavior Detected for bird ${bird?.ring_id || t.platform_id}`,
+      timestamp: new Date().toISOString(),
+      status: 'active'
+    });
+  }
+
+  return updates;
 };
 
 export const useAppStore = create<AppState>()(
@@ -264,6 +437,7 @@ export const useAppStore = create<AppState>()(
       alerts: [],
       positions: [],
       users: [],
+      staticTestPeriods: [],
       
       // Auth Default State
       currentUser: null,
@@ -517,6 +691,62 @@ export const useAppStore = create<AppState>()(
         });
       },
 
+      // ─── Manual Dead Override & Static Test Archive Actions ───────────────
+      markTransmitterDead: async (transmitterId: string, user: User) => {
+        const role = user?.role || get().currentUserRole;
+        if (role !== 'Administrator' && role !== 'Researcher' && role !== 'Field Coordinator') {
+          throw new Error('Unauthorized: Only Administrators, Researchers, and Field Coordinators can mark transmitters as Dead.');
+        }
+
+        const transmitter = get().transmitters.find(t => t.id === transmitterId || t.platform_id === transmitterId);
+        if (!transmitter) return;
+
+        const nowIso = new Date().toISOString();
+        const updates = {
+          manual_status_override: 'Dead' as const,
+          manual_status_set_by: user.name || user.email || 'User',
+          manual_status_set_at: nowIso,
+          derived_status: 'Dead' as const
+        };
+
+        const updatedTransmitters = get().transmitters.map(t => 
+          (t.id === transmitter.id ? { ...t, ...updates } : t)
+        );
+
+        set({ transmitters: updatedTransmitters, lastSaved: nowIso });
+        await saveDocument('transmitters', transmitter.id, updates);
+        logUserActivity(user.id || user.email, user.email || '', 'DATA_UPDATE', `Marked PTT ${transmitter.platform_id} as Dead`);
+      },
+
+      unmarkTransmitterDead: async (transmitterId: string) => {
+        const role = get().currentUserRole;
+        if (role !== 'Administrator') {
+          throw new Error('Unauthorized: Only Administrators can unmark transmitters as Dead.');
+        }
+
+        const transmitter = get().transmitters.find(t => t.id === transmitterId || t.platform_id === transmitterId);
+        if (!transmitter) return;
+
+        const updates = {
+          manual_status_override: null,
+          manual_status_set_by: null,
+          manual_status_set_at: null
+        };
+
+        const updatedTransmitters = get().transmitters.map(t => 
+          (t.id === transmitter.id ? { ...t, manual_status_override: undefined, manual_status_set_by: undefined, manual_status_set_at: undefined } : t)
+        );
+        set({ transmitters: updatedTransmitters, lastSaved: new Date().toISOString() });
+
+        await saveDocument('transmitters', transmitter.id, updates);
+        await get().recalculateTransmitterStatuses();
+      },
+
+      loadStaticTestArchive: async () => {
+        const periods = await loadCollection<StaticTestPeriod>('static_test_periods');
+        set({ staticTestPeriods: periods });
+      },
+
       // ─── Argos → Firebase Direct Sync ───────────────────────────────────────
       // This is the CORE ingestion pipeline. Data flows:
       // Argos API → mapArgosApiData() → syncArgosToFirebase() → Firebase
@@ -736,38 +966,19 @@ export const useAppStore = create<AppState>()(
 
                           const { status: derived, isNesting } = evaluateTransmitterStatus({ ...t, last_fix: correctedLastFix }, allPositions);
                           
-                          if (t.derived_status !== derived) {
-                              if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
-                                  const bird = get().birds.find(b => b.id === t.bird_id);
-                                  addAlert({
-                                      id: `status-alert-${t.platform_id}-${Date.now()}`,
-                                      type: derived === 'Inactive' ? 'no_fix' : 'speed_anomaly',
-                                      severity: 'critical',
-                                      transmitter_id: t.platform_id,
-                                      bird_name: bird?.ring_id || 'Unknown',
-                                      message: `CRITICAL: PTT ${t.platform_id} status changed from Active to ${derived}`,
-                                      timestamp: new Date().toISOString(),
-                                      status: 'active'
-                                  });
-                              }
-                              newTransmitters[i].derived_status = derived;
-                              statusUpdated = true;
-                              // Also update in DB
-                              await saveDocument('transmitters', t.id, { derived_status: derived });
-                          }
+                          const statusUpdates = await processTransmitterStatusUpdates(
+                              { ...t, last_fix: correctedLastFix },
+                              derived,
+                              isNesting,
+                              allPositions,
+                              addAlert,
+                              () => get().birds
+                          );
 
-                          if (isNesting) {
-                              const bird = get().birds.find(b => b.id === t.bird_id);
-                              addAlert({
-                                  id: `nesting-alert-${t.platform_id}-${Date.now()}`,
-                                  type: 'nesting',
-                                  severity: 'info',
-                                  transmitter_id: t.platform_id,
-                                  bird_name: bird?.ring_id || 'Unknown',
-                                  message: `Nesting Behavior Detected for bird ${bird?.ring_id || t.platform_id}`,
-                                  timestamp: new Date().toISOString(),
-                                  status: 'active'
-                              });
+                          if (Object.keys(statusUpdates).length > 0) {
+                              newTransmitters[i] = { ...newTransmitters[i], ...statusUpdates };
+                              statusUpdated = true;
+                              await saveDocument('transmitters', t.id, statusUpdates);
                           }
                       } catch (err) {
                           console.error(`Error evaluating status for ${t.platform_id}:`, err);
@@ -835,11 +1046,12 @@ export const useAppStore = create<AppState>()(
           // purgeZeroCoordinates disabled on init — zero coords are now filtered at ingestion time
           // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
-          const [fsTransmitters, fsBirds, fsAlerts, fsUsers] = await Promise.all([
+          const [fsTransmitters, fsBirds, fsAlerts, fsUsers, fsStaticPeriods] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
             loadRecentAlerts<Alert>(),
             loadCollection<User>('users'),
+            loadCollection<StaticTestPeriod>('static_test_periods'),
           ]);
 
           // Load only the latest GPS and Doppler position for each transmitter
@@ -903,6 +1115,7 @@ export const useAppStore = create<AppState>()(
             positions: recentPositions,
             alerts: mergedAlerts,
             users: mergedUsers,
+            staticTestPeriods: fsStaticPeriods || [],
             firestoreReady: true,
             currentUserRole: role,
             currentUserPermissions: permissions,
@@ -949,10 +1162,6 @@ export const useAppStore = create<AppState>()(
           });
 
           console.log(`[AppStore] Firestore init complete: ${mergedTransmitters.length} transmitters, ${mergedBirds.length} birds, ${recentPositions.length} positions, role: ${role}`);
-
-          // Note: Automatic background status evaluation has been completely removed to prevent
-          // Firebase read spikes and unexpected live map changes on app load.
-          // Status updates are strictly manual via the "Recalculate Statuses" button in the Transmitters table.
 
         } catch (error) {
           console.error('[AppStore] Firestore init error:', error);
@@ -1018,24 +1227,19 @@ export const useAppStore = create<AppState>()(
 
               const { status: newStatus, isNesting } = evaluateTransmitterStatus({ ...t, last_fix: correctedLastFix }, allPositions);
 
-              if (t.derived_status !== newStatus) {
-                currentTransmitters[i].derived_status = newStatus;
-                await saveDocument('transmitters', t.id, { derived_status: newStatus });
-                updated++;
-              }
+              const statusUpdates = await processTransmitterStatusUpdates(
+                { ...t, last_fix: correctedLastFix },
+                newStatus,
+                isNesting,
+                allPositions,
+                get().addAlert,
+                () => get().birds
+              );
 
-              if (isNesting) {
-                 const bird = get().birds.find(b => b.id === t.bird_id);
-                 get().addAlert({
-                     id: `nesting-alert-${t.platform_id}-${Date.now()}`,
-                     type: 'nesting',
-                     severity: 'info',
-                     transmitter_id: t.platform_id,
-                     bird_name: bird?.ring_id || 'Unknown',
-                     message: `Nesting Behavior Detected for bird ${bird?.ring_id || t.platform_id}`,
-                     timestamp: new Date().toISOString(),
-                     status: 'active'
-                 });
+              if (Object.keys(statusUpdates).length > 0) {
+                currentTransmitters[i] = { ...currentTransmitters[i], ...statusUpdates };
+                await saveDocument('transmitters', t.id, statusUpdates);
+                updated++;
               }
             } catch (err) {
               console.warn(`[AppStore] Failed to evaluate status for ${t.platform_id}:`, err);
