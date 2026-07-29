@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { KPICard } from '../components/KPICard';
-import { Radio, AlertTriangle, Battery, Navigation, Activity, Satellite, Clock, ShieldAlert, Zap, Maximize, Minimize } from 'lucide-react';
+import { Radio, AlertTriangle, Battery, Navigation, Activity, Satellite, Clock, ShieldAlert, Zap, Maximize, Minimize, Filter, Calendar, Search, Check, X, ChevronDown, SlidersHorizontal, Layers, Percent, FileText } from 'lucide-react';
 import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
 import { 
@@ -11,6 +11,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend 
 } from 'recharts';
 import { formatDateTime, formatBattery } from '../utils/formatting';
+import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/accuracyCalculator';
 
 const renderCustomizedLabel = (props: any) => {
   const { cx, cy, midAngle, innerRadius, outerRadius, value, name, x, y } = props;
@@ -115,33 +116,70 @@ export const Dashboard = () => {
     return data;
   }, [positions]);
 
-  // 2. Generate Location Class (LC) Data for Radar Chart (Last 7 Days)
-  const lcData = useMemo(() => {
-    const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    
-    const recentFixes = positions.filter(p => new Date(p.timestamp).getTime() >= sevenDaysAgo);
-    const lcCounts: Record<string, number> = { '3': 0, '2': 0, '1': 0, '0': 0, 'A': 0, 'B': 0, 'Z': 0 };
-    
-    recentFixes.forEach(p => {
-      if (p.lc && lcCounts[p.lc] !== undefined) {
-        lcCounts[p.lc]++;
-      } else if (!p.lc && p.locationType === 'GPS') {
-         // GPS positions might not have an LC in some datasets, treat them as high accuracy
-         lcCounts['3']++;
-      }
-    });
+  // Accuracy analysis state
+  const [accuracyMode, setAccuracyMode] = useState<'normal' | 'static_test'>('normal');
+  const [selectedAccuracyTxIds, setSelectedAccuracyTxIds] = useState<string[]>([]);
+  const [accuracyDatePreset, setAccuracyDatePreset] = useState<'last_7_days' | 'last_30_days' | 'custom'>('last_7_days');
+  const [accuracyStartDate, setAccuracyStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [accuracyEndDate, setAccuracyEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [txSearchQuery, setTxSearchQuery] = useState('');
 
-    return [
-      { lc: 'Class 3 (<250m)', count: lcCounts['3'] },
-      { lc: 'Class 2 (<500m)', count: lcCounts['2'] },
-      { lc: 'Class 1 (<1500m)', count: lcCounts['1'] },
-      { lc: 'Class 0 (>1500m)', count: lcCounts['0'] },
-      { lc: 'Class A (No limits)', count: lcCounts['A'] },
-      { lc: 'Class B (No limits)', count: lcCounts['B'] },
-      { lc: 'Class Z (Invalid)', count: lcCounts['Z'] }
-    ];
-  }, [positions]);
+  // Handle date preset changes
+  const handleDatePresetChange = (preset: 'last_7_days' | 'last_30_days' | 'custom') => {
+    setAccuracyDatePreset(preset);
+    const end = new Date().toISOString().split('T')[0];
+    setAccuracyEndDate(end);
+    if (preset === 'last_7_days') {
+      const start = new Date();
+      start.setDate(start.getDate() - 7);
+      setAccuracyStartDate(start.toISOString().split('T')[0]);
+    } else if (preset === 'last_30_days') {
+      const start = new Date();
+      start.setDate(start.getDate() - 30);
+      setAccuracyStartDate(start.toISOString().split('T')[0]);
+    }
+  };
+
+  // Normal accuracy calculation (percentages by Location Class)
+  const { chartData: normalAccuracyData, totalFixes: normalTotalFixes } = useMemo(() => {
+    return calculateNormalAccuracy(positions, selectedAccuracyTxIds, accuracyStartDate, accuracyEndDate);
+  }, [positions, selectedAccuracyTxIds, accuracyStartDate, accuracyEndDate]);
+
+  // Static Test accuracy calculation (SensorStaticTest.R)
+  const staticTestAnalysis = useMemo(() => {
+    return calculateStaticTestAccuracy(positions, transmitters, selectedAccuracyTxIds, accuracyStartDate, accuracyEndDate);
+  }, [positions, transmitters, selectedAccuracyTxIds, accuracyStartDate, accuracyEndDate]);
+
+  // Modal helpers for selecting transmitters
+  const filteredModalTransmitters = useMemo(() => {
+    const q = txSearchQuery.toLowerCase().trim();
+    return transmitters.filter(t => {
+      const bird = birds.find(b => b.id === t.bird_id);
+      const matchId = String(t.platform_id).toLowerCase().includes(q);
+      const matchBird = bird ? (bird.ring_id.toLowerCase().includes(q) || (bird as any).name?.toLowerCase().includes(q)) : false;
+      return !q || matchId || matchBird;
+    });
+  }, [transmitters, birds, txSearchQuery]);
+
+  const selectAllFilteredTx = () => {
+    const ids = filteredModalTransmitters.map(t => String(t.platform_id));
+    setSelectedAccuracyTxIds(prev => Array.from(new Set([...prev, ...ids])));
+  };
+
+  const clearTxSelection = () => {
+    setSelectedAccuracyTxIds([]);
+  };
+
+  const toggleTxSelection = (platformId: string) => {
+    setSelectedAccuracyTxIds(prev =>
+      prev.includes(platformId) ? prev.filter(id => id !== platformId) : [...prev, platformId]
+    );
+  };
 
   // 3. Generate Battery Health Data (Bar Chart)
   const batteryData = useMemo(() => {
@@ -424,34 +462,214 @@ export const Dashboard = () => {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* Lower Analytical Row */}
+          </div>          {/* Lower Analytical Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* LC Radar Chart */}
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Location Class Accuracy</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Quality distribution (Last 7 Days)</p>
-              <div className="h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={lcData}>
-                    <PolarGrid stroke="#e5e7eb" />
-                    <PolarAngleAxis dataKey="lc" tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 600 }} />
-                    <Radar name="Count" dataKey="count" stroke="#3b82f6" strokeWidth={2} fill="#3b82f6" fillOpacity={0.4} animationDuration={1500} />
-                    <RechartsTooltip 
-                      contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
-                      itemStyle={{ color: '#3b82f6', fontWeight: 600 }}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
+            {/* Fix Accuracy Card (Supports Normal % & SensorStaticTest.R) */}
+            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all ${accuracyMode === 'static_test' ? 'col-span-1 md:col-span-2' : ''}`}>
+              
+              {/* Header & Controls Bar */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-slate-700">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">Fix Accuracy Analysis</h3>
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${accuracyMode === 'normal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'}`}>
+                      {accuracyMode === 'normal' ? 'Percentage Mode' : 'Static Test (SensorStaticTest.R)'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {selectedAccuracyTxIds.length === 0 ? 'All Transmitters' : `${selectedAccuracyTxIds.length} Transmitters Selected`} · {accuracyStartDate} to {accuracyEndDate}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Mode Toggle */}
+                  <div className="flex bg-gray-100 dark:bg-slate-700/60 p-1 rounded-xl">
+                    <button
+                      onClick={() => setAccuracyMode('normal')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${accuracyMode === 'normal' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-300 shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+                    >
+                      <Percent size={13} />
+                      Normal Fixes
+                    </button>
+                    <button
+                      onClick={() => setAccuracyMode('static_test')}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 ${accuracyMode === 'static_test' ? 'bg-yellow-400 text-slate-900 shadow-sm font-extrabold' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+                    >
+                      <SlidersHorizontal size={13} />
+                      Static Test Only
+                    </button>
+                  </div>
+
+                  {/* Transmitter Selection Trigger Button */}
+                  <button
+                    onClick={() => setIsTxModalOpen(true)}
+                    className="px-3 py-1.5 text-xs font-bold rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 flex items-center gap-1.5 transition-colors shadow-sm"
+                  >
+                    <Filter size={13} className="text-brand-600 dark:text-brand-400" />
+                    {selectedAccuracyTxIds.length === 0 ? 'All Transmitters' : `${selectedAccuracyTxIds.length} Selected`}
+                    <ChevronDown size={13} className="text-gray-400" />
+                  </button>
+
+                  {/* Date Range Selector */}
+                  <div className="flex items-center gap-1 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-1 text-xs">
+                    <button
+                      onClick={() => handleDatePresetChange('last_7_days')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${accuracyDatePreset === 'last_7_days' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+                    >
+                      7D
+                    </button>
+                    <button
+                      onClick={() => handleDatePresetChange('last_30_days')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${accuracyDatePreset === 'last_30_days' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+                    >
+                      30D
+                    </button>
+                    <button
+                      onClick={() => setAccuracyDatePreset('custom')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${accuracyDatePreset === 'custom' ? 'bg-brand-600 text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+
+                  {accuracyDatePreset === 'custom' && (
+                    <div className="flex items-center gap-1 text-xs">
+                      <input
+                        type="date"
+                        value={accuracyStartDate}
+                        onChange={(e) => setAccuracyStartDate(e.target.value)}
+                        className="px-2 py-1 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-gray-300 text-xs"
+                      />
+                      <span className="text-gray-400">-</span>
+                      <input
+                        type="date"
+                        value={accuracyEndDate}
+                        onChange={(e) => setAccuracyEndDate(e.target.value)}
+                        className="px-2 py-1 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-gray-300 text-xs"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Normal Mode Presentation */}
+              {accuracyMode === 'normal' && (
+                <div>
+                  <div className="h-56 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={normalAccuracyData}>
+                        <PolarGrid stroke="#e5e7eb" />
+                        <PolarAngleAxis dataKey="lc" tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 600 }} />
+                        <Radar name="Accuracy (%)" dataKey="percentage" stroke="#3b82f6" strokeWidth={2} fill="#3b82f6" fillOpacity={0.4} animationDuration={1500} />
+                        <RechartsTooltip 
+                          formatter={(val: any, name: any, item: any) => [`${val}% (${item.payload.count} fixes)`, 'Accuracy']}
+                          contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
+                          itemStyle={{ color: '#3b82f6', fontWeight: 600 }}
+                        />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Percentage Pill Breakdown */}
+                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                    {normalAccuracyData.map(item => (
+                      <div key={item.lc} className="bg-gray-50 dark:bg-slate-900/60 p-2 rounded-xl border border-gray-100 dark:border-slate-700/50">
+                        <div className="text-[10px] text-gray-400 truncate">{item.label}</div>
+                        <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">{item.percentage}%</div>
+                        <div className="text-[10px] text-gray-400 font-mono">{item.count} fixes</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Static Test Mode Presentation (SensorStaticTest.R) */}
+              {accuracyMode === 'static_test' && (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Spatial Accuracy Bins Chart */}
+                    <div className="md:col-span-1 bg-yellow-50/50 dark:bg-yellow-950/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-900/40">
+                      <h4 className="text-xs font-bold text-yellow-900 dark:text-yellow-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <SlidersHorizontal size={14} /> Spatial Accuracy Bins
+                      </h4>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3">Excludes 2 initial days + 1 final day</p>
+                      
+                      <div className="h-44 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={staticTestAnalysis.aggregateSpatial} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                            <XAxis dataKey="bin" tick={{ fontSize: 10, fill: '#854d0e', fontWeight: 600 }} />
+                            <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} unit="%" />
+                            <RechartsTooltip
+                              formatter={(val: any) => [`${val}%`, 'Spatial Accuracy']}
+                              contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#eab308', borderRadius: '8px' }}
+                              itemStyle={{ color: '#eab308', fontWeight: 600 }}
+                            />
+                            <Bar dataKey="percentage" radius={[4, 4, 0, 0]} fill="#eab308" animationDuration={1000} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* SensorStaticTest.R Telemetry Sessions Table */}
+                    <div className="md:col-span-2 overflow-x-auto">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                          <FileText size={14} className="text-yellow-600" /> Test Sessions Summary (SensorStaticTest.R)
+                        </h4>
+                        <span className="text-xs text-gray-500">{staticTestAnalysis.results.length} Sessions Analyzed</span>
+                      </div>
+
+                      {staticTestAnalysis.results.length > 0 ? (
+                        <table className="w-full text-xs text-left border-collapse">
+                          <thead>
+                            <tr className="bg-gray-50 dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-gray-500 dark:text-gray-400 uppercase text-[10px] font-bold">
+                              <th className="px-3 py-2">Transmitter</th>
+                              <th className="px-3 py-2">Model</th>
+                              <th className="px-3 py-2 text-center">Effect. Duration</th>
+                              <th className="px-3 py-2 text-center">Barycentre (Lat, Lon)</th>
+                              <th className="px-3 py-2 text-center">GPS Fixes (nPos)</th>
+                              <th className="px-3 py-2 text-center">Mean/Day</th>
+                              <th className="px-3 py-2 text-center">P0_10 (&le;10m)</th>
+                              <th className="px-3 py-2 text-center">P0_20 (&le;20m)</th>
+                              <th className="px-3 py-2 text-center">P20_50</th>
+                              <th className="px-3 py-2 text-center">Psupp50 (&gt;50m)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                            {staticTestAnalysis.results.map((r, idx) => (
+                              <tr key={`${r.transmitterId}-${idx}`} className="hover:bg-yellow-50/40 dark:hover:bg-slate-700/50 transition-colors">
+                                <td className="px-3 py-2.5 font-bold text-gray-900 dark:text-white">{r.transmitterId}</td>
+                                <td className="px-3 py-2.5 text-gray-500">{r.model || 'SolarPTT'}</td>
+                                <td className="px-3 py-2.5 text-center font-medium">{r.effectiveDurationDays} d</td>
+                                <td className="px-3 py-2.5 text-center font-mono text-[11px]">{r.mLat.toFixed(3)}, {r.mLon.toFixed(3)}</td>
+                                <td className="px-3 py-2.5 text-center font-bold text-brand-600 dark:text-brand-400">{r.nPos}</td>
+                                <td className="px-3 py-2.5 text-center font-medium">{r.meanPosDay}</td>
+                                <td className="px-3 py-2.5 text-center font-bold text-green-600">{r.p0_10}%</td>
+                                <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{r.p0_20}%</td>
+                                <td className="px-3 py-2.5 text-center font-medium text-amber-600">{r.p20_50}%</td>
+                                <td className="px-3 py-2.5 text-center font-bold text-red-500">{r.psupp50}%</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="p-8 text-center bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 text-gray-400 text-xs">
+                          No active Static Test sessions found in the selected date window.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
 
             {/* Battery Health Bar Chart */}
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
+            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm ${accuracyMode === 'static_test' ? 'col-span-1 md:col-span-2' : ''}`}>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Active Fleet Battery Health</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Voltage distribution across deployed PTTs</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Voltage distribution across deployed transmitters</p>
               <div className="h-48 w-full">
                 {batteryData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -479,7 +697,6 @@ export const Dashboard = () => {
                 )}
               </div>
             </div>
-
           </div>
         </div>
 
@@ -558,9 +775,116 @@ export const Dashboard = () => {
               )}
             </div>
           </div>
-
         </div>
       </div>
+
+      {/* Transmitter Selection Modal */}
+      {isTxModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-gray-100 dark:border-slate-700 max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-700">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-white">Select Transmitters</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Filter accuracy metrics by individual or bulk transmitters</p>
+              </div>
+              <button
+                onClick={() => setIsTxModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-3 flex-1 overflow-hidden flex flex-col">
+              {/* Search Input */}
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search Transmitter ID or Bird..."
+                  value={txSearchQuery}
+                  onChange={(e) => setTxSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 dark:text-gray-200"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 text-xs">
+                <button
+                  onClick={selectAllFilteredTx}
+                  className="flex-1 py-1.5 font-bold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 hover:bg-brand-100 rounded-lg transition-colors"
+                >
+                  Select All ({filteredModalTransmitters.length})
+                </button>
+                <button
+                  onClick={clearTxSelection}
+                  className="flex-1 py-1.5 font-bold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Clear Selection
+                </button>
+              </div>
+
+              {/* Transmitter Checkbox List */}
+              <div className="flex-1 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
+                {filteredModalTransmitters.map((t) => {
+                  const bird = birds.find((b) => b.id === t.bird_id);
+                  const isSelected = selectedAccuracyTxIds.includes(String(t.platform_id));
+                  const status = t.derived_status || t.status;
+
+                  let badgeColor = 'bg-slate-900 text-white';
+                  if (status === 'Active' || status === 'active') badgeColor = 'bg-green-100 text-green-700';
+                  if (status === 'Potential Mortality') badgeColor = 'bg-amber-100 text-amber-800';
+                  if (status === 'Static test') badgeColor = 'bg-yellow-100 text-yellow-800';
+                  if (status === 'Dead' || status === 'dead') badgeColor = 'bg-red-600 text-white';
+
+                  return (
+                    <div
+                      key={t.id}
+                      onClick={() => toggleTxSelection(String(t.platform_id))}
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/20'
+                          : 'border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-700/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                            isSelected ? 'bg-brand-600 border-brand-600 text-white' : 'border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+                          }`}
+                        >
+                          {isSelected && <Check size={12} />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-gray-900 dark:text-white">{t.platform_id}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {bird ? `Bird: ${bird.ring_id}` : 'Unassigned'} · {t.model}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`}>
+                        {status}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-100 dark:border-slate-700 flex justify-between items-center">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {selectedAccuracyTxIds.length === 0 ? 'All Transmitters Active' : `${selectedAccuracyTxIds.length} Transmitters Selected`}
+              </span>
+              <button
+                onClick={() => setIsTxModalOpen(false)}
+                className="px-5 py-2 text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 rounded-xl shadow-sm transition-colors"
+              >
+                Apply Selection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
