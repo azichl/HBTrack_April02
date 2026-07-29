@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/appStore';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 import { CustomSelect } from '../components/CustomSelect';
@@ -43,51 +43,28 @@ const MapResizer = () => {
   return null;
 };
 
-// Colors mapping for Leaflet Markers (matching Live Tracking & Dashboard)
-const greenIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+// Use exact user-requested hex colors for the map markers, adjusted size (matching Live Tracking)
+const createSvgIcon = (colorHex: string) => {
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `<div style="position: relative; width: 21px; height: 35px;">
+             <img src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png" style="position: absolute; top: 0; left: 0; width: 35px; height: 35px;" />
+             <svg width="21" height="35" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 0; left: 0; z-index: 10;">
+               <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${colorHex}" stroke="#000000" stroke-width="1.5" stroke-opacity="0.3" />
+               <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.8" />
+             </svg>
+           </div>`,
+    iconSize: [21, 35],
+    iconAnchor: [10.5, 35],
+    popupAnchor: [1, -28]
+  });
+};
 
-const orangeIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-orange.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const yellowIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-yellow.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const redIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
-
-const blackIcon = new L.Icon({
-  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-black.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41]
-});
+const greenIcon = createSvgIcon('#22c55e');
+const orangeIcon = createSvgIcon('#f97316');
+const yellowIcon = createSvgIcon('#eab308');
+const blackIcon = createSvgIcon('#0f172a');
+const redIcon = createSvgIcon('#dc2626');
 
 const getStatusIcon = (status: string) => {
     if (status === 'Active' || status === 'active') return greenIcon;
@@ -579,6 +556,13 @@ export const GeoSpatialAnalysis = () => {
               {/* Subject Markers connected to live transmitter status */}
               {activeAssets.map(item => {
                   const status = item.status;
+                  let ticketClass = 'bg-white text-slate-900 border-2 border-slate-900';
+                  if (status === 'Active' || status === 'active') ticketClass = 'bg-white text-slate-900 border-2 border-green-500';
+                  if (status === 'Potential Mortality') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFAA33]';
+                  if (status === 'Static test') ticketClass = 'bg-white text-slate-900 border-2 border-[#FFEA00]';
+                  if (status === 'Inactive' || status === 'inactive') ticketClass = 'bg-white text-slate-900 border-2 border-slate-900';
+                  if (status === 'Dead' || status === 'dead') ticketClass = 'bg-white text-slate-900 border-2 border-red-600';
+
                   return (
                       <Marker
                           key={item.transmitter.platform_id}
@@ -590,6 +574,19 @@ export const GeoSpatialAnalysis = () => {
                               }
                           }}
                       >
+                          <Tooltip 
+                              permanent 
+                              direction="top" 
+                              offset={[0, -28]} 
+                              className="!bg-transparent !border-0 !shadow-none !p-0 before:!hidden"
+                          >
+                              <div 
+                                  className={`px-1.5 py-0 rounded-full shadow-sm text-xs font-bold flex items-center gap-1 ${ticketClass}`}
+                                  style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+                              >
+                                  <span>{item.transmitter.platform_id}</span>
+                              </div>
+                          </Tooltip>
                           <Popup>
                               <div className="p-1.5 space-y-1 text-slate-800 min-w-[180px]">
                                   <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
