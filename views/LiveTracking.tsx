@@ -653,7 +653,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     );
 };
 
-interface ClusterMarkerProps {
+interface StaticTestClusterMarkerProps {
     cluster: { lat: number; lon: number; positions: any[] };
     transmitters: any[];
     birds: any[];
@@ -662,7 +662,7 @@ interface ClusterMarkerProps {
     setShowHistory: (show: boolean) => void;
 }
 
-const ClusterMarker: React.FC<ClusterMarkerProps> = ({
+const StaticTestClusterMarker: React.FC<StaticTestClusterMarkerProps> = ({
     cluster,
     transmitters,
     birds,
@@ -673,33 +673,15 @@ const ClusterMarker: React.FC<ClusterMarkerProps> = ({
     const map = useMap();
     const count = cluster.positions.length;
 
-    const statuses = cluster.positions.map(p => {
-        const t = transmitters.find(tr => String(tr.platform_id) === String(p.transmitter_id));
-        return t?.derived_status || t?.status || 'Active';
-    });
-
-    let borderClass = 'border-emerald-500 text-slate-900';
-    let ringBg = 'bg-emerald-500';
-    if (statuses.includes('Dead')) {
-        borderClass = 'border-red-600 text-red-700';
-        ringBg = 'bg-red-600';
-    } else if (statuses.includes('Potential Mortality')) {
-        borderClass = 'border-[#FFAA33] text-amber-800';
-        ringBg = 'bg-[#FFAA33]';
-    } else if (statuses.includes('Inactive')) {
-        borderClass = 'border-slate-900 text-slate-900';
-        ringBg = 'bg-slate-900';
-    }
-
     const clusterHtml = `
-        <div class="px-2.5 py-0.5 rounded-full shadow-md text-xs font-bold flex items-center gap-1.5 bg-white text-slate-900 border-2 ${borderClass} cursor-pointer transition-transform hover:scale-105" style="font-family: 'Sakkal Majalla', sans-serif; white-space: nowrap;">
-            <span class="w-2.5 h-2.5 rounded-full ${ringBg} animate-ping"></span>
-            <span class="font-extrabold">${count} PTTs</span>
+        <div class="px-2.5 py-0.5 rounded-full shadow-md text-xs font-bold flex items-center gap-1.5 bg-white text-slate-900 border-2 border-[#FFEA00] cursor-pointer transition-transform hover:scale-105" style="font-family: 'Sakkal Majalla', sans-serif; white-space: nowrap;">
+            <span class="w-2.5 h-2.5 rounded-full bg-[#FFEA00] animate-ping"></span>
+            <span class="font-extrabold text-slate-900">${count} PTTs</span>
         </div>
     `;
 
     const clusterIcon = L.divIcon({
-        className: 'custom-cluster-icon',
+        className: 'custom-static-cluster-icon',
         html: clusterHtml,
         iconSize: [85, 26],
         iconAnchor: [42, 13]
@@ -721,13 +703,13 @@ const ClusterMarker: React.FC<ClusterMarkerProps> = ({
                 <div className="p-1" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
                     <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-700">
                         <div className="font-bold text-gray-900 dark:text-white text-sm">
-                            {count} PTTs in Cluster
+                            {count} Static Test PTTs
                         </div>
                         <button
                             onClick={() => {
                                 map.flyTo([cluster.lat, cluster.lon], Math.min(map.getZoom() + 3, 14));
                             }}
-                            className="text-[10px] bg-brand-600 hover:bg-brand-700 text-white font-bold px-2 py-0.5 rounded transition-colors"
+                            className="text-[10px] bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-bold px-2 py-0.5 rounded transition-colors"
                         >
                             Zoom In
                         </button>
@@ -737,13 +719,6 @@ const ClusterMarker: React.FC<ClusterMarkerProps> = ({
                         {cluster.positions.map(p => {
                             const itemT = transmitters.find(t => String(t.platform_id) === String(p.transmitter_id));
                             const itemB = birds.find(b => b.id === itemT?.bird_id);
-                            const itemStatus = itemT?.derived_status || itemT?.status || 'inactive';
-                            
-                            let sBadge = 'bg-slate-900 text-white';
-                            if (itemStatus === 'Active' || itemStatus === 'active') sBadge = 'bg-green-100 text-green-700';
-                            if (itemStatus === 'Potential Mortality') sBadge = 'bg-[#FFAA33]/20 text-[#FFAA33]';
-                            if (itemStatus === 'Static test') sBadge = 'bg-[#FFEA00]/20 text-[#e6b800]';
-                            if (itemStatus === 'Dead' || itemStatus === 'dead') sBadge = 'bg-red-600 text-white';
 
                             return (
                                 <div 
@@ -752,13 +727,13 @@ const ClusterMarker: React.FC<ClusterMarkerProps> = ({
                                         setSelectedTransmitterIds([String(p.transmitter_id)]);
                                         setShowHistory(true);
                                     }}
-                                    className="p-2 rounded-lg border border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 flex items-center justify-between cursor-pointer transition-colors"
+                                    className="p-2 rounded-lg border border-yellow-200 dark:border-yellow-900/40 bg-yellow-50/50 dark:bg-yellow-950/20 hover:bg-yellow-100/50 flex items-center justify-between cursor-pointer transition-colors"
                                 >
                                     <div>
                                         <div className="font-bold text-gray-900 dark:text-white text-xs">{p.transmitter_id}</div>
                                         <div className="text-[10px] text-gray-500 dark:text-gray-400">{itemB ? `Bird: ${itemB.ring_id}` : 'Unassigned'}</div>
                                     </div>
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sBadge}`}>{itemStatus}</span>
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-[#FFEA00]/20 text-[#e6b800] border border-yellow-300">Static test</span>
                                 </div>
                             );
                         })}
@@ -769,8 +744,8 @@ const ClusterMarker: React.FC<ClusterMarkerProps> = ({
     );
 };
 
-interface MapClusteredMarkersProps {
-    latestPositions: any[];
+interface StaticTestClusteredMarkersProps {
+    staticTestPositions: any[];
     transmitters: any[];
     birds: any[];
     timeZone: string;
@@ -780,8 +755,8 @@ interface MapClusteredMarkersProps {
     isTrackingUser?: boolean;
 }
 
-const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
-    latestPositions,
+const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
+    staticTestPositions,
     transmitters,
     birds,
     timeZone,
@@ -799,12 +774,12 @@ const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
     });
 
     const clusters = useMemo(() => {
-        if (!latestPositions || latestPositions.length === 0) return [];
+        if (!staticTestPositions || staticTestPositions.length === 0) return [];
         
         const result: { lat: number; lon: number; positions: any[] }[] = [];
         const CLUSTER_PIXEL_RADIUS = 50;
 
-        latestPositions.forEach(pos => {
+        staticTestPositions.forEach(pos => {
             const pPoint = map.latLngToLayerPoint([pos.lat, pos.lon]);
             
             let targetCluster = result.find(c => {
@@ -829,7 +804,7 @@ const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
         });
 
         return result;
-    }, [latestPositions, map, mapVersion]);
+    }, [staticTestPositions, map, mapVersion]);
 
     return (
         <>
@@ -840,7 +815,7 @@ const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
                     const bird = birds.find(b => b.id === transmitter?.bird_id);
                     return (
                         <TransmitterMarker 
-                            key={pos.id || `single-${idx}`} 
+                            key={pos.id || `static-single-${idx}`} 
                             pos={pos}
                             transmitter={transmitter}
                             bird={bird}
@@ -849,7 +824,7 @@ const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
                             setShowHistory={setShowHistory}
                             setNavTarget={setNavTarget}
                             isTrackingUser={isTrackingUser}
-                            latestPositions={latestPositions}
+                            latestPositions={staticTestPositions}
                             transmitters={transmitters}
                             birds={birds}
                         />
@@ -857,8 +832,8 @@ const MapClusteredMarkers: React.FC<MapClusteredMarkersProps> = ({
                 }
 
                 return (
-                    <ClusterMarker
-                        key={`cluster-${c.positions.map(p => p.transmitter_id).join('-')}-${idx}`}
+                    <StaticTestClusterMarker
+                        key={`static-cluster-${c.positions.map(p => p.transmitter_id).join('-')}-${idx}`}
                         cluster={c}
                         transmitters={transmitters}
                         birds={birds}
@@ -1785,9 +1760,43 @@ export const LiveTracking = () => {
             <ZoomControl position="bottomright" />
             <ScaleControl position="bottomleft" />
 
-            {/* Bird Markers (DYNAMICALLY CLUSTERED BY ZOOM & PIXEL DISTANCE) */}
-            <MapClusteredMarkers 
-                latestPositions={latestPositions}
+            {/* Standard Bird Markers (PREVIOUS DESIGN RESTORED) */}
+            {latestPositions
+                .filter(pos => {
+                    const t = transmitters.find(tr => String(tr.platform_id) === String(pos.transmitter_id));
+                    const st = t?.derived_status || t?.status;
+                    return st !== 'Static test' && st !== 'Static Test';
+                })
+                .map((pos) => {
+                    const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));
+                    const bird = birds.find(b => b.id === transmitter?.bird_id);
+                    
+                    return (
+                        <TransmitterMarker 
+                            key={pos.id} 
+                            pos={pos}
+                            transmitter={transmitter}
+                            bird={bird}
+                            timeZone={timeZone}
+                            setSelectedTransmitterIds={setSelectedTransmitterIds}
+                            setShowHistory={setShowHistory}
+                            setNavTarget={setNavTarget}
+                            isTrackingUser={isTrackingUser}
+                            latestPositions={latestPositions}
+                            transmitters={transmitters}
+                            birds={birds}
+                        />
+                    );
+                })
+            }
+
+            {/* Static Test Markers (CLUSTERED WITH YELLOW BADGES ONLY FOR STATIC TEST) */}
+            <StaticTestClusteredMarkers 
+                staticTestPositions={latestPositions.filter(pos => {
+                    const t = transmitters.find(tr => String(tr.platform_id) === String(pos.transmitter_id));
+                    const st = t?.derived_status || t?.status;
+                    return st === 'Static test' || st === 'Static Test';
+                })}
                 transmitters={transmitters}
                 birds={birds}
                 timeZone={timeZone}
