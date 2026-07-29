@@ -218,66 +218,80 @@ const safeParseDate = (ts: any): number => {
     return new Date(str).getTime();
 };
 
-export const loadLatestPositionsPerTransmitter = async (transmitterIds: string[]) => {
+export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string | number)[]) => {
   try {
     const promises: Promise<any>[] = [];
     
     transmitterIds.forEach(rawId => {
-      const id = String(rawId);
-      
-      const p1 = getDocs(query(
-        collection(db, 'positions'),
-        where('transmitter_id', '==', id),
-        orderBy('timestamp', 'desc'),
-        limit(5)
-      )).then(snap => snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const idStr = String(rawId);
+      const idNum = Number(rawId);
+      const isNumValid = !isNaN(idNum);
 
-      const p2 = getDocs(query(
-        collection(db, 'argos_positions'),
-        where('platformId', '==', id),
-        orderBy('timestamp', 'desc'),
-        limit(5)
-      )).then(snap => snap.docs.map(d => {
-        const data = d.data();
-        let numLon = Number(data.lon);
-        if (id === '242086' && !isNaN(numLon) && numLon < 0) {
-          numLon = Math.abs(numLon);
-        }
-        return {
-          id: d.id,
-          transmitter_id: String(data.platformId || id),
-          timestamp: data.timestamp,
-          lat: Number(data.lat),
-          lon: numLon,
-          lc: data.lc || 'Z',
-          is_kalman: false,
-          speed_kmh: 0,
-          course: 0,
-          satellite: data.satellite || 'UNK',
-          locationType: data.locationType || 'Doppler'
-        };
-      }));
-
-      promises.push(Promise.all([p1, p2]).then(([posList, argosList]) => {
-        const combined: any[] = [...posList, ...argosList].filter((item: any) => {
-          const numLat = Number(item.lat);
-          const numLon = Number(item.lon);
-          return !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
+      const fetchDocs = (colName: string, fieldName: string, val: string | number) => {
+        return getDocs(query(
+          collection(db, colName),
+          where(fieldName, '==', val),
+          orderBy('timestamp', 'desc'),
+          limit(5)
+        )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
+        .catch(() => {
+          return getDocs(query(
+            collection(db, colName),
+            where(fieldName, '==', val),
+            limit(20)
+          )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
+          .catch(() => []);
         });
-        if (combined.length === 0) return null;
+      };
 
-        combined.sort((a: any, b: any) => {
+      const p1 = fetchDocs('positions', 'transmitter_id', idStr);
+      const p2 = isNumValid ? fetchDocs('positions', 'transmitter_id', idNum) : Promise.resolve([]);
+      const p3 = fetchDocs('positions', 'platformId', idStr);
+      const p4 = isNumValid ? fetchDocs('positions', 'platformId', idNum) : Promise.resolve([]);
+
+      const p5 = fetchDocs('argos_positions', 'platformId', idStr);
+      const p6 = isNumValid ? fetchDocs('argos_positions', 'platformId', idNum) : Promise.resolve([]);
+      const p7 = fetchDocs('argos_positions', 'transmitter_id', idStr);
+      const p8 = isNumValid ? fetchDocs('argos_positions', 'transmitter_id', idNum) : Promise.resolve([]);
+
+      promises.push(Promise.all([p1, p2, p3, p4, p5, p6, p7, p8]).then(results => {
+        const combinedRaw = results.flat();
+        if (combinedRaw.length === 0) return null;
+
+        const normalized = combinedRaw.map((d: any) => {
+          const rawLat = d.lat !== undefined ? d.lat : d.latitude;
+          let rawLon = d.lon !== undefined ? d.lon : d.longitude;
+          let numLon = Number(rawLon);
+          if (idStr === '242086' && !isNaN(numLon) && numLon < 0) {
+            numLon = Math.abs(numLon);
+          }
+
+          return {
+            id: d.docId || `pos-${d.id || Date.now()}`,
+            transmitter_id: idStr,
+            timestamp: d.timestamp || d.locationDate || new Date().toISOString(),
+            lat: Number(rawLat),
+            lon: numLon,
+            lc: d.lc || '3',
+            is_kalman: false,
+            speed_kmh: Number(d.speed_kmh || d.speed || 0),
+            course: Number(d.course || 0),
+            satellite: d.satellite || 'GPS',
+            locationType: d.locationType || 'GPS'
+          };
+        }).filter(item => {
+          return !isNaN(item.lat) && !isNaN(item.lon) && item.lat !== 0 && item.lon !== 0 && (Math.abs(item.lat) > 0.0001 || Math.abs(item.lon) > 0.0001);
+        });
+
+        if (normalized.length === 0) return null;
+
+        normalized.sort((a, b) => {
           const tsA = safeParseDate(a.timestamp);
           const tsB = safeParseDate(b.timestamp);
           return (isNaN(tsB) ? 0 : tsB) - (isNaN(tsA) ? 0 : tsA);
         });
 
-        const best: any = combined[0];
-        if (String(best.transmitter_id) === '242086' && Number(best.lon) < 0) {
-          best.lon = Math.abs(Number(best.lon));
-        }
-
-        return best;
+        return normalized[0];
       }));
     });
 

@@ -1136,9 +1136,9 @@ export const LiveTracking = () => {
     
     // 2. Map to store latest position per ID
     const latestMap = new Map<string, typeof positions[0]>();
-    
-    positions.forEach(p => {
-        const pid = String(p.transmitter_id);
+      positions.forEach(p => {
+        const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
+        if (!pid) return;
 
         // Filter by transmitter status validity
         if (!relevantIds.has(pid)) return;
@@ -1175,13 +1175,23 @@ export const LiveTracking = () => {
         }
     });
 
-    // Fallback: For transmitters with no position in 7-day memory cache, use transmitter's last_fix & coords
+    // Fallback: For transmitters with no position in memory cache, use transmitter's last_fix & coords or search full positions array
     relevantTransmitters.forEach(t => {
       const pid = String(t.platform_id);
       if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(pid)) return;
       if (!latestMap.has(pid)) {
-        const rawLat = (t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat;
-        const rawLon = (t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon;
+        let rawLat = (t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat;
+        let rawLon = (t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon;
+
+        // Search full positions array for any position matching pid if coords missing on transmitter object
+        if (rawLat === undefined || rawLon === undefined || Number(rawLat) === 0 || Number(rawLon) === 0) {
+          const matchPos = positions.find(p => String(p.transmitter_id || (p as any).platformId || (p as any).platform_id) === pid);
+          if (matchPos) {
+            rawLat = matchPos.lat;
+            rawLon = matchPos.lon;
+          }
+        }
+
         const numLat = Number(rawLat || 0);
         let numLon = Number(rawLon || 0);
 
@@ -1195,21 +1205,19 @@ export const LiveTracking = () => {
             return;
         }
 
-        if (t.last_fix) {
-          latestMap.set(pid, {
-            id: `fallback-pos-${t.id}`,
+        latestMap.set(pid, {
+            id: `pos-fallback-${pid}`,
             transmitter_id: pid,
             timestamp: t.last_fix || new Date().toISOString(),
             lat: numLat,
             lon: numLon,
-            lc: 'GPS',
+            lc: '3',
             is_kalman: false,
             speed_kmh: 0,
             course: 0,
-            satellite: 'GPS',
+            satellite: 'Fallback',
             locationType: 'GPS'
-          } as any);
-        }
+        } as any);
       }
     });
 

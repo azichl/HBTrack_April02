@@ -144,8 +144,8 @@ export const Monitoring = () => {
   const tableData = useMemo<MonitoringTableRow[]>(() => {
     return transmitters.map(t => {
       const bird = birds.find(b => b.id === t.bird_id);
-      const pos = latestPositions.get(t.platform_id);
       const pid = String(t.platform_id);
+      const pos = latestPositions.get(pid);
 
       // Determine the true latest timestamp by comparing all sources
       const posTs = pos ? safeParseDate(pos.timestamp) : NaN;
@@ -157,8 +157,8 @@ export const Monitoring = () => {
       const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
       const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
 
-      let displayLat = pos?.lat;
-      let displayLon = pos?.lon;
+      let displayLat = pos?.lat !== undefined ? Number(pos.lat) : (t as any).latitude !== undefined ? Number((t as any).latitude) : (t as any).lat !== undefined ? Number((t as any).lat) : undefined;
+      let displayLon = pos?.lon !== undefined ? Number(pos.lon) : (t as any).longitude !== undefined ? Number((t as any).longitude) : (t as any).lon !== undefined ? Number((t as any).lon) : undefined;
       if (pid === '242086' && displayLon !== undefined && displayLon < 0) {
         displayLon = Math.abs(displayLon);
       }
@@ -175,7 +175,7 @@ export const Monitoring = () => {
         battery_voltage: t.battery_voltage,
         speed: pos?.speed_kmh,
         timestamp: bestTimestamp,
-        hasPos: !!pos
+        hasPos: !!pos || (displayLat !== undefined && displayLon !== undefined)
       };
     });
   }, [transmitters, birds, latestPositions, argosLastFix]);
