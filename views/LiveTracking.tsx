@@ -2282,7 +2282,8 @@ export const LiveTracking = () => {
                                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${(() => {
                                                 const s = t.derived_status || t.status;
                                                 if (s === 'Active' || s === 'active') return 'bg-green-500';
-                                                if (s === 'Inactive') return 'bg-[#FF2A00]';
+                                                if (s === 'Inactive' || s === 'inactive') return 'bg-slate-900';
+                                                if (s === 'Dead' || s === 'dead') return 'bg-red-600';
                                                 if (s === 'Static test') return 'bg-[#FFEA00]';
                                                 return 'bg-[#FFAA33]';
                                             })()}`}></div>
@@ -2307,7 +2308,8 @@ export const LiveTracking = () => {
                 >
                     <div className={`w-2.5 h-2.5 rounded-full ${
                         selectedStatus === 'active' ? 'bg-green-500' : 
-                        selectedStatus === 'inactive' ? 'bg-[#FF2A00]' : 
+                        selectedStatus === 'inactive' ? 'bg-slate-900' : 
+                        selectedStatus === 'dead' ? 'bg-red-600' :
                         selectedStatus === 'mortality' ? 'bg-[#FFAA33]' : 
                         selectedStatus === 'static' ? 'bg-[#FFEA00]' : 'bg-gray-900'
                     }`} />
@@ -2315,6 +2317,7 @@ export const LiveTracking = () => {
                         {selectedStatus === 'all' ? 'All Statuses' : 
                          selectedStatus === 'mortality' ? 'Potential Mortality' : 
                          selectedStatus === 'static' ? 'Static test' : 
+                         selectedStatus === 'dead' ? 'Dead' :
                          selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
                     </span>
                     <ChevronDown size={16} className="text-gray-400" />
@@ -2330,8 +2333,9 @@ export const LiveTracking = () => {
                             { id: 'all', label: 'All Statuses', color: 'bg-gray-900' },
                             { id: 'active', label: 'Active', color: 'bg-green-500' },
                             { id: 'mortality', label: 'Potential Mortality', color: 'bg-[#FFAA33]' },
-                            { id: 'inactive', label: 'Inactive', color: 'bg-[#FF2A00]' },
-                            { id: 'static', label: 'Static test', color: 'bg-[#FFEA00]' }
+                            { id: 'inactive', label: 'Inactive', color: 'bg-slate-900' },
+                            { id: 'static', label: 'Static test', color: 'bg-[#FFEA00]' },
+                            { id: 'dead', label: 'Dead', color: 'bg-red-600' }
                         ].map(option => (
                             <button
                                 key={option.id}
