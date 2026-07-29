@@ -142,7 +142,7 @@ export const MigrationPrediction = ({ selectedTransmitterId }: { selectedTransmi
                         </div>
                     </Tooltip>
                     <Popup>
-                        <div className="text-sm font-bold">PTT {pos.transmitter_id}</div>
+                        <div className="text-sm font-bold">{pos.transmitter_id}</div>
                         <div className="text-xs">{formatDateTime(pos.timestamp, timeZone)}</div>
                         <div className="text-xs text-gray-500">Lat: {pos.lat.toFixed(3)}, Lon: {pos.lon.toFixed(3)}</div>
                     </Popup>

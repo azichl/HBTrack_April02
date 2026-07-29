@@ -219,7 +219,7 @@ const processTransmitterStatusUpdates = async (
         severity: 'critical',
         transmitter_id: t.platform_id,
         bird_name: bird?.ring_id || 'Unknown',
-        message: `CRITICAL: PTT ${t.platform_id} status changed from Active to ${derived}`,
+        message: `CRITICAL: Transmitter ${t.platform_id} status changed from Active to ${derived}`,
         timestamp: new Date().toISOString(),
         status: 'active'
       });
@@ -331,7 +331,7 @@ const processTransmitterStatusUpdates = async (
               severity: 'critical',
               transmitter_id: t.platform_id,
               bird_name: bird?.ring_id || 'Unknown',
-              message: `PTT ${t.platform_id} is on Static Test and will roll into a new Argos billing month on ${nextMonthStr} if still transmitting. Power off before ${lastSafeDateStr} to avoid an extra month's subscription.`,
+              message: `Transmitter ${t.platform_id} is on Static Test and will roll into a new Argos billing month on ${nextMonthStr} if still transmitting. Power off before ${lastSafeDateStr} to avoid an extra month's subscription.`,
               timestamp: new Date().toISOString(),
               status: 'active'
             });

@@ -306,7 +306,7 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
   return (
     <div className="text-center p-1 min-w-[200px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
         <div className="flex items-center justify-center gap-1 mb-1">
-             <div className="font-bold text-[14px]" style={{color: color}}>PTT {pttId}</div>
+             <div className="font-bold text-[14px]" style={{color: color}}>{pttId}</div>
              {type && (
                  <span className={`text-[10px] px-1 rounded ${type === 'GPS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
                      {type}
@@ -473,10 +473,10 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                     {isGroup ? (
                         <>
                             <span className="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
-                            <span>{overlappingPositions.length} PTTs</span>
+                            <span>{overlappingPositions.length} Transmitters</span>
                         </>
                     ) : (
-                        <span>PTT {pos.transmitter_id}</span>
+                        <span>{pos.transmitter_id}</span>
                     )}
                 </div>
             </Tooltip>
@@ -528,7 +528,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                                             className={`p-2 rounded-lg border transition-all flex items-center justify-between cursor-pointer ${isItemSel ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/20' : 'border-gray-100 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
                                         >
                                             <div>
-                                                <div className="font-bold text-gray-900 dark:text-white text-xs">PTT {itemPos.transmitter_id}</div>
+                                                <div className="font-bold text-gray-900 dark:text-white text-xs">{itemPos.transmitter_id}</div>
                                                 <div className="text-[10px] text-gray-500 dark:text-gray-400">{itemB ? `Bird: ${itemB.ring_id}` : 'Unassigned'}</div>
                                             </div>
                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${sBadge}`}>{itemStatus}</span>
@@ -540,7 +540,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                     ) : (
                         <div>
                             <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100 dark:border-slate-700">
-                                <h3 className="font-bold text-brand-900 dark:text-white text-base">PTT {currentPos.transmitter_id}</h3>
+                                <h3 className="font-bold text-brand-900 dark:text-white text-base">{currentPos.transmitter_id}</h3>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${badgeColorClass}`}>
                                     {status}
                                 </span>
@@ -625,7 +625,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                                         (currentUserRole === 'Administrator' || currentUserRole === 'Researcher' || currentUserRole === 'Field Coordinator') && (
                                             <button
                                                 onClick={async () => {
-                                                    if (window.confirm(`This will permanently mark PTT ${currentTransmitter.platform_id} as Dead. This cannot be automatically reversed. Continue?`)) {
+                                                    if (window.confirm(`This will permanently mark ${currentTransmitter.platform_id} as Dead. This cannot be automatically reversed. Continue?`)) {
                                                         const userProfile = {
                                                             id: currentUser?.uid || 'user',
                                                             name: currentUser?.displayName || currentUser?.email || 'User',
@@ -2060,7 +2060,7 @@ export const LiveTracking = () => {
                         {/* Scrollable Content */}
                         <div className="p-4 pt-3 overflow-y-auto custom-scrollbar max-h-[60vh]">
                         {selectedTransmitterIds.length === 0 ? (
-                            <p className="text-xs text-gray-500 italic">Please select a PTT to view history.</p>
+                            <p className="text-xs text-gray-500 italic">Please select a transmitter to view history.</p>
                         ) : (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
@@ -2219,7 +2219,7 @@ export const LiveTracking = () => {
                     <Search size={18} className="ml-3 text-gray-400 flex-shrink-0" />
                     <input 
                         type="text" 
-                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs Selected` : "Search PTT ID..."}
+                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} Selected` : "Search ID..."}
                         value={searchQuery}
                         onFocus={() => setIsSearchFocused(true)}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -2275,7 +2275,7 @@ export const LiveTracking = () => {
                                                     {isSelected && <Check size={12} className="text-white" />}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <div className="text-sm font-bold text-gray-900 truncate">PTT {t.platform_id}</div>
+                                                    <div className="text-sm font-bold text-gray-900 truncate">{t.platform_id}</div>
                                                     <div className="text-xs text-gray-500 truncate">{bird?.ring_id || 'Unassigned'}</div>
                                                 </div>
                                             </div>
@@ -2568,7 +2568,7 @@ export const LiveTracking = () => {
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
-                This will permanently mark PTT <strong>{confirmDeadTransmitter.platform_id}</strong> as <strong>Dead</strong>. This cannot be automatically reversed. Continue?
+                This will permanently mark <strong>{confirmDeadTransmitter.platform_id}</strong> as <strong>Dead</strong>. This cannot be automatically reversed. Continue?
               </p>
               <div className="flex justify-end gap-3">
                 <button

@@ -506,7 +506,7 @@ export const Dashboard = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-snug mb-1.5 line-clamp-2">{alert.message}</p>
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-brand-700 dark:text-brand-400 truncate bg-brand-100/50 dark:bg-brand-900/30 px-2 py-0.5 rounded">{`PTT ${alert.transmitter_id}`}</span>
+                      <span className="text-[11px] font-semibold text-brand-700 dark:text-brand-400 truncate bg-brand-100/50 dark:bg-brand-900/30 px-2 py-0.5 rounded">{alert.transmitter_id}</span>
                       <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 whitespace-nowrap bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded shadow-sm border border-gray-100 dark:border-slate-600 font-medium">
                         {formatDateTime(alert.timestamp, timeZone).split(' ')[1]}
                       </span>

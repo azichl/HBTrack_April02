@@ -176,7 +176,7 @@ export const GeofenceAlerts = () => {
                                     )}
                                 </td>
                                 <td className="px-6 py-4">
-                                    <div className="text-sm font-bold text-gray-900 dark:text-white">PTT {alert.transmitter_id}</div>
+                                    <div className="text-sm font-bold text-gray-900 dark:text-white">{alert.transmitter_id}</div>
                                     <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{bird ? `Bird: ${bird.ring_id}` : 'Unassigned'}</div>
                                 </td>
                                 <td className="px-6 py-4">

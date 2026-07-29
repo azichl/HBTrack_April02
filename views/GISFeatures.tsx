@@ -114,7 +114,7 @@ export const GISFeatures = () => {
       const bird = birds.find(b => b.id === t.bird_id);
       return {
         id: t.platform_id,
-        label: `PTT ${t.platform_id}${bird ? ` — ${(bird as any).name || bird.species}` : ''}`,
+        label: `${t.platform_id}${bird ? ` — ${(bird as any).name || bird.species}` : ''}`,
       };
     });
   }, [transmitters, birds]);
@@ -1150,7 +1150,7 @@ ${coords}
             {/* Target Transmitter */}
             {(currentSubView === 'sensor-agg-nest' || currentSubView === 'sensor-agg-death' || currentSubView === 'sensor-argos-prediction' || currentSubView === 'sensor-activity' || currentSubView === 'display-seasonal') && (
               <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-gray-500">Transmitter PTT</label>
+                <label className="text-[11px] font-semibold text-gray-500">Transmitter ID</label>
                 <select value={targetPttId} onChange={(e) => setTargetPttId(e.target.value)} className="w-full p-2 border rounded-lg bg-gray-50 dark:bg-slate-950 border-gray-200 dark:border-slate-800 text-gray-700 dark:text-gray-300">
                   <option value="">— Select —</option>
                   {pttOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -1597,7 +1597,7 @@ ${coords}
               <tr>
                 <th className="px-3 py-2.5 text-left">Nest Site</th>
                 <th className="px-3 py-2.5 text-left">Bird ID</th>
-                <th className="px-3 py-2.5 text-left">Transmitter PTT</th>
+                <th className="px-3 py-2.5 text-left">Transmitter ID</th>
                 <th className="px-3 py-2.5 text-left">Auto Start</th>
                 <th className="px-3 py-2.5 text-left">Auto End</th>
                 <th className="px-3 py-2.5 text-center">Duration (days)</th>

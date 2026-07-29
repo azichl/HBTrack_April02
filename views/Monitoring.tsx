@@ -221,7 +221,7 @@ export const Monitoring = () => {
 
   const handleDeleteCoordinate = async (platformId: string, timestamp: string | undefined) => {
     if (!timestamp) return;
-    if (window.confirm(`Are you sure you want to permanently delete the latest coordinate for PTT ${platformId}?`)) {
+    if (window.confirm(`Are you sure you want to permanently delete the latest coordinate for ${platformId}?`)) {
       await deleteCoordinateRecord(undefined, platformId, timestamp);
       // Wait a moment for listeners to catch up or refresh state if needed
       // Actually since positions are listener-based in appStore, it will automatically vanish!
@@ -291,9 +291,9 @@ export const Monitoring = () => {
                         <button 
                             onClick={() => setDatabaseActiveTab('Transmitters')}
                             className="font-bold text-gray-900 dark:text-white hover:text-brand-600 dark:hover:text-brand-400 hover:underline text-left block transition-colors"
-                            title="View PTT Details"
+                            title="View Transmitter Details"
                         >
-                          PTT {row.platform_id}
+                          {row.platform_id}
                         </button>
                         <button 
                           onClick={() => setDatabaseActiveTab('Birds')} 

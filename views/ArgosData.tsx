@@ -690,7 +690,7 @@ export const ArgosData = () => {
                                       onClick={() => setSelectedTransmitterIds(prev => prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id])}
                                       className={`px-3 py-2 rounded-lg text-sm cursor-pointer flex items-center justify-between transition-colors ${selectedTransmitterIds.includes(id) ? 'bg-brand-50 dark:bg-emerald-400/10 text-brand-700 dark:text-emerald-400 border border-brand-200 dark:border-emerald-400/20' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
                                   >
-                                      PTT {id}
+                                      {id}
                                       {selectedTransmitterIds.includes(id) && <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>}
                                   </div>
                               ))}

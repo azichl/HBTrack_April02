@@ -89,7 +89,7 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          placeholder="Search birds, PTTs, or alerts..."
+          placeholder="Search birds, transmitters, or alerts..."
           className="w-full pl-9 pr-9 py-2 bg-gray-100 dark:bg-slate-700 border border-transparent focus:border-brand-400 focus:ring-2 focus:ring-brand-200 dark:focus:ring-brand-900 rounded-lg text-sm outline-none text-gray-700 dark:text-gray-200 placeholder-gray-400 transition-all"
         />
         {query && (
@@ -115,7 +115,7 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
                     <Radio size={14} className="text-blue-600 dark:text-blue-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">PTT {t.platform_id}</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{t.platform_id}</p>
                     <p className="text-xs text-gray-400 truncate">{t.model} · <span className={`font-medium ${t.status === 'active' ? 'text-green-500' : 'text-red-400'}`}>{t.status}</span></p>
                   </div>
                 </button>
@@ -150,7 +150,7 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.message}</p>
-                    <p className="text-xs text-gray-400 truncate">PTT {a.transmitter_id} · {a.type.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-gray-400 truncate">{a.transmitter_id} · {a.type.replace(/_/g, ' ')}</p>
                   </div>
                 </button>
               ))}
@@ -251,7 +251,7 @@ const NotificationPanel = ({ onNavigate }: { onNavigate: (tab: string) => void }
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-gray-900 dark:text-white leading-tight truncate">{alert.message}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5">PTT {alert.transmitter_id} · {formatTime(alert.timestamp)}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{alert.transmitter_id} · {formatTime(alert.timestamp)}</p>
                   </div>
                   {alert.status === 'active' && (
                     <button

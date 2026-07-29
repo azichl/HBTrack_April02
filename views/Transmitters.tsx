@@ -221,7 +221,7 @@ export const Transmitters = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-sky-200 dark:bg-sky-900 border-b border-sky-300 dark:border-sky-800 text-slate-800 dark:text-sky-100">
-                  <th className="px-4 py-3 text-xs font-bold uppercase">PTT ID</th>
+                  <th className="px-4 py-3 text-xs font-bold uppercase">Transmitter ID</th>
                   <th className="px-4 py-3 text-xs font-bold uppercase">Start Date</th>
                   <th className="px-4 py-3 text-xs font-bold uppercase">End Date</th>
                   <th className="px-4 py-3 text-xs font-bold uppercase">Fix Count</th>
@@ -542,7 +542,7 @@ export const Transmitters = () => {
               </div>
             </div>
             <p className="text-sm text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
-              This will permanently mark PTT <strong>{confirmDeadTransmitter.platform_id}</strong> as <strong>Dead</strong>. This cannot be automatically reversed. Continue?
+              This will permanently mark <strong>{confirmDeadTransmitter.platform_id}</strong> as <strong>Dead</strong>. This cannot be automatically reversed. Continue?
             </p>
             <div className="flex justify-end gap-3">
               <button

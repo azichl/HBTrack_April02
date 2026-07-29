@@ -215,7 +215,7 @@ export const Birds = () => {
                     className="rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
                   />
                 </th>
-                <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Assoc. PTT" sortKey="associated_ptt" currentSort={sortConfig} onSort={requestSort} filterValue={filters['associated_ptt']} onFilter={setFilter} />
+                <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Assoc. Transmitter" sortKey="associated_ptt" currentSort={sortConfig} onSort={requestSort} filterValue={filters['associated_ptt']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Ring ID" sortKey="ring_id" currentSort={sortConfig} onSort={requestSort} filterValue={filters['ring_id']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Species" sortKey="species" currentSort={sortConfig} onSort={requestSort} filterValue={filters['species']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-emerald-200/50 dark:border-emerald-800/50 bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-100" label="Sex" sortKey="sex_label" currentSort={sortConfig} onSort={requestSort} filterValue={filters['sex_label']} onFilter={setFilter} />
@@ -318,7 +318,7 @@ export const Birds = () => {
                   />
                 </div>
                 <div>
-                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned Transmitter (PTT)</label>
+                   <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Assigned Transmitter</label>
                    <CustomSelect 
                     value={selectedTransmitterId}
                     onChange={(val) => setSelectedTransmitterId(val)}

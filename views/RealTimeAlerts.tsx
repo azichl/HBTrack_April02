@@ -130,7 +130,7 @@ export const RealTimeAlerts = () => {
             <tr>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Severity</th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Time</th>
-              <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Bird / PTT</th>
+              <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Bird / Transmitter</th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Alert Message</th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
@@ -159,7 +159,7 @@ export const RealTimeAlerts = () => {
                   <div className="text-xs text-gray-400 pl-6">{formatDateTime(alert.timestamp, timeZone).split(' ')[0] || '-'}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <div className="text-sm font-bold text-gray-900 dark:text-white">PTT {alert.transmitter_id}</div>
+                  <div className="text-sm font-bold text-gray-900 dark:text-white">{alert.transmitter_id}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{alert.bird_name ? `Bird: ${alert.bird_name}` : 'Unassigned'}</div>
                 </td>
                 <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">

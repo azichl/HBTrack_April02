@@ -440,7 +440,7 @@ export const GeoSpatialAnalysis = () => {
                           { value: 'all', label: 'All Monitored Transmitters (Global BBox)' },
                           ...activeAssets.map(item => ({
                               value: item.transmitter.platform_id,
-                              label: `[${item.status}] PTT ${item.transmitter.platform_id} (${item.bird?.name || item.bird?.ring_id || 'Unnamed'})`
+                              label: `[${item.status}] ${item.transmitter.platform_id} (${item.bird?.name || item.bird?.ring_id || 'Unnamed'})`
                           }))
                       ]}
                   />
@@ -593,7 +593,7 @@ export const GeoSpatialAnalysis = () => {
                           <Popup>
                               <div className="p-1.5 space-y-1 text-slate-800 min-w-[180px]">
                                   <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-1">
-                                      <h4 className="text-xs font-bold text-brand-600 m-0">PTT {item.transmitter.platform_id}</h4>
+                                      <h4 className="text-xs font-bold text-brand-600 m-0">{item.transmitter.platform_id}</h4>
                                       <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-full ${
                                           status === 'Active' || status === 'active' ? 'bg-green-100 text-green-800 border border-green-300' :
                                           status === 'Potential Mortality' ? 'bg-amber-100 text-amber-900 border border-amber-400 font-extrabold' :
