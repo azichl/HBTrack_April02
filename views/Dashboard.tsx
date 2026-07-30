@@ -482,7 +482,7 @@ export const Dashboard = () => {
             {/* Fix Accuracy Card (Supports Normal % & SensorStaticTest.R) */}
             <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all w-full ${
               isAccuracyFullscreen 
-                ? 'fixed inset-0 z-[990] m-0 rounded-none p-6 md:p-8 overflow-y-auto w-screen h-screen bg-white dark:bg-slate-900' 
+                ? 'fixed inset-0 z-[9999] m-0 rounded-none p-6 md:p-10 overflow-y-auto w-screen h-screen bg-white dark:bg-slate-900 animate-in fade-in duration-200' 
                 : ''
             }`}>
               
@@ -745,7 +745,7 @@ export const Dashboard = () => {
 
       {/* Transmitter Selection Modal */}
       {isTxModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-gray-100 dark:border-slate-700 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between pb-4 border-b border-gray-100 dark:border-slate-700">
               <div>
