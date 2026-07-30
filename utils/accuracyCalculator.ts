@@ -65,19 +65,34 @@ export const calculateNormalAccuracy = (
   });
 
   const totalFixes = filteredFixes.length;
-  const lcCounts: Record<string, number> = { '3': 0, '2': 0, '1': 0, '0': 0, 'A': 0, 'B': 0, 'Z': 0 };
+  const lcCounts: Record<string, number> = {
+    'GPS': 0,
+    '3': 0,
+    '2': 0,
+    '1': 0,
+    '0': 0,
+    'A': 0,
+    'B': 0,
+    'Z': 0
+  };
 
   filteredFixes.forEach((p) => {
-    if (p.lc && lcCounts[p.lc] !== undefined) {
+    const locType = String(p.locationType || '').toUpperCase();
+    const lcUp = String(p.lc || '').toUpperCase();
+
+    if (locType === 'GPS' || lcUp === 'GPS' || lcUp === 'G') {
+      lcCounts['GPS']++;
+    } else if (p.lc && lcCounts[p.lc] !== undefined) {
       lcCounts[p.lc]++;
-    } else if (!p.lc && (p.locationType === 'GPS' || !p.locationType)) {
-      lcCounts['3']++;
+    } else if (lcUp && lcCounts[lcUp] !== undefined) {
+      lcCounts[lcUp]++;
     } else {
       lcCounts['Z']++;
     }
   });
 
   const lcLabels: Record<string, string> = {
+    'GPS': 'GPS Class (<30m)',
     '3': 'Class 3 (<250m)',
     '2': 'Class 2 (<500m)',
     '1': 'Class 1 (<1500m)',
@@ -175,8 +190,16 @@ export const calculateStaticTestAccuracy = (
       effectiveFixes = txFixes;
     }
 
-    const gpsFixes = effectiveFixes.filter((p) => p.locationType === 'GPS' || (!p.locationType && (!p.lc || p.lc === '3')));
-    const argosFixes = effectiveFixes.filter((p) => p.locationType === 'Doppler' || (p.lc && p.lc !== '3'));
+    const gpsFixes = effectiveFixes.filter((p) => {
+      const locType = String(p.locationType || '').toUpperCase();
+      const lcUp = String(p.lc || '').toUpperCase();
+      return locType === 'GPS' || lcUp === 'GPS' || lcUp === 'G' || (!p.locationType && (!p.lc || p.lc === '3'));
+    });
+    const argosFixes = effectiveFixes.filter((p) => {
+      const locType = String(p.locationType || '').toUpperCase();
+      const lcUp = String(p.lc || '').toUpperCase();
+      return locType === 'DOPPLER' || (p.lc && !['GPS', 'G'].includes(lcUp) && p.lc !== '3');
+    });
 
     if (gpsFixes.length === 0) return;
 
