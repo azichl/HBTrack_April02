@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2 } from 'lucide-react';
+import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
@@ -1075,9 +1076,63 @@ export const LiveTracking = () => {
   const clickPopupInitialOffsetRef = useRef({ x: 0, y: 0 });
 
 
-  // Fullscreen State
+  // Fullscreen & Floating Donut State
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showDonutWidget, setShowDonutWidget] = useState(true);
+
+  // Network Status Donut Data
+  const donutStatusData = useMemo(() => {
+    let active = 0;
+    let mortality = 0;
+    let staticTest = 0;
+    let inactive = 0;
+    let dead = 0;
+
+    transmitters.forEach(t => {
+      const status = t.derived_status || t.status || 'Active';
+      if (status === 'Active' || status === 'active') active++;
+      else if (status === 'Potential Mortality') mortality++;
+      else if (status === 'Static test') staticTest++;
+      else if (status === 'Inactive' || status === 'inactive') inactive++;
+      else if (status === 'Dead' || status === 'dead') dead++;
+      else active++;
+    });
+
+    return [
+      { name: 'Active', value: active, color: '#22c55e' },
+      { name: 'Potential Mortality', value: mortality, color: '#f97316' },
+      { name: 'Static test', value: staticTest, color: '#eab308' },
+      { name: 'Inactive', value: inactive, color: '#0f172a' },
+      { name: 'Dead', value: dead, color: '#dc2626' }
+    ].filter(d => d.value > 0);
+  }, [transmitters]);
+
+  const renderDonutLabel = (props: any) => {
+    const { cx, cy, midAngle, innerRadius, outerRadius, value } = props;
+    if (!value || value === 0) return null;
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#ffffff"
+        textAnchor="middle"
+        dominantBaseline="central"
+        style={{
+          fontSize: '12px',
+          fontWeight: '900',
+          filter: 'drop-shadow(0px 1.5px 3px rgba(0,0,0,0.95))'
+        }}
+      >
+        {value}
+      </text>
+    );
+  };
 
   // Ensure positions are generated (if simulated, otherwise real data stays)
   useEffect(() => {
@@ -2422,6 +2477,21 @@ export const LiveTracking = () => {
                 </button>
             </div>
 
+            {/* Network Status Donut Toggle */}
+            <div className="relative">
+                <button 
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        closeAllDropdowns();
+                        setShowDonutWidget(!showDonutWidget);
+                    }}
+                    className={`p-2.5 bg-white rounded-lg shadow-md hover:bg-brand-50 transition-colors ${showDonutWidget ? 'text-brand-600 bg-brand-50 ring-2 ring-brand-500/50' : 'text-gray-700'}`}
+                    title="Toggle Network Status Donut Chart"
+                >
+                    <PieChartIcon size={20} />
+                </button>
+            </div>
+
             <button 
                 onClick={toggleFullscreen}
                 onTouchEnd={(e) => {
@@ -2436,6 +2506,54 @@ export const LiveTracking = () => {
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
             </button>
         </div>
+
+        {/* Floating Draggable Network Status Donut Chart (Transparent Background, Numbers on Slices, No Legend) */}
+        {showDonutWidget && (
+          <DraggableComponent cancel="button, input, select, label">
+            <div className="absolute top-20 right-6 z-[600] select-none cursor-move group">
+              <div className="flex items-center justify-between px-2.5 py-1 bg-slate-900/60 backdrop-blur-md rounded-lg text-white/90 opacity-0 group-hover:opacity-100 transition-opacity mb-1 border border-white/10 shadow-lg">
+                <span className="text-[10px] font-bold tracking-wider uppercase flex items-center gap-1">
+                  <GripHorizontal size={12} className="text-gray-300" /> Network Status
+                </span>
+                <button 
+                  onClick={() => setShowDonutWidget(false)}
+                  className="text-gray-400 hover:text-white ml-2 p-0.5 rounded"
+                  title="Hide Donut Chart"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+
+              <div className="w-52 h-52 relative drop-shadow-[0_10px_20px_rgba(0,0,0,0.65)]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={donutStatusData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={36}
+                      outerRadius={74}
+                      paddingAngle={3}
+                      dataKey="value"
+                      animationDuration={800}
+                      labelLine={false}
+                      label={renderDonutLabel}
+                    >
+                      {donutStatusData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(255,255,255,0.6)" strokeWidth={1.5} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip 
+                      formatter={(val: any, name: any) => [`${val} Transmitters`, name]}
+                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255, 255, 255, 0.2)', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)' }}
+                      itemStyle={{ color: '#fff' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </DraggableComponent>
+        )}
 
         {/* Search Bar */}
         <div className="absolute top-4 left-16 z-[400]">
