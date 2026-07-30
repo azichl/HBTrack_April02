@@ -128,6 +128,18 @@ export const Dashboard = () => {
   const [accuracyEndDate, setAccuracyEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [txSearchQuery, setTxSearchQuery] = useState('');
+  const [isAccuracyFullscreen, setIsAccuracyFullscreen] = useState(false);
+
+  // Esc key listener to exit full screen view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAccuracyFullscreen) {
+        setIsAccuracyFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAccuracyFullscreen]);
 
   // Handle date preset changes
   const handleDatePresetChange = (preset: 'last_7_days' | 'last_30_days' | 'custom') => {
@@ -466,7 +478,11 @@ export const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Fix Accuracy Card (Supports Normal % & SensorStaticTest.R) */}
-            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all ${accuracyMode === 'static_test' ? 'col-span-1 md:col-span-2' : ''}`}>
+            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all ${
+              isAccuracyFullscreen 
+                ? 'fixed inset-0 z-[990] m-0 rounded-none p-6 md:p-8 overflow-y-auto w-screen h-screen bg-white dark:bg-slate-900' 
+                : accuracyMode === 'static_test' ? 'col-span-1 md:col-span-2' : ''
+            }`}>
               
               {/* Header & Controls Bar */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-4 border-b border-gray-100 dark:border-slate-700">
@@ -476,6 +492,11 @@ export const Dashboard = () => {
                     <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${accuracyMode === 'normal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300'}`}>
                       {accuracyMode === 'normal' ? 'Percentage Mode' : 'Static Test (SensorStaticTest.R)'}
                     </span>
+                    {isAccuracyFullscreen && (
+                      <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                        Full Screen Mode
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {selectedAccuracyTxIds.length === 0 ? 'All Transmitters' : `${selectedAccuracyTxIds.length} Transmitters Selected`} · {accuracyStartDate} to {accuracyEndDate}
@@ -550,13 +571,22 @@ export const Dashboard = () => {
                       />
                     </div>
                   )}
+
+                  {/* Full Screen View Toggle Button */}
+                  <button
+                    onClick={() => setIsAccuracyFullscreen(!isAccuracyFullscreen)}
+                    title={isAccuracyFullscreen ? "Exit Full Screen (Esc)" : "Full Screen View"}
+                    className="p-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 hover:bg-brand-50 hover:border-brand-300 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 hover:text-brand-600 dark:hover:text-brand-400 flex items-center justify-center transition-all shadow-sm"
+                  >
+                    {isAccuracyFullscreen ? <Minimize size={15} /> : <Maximize size={15} />}
+                  </button>
                 </div>
               </div>
 
               {/* Normal Mode Presentation */}
               {accuracyMode === 'normal' && (
                 <div>
-                  <div className="h-56 w-full">
+                  <div className={`w-full transition-all ${isAccuracyFullscreen ? 'h-[440px]' : 'h-56'}`}>
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart cx="50%" cy="50%" outerRadius="70%" data={normalAccuracyData}>
                         <PolarGrid stroke="#e5e7eb" />
@@ -574,9 +604,9 @@ export const Dashboard = () => {
                   {/* Percentage Pill Breakdown */}
                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                     {normalAccuracyData.map(item => (
-                      <div key={item.lc} className="bg-gray-50 dark:bg-slate-900/60 p-2 rounded-xl border border-gray-100 dark:border-slate-700/50">
-                        <div className="text-[10px] text-gray-400 truncate">{item.label}</div>
-                        <div className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">{item.percentage}%</div>
+                      <div key={item.lc} className="bg-gray-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-slate-700/50 shadow-sm">
+                        <div className="text-[10px] text-gray-400 truncate font-semibold">{item.label}</div>
+                        <div className="text-base font-bold text-gray-900 dark:text-white mt-0.5">{item.percentage}%</div>
                         <div className="text-[10px] text-gray-400 font-mono">{item.count} fixes</div>
                       </div>
                     ))}
@@ -595,7 +625,7 @@ export const Dashboard = () => {
                       </h4>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3">Excludes 2 initial days + 1 final day</p>
                       
-                      <div className="h-44 w-full">
+                      <div className={`w-full transition-all ${isAccuracyFullscreen ? 'h-[360px]' : 'h-44'}`}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={staticTestAnalysis.aggregateSpatial} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
