@@ -474,14 +474,16 @@ export const Dashboard = () => {
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </div>          {/* Lower Analytical Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          </div>
+
+          {/* Lower Analytical Section (Extended Fix Accuracy Analysis) */}
+          <div className="w-full">
             
             {/* Fix Accuracy Card (Supports Normal % & SensorStaticTest.R) */}
-            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all ${
+            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm transition-all w-full ${
               isAccuracyFullscreen 
                 ? 'fixed inset-0 z-[990] m-0 rounded-none p-6 md:p-8 overflow-y-auto w-screen h-screen bg-white dark:bg-slate-900' 
-                : accuracyMode === 'static_test' ? 'col-span-1 md:col-span-2' : ''
+                : ''
             }`}>
               
               {/* Header & Controls Bar */}
@@ -585,13 +587,13 @@ export const Dashboard = () => {
 
               {/* Normal Mode Presentation */}
               {accuracyMode === 'normal' && (
-                <div>
-                  <div className={`w-full transition-all ${isAccuracyFullscreen ? 'h-[440px]' : 'h-56'}`}>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+                  <div className={`w-full lg:col-span-1 transition-all ${isAccuracyFullscreen ? 'h-[440px]' : 'h-64'}`}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={normalAccuracyData}>
+                      <RadarChart cx="50%" cy="50%" outerRadius="75%" data={normalAccuracyData}>
                         <PolarGrid stroke="#e5e7eb" />
-                        <PolarAngleAxis dataKey="lc" tick={{ fill: '#6b7280', fontSize: 10, fontWeight: 600 }} />
-                        <Radar name="Accuracy (%)" dataKey="percentage" stroke="#3b82f6" strokeWidth={2} fill="#3b82f6" fillOpacity={0.4} animationDuration={1500} />
+                        <PolarAngleAxis dataKey="lc" tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 700 }} />
+                        <Radar name="Accuracy (%)" dataKey="percentage" stroke="#3b82f6" strokeWidth={2.5} fill="#3b82f6" fillOpacity={0.4} animationDuration={1200} />
                         <RechartsTooltip 
                           formatter={(val: any, name: any, item: any) => [`${val}% (${item.payload.count} fixes)`, 'Accuracy']}
                           contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
@@ -601,13 +603,13 @@ export const Dashboard = () => {
                     </ResponsiveContainer>
                   </div>
 
-                  {/* Percentage Pill Breakdown */}
-                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  {/* Percentage Pill Breakdown (Expanded Full Width Grid) */}
+                  <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {normalAccuracyData.map(item => (
-                      <div key={item.lc} className="bg-gray-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-gray-100 dark:border-slate-700/50 shadow-sm">
-                        <div className="text-[10px] text-gray-400 truncate font-semibold">{item.label}</div>
-                        <div className="text-base font-bold text-gray-900 dark:text-white mt-0.5">{item.percentage}%</div>
-                        <div className="text-[10px] text-gray-400 font-mono">{item.count} fixes</div>
+                      <div key={item.lc} className="bg-gray-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/50 shadow-sm flex flex-col justify-between">
+                        <div className="text-xs text-gray-500 dark:text-gray-400 font-semibold truncate">{item.label}</div>
+                        <div className="text-xl font-extrabold text-gray-900 dark:text-white my-1">{item.percentage}%</div>
+                        <div className="text-[11px] text-brand-600 dark:text-brand-400 font-mono font-medium">{item.count} fixes</div>
                       </div>
                     ))}
                   </div>
@@ -676,7 +678,7 @@ export const Dashboard = () => {
                                 <td className="px-3 py-2.5 text-center font-mono text-[11px]">{r.mLat.toFixed(3)}, {r.mLon.toFixed(3)}</td>
                                 <td className="px-3 py-2.5 text-center font-bold text-brand-600 dark:text-brand-400">{r.nPos}</td>
                                 <td className="px-3 py-2.5 text-center font-medium">{r.meanPosDay}</td>
-                                <td className="px-3 py-2.5 text-center font-bold text-green-600">{r.p0_10}%</td>
+                                <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{r.p0_10}%</td>
                                 <td className="px-3 py-2.5 text-center font-semibold text-emerald-600">{r.p0_20}%</td>
                                 <td className="px-3 py-2.5 text-center font-medium text-amber-600">{r.p20_50}%</td>
                                 <td className="px-3 py-2.5 text-center font-bold text-red-500">{r.psupp50}%</td>
@@ -694,38 +696,6 @@ export const Dashboard = () => {
                 </div>
               )}
 
-            </div>
-
-            {/* Battery Health Bar Chart */}
-            <div className={`bg-white dark:bg-slate-800 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm ${accuracyMode === 'static_test' ? 'col-span-1 md:col-span-2' : ''}`}>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Active Fleet Battery Health</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">Voltage distribution across deployed transmitters</p>
-              <div className="h-48 w-full">
-                {batteryData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={batteryData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" opacity={0.5} />
-                      <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#6b7280'}} />
-                      <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#374151', fontWeight: 600}} width={95} />
-                      <RechartsTooltip 
-                        contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', borderColor: '#334155', borderRadius: '8px' }}
-                        itemStyle={{ color: '#f8fafc', fontWeight: 600 }}
-                        cursor={{fill: 'rgba(0,0,0,0.05)'}}
-                      />
-                      <Bar dataKey="count" radius={[0, 4, 4, 0]} animationDuration={1000} barSize={24}>
-                        {batteryData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                    <Zap size={24} className="mb-2 opacity-50" />
-                    <span className="text-sm">No battery telemetry available</span>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>

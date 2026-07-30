@@ -227,6 +227,22 @@ const processTransmitterStatusUpdates = async (
     updates.derived_status = derived;
   }
 
+  // Battery Low Alert Check (Threshold < 3.5V)
+  const v = Number(t.battery_voltage);
+  if (!isNaN(v) && v > 0 && v < 3.5) {
+    const bird = getBirds().find(b => b.id === t.bird_id);
+    addAlert({
+      id: `alert-battery-${t.platform_id}-${Date.now()}`,
+      type: 'battery_low',
+      severity: v < 3.2 ? 'critical' : 'warning',
+      transmitter_id: String(t.platform_id),
+      bird_name: bird?.ring_id || 'Unknown',
+      message: `CRITICAL: Transmitter ${t.platform_id} battery level dropped to ${v.toFixed(2)}V (below 3.5V threshold)`,
+      timestamp: new Date().toISOString(),
+      status: 'active'
+    });
+  }
+
   // Track inactive_since timestamp
   if (derived === 'Inactive') {
     if (!t.inactive_since) {
