@@ -675,17 +675,24 @@ const StaticTestClusterMarker: React.FC<StaticTestClusterMarkerProps> = ({
     const count = cluster.positions.length;
 
     const clusterHtml = `
-        <div class="px-2.5 py-0.5 rounded-full shadow-md text-xs font-bold flex items-center gap-1.5 bg-white text-slate-900 border-2 border-[#FFEA00] cursor-pointer transition-transform hover:scale-105" style="font-family: 'Sakkal Majalla', sans-serif; white-space: nowrap;">
-            <span class="w-2.5 h-2.5 rounded-full bg-[#FFEA00] animate-ping"></span>
-            <span class="font-extrabold text-slate-900">${count} PTTs</span>
+        <div class="flex flex-col items-center cursor-pointer transition-transform hover:scale-105" style="font-family: 'Sakkal Majalla', sans-serif;">
+            <div class="px-3 py-0.5 rounded-full shadow-md text-xs font-extrabold bg-white text-slate-900 border-2 border-[#eab308] whitespace-nowrap flex items-center justify-center">
+                <span>${count} PTTs</span>
+            </div>
+            <div class="-mt-1 flex flex-col items-center">
+                <svg width="24" height="28" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg" class="drop-shadow-md">
+                    <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 30 12 30C12 30 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="#eab308"/>
+                    <circle cx="12" cy="11" r="4" fill="white"/>
+                </svg>
+            </div>
         </div>
     `;
 
     const clusterIcon = L.divIcon({
         className: 'custom-static-cluster-icon',
         html: clusterHtml,
-        iconSize: [85, 26],
-        iconAnchor: [42, 13]
+        iconSize: [80, 46],
+        iconAnchor: [40, 46]
     });
 
     return (
