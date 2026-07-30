@@ -1080,6 +1080,10 @@ export const LiveTracking = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDonutWidget, setShowDonutWidget] = useState(true);
+  const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
+  const [isDraggingDonut, setIsDraggingDonut] = useState(false);
+  const donutDragStartRef = useRef({ x: 0, y: 0 });
+  const donutInitialOffsetRef = useRef({ x: 0, y: 0 });
 
   // Network Status Donut Data
   const donutStatusData = useMemo(() => {
@@ -1680,6 +1684,49 @@ export const LiveTracking = () => {
     measureToolDragStartRef.current = { x: e.clientX, y: e.clientY };
     measureToolInitialOffsetRef.current = { ...measureToolOffset };
   };
+
+  const handleDonutMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setIsDraggingDonut(true);
+    donutDragStartRef.current = { x: clientX, y: clientY };
+    donutInitialOffsetRef.current = { ...donutOffset };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent | TouchEvent) => {
+      if (isDraggingDonut) {
+        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+        const deltaX = clientX - donutDragStartRef.current.x;
+        const deltaY = clientY - donutDragStartRef.current.y;
+        setDonutOffset({
+          x: donutInitialOffsetRef.current.x + deltaX,
+          y: donutInitialOffsetRef.current.y + deltaY
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingDonut) {
+        setIsDraggingDonut(false);
+      }
+    };
+
+    if (isDraggingDonut) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleMouseMove);
+      window.addEventListener('touchend', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleMouseMove);
+      window.removeEventListener('touchend', handleMouseUp);
+    };
+  }, [isDraggingDonut]);
 
   const closeAllDropdowns = () => {
     setLayerOpen(false);
@@ -2507,52 +2554,65 @@ export const LiveTracking = () => {
             </button>
         </div>
 
-        {/* Floating Draggable Network Status Donut Chart (Transparent Background, Numbers on Slices, No Legend) */}
+        {/* Floating Draggable Network Status Donut Chart (Default at Bottom-Right, Fully Movable via Drag and Drop, Transparent Background, Numbers on Slices) */}
         {showDonutWidget && (
-          <DraggableComponent cancel="button, input, select, label">
-            <div className="absolute top-20 right-6 z-[600] select-none cursor-move group">
-              <div className="flex items-center justify-between px-2.5 py-1 bg-slate-900/60 backdrop-blur-md rounded-lg text-white/90 opacity-0 group-hover:opacity-100 transition-opacity mb-1 border border-white/10 shadow-lg">
-                <span className="text-[10px] font-bold tracking-wider uppercase flex items-center gap-1">
-                  <GripHorizontal size={12} className="text-gray-300" /> Network Status
-                </span>
-                <button 
-                  onClick={() => setShowDonutWidget(false)}
-                  className="text-gray-400 hover:text-white ml-2 p-0.5 rounded"
-                  title="Hide Donut Chart"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-
-              <div className="w-52 h-52 relative drop-shadow-[0_10px_20px_rgba(0,0,0,0.65)]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={donutStatusData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={36}
-                      outerRadius={74}
-                      paddingAngle={3}
-                      dataKey="value"
-                      animationDuration={800}
-                      labelLine={false}
-                      label={renderDonutLabel}
-                    >
-                      {donutStatusData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(255,255,255,0.6)" strokeWidth={1.5} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip 
-                      formatter={(val: any, name: any) => [`${val} Transmitters`, name]}
-                      contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255, 255, 255, 0.2)', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)' }}
-                      itemStyle={{ color: '#fff' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+          <div 
+            className="absolute bottom-10 right-10 z-[600] select-none group"
+            style={{
+              transform: `translate(${donutOffset.x}px, ${donutOffset.y}px)`,
+              cursor: isDraggingDonut ? 'grabbing' : 'grab'
+            }}
+            onMouseDown={handleDonutMouseDown}
+            onTouchStart={handleDonutMouseDown}
+          >
+            {/* Header / Drag Bar */}
+            <div className="flex items-center justify-between px-2.5 py-1 bg-slate-900/70 backdrop-blur-md rounded-lg text-white/90 opacity-0 group-hover:opacity-100 transition-opacity mb-1 border border-white/15 shadow-lg">
+              <span className="text-[10px] font-extrabold tracking-wider uppercase flex items-center gap-1.5">
+                <GripHorizontal size={13} className="text-amber-400" /> Network Status
+              </span>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDonutWidget(false);
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                className="text-gray-400 hover:text-white ml-2 p-0.5 rounded transition-colors"
+                title="Close Donut Chart"
+              >
+                <X size={12} />
+              </button>
             </div>
-          </DraggableComponent>
+
+            {/* Transparent Donut Chart */}
+            <div className="w-52 h-52 relative drop-shadow-[0_10px_25px_rgba(0,0,0,0.7)]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={donutStatusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={36}
+                    outerRadius={74}
+                    paddingAngle={3}
+                    dataKey="value"
+                    animationDuration={800}
+                    labelLine={false}
+                    label={renderDonutLabel}
+                  >
+                    {donutStatusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="rgba(255,255,255,0.7)" strokeWidth={1.5} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip 
+                    formatter={(val: any, name: any) => [`${val} Transmitters`, name]}
+                    contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: 'rgba(255, 255, 255, 0.2)', borderRadius: '10px', color: '#fff', fontSize: '11px', fontWeight: 'bold', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)' }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         )}
 
         {/* Search Bar */}
