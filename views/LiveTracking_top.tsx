@@ -266,7 +266,14 @@ const LocationTimestamp = ({ timestamp, lat, lon, fallbackTimeZone }: { timestam
 
 // Component for Popup with LST Data Fetching
 const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone, onOpen3DModal }: { lat: number, lon: number, timestamp: string, pttId: string, color: string, type?: string, timeZone: string, onOpen3DModal?: (lat: number, lon: number, pttId: string) => void }) => {
-  const [data, setData] = useState<{ temp: number | null, loading: boolean, source?: string, timezone?: string }>({ temp: null, loading: true });
+  const [data, setData] = useState<{
+    airTemp: number | null;
+    soilTemp: number | null;
+    temp: number | null;
+    loading: boolean;
+    source?: string;
+    timezone?: string;
+  }>({ airTemp: null, soilTemp: null, temp: null, loading: true });
 
   useEffect(() => {
     let isMounted = true;
@@ -275,13 +282,15 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone, on
       if (isMounted) {
         if (result) {
           setData({
+            airTemp: result.airTemp,
+            soilTemp: result.soilTemp,
             temp: result.temp,
             loading: false,
-            source: `${result.source} (${result.apiUsed})`,
+            source: result.source,
             timezone: result.timezone
           });
         } else {
-          setData({ temp: null, loading: false });
+          setData({ airTemp: null, soilTemp: null, temp: null, loading: false });
         }
       }
     };
@@ -290,7 +299,7 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone, on
   }, [lat, lon, timestamp]);
 
   return (
-    <div className="text-center p-1 min-w-[170px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+    <div className="text-center p-1 min-w-[200px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
         <div className="flex items-center justify-center gap-1 mb-1">
              <div className="font-bold text-xs" style={{color: color}}>PTT {pttId}</div>
              {type && (
@@ -312,20 +321,31 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone, on
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-2.5 border border-orange-200">
             <div className="text-[10px] uppercase font-bold text-orange-800 mb-1 flex items-center justify-center gap-1">
                  <ThermometerSun size={12} />
-                 Land Surface Temp (LST)
+                 Weather Context
             </div>
             {data.loading ? (
                 <div className="flex items-center justify-center gap-2 py-2">
                      <div className="w-3 h-3 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin"></div>
                      <span className="text-xs text-orange-600 font-medium">Loading Data...</span>
                 </div>
-            ) : data.temp !== null ? (
+            ) : (data.airTemp !== null || data.soilTemp !== null) ? (
                 <div>
-                  <div className="text-2xl font-black text-orange-600 tracking-tight">
-                      {data.temp}°C
+                  <div className="flex items-center justify-around gap-2 my-1">
+                    {data.airTemp !== null && (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] uppercase font-bold text-gray-500">Air Temp (2m)</span>
+                        <span className="text-xl font-black text-orange-600 tracking-tight">{data.airTemp}°C</span>
+                      </div>
+                    )}
+                    {data.soilTemp !== null && (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[9px] uppercase font-bold text-gray-500">Surface/Soil</span>
+                        <span className="text-lg font-bold text-amber-700 tracking-tight">{data.soilTemp}°C</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="text-[9px] text-orange-400 mt-1 opacity-70">
-                    {data.source || 'Open-Meteo'}
+                  <div className="text-[9px] text-orange-400 mt-1 opacity-80">
+                    Source: {data.source || 'Open-Meteo'}
                   </div>
                 </div>
             ) : (
