@@ -7,6 +7,7 @@ import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { formatDateTime, formatBattery } from '../utils/formatting';
+import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
@@ -267,37 +268,18 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
-      try {
-        const date = new Date(timestamp);
-        const dateStr = date.toISOString().split('T')[0];
-        const hour = date.getUTCHours(); 
-        
-        // Added timezone=auto to get the local time zone of the point
-        let url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=soil_temperature_0cm&timezone=auto`;
-        
-        let res = await fetch(url);
-        let json = await res.json();
-        let source = 'Forecast API';
-        
-        if (json.error) {
-             // Fallback to archive
-             url = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=soil_temperature_0cm&timezone=auto`;
-             res = await fetch(url);
-             json = await res.json();
-             source = 'Archive API';
-        }
-
-        if (isMounted && json.hourly && json.hourly.soil_temperature_0cm) {
-          const temp = json.hourly.soil_temperature_0cm[hour] !== undefined 
-            ? json.hourly.soil_temperature_0cm[hour] 
-            : json.hourly.soil_temperature_0cm[0];
-          
-          setData({ temp, loading: false, source, timezone: json.timezone });
+      const result = await fetchLSTData(lat, lon, timestamp);
+      if (isMounted) {
+        if (result) {
+          setData({
+            temp: result.temp,
+            loading: false,
+            source: `${result.source} (${result.apiUsed})`,
+            timezone: result.timezone
+          });
         } else {
-          if(isMounted) setData({ temp: null, loading: false });
+          setData({ temp: null, loading: false });
         }
-      } catch (e) {
-        if(isMounted) setData({ temp: null, loading: false });
       }
     };
     fetchData();
@@ -340,7 +322,7 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
                       {data.temp}°C
                   </div>
                   <div className="text-[9px] text-orange-400 mt-1 opacity-70">
-                    Source: Open-Meteo
+                    {data.source || 'Open-Meteo'}
                   </div>
                 </div>
             ) : (
