@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon } from 'lucide-react';
+import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
@@ -940,6 +940,7 @@ export const LiveTracking = () => {
       geeNdviTileUrl,
       geeLstTileUrl,
       geeSaviTileUrl,
+      geeNdwiTileUrl,
       markTransmitterDead,
       unmarkTransmitterDead,
       currentUserRole,
@@ -1896,6 +1897,9 @@ export const LiveTracking = () => {
             {activeGeeLayer === 'savi' && geeSaviTileUrl && (
                 <TileLayer url={geeSaviTileUrl} zIndex={400} />
             )}
+            {activeGeeLayer === 'ndwi' && geeNdwiTileUrl && (
+                <TileLayer url={geeNdwiTileUrl} zIndex={400} />
+            )}
             {activeGeeLayer === 'lst' && geeLstTileUrl && (
                 <TileLayer url={geeLstTileUrl} zIndex={400} />
             )}
@@ -2352,8 +2356,8 @@ export const LiveTracking = () => {
                         </div>
 
                         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pt-3 border-t border-gray-100">GEE Satellite Layers</h4>
-                        <div className="flex gap-2">
-                            {(['ndvi', 'savi', 'lst'] as const).map(layer => (
+                        <div className="flex gap-1.5">
+                            {(['ndvi', 'savi', 'ndwi', 'lst'] as const).map(layer => (
                                 <button
                                     key={layer}
                                     onClick={() => {
@@ -2363,15 +2367,16 @@ export const LiveTracking = () => {
                                             setActiveGeeLayer(layer);
                                         }
                                     }}
-                                    className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-md border transition-all flex items-center justify-center gap-1 ${
+                                    className={`flex-1 py-1.5 text-[9px] font-bold uppercase tracking-wide rounded-md border transition-all flex items-center justify-center gap-1 ${
                                         activeGeeLayer === layer
                                         ? 'bg-brand-50 text-brand-700 border-brand-300'
                                         : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                                     }`}
                                 >
-                                    {layer === 'ndvi' && <Satellite size={12} />}
-                                    {layer === 'savi' && <Satellite size={12} />}
-                                    {layer === 'lst' && <ThermometerSun size={12} />}
+                                    {layer === 'ndvi' && <Satellite size={11} />}
+                                    {layer === 'savi' && <Satellite size={11} />}
+                                    {layer === 'ndwi' && <Droplets size={11} />}
+                                    {layer === 'lst' && <ThermometerSun size={11} />}
                                     {layer.toUpperCase()}
                                 </button>
                             ))}

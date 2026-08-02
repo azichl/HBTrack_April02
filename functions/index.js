@@ -322,6 +322,21 @@ exports.getGEETileUrl = onRequest({ cors: true, maxInstances: 5, timeoutSeconds:
           '#66A200', '#228B22', '#012E01'
         ]
       };
+    } else if (type === 'ndwi') {
+      const s2Col = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+        .filterBounds(roi)
+        .filterDate(startDate, endDate)
+        .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
+        .map(maskS2Clouds);
+
+      const s2Composite = s2Col.median();
+      // NDWI Formula (McFeeters): (Green - NIR) / (Green + NIR) => (B3 - B8) / (B3 + B8)
+      image = s2Composite.normalizedDifference(['B3', 'B8']).rename('NDWI');
+      visParams = {
+        min: -0.5,
+        max: 0.5,
+        palette: ['#8c510a', '#d8b365', '#f6e8c3', '#c7eae5', '#5ab4ac', '#01665e', '#08589e']
+      };
     } else if (type === 'lst') {
       const modisCol = ee.ImageCollection('MODIS/061/MOD11A1')
         .filterBounds(roi)
@@ -335,7 +350,7 @@ exports.getGEETileUrl = onRequest({ cors: true, maxInstances: 5, timeoutSeconds:
         palette: ['#0000FF', '#00FFFF', '#00FF00', '#FFFF00', '#FF0000']
       };
     } else {
-      return res.status(400).json({ error: "invalid_type", message: "Type must be 'ndvi', 'savi', or 'lst'." });
+      return res.status(400).json({ error: "invalid_type", message: "Type must be 'ndvi', 'savi', 'ndwi', or 'lst'." });
     }
 
     // Get Map ID from GEE - handle both old callback and new promise API

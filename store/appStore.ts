@@ -86,11 +86,13 @@ interface AppState {
   geeNdviTileUrl: string | null;
   geeLstTileUrl: string | null;
   geeSaviTileUrl: string | null;
-  activeGeeLayer: 'ndvi' | 'lst' | 'savi' | null;
+  geeNdwiTileUrl: string | null;
+  activeGeeLayer: 'ndvi' | 'lst' | 'savi' | 'ndwi' | null;
   setGeeNdviTileUrl: (url: string | null) => void;
   setGeeLstTileUrl: (url: string | null) => void;
   setGeeSaviTileUrl: (url: string | null) => void;
-  setActiveGeeLayer: (layer: 'ndvi' | 'lst' | 'savi' | null) => void;
+  setGeeNdwiTileUrl: (url: string | null) => void;
+  setActiveGeeLayer: (layer: 'ndvi' | 'lst' | 'savi' | 'ndwi' | null) => void;
   
   // System State
   lastSaved: string;
@@ -444,10 +446,12 @@ export const useAppStore = create<AppState>()(
       geeNdviTileUrl: null,
       geeLstTileUrl: null,
       geeSaviTileUrl: null,
+      geeNdwiTileUrl: null,
       activeGeeLayer: null,
       setGeeNdviTileUrl: (url) => set({ geeNdviTileUrl: url }),
       setGeeLstTileUrl: (url) => set({ geeLstTileUrl: url }),
       setGeeSaviTileUrl: (url) => set({ geeSaviTileUrl: url }),
+      setGeeNdwiTileUrl: (url) => set({ geeNdwiTileUrl: url }),
       setActiveGeeLayer: (layer) => set({ activeGeeLayer: layer }),
       
       lastSaved: new Date().toISOString(),

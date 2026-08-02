@@ -18,7 +18,8 @@ import {
   MapPin, 
   Info,
   ThermometerSun,
-  Leaf
+  Leaf,
+  Droplets
 } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 
@@ -84,6 +85,7 @@ export const GeoSpatialAnalysis = () => {
     setGeeNdviTileUrl,
     setGeeLstTileUrl,
     setGeeSaviTileUrl,
+    setGeeNdwiTileUrl,
     setActiveGeeLayer,
     generateLivePositions
   } = useAppStore();
@@ -100,7 +102,7 @@ export const GeoSpatialAnalysis = () => {
       return d.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [analysisType, setAnalysisType] = useState<'ndvi' | 'lst' | 'savi'>('ndvi');
+  const [analysisType, setAnalysisType] = useState<'ndvi' | 'lst' | 'savi' | 'ndwi'>('ndvi');
   const [selectedTransmitterId, setSelectedTransmitterId] = useState<string>('all');
 
   // GEE State
@@ -263,6 +265,8 @@ export const GeoSpatialAnalysis = () => {
                   setGeeNdviTileUrl(data.tileUrl);
               } else if (analysisType === 'savi') {
                   setGeeSaviTileUrl(data.tileUrl);
+              } else if (analysisType === 'ndwi') {
+                  setGeeNdwiTileUrl(data.tileUrl);
               } else {
                   setGeeLstTileUrl(data.tileUrl);
               }
@@ -362,45 +366,54 @@ export const GeoSpatialAnalysis = () => {
               {/* Analysis Type */}
               <div className="flex flex-col gap-1.5">
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">Observation Mode</label>
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-900 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-slate-50 dark:bg-slate-900 p-1 rounded-xl border border-slate-100 dark:border-slate-800">
                       <button
                           type="button"
                           onClick={() => setAnalysisType('ndvi')}
-                          className={`py-2 px-3 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          className={`py-2 px-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
                               analysisType === 'ndvi' 
                                 ? 'bg-white dark:bg-slate-800 text-green-700 dark:text-green-400 shadow-sm' 
                                 : 'text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                           }`}
                       >
                           <Leaf size={14} />
-                          <span className="hidden sm:inline">NDVI (Greenness)</span>
-                          <span className="sm:hidden">NDVI</span>
+                          <span>NDVI</span>
                       </button>
                       <button
                           type="button"
                           onClick={() => setAnalysisType('savi')}
-                          className={`py-2 px-3 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          className={`py-2 px-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
                               analysisType === 'savi' 
-                                ? 'bg-white dark:bg-slate-800 text-yellow-600 dark:text-yellow-400 shadow-sm' 
+                                ? 'bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 shadow-sm' 
                                 : 'text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                           }`}
                       >
                           <Leaf size={14} />
-                          <span className="hidden sm:inline">SAVI (Desert)</span>
-                          <span className="sm:hidden">SAVI</span>
+                          <span>SAVI</span>
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setAnalysisType('ndwi')}
+                          className={`py-2 px-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                              analysisType === 'ndwi' 
+                                ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm' 
+                                : 'text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                      >
+                          <Droplets size={14} />
+                          <span>NDWI</span>
                       </button>
                       <button
                           type="button"
                           onClick={() => setAnalysisType('lst')}
-                          className={`py-2 px-3 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          className={`py-2 px-2.5 rounded-lg text-[10px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 ${
                               analysisType === 'lst' 
                                 ? 'bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 shadow-sm' 
                                 : 'text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                           }`}
                       >
                           <ThermometerSun size={14} />
-                          <span className="hidden sm:inline">LST (Temperature)</span>
-                          <span className="sm:hidden">LST</span>
+                          <span>LST</span>
                       </button>
                   </div>
               </div>
@@ -496,7 +509,7 @@ export const GeoSpatialAnalysis = () => {
                   <div className="flex items-center gap-1.5">
                       <Info size={14} className="text-gray-400" />
                       <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          {analysisType === 'ndvi' ? 'NDVI Vegetation Color Index' : analysisType === 'savi' ? 'SAVI Desert Vegetation Index' : 'LST Temperature Color Index'}
+                          {analysisType === 'ndvi' ? 'NDVI Vegetation Color Index' : analysisType === 'savi' ? 'SAVI Desert Vegetation Index' : analysisType === 'ndwi' ? 'NDWI Surface Water & Moisture Index' : 'LST Temperature Color Index'}
                       </span>
                   </div>
                   
@@ -506,6 +519,14 @@ export const GeoSpatialAnalysis = () => {
                           <div className="flex justify-between text-[10px] text-gray-500 font-bold px-0.5">
                               <span>0.0 (Bare soil / Desert)</span>
                               <span>0.6 (Dense plants)</span>
+                          </div>
+                      </div>
+                  ) : analysisType === 'ndwi' ? (
+                      <div className="flex flex-col gap-1">
+                          <div className="h-4 w-full rounded bg-gradient-to-r from-[#8c510a] via-[#f6e8c3] via-[#5ab4ac] to-[#08589e] border border-slate-100 dark:border-slate-800" />
+                          <div className="flex justify-between text-[10px] text-gray-500 font-bold px-0.5">
+                              <span>-0.5 (Dry Land / Sand)</span>
+                              <span>0.5 (Open Water / Lakes)</span>
                           </div>
                       </div>
                   ) : (

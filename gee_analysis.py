@@ -193,12 +193,14 @@ def main():
               .map(mask_s2_clouds))
               
     if s2_col.size().getInfo() > 0:
-        print(f"[GEE] Found Sentinel-2 images. Computing Median composite & NDVI...")
+        print(f"[GEE] Found Sentinel-2 images. Computing Median composite, NDVI & NDWI...")
         s2_composite = s2_col.median()
         ndvi = s2_composite.normalizedDifference(['B8', 'B4']).rename('NDVI')
+        ndwi = s2_composite.normalizedDifference(['B3', 'B8']).rename('NDWI')
     else:
-        print("[GEE] ⚠️ No Sentinel-2 imagery found in range. NDVI overlay will be skipped.")
+        print("[GEE] ⚠️ No Sentinel-2 imagery found in range. NDVI & NDWI overlays will be skipped.")
         ndvi = None
+        ndwi = None
 
     # ── 5. MODIS Land Surface Temperature (LST) Analysis ──
     print("[GEE] Fetching MODIS LST (Land Surface Temperature) imagery...")
@@ -225,6 +227,7 @@ def main():
     )
 
     ndvi_url = None
+    ndwi_url = None
     lst_url = None
 
     # Add NDVI Layer
@@ -238,6 +241,15 @@ def main():
             ]
         }
         ndvi_url = add_ee_tile_layer(m, ndvi, ndvi_vis, 'NDVI (Vegetation Index)')
+
+    # Add NDWI Layer
+    if ndwi:
+        ndwi_vis = {
+            'min': -0.5,
+            'max': 0.5,
+            'palette': ['#8c510a', '#d8b365', '#f6e8c3', '#c7eae5', '#5ab4ac', '#01665e', '#08589e']
+        }
+        ndwi_url = add_ee_tile_layer(m, ndwi, ndwi_vis, 'NDWI (Water & Moisture Index)')
 
     # Add LST Layer
     if lst_celsius:
