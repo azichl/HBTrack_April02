@@ -93,6 +93,14 @@ interface AppState {
   setGeeSaviTileUrl: (url: string | null) => void;
   setGeeNdwiTileUrl: (url: string | null) => void;
   setActiveGeeLayer: (layer: 'ndvi' | 'lst' | 'savi' | 'ndwi' | null) => void;
+
+  // Shared Map State (Synchronized between Live Map & GEE Map)
+  sharedMapCenter: [number, number];
+  sharedMapZoom: number;
+  activeBaseLayer: string;
+  setSharedMapCenter: (center: [number, number]) => void;
+  setSharedMapZoom: (zoom: number) => void;
+  setActiveBaseLayer: (layer: string) => void;
   
   // System State
   lastSaved: string;
@@ -453,6 +461,13 @@ export const useAppStore = create<AppState>()(
       setGeeSaviTileUrl: (url) => set({ geeSaviTileUrl: url }),
       setGeeNdwiTileUrl: (url) => set({ geeNdwiTileUrl: url }),
       setActiveGeeLayer: (layer) => set({ activeGeeLayer: layer }),
+
+      sharedMapCenter: [24.0, 45.0],
+      sharedMapZoom: 5,
+      activeBaseLayer: 'google_hybrid',
+      setSharedMapCenter: (center) => set({ sharedMapCenter: center }),
+      setSharedMapZoom: (zoom) => set({ sharedMapZoom: zoom }),
+      setActiveBaseLayer: (layer) => set({ activeBaseLayer: layer }),
       
       lastSaved: new Date().toISOString(),
       firestoreReady: false,

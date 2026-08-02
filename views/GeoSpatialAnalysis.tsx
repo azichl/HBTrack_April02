@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAppStore } from '../store/appStore';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMap, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMap, useMapEvents, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 import { CustomSelect } from '../components/CustomSelect';
@@ -21,6 +21,7 @@ import {
   Leaf,
   Droplets
 } from 'lucide-react';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 import { getAuth } from 'firebase/auth';
 
 // Setup Map Center Updater helper component
@@ -78,16 +79,22 @@ const getStatusIcon = (status: string) => {
 
 export const GeoSpatialAnalysis = () => {
     const { 
-    transmitters, 
-    birds, 
-    positions, 
+    transmitters,
+    birds,
+    positions,
     selectedTransmitterIds,
     setGeeNdviTileUrl,
     setGeeLstTileUrl,
     setGeeSaviTileUrl,
     setGeeNdwiTileUrl,
     setActiveGeeLayer,
-    generateLivePositions
+    generateLivePositions,
+    sharedMapCenter,
+    sharedMapZoom,
+    activeBaseLayer,
+    setSharedMapCenter,
+    setSharedMapZoom,
+    setActiveBaseLayer
   } = useAppStore();
 
   // Call simulation generator on mount
@@ -143,16 +150,40 @@ export const GeoSpatialAnalysis = () => {
     }
   }, [selectedTransmitterIds]);
 
+  // Current calendar month key for static test active filtering
+  const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);
+
+  const hasCurrentMonthFixesMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    positions.forEach(p => {
+      const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
+      if (!pid) return;
+      if (getYearMonthKey(p.timestamp) === currentYearMonthKey) {
+        map.set(pid, true);
+      }
+    });
+    return map;
+  }, [positions, currentYearMonthKey]);
+
   const activeAssets = useMemo(() => {
     return transmitters
+      .filter(t => {
+        const st = t.derived_status || t.status;
+        const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
+        if (isStatic && !hasCurrentMonthFixesMap.get(String(t.platform_id))) {
+          return false;
+        }
+        return true;
+      })
       .map(t => {
         const bird = birds.find(b => b.id === t.bird_id);
-        const lastPos = positions.find(p => p.transmitter_id === t.platform_id);
+        const pid = String(t.platform_id);
+        const lastPos = positions.find(p => String(p.transmitter_id || (p as any).platformId) === pid);
         const status = t.derived_status || t.status || 'Active';
         return { transmitter: t, bird, lastPos, status };
       })
       .filter(item => !!item.lastPos);
-  }, [transmitters, birds, positions]);
+  }, [transmitters, birds, positions, hasCurrentMonthFixesMap]);
 
   // Handle saving service account key
   const handleSaveGeeKey = async () => {
@@ -223,8 +254,8 @@ export const GeoSpatialAnalysis = () => {
       // Update Map View center to focus on analyzed area
       const centerLat = (minLat + maxLat) / 2;
       const centerLon = (minLon + maxLon) / 2;
-      setMapCenter([centerLat, centerLon]);
-      setMapZoom(selectedTransmitterId === 'all' ? 6 : 8);
+      setSharedMapCenter([centerLat, centerLon]);
+      setSharedMapZoom(selectedTransmitterId === 'all' ? 6 : 8);
 
       setIsLoading(true);
 
@@ -546,19 +577,39 @@ export const GeoSpatialAnalysis = () => {
       {/* RIGHT: Map Area */}
       <div className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm relative z-0">
           <MapContainer
-             center={mapCenter}
-             zoom={mapZoom}
+             center={sharedMapCenter}
+             zoom={sharedMapZoom}
              zoomControl={false}
              className="w-full h-full"
           >
-              <MapController center={mapCenter} zoom={mapZoom} />
+              <MapController center={sharedMapCenter} zoom={sharedMapZoom} />
               <MapResizer />
+              {(() => {
+                const MapSyncEvents = () => {
+                  const map = useMapEvents({
+                    moveend: () => {
+                      const c = map.getCenter();
+                      const z = map.getZoom();
+                      setSharedMapCenter([c.lat, c.lng]);
+                      setSharedMapZoom(z);
+                    }
+                  });
+                  return null;
+                };
+                return <MapSyncEvents />;
+              })()}
 
-              {/* Satellite Layer */}
-              <TileLayer
-                  url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
-                  attribution="Google Satellite Hybrid"
-              />
+              {/* Dynamic Base Tile Layer matching Live Map */}
+              {(() => {
+                switch(activeBaseLayer) {
+                  case 'roadmap': return <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />;
+                  case 'google_roadmap': return <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
+                  case 'google_hybrid': return <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
+                  case 'scienceterrain': return <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />;
+                  case 'maptiler_outdoor': return <TileLayer url="https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=wSEj7Jfw4drYYrF3X294" attribution='&copy; MapTiler' />;
+                  default: return <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
+                }
+              })()}
 
               {/* Google Earth Engine Dynamic Overlay Layer */}
               {tileUrl && (

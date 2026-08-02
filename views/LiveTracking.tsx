@@ -193,13 +193,17 @@ const MapEventsHandler = ({
     onWeatherClick, 
     activeWeatherLayer,
     onMapClick,
-    onContextMenu
+    onContextMenu,
+    setSharedMapCenter,
+    setSharedMapZoom
 }: { 
     closeDropdowns: () => void; 
     onWeatherClick: (e: L.LeafletMouseEvent) => void; 
     activeWeatherLayer: string;
     onMapClick: (e: L.LeafletMouseEvent) => void;
     onContextMenu: (e: L.LeafletMouseEvent) => void;
+    setSharedMapCenter?: (center: [number, number]) => void;
+    setSharedMapZoom?: (zoom: number) => void;
 }) => {
     useMapEvents({
         click: (e) => {
@@ -213,6 +217,15 @@ const MapEventsHandler = ({
         contextmenu: (e) => {
             closeDropdowns();
             onContextMenu(e); 
+        },
+        moveend: (e) => {
+            if (setSharedMapCenter && setSharedMapZoom) {
+                const map = e.target;
+                const c = map.getCenter();
+                const z = map.getZoom();
+                setSharedMapCenter([c.lat, c.lng]);
+                setSharedMapZoom(z);
+            }
         }
     });
     return null;
@@ -945,7 +958,13 @@ export const LiveTracking = () => {
       unmarkTransmitterDead,
       currentUserRole,
       currentUserPermissions,
-      currentUser
+      currentUser,
+      sharedMapCenter,
+      sharedMapZoom,
+      activeBaseLayer,
+      setSharedMapCenter,
+      setSharedMapZoom,
+      setActiveBaseLayer
   } = useAppStore();
   
   const [confirmDeadTransmitter, setConfirmDeadTransmitter] = useState<Transmitter | null>(null);
@@ -958,7 +977,11 @@ export const LiveTracking = () => {
   const [weatherOpen, setWeatherOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false); // New History Dropdown State
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
-  const [activeLayer, setActiveLayer] = useState('google_hybrid');
+  const [activeLayer, setActiveLayer] = useState(activeBaseLayer);
+  
+  useEffect(() => {
+    setActiveLayer(activeBaseLayer);
+  }, [activeBaseLayer]);
   const [activeWeatherLayer, setActiveWeatherLayer] = useState('none');
   const [showLabels, setShowLabels] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -1853,8 +1876,8 @@ export const LiveTracking = () => {
   const renderTrackingMap = () => (
     <div className="relative w-full h-full" style={{ height: '100%', width: '100%', minHeight: '400px' }}>
         <MapContainer 
-            center={[36.0, 59.0]} 
-            zoom={4} 
+            center={sharedMapCenter} 
+            zoom={sharedMapZoom} 
             minZoom={3}
             maxBounds={[[-90, -180], [90, 180]]}
             className={`w-full h-full z-0 ${isMeasuring ? 'cursor-crosshair' : ''}`}
@@ -1869,6 +1892,8 @@ export const LiveTracking = () => {
                 activeWeatherLayer={activeWeatherLayer}
                 onMapClick={handleMapClick}
                 onContextMenu={handleContextMenu}
+                setSharedMapCenter={setSharedMapCenter}
+                setSharedMapZoom={setSharedMapZoom}
             />
             
             {getTileLayer(activeLayer)}
@@ -2330,7 +2355,7 @@ export const LiveTracking = () => {
                             {layers.map(layer => (
                                 <button
                                     key={layer.id}
-                                    onClick={() => { setActiveLayer(layer.id); }}
+                                    onClick={() => { setActiveLayer(layer.id); setActiveBaseLayer(layer.id); }}
                                     className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between ${
                                         activeLayer === layer.id 
                                             ? 'bg-brand-50 text-brand-700 font-medium' 
