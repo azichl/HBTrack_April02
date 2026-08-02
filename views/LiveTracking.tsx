@@ -6,7 +6,7 @@ import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import ReactMarkdown from 'react-markdown';
-import { formatDateTime, formatBattery } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
@@ -1094,6 +1094,21 @@ export const LiveTracking = () => {
   const donutDragStartRef = useRef({ x: 0, y: 0 });
   const donutInitialOffsetRef = useRef({ x: 0, y: 0 });
 
+  // Map of static test transmitters that have transmissions in the current calendar month
+  const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);
+
+  const hasCurrentMonthFixesMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    positions.forEach(p => {
+      const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
+      if (!pid) return;
+      if (getYearMonthKey(p.timestamp) === currentYearMonthKey) {
+        map.set(pid, true);
+      }
+    });
+    return map;
+  }, [positions, currentYearMonthKey]);
+
   // Network Status Donut Data
   const donutStatusData = useMemo(() => {
     let active = 0;
@@ -1104,9 +1119,16 @@ export const LiveTracking = () => {
 
     transmitters.forEach(t => {
       const status = t.derived_status || t.status || 'Active';
+      const isStatic = status === 'Static test' || status === 'Static Test' || status === 'static';
+
+      // Static Test Rule: display on live map ONLY if tested during the current calendar month
+      if (isStatic && !hasCurrentMonthFixesMap.get(String(t.platform_id))) {
+        return;
+      }
+
       if (status === 'Active' || status === 'active') active++;
       else if (status === 'Potential Mortality') mortality++;
-      else if (status === 'Static test') staticTest++;
+      else if (isStatic) staticTest++;
       else if (status === 'Inactive' || status === 'inactive') inactive++;
       else if (status === 'Dead' || status === 'dead') dead++;
       else active++;
@@ -1119,7 +1141,7 @@ export const LiveTracking = () => {
       { name: 'Inactive', value: inactive, color: '#0f172a' },
       { name: 'Dead', value: dead, color: '#dc2626' }
     ].filter(d => d.value > 0);
-  }, [transmitters]);
+  }, [transmitters, hasCurrentMonthFixesMap]);
 
   const renderDonutLabel = (props: any) => {
     const { cx, cy, midAngle, innerRadius, outerRadius, value } = props;
@@ -1171,9 +1193,15 @@ export const LiveTracking = () => {
 
   // Compute LATEST positions for markers (Strictly one per transmitter based on timestamp)
   const latestPositions = useMemo(() => {
-    // 1. Identify relevant transmitters based on status filter
+    // 1. Identify relevant transmitters based on status filter & current month static test rule
     const relevantTransmitters = transmitters.filter(t => {
        const status = t.derived_status || t.status || 'Active';
+       const isStatic = status === 'Static test' || status === 'Static Test' || status === 'static';
+
+       // Rule: Static test status tags MUST have fixes in current calendar month to display on live map
+       if (isStatic && !hasCurrentMonthFixesMap.get(String(t.platform_id))) {
+         return false;
+       }
        
        const allowedStatuses = ['Active', 'active', 'Potential Mortality', 'Inactive', 'inactive', 'Static test', 'Dead', 'dead'];
        if (!allowedStatuses.includes(status)) return false;
@@ -1195,7 +1223,7 @@ export const LiveTracking = () => {
        if (selectedStatus === 'active') return status === 'Active' || status === 'active';
        if (selectedStatus === 'inactive') return status === 'Inactive' || status === 'inactive';
        if (selectedStatus === 'mortality') return status === 'Potential Mortality';
-       if (selectedStatus === 'static') return status === 'Static test';
+       if (selectedStatus === 'static') return isStatic;
        if (selectedStatus === 'dead') return status === 'Dead' || status === 'dead';
        return true;
     });
@@ -1214,6 +1242,14 @@ export const LiveTracking = () => {
         // Filter by selection (if any selection is active in search)
         if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(pid)) {
             return;
+        }
+
+        // For Static Test tags: only consider current month positions for live map display
+        const tr = transmitters.find(t => String(t.platform_id) === pid);
+        const st = tr?.derived_status || tr?.status;
+        const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
+        if (isStatic && getYearMonthKey(p.timestamp) !== currentYearMonthKey) {
+          return;
         }
 
         // Filter invalid zero coordinates for marker display
@@ -1243,17 +1279,24 @@ export const LiveTracking = () => {
         }
     });
 
-    // Fallback: For transmitters with no position in memory cache, use transmitter's last_fix & coords or search full positions array
+    // Fallback: For transmitters with no position in memory cache
     relevantTransmitters.forEach(t => {
       const pid = String(t.platform_id);
+      const st = t.derived_status || t.status;
+      const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
+      if (isStatic && !hasCurrentMonthFixesMap.get(pid)) return;
       if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(pid)) return;
+
       if (!latestMap.has(pid)) {
         let rawLat = (t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat;
         let rawLon = (t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon;
 
-        // Search full positions array for any position matching pid if coords missing on transmitter object
         if (rawLat === undefined || rawLon === undefined || Number(rawLat) === 0 || Number(rawLon) === 0) {
-          const matchPos = positions.find(p => String(p.transmitter_id || (p as any).platformId || (p as any).platform_id) === pid);
+          const matchPos = positions.find(p => {
+            if (String(p.transmitter_id || (p as any).platformId || (p as any).platform_id) !== pid) return false;
+            if (isStatic && getYearMonthKey(p.timestamp) !== currentYearMonthKey) return false;
+            return true;
+          });
           if (matchPos) {
             rawLat = matchPos.lat;
             rawLon = matchPos.lon;
@@ -1263,12 +1306,10 @@ export const LiveTracking = () => {
         const numLat = Number(rawLat || 0);
         let numLon = Number(rawLon || 0);
 
-        // Auto-correct negative longitude for 242086
         if (pid === '242086' && numLon < 0) {
           numLon = Math.abs(numLon);
         }
 
-        // NEVER render fallback marker if coordinates are zero / invalid!
         if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
             return;
         }
@@ -1293,7 +1334,6 @@ export const LiveTracking = () => {
     if (showHistory && historyPaths.length > 0) {
         historyPaths.forEach(hp => {
             if (hp.path.length > 0) {
-                // The history path is sorted ASC, so the last point is the most recent
                 const lastPoint = hp.path[hp.path.length - 1];
                 const existingPos = latestMap.get(hp.id);
                 
@@ -1309,14 +1349,13 @@ export const LiveTracking = () => {
                 
                 latestMap.set(hp.id, overridePos as any);
             } else {
-                // If history is active but no points match the filter, hide the green marker
                 latestMap.delete(hp.id);
             }
         });
     }
 
     return Array.from(latestMap.values());
-  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType, showHistory, historyPaths]);
+  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType, showHistory, historyPaths, hasCurrentMonthFixesMap, currentYearMonthKey]);
   
   // ── Cache raw history so changing GPS/Doppler filter does NOT re-fetch from Firestore ──
   const rawHistoryCache = useRef<any[]>([]);
@@ -1378,6 +1417,13 @@ export const LiveTracking = () => {
 
     selectedTransmitterIds.forEach((pttId, index) => {
         let track = rawPositions.filter(p => p.transmitter_id === pttId);
+
+        // For Static Test tags, only display positions from the current calendar month on live map history track
+        const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
+        const st = tr?.derived_status || tr?.status;
+        if (st === 'Static test' || st === 'Static Test' || st === 'static') {
+          track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
+        }
 
         track = track.filter(p => {
             const numLat = Number(p.lat);

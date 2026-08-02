@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ArgosMessage } from '../types';
+import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 
 // ─── Single Document Operations ───────────────────────────────────────────────
 
@@ -864,6 +865,78 @@ export const savePositions = async (positions: Array<{ id: string; [key: string]
 export const cleanupOldPositions = async () => {
   console.log('[Firestore] Cleanup disabled to retain historical tracking data permanently.');
   return 0;
+};
+
+/**
+ * Static Test Month Archiving Service
+ * Groups positions for static test transmitters by month (YYYY-MM).
+ * Past months (older than current month) are archived into Firestore collection `static_test_archives`.
+ */
+export const archiveStaticTestSessions = async (
+  positions: any[],
+  transmitters: any[]
+): Promise<number> => {
+  try {
+    const currentYM = getCurrentYearMonthKey();
+
+    const staticTxIds = new Set<string>();
+    transmitters.forEach(t => {
+      const st = t.derived_status || t.status || '';
+      if (st === 'Static test' || st === 'Static Test' || st === 'static') {
+        staticTxIds.add(String(t.platform_id));
+      }
+    });
+
+    if (staticTxIds.size === 0) return 0;
+
+    const grouped = new Map<string, { pid: string; ym: string; fixes: any[] }>();
+
+    positions.forEach(p => {
+      const pid = String(p.transmitter_id || p.platformId || p.platform_id || '');
+      if (!staticTxIds.has(pid)) return;
+
+      const ym = getYearMonthKey(p.timestamp);
+      if (!ym) return;
+
+      const key = `${pid}_${ym}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, { pid, ym, fixes: [] });
+      }
+      grouped.get(key)!.fixes.push(p);
+    });
+
+    const archiveDocs: Array<{ id: string; data: any }> = [];
+
+    grouped.forEach(({ pid, ym, fixes }, key) => {
+      if (ym < currentYM && fixes.length > 0) {
+        const sortedFixes = [...fixes].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+        archiveDocs.push({
+          id: key,
+          data: {
+            id: key,
+            transmitter_id: pid,
+            year_month: ym,
+            status: 'Static test',
+            start_date: sortedFixes[0].timestamp,
+            end_date: sortedFixes[sortedFixes.length - 1].timestamp,
+            total_fixes: fixes.length,
+            positions: sortedFixes,
+            archived_at: new Date().toISOString()
+          }
+        });
+      }
+    });
+
+    if (archiveDocs.length > 0) {
+      await batchWriteDocuments('static_test_archives', archiveDocs);
+      console.log(`[Firestore] Archived ${archiveDocs.length} past static test monthly sessions`);
+    }
+
+    return archiveDocs.length;
+  } catch (error) {
+    console.error('[Firestore] Error archiving static test sessions:', error);
+    return 0;
+  }
 };
 
 // ─── Sync Helpers ─────────────────────────────────────────────────────────────
