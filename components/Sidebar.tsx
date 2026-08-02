@@ -90,6 +90,9 @@ export const Sidebar = () => {
       }
   };
 
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+
   return (
     <div className="w-full h-full bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shadow-sm overflow-y-auto scrollbar-hide transition-colors duration-300">
       {/* Logo Section */}
@@ -109,7 +112,7 @@ export const Sidebar = () => {
         </div>
       </div>
 
-      {/* Navigation — filtered by role permissions */}
+      {/* Navigation — filtered by role permissions and iOS mode */}
       <div className="flex-1 px-3 pb-6">
         <GroupLabel label="Overview" />
         {(hasPermission('View Data') || isAdmin) && (
@@ -133,60 +136,61 @@ export const Sidebar = () => {
           </button>
         )}
 
-        {(hasPermission('Generate Reports') || hasPermission('Manage Alerts') || isAdmin) && (
-          <>
-            <GroupLabel label="Analysis" />
-            {(hasPermission('Generate Reports') || isAdmin) && (
-              <NavItem icon={FileText} label="Reports" active={activeTab === 'Reports'} onClick={() => handleNavigation('Reports')} />
-            )}
-            {(hasPermission('Generate Reports') || isAdmin) && (
-              <NavItem icon={Globe} label="Geo Spatial Analysis" active={activeTab === 'Geo Spatial Analysis'} onClick={() => handleNavigation('Geo Spatial Analysis')} />
-            )}
-            {(hasPermission('Manage Alerts') || isAdmin) && (
-              <NavItem 
-                icon={AlertTriangle} label="Alerts" 
-                active={activeTab === 'Alerts' || activeTab === 'Real-Time Alerts' || activeTab === 'Geofence Alerts'} 
-                badge={activeAlertCount > 0 ? activeAlertCount : undefined}
-                badgeColor="bg-red-500 text-white"
-                onClick={() => handleNavigation('Alerts')} 
-              />
-            )}
-          </>
-        )}
-
-        {(hasPermission('Live Tracking') || isAdmin) && (
-          <>
-            <GroupLabel label="Advanced" />
-            <NavItem icon={BrainCircuit} label="AI Predictions" active={activeTab === 'AI Predictions'} badge="AI" onClick={() => handleNavigation('AI Predictions')} />
-          </>
-        )}
-
+        {/* Database & Data Upload API Ingestion */}
         {(hasPermission('Manage Database') || hasPermission('Upload Data') || isAdmin) && (
           <>
-            <GroupLabel label="Database" />
-            <NavItem icon={Database} label="Database" active={activeTab === 'Database'} onClick={() => handleNavigation('Database')} />
+            <GroupLabel label="Database & Ingestion" />
+            <NavItem icon={Database} label="Data Ingestion & DB" active={activeTab === 'Database'} onClick={() => handleNavigation('Database')} />
           </>
         )}
-        
 
-
-        <NavItem icon={Map} label="GIS" active={activeTab === 'GIS Features'} onClick={() => handleNavigation('GIS Features')} />
-
-        {/* Administration — Admin only */}
-        {(hasPermission('Manage Users') || isAdmin) && (
+        {!isIOSMode && (
           <>
-            <GroupLabel label="Administration" />
-            <NavItem icon={Users} label="User Management" active={activeTab === 'User Management'} onClick={() => handleNavigation('User Management')} />
+            {(hasPermission('Generate Reports') || hasPermission('Manage Alerts') || isAdmin) && (
+              <>
+                <GroupLabel label="Analysis" />
+                {(hasPermission('Generate Reports') || isAdmin) && (
+                  <NavItem icon={FileText} label="Reports" active={activeTab === 'Reports'} onClick={() => handleNavigation('Reports')} />
+                )}
+                {(hasPermission('Generate Reports') || isAdmin) && (
+                  <NavItem icon={Globe} label="Geo Spatial Analysis" active={activeTab === 'Geo Spatial Analysis'} onClick={() => handleNavigation('Geo Spatial Analysis')} />
+                )}
+                {(hasPermission('Manage Alerts') || isAdmin) && (
+                  <NavItem 
+                    icon={AlertTriangle} label="Alerts" 
+                    active={activeTab === 'Alerts' || activeTab === 'Real-Time Alerts' || activeTab === 'Geofence Alerts'} 
+                    badge={activeAlertCount > 0 ? activeAlertCount : undefined}
+                    badgeColor="bg-red-500 text-white"
+                    onClick={() => handleNavigation('Alerts')} 
+                  />
+                )}
+              </>
+            )}
 
+            {(hasPermission('Live Tracking') || isAdmin) && (
+              <>
+                <GroupLabel label="Advanced" />
+                <NavItem icon={BrainCircuit} label="AI Predictions" active={activeTab === 'AI Predictions'} badge="AI" onClick={() => handleNavigation('AI Predictions')} />
+              </>
+            )}
+
+            <NavItem icon={Map} label="GIS" active={activeTab === 'GIS Features'} onClick={() => handleNavigation('GIS Features')} />
+
+            {(hasPermission('Manage Users') || isAdmin) && (
+              <>
+                <GroupLabel label="Administration" />
+                <NavItem icon={Users} label="User Management" active={activeTab === 'User Management'} onClick={() => handleNavigation('User Management')} />
+              </>
+            )}
+            
+            <div className="my-2 border-t border-gray-100 dark:border-slate-800"></div>
+
+            {(hasPermission('System Settings') || isAdmin) && (
+              <NavItem icon={Settings} label="Settings" active={activeTab === 'Settings'} onClick={() => handleNavigation('Settings')} />
+            )}
+            <NavItem icon={HelpCircle} label="Help & Support" active={activeTab === 'Help & Support'} onClick={() => handleNavigation('Help & Support')} />
           </>
         )}
-        
-        <div className="my-2 border-t border-gray-100 dark:border-slate-800"></div>
-
-        {(hasPermission('System Settings') || isAdmin) && (
-          <NavItem icon={Settings} label="Settings" active={activeTab === 'Settings'} onClick={() => handleNavigation('Settings')} />
-        )}
-        <NavItem icon={HelpCircle} label="Help & Support" active={activeTab === 'Help & Support'} onClick={() => handleNavigation('Help & Support')} />
       </div>
 
       {/* Footer */}

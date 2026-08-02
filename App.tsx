@@ -20,6 +20,7 @@ import { GISFeatures } from './views/GISFeatures';
 import { Settings } from './views/Settings';
 import { HelpSupport } from './views/HelpSupport';
 import { GeoSpatialAnalysis } from './views/GeoSpatialAnalysis';
+import { IOSBottomNav } from './components/IOSBottomNav';
 import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { HoubaraIcon } from './components/HoubaraIcon';
 
@@ -382,6 +383,7 @@ const App = () => {
 
   const searchParams = new URLSearchParams(window.location.search);
   const isStandalone = searchParams.get('standalone') === 'true';
+  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
   const urlTab = searchParams.get('tab');
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
@@ -430,7 +432,7 @@ const App = () => {
 
   return (
     <div className={`${darkMode ? 'dark' : ''} h-full`}>
-      <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300">
+      <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300 pt-[env(safe-area-inset-top,0px)]">
 
         {sidebarOpen && (
           <div
@@ -498,11 +500,14 @@ const App = () => {
           </header>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col">
+          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isIOSMode ? 'pb-16' : ''}`}>
             <div className="flex-1 overflow-y-auto p-4 md:p-6 w-full mx-auto flex flex-col h-full">
                {renderContent()}
             </div>
           </main>
+
+          {/* Render iOS Bottom Tab Bar when in iOS mode or mobile device */}
+          {isIOSMode && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
         </div>
       </div>
     </div>
