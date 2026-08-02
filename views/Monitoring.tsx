@@ -4,7 +4,7 @@ import { Map as MapIcon, Activity, Battery, Navigation, Download, RefreshCw, X, 
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { Position } from '../types';
-import { formatDateTime, formatBattery } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 import Draggable from 'react-draggable';
 import { saveDocument, deleteCoordinateRecord } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
@@ -141,44 +141,67 @@ export const Monitoring = () => {
     fetchDirectLastFix();
   }, [transmitters]);
 
-  const tableData = useMemo<MonitoringTableRow[]>(() => {
-    return transmitters.map(t => {
-      const bird = birds.find(b => b.id === t.bird_id);
-      const pid = String(t.platform_id);
-      const pos = latestPositions.get(pid);
+  const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);
 
-      // Determine the true latest timestamp by comparing all sources
-      const posTs = pos ? safeParseDate(pos.timestamp) : NaN;
-      const argosTs = argosLastFix.has(pid) ? safeParseDate(argosLastFix.get(pid)!) : NaN;
-      const lastFixTs = safeParseDate(t.last_fix);
-
-      // Pick the maximum valid timestamp from any source
-      const candidates = [posTs, argosTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
-      const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
-      const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
-
-      let displayLat = pos?.lat !== undefined ? Number(pos.lat) : (t as any).latitude !== undefined ? Number((t as any).latitude) : (t as any).lat !== undefined ? Number((t as any).lat) : undefined;
-      let displayLon = pos?.lon !== undefined ? Number(pos.lon) : (t as any).longitude !== undefined ? Number((t as any).longitude) : (t as any).lon !== undefined ? Number((t as any).lon) : undefined;
-      if (pid === '242086' && displayLon !== undefined && displayLon < 0) {
-        displayLon = Math.abs(displayLon);
+  const hasCurrentMonthFixesMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    positions.forEach(p => {
+      const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
+      if (!pid) return;
+      if (getYearMonthKey(p.timestamp) === currentYearMonthKey) {
+        map.set(pid, true);
       }
-
-      return {
-        id: t.id,
-        platform_id: t.platform_id,
-        bird_ring_id: bird?.ring_id || 'Unassigned',
-        bird_id: t.bird_id,
-        status: t.derived_status || t.status,
-        model: t.model,
-        lat: displayLat,
-        lon: displayLon,
-        battery_voltage: t.battery_voltage,
-        speed: pos?.speed_kmh,
-        timestamp: bestTimestamp,
-        hasPos: !!pos || (displayLat !== undefined && displayLon !== undefined)
-      };
     });
-  }, [transmitters, birds, latestPositions, argosLastFix]);
+    return map;
+  }, [positions, currentYearMonthKey]);
+
+  const tableData = useMemo<MonitoringTableRow[]>(() => {
+    return transmitters
+      .filter(t => {
+        const st = t.derived_status || t.status;
+        const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
+        if (isStatic && !hasCurrentMonthFixesMap.get(String(t.platform_id))) {
+          return false;
+        }
+        return true;
+      })
+      .map(t => {
+        const bird = birds.find(b => b.id === t.bird_id);
+        const pid = String(t.platform_id);
+        const pos = latestPositions.get(pid);
+
+        // Determine the true latest timestamp by comparing all sources
+        const posTs = pos ? safeParseDate(pos.timestamp) : NaN;
+        const argosTs = argosLastFix.has(pid) ? safeParseDate(argosLastFix.get(pid)!) : NaN;
+        const lastFixTs = safeParseDate(t.last_fix);
+
+        // Pick the maximum valid timestamp from any source
+        const candidates = [posTs, argosTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
+        const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
+        const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
+
+        let displayLat = pos?.lat !== undefined ? Number(pos.lat) : (t as any).latitude !== undefined ? Number((t as any).latitude) : (t as any).lat !== undefined ? Number((t as any).lat) : undefined;
+        let displayLon = pos?.lon !== undefined ? Number(pos.lon) : (t as any).longitude !== undefined ? Number((t as any).longitude) : (t as any).lon !== undefined ? Number((t as any).lon) : undefined;
+        if (pid === '242086' && displayLon !== undefined && displayLon < 0) {
+          displayLon = Math.abs(displayLon);
+        }
+
+        return {
+          id: t.id,
+          platform_id: t.platform_id,
+          bird_ring_id: bird?.ring_id || 'Unassigned',
+          bird_id: t.bird_id,
+          status: t.derived_status || t.status,
+          model: t.model,
+          lat: displayLat,
+          lon: displayLon,
+          battery_voltage: t.battery_voltage,
+          speed: pos?.speed_kmh,
+          timestamp: bestTimestamp,
+          hasPos: !!pos || (displayLat !== undefined && displayLon !== undefined)
+        };
+      });
+  }, [transmitters, birds, latestPositions, argosLastFix, hasCurrentMonthFixesMap]);
 
   // Client-side search filtering
   const filteredData = useMemo(() => {

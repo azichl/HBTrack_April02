@@ -10,7 +10,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend 
 } from 'recharts';
-import { formatDateTime, formatBattery } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/accuracyCalculator';
 
 const renderCustomizedLabel = (props: any) => {
@@ -244,7 +244,22 @@ export const Dashboard = () => {
       ? formatDateTime(new Date(Math.max(...positions.map(d => new Date(d.timestamp).getTime()))).toISOString(), timeZone)
       : 'No Data';
 
-  // Transmitters Status Data
+  // Current calendar month key for static test active filtering
+  const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);
+
+  const hasCurrentMonthFixesMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    positions.forEach(p => {
+      const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
+      if (!pid) return;
+      if (getYearMonthKey(p.timestamp) === currentYearMonthKey) {
+        map.set(pid, true);
+      }
+    });
+    return map;
+  }, [positions, currentYearMonthKey]);
+
+  // Transmitters Status Data (Mirroring Live Map current situation)
   const normalizeStatus = (raw?: string): string => {
     if (!raw) return 'Unknown';
     const trimmed = raw.trim().toLowerCase();
@@ -256,32 +271,47 @@ export const Dashboard = () => {
     return raw.charAt(0).toUpperCase() + raw.slice(1);
   };
 
-  const allStatuses = transmitters.reduce((acc, t) => {
-    const s = normalizeStatus(t.derived_status || t.status);
-    acc[s] = (acc[s] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const activeLiveTransmitters = useMemo(() => {
+    return transmitters.filter(t => {
+      const status = normalizeStatus(t.derived_status || t.status);
+      if (status === 'Static test') {
+        return hasCurrentMonthFixesMap.get(String(t.platform_id));
+      }
+      return true;
+    });
+  }, [transmitters, hasCurrentMonthFixesMap]);
+
+  const allStatuses = useMemo(() => {
+    return activeLiveTransmitters.reduce((acc, t) => {
+      const s = normalizeStatus(t.derived_status || t.status);
+      acc[s] = (acc[s] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [activeLiveTransmitters]);
   
   const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1', '#a855f7', '#d946ef'];
-  const transmitterStatusData = Object.entries(allStatuses).map(([name, value], i) => {
-    let color = CHART_COLORS[i % CHART_COLORS.length];
-    if (name.toLowerCase() === 'active') color = '#10b981'; // Green
-    else if (name.toLowerCase() === 'static test') color = '#eab308'; // Yellow
-    else if (name.toLowerCase() === 'potential mortality') color = '#f97316'; // Orange
-    else if (name.toLowerCase() === 'inactive') color = '#0f172a'; // Slate-900 / Near-black
-    else if (name.toLowerCase() === 'dead') color = '#dc2626'; // Red
-    
-    return { name, value, color };
-  });
+  const transmitterStatusData = useMemo(() => {
+    return Object.entries(allStatuses).map(([name, value], i) => {
+      let color = CHART_COLORS[i % CHART_COLORS.length];
+      if (name.toLowerCase() === 'active') color = '#10b981'; // Green
+      else if (name.toLowerCase() === 'static test') color = '#eab308'; // Yellow
+      else if (name.toLowerCase() === 'potential mortality') color = '#f97316'; // Orange
+      else if (name.toLowerCase() === 'inactive') color = '#0f172a'; // Slate-900 / Near-black
+      else if (name.toLowerCase() === 'dead') color = '#dc2626'; // Red
+      
+      return { name, value, color };
+    });
+  }, [allStatuses]);
   
-  // Keep original statusData for the side panel Network Status pie chart
-  const statusData = [
-    { name: 'Active', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Active').length, color: '#10b981' },
-    { name: 'Static test', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Static test').length, color: '#eab308' },
-    { name: 'Potential Mortality', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Potential Mortality').length, color: '#f97316' },
-    { name: 'Inactive', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Inactive').length, color: '#0f172a' },
-    { name: 'Dead', value: transmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Dead').length, color: '#dc2626' }
-  ].filter(d => d.value > 0);
+  const statusData = useMemo(() => {
+    return [
+      { name: 'Active', value: activeLiveTransmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Active').length, color: '#10b981' },
+      { name: 'Static test', value: activeLiveTransmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Static test').length, color: '#eab308' },
+      { name: 'Potential Mortality', value: activeLiveTransmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Potential Mortality').length, color: '#f97316' },
+      { name: 'Inactive', value: activeLiveTransmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Inactive').length, color: '#0f172a' },
+      { name: 'Dead', value: activeLiveTransmitters.filter(t => normalizeStatus(t.derived_status || t.status) === 'Dead').length, color: '#dc2626' }
+    ].filter(d => d.value > 0);
+  }, [activeLiveTransmitters]);
 
   // Fleet Overview (Top 5 recent)
   const recentFleet = useMemo(() => {
@@ -347,7 +377,7 @@ export const Dashboard = () => {
             
             <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-700/80 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-600">
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total:</span>
-              <strong className="text-slate-900 dark:text-white font-bold text-sm">{transmitters.length}</strong>
+              <strong className="text-slate-900 dark:text-white font-bold text-sm">{activeLiveTransmitters.length}</strong>
             </div>
           </div>
           
@@ -376,7 +406,7 @@ export const Dashboard = () => {
                   </Pie>
                   {/* Center Donut Label */}
                   <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-900 dark:fill-white font-black text-2xl">
-                    {transmitters.length}
+                    {activeLiveTransmitters.length}
                   </text>
                   <text x="50%" y="57%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-400 dark:fill-gray-500 font-bold text-[10px] uppercase tracking-wider">
                     Units
