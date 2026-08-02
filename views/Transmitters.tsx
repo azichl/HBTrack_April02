@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Edit, Trash2, Download, Check, X, Plus, Save } from 'lucide-react';
-import { Transmitter } from '../types';
+import { Edit, Trash2, Download, Check, X, Plus, Save, History, Clock, Activity, ShieldAlert } from 'lucide-react';
+import { Transmitter, StatusHistoryRecord } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime } from '../utils/formatting';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
-import { bulkDeleteRecords } from '../services/firestoreService';
+import { bulkDeleteRecords, recordStatusTransition } from '../services/firestoreService';
 
 type TransmitterTableRow = Transmitter & {
   bird_species: string;
@@ -28,6 +28,8 @@ export const Transmitters = () => {
     unmarkTransmitterDead,
     staticTestPeriods,
     loadStaticTestArchive,
+    statusHistoryRecords,
+    loadStatusHistory,
     currentUserRole,
     currentUserPermissions,
     currentUser
@@ -37,6 +39,9 @@ export const Transmitters = () => {
 
   const [activeTab, setActiveTab] = useState<'transmitters' | 'archive'>('transmitters');
   const [confirmDeadTransmitter, setConfirmDeadTransmitter] = useState<Transmitter | null>(null);
+  const [selectedHistoryPlatformId, setSelectedHistoryPlatformId] = useState<string | null>(null);
+  const [manualStatusChoice, setManualStatusChoice] = useState<'Static test' | 'Active' | 'Potential Mortality' | 'Dead' | 'Inactive'>('Static test');
+  const [manualStatusComment, setManualStatusComment] = useState('');
   const [formData, setFormData] = useState<Partial<Transmitter>>({});
   const nodeRef = useRef<HTMLDivElement>(null);
 
@@ -377,6 +382,17 @@ export const Transmitters = () => {
                           </button>
                         )
                       )}
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedHistoryPlatformId(String(t.platform_id));
+                          loadStatusHistory(String(t.platform_id));
+                        }} 
+                        className="p-1 text-sky-600 hover:text-sky-800 hover:bg-sky-50 dark:hover:bg-sky-900/30 rounded-md transition-colors" 
+                        title="View Status History by Date"
+                      >
+                        <History size={15} />
+                      </button>
                       <button onClick={() => { if(window.confirm('Delete transmitter?')) { bulkDeleteRecords('transmitters', [t.id]); } }} className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md" title="Delete">
                         <Trash2 size={15} />
                       </button>
@@ -568,6 +584,131 @@ export const Transmitters = () => {
               >
                 Confirm Mark as Dead
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status History Timeline Modal */}
+      {selectedHistoryPlatformId && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full p-6 border border-gray-100 dark:border-slate-700 max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-4 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 rounded-lg">
+                  <History size={22} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-white">Status History Timeline</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Transmitter PTT #{selectedHistoryPlatformId}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedHistoryPlatformId(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Timeline Content */}
+            <div className="overflow-y-auto flex-1 pr-2 space-y-4 mb-4">
+              {(() => {
+                const historyList = statusHistoryRecords
+                  .filter(r => String(r.platform_id) === String(selectedHistoryPlatformId))
+                  .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+
+                if (historyList.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-sm text-gray-500 italic">
+                      No archived status transitions recorded yet for this transmitter.
+                    </div>
+                  );
+                }
+
+                return historyList.map((record, idx) => {
+                  let badgeColor = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300';
+                  if (record.status === 'Static test') badgeColor = 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-300';
+                  else if (record.status === 'Potential Mortality') badgeColor = 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
+                  else if (record.status === 'Dead') badgeColor = 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+                  else if (record.status === 'Inactive') badgeColor = 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
+
+                  return (
+                    <div key={record.id || idx} className="relative pl-6 border-l-2 border-sky-300 dark:border-sky-700 pb-4 last:pb-0">
+                      <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-sky-500 border-2 border-white dark:border-slate-800" />
+                      <div className="bg-gray-50 dark:bg-slate-700/50 p-3.5 rounded-lg border border-gray-100 dark:border-slate-700">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${badgeColor}`}>
+                            {record.status}
+                          </span>
+                          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                            {record.duration_days ? `${record.duration_days} days` : 'Active'}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-300 mb-1">
+                          <strong>Period:</strong> {formatDateTime(record.start_date, timeZone)} &rarr; {record.end_date ? formatDateTime(record.end_date, timeZone) : 'Present'}
+                        </div>
+                        {record.set_by && (
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                            <strong>Recorded by:</strong> {record.set_by}
+                          </div>
+                        )}
+                        {record.comment && (
+                          <div className="text-xs italic text-gray-600 dark:text-gray-300 mt-1 border-t border-gray-200/50 dark:border-slate-600/50 pt-1">
+                            &ldquo;{record.comment}&rdquo;
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Manual Status Transition Log Form */}
+            <div className="border-t border-gray-100 dark:border-slate-700 pt-4 mt-auto">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                Log New Status Change (e.g. Field Recovery & Refit)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+                <select
+                  value={manualStatusChoice}
+                  onChange={(e) => setManualStatusChoice(e.target.value as any)}
+                  className="bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded p-2 text-xs font-bold text-gray-800 dark:text-white"
+                >
+                  <option value="Static test">Static test</option>
+                  <option value="Active">Active</option>
+                  <option value="Potential Mortality">Potential Mortality</option>
+                  <option value="Dead">Dead</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Comment (e.g. Recovered from field, refitting)"
+                  value={manualStatusComment}
+                  onChange={(e) => setManualStatusComment(e.target.value)}
+                  className="sm:col-span-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-600 rounded p-2 text-xs text-gray-800 dark:text-white"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={async () => {
+                    const userName = currentUser?.displayName || currentUser?.email || 'User';
+                    await recordStatusTransition(
+                      selectedHistoryPlatformId,
+                      manualStatusChoice,
+                      transmitters.find(t => String(t.platform_id) === String(selectedHistoryPlatformId))?.bird_id,
+                      userName,
+                      manualStatusComment || `Manual status update to ${manualStatusChoice}`
+                    );
+                    setManualStatusComment('');
+                    loadStatusHistory(selectedHistoryPlatformId);
+                  }}
+                  className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded text-xs font-bold shadow transition-colors flex items-center gap-1"
+                >
+                  <Activity size={14} /> Record Status Change
+                </button>
+              </div>
             </div>
           </div>
         </div>

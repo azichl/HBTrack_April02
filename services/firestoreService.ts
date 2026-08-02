@@ -4,7 +4,7 @@ import {
   DocumentSnapshot, addDoc, updateDoc, Timestamp, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { ArgosMessage } from '../types';
+import { ArgosMessage, StatusHistoryRecord } from '../types';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 
 // ─── Single Document Operations ───────────────────────────────────────────────
@@ -937,6 +937,123 @@ export const archiveStaticTestSessions = async (
     console.error('[Firestore] Error archiving static test sessions:', error);
     return 0;
   }
+};
+
+/**
+ * Transmitter Status History Archiving Service
+ * Records status transitions linked by date and duration.
+ */
+export const recordStatusTransition = async (
+  platform_id: string,
+  newStatus: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead',
+  bird_id?: string,
+  setBy: string = 'system',
+  comment?: string
+): Promise<StatusHistoryRecord | null> => {
+  try {
+    const pidStr = String(platform_id);
+    const nowIso = new Date().toISOString();
+
+    // Query active status records for this transmitter
+    const q = query(
+      collection(db, 'status_history'),
+      where('platform_id', '==', pidStr)
+    );
+    const snap = await getDocs(q);
+    const historyDocs = snap.docs.map(d => ({ id: d.id, ...d.data() } as StatusHistoryRecord));
+    
+    // Find open record (where end_date is null or undefined)
+    const openRecord = historyDocs.find(r => !r.end_date);
+
+    if (openRecord) {
+      if (openRecord.status === newStatus) {
+        // Status has not changed, keep current open record
+        return openRecord;
+      }
+
+      // Close previous status record
+      const startMs = safeParseTimestamp(openRecord.start_date);
+      const nowMs = Date.now();
+      const durationDays = isNaN(startMs) ? 1 : Math.max(1, Math.ceil((nowMs - startMs) / (1000 * 60 * 60 * 24)));
+
+      await saveDocument('status_history', openRecord.id, {
+        end_date: nowIso,
+        duration_days: durationDays
+      });
+    }
+
+    // Open new status history record
+    const newRecordId = `sh_${pidStr}_${Date.now()}`;
+    const newRecord: StatusHistoryRecord = {
+      id: newRecordId,
+      transmitter_id: pidStr,
+      platform_id: pidStr,
+      bird_id: bird_id || '',
+      status: newStatus,
+      start_date: nowIso,
+      end_date: null,
+      duration_days: 1,
+      set_by: setBy,
+      comment: comment || `Status updated to ${newStatus}`,
+      created_at: nowIso
+    };
+
+    await saveDocument('status_history', newRecordId, newRecord);
+    console.log(`[Firestore] Recorded status transition for PTT ${pidStr}: -> ${newStatus}`);
+    return newRecord;
+  } catch (error) {
+    console.error(`[Firestore] Error recording status transition for ${platform_id}:`, error);
+    return null;
+  }
+};
+
+export const loadStatusHistoryForTransmitter = async (platform_id: string): Promise<StatusHistoryRecord[]> => {
+  try {
+    const q = query(
+      collection(db, 'status_history'),
+      where('platform_id', '==', String(platform_id))
+    );
+    const snap = await getDocs(q);
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() } as StatusHistoryRecord));
+    docs.sort((a, b) => safeParseTimestamp(a.start_date) - safeParseTimestamp(b.start_date));
+    return docs;
+  } catch (error) {
+    console.error(`[Firestore] Error loading status history for ${platform_id}:`, error);
+    return [];
+  }
+};
+
+export const loadAllStatusHistory = async (): Promise<StatusHistoryRecord[]> => {
+  try {
+    const docs = await loadCollection<StatusHistoryRecord>('status_history');
+    docs.sort((a, b) => safeParseTimestamp(a.start_date) - safeParseTimestamp(b.start_date));
+    return docs;
+  } catch (error) {
+    console.error('[Firestore] Error loading all status history:', error);
+    return [];
+  }
+};
+
+/**
+ * Get status of transmitter at specific historical date
+ */
+export const getStatusAtDate = (
+  history: StatusHistoryRecord[],
+  targetDate: string | Date
+): 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead' | 'Unknown' => {
+  const targetMs = typeof targetDate === 'string' ? safeParseTimestamp(targetDate) : targetDate.getTime();
+  if (isNaN(targetMs)) return 'Unknown';
+
+  const sorted = [...history].sort((a, b) => safeParseTimestamp(a.start_date) - safeParseTimestamp(b.start_date));
+  for (const record of sorted) {
+    const startMs = safeParseTimestamp(record.start_date);
+    const endMs = record.end_date ? safeParseTimestamp(record.end_date) : Infinity;
+    if (targetMs >= startMs && targetMs <= endMs) {
+      return record.status;
+    }
+  }
+
+  return 'Unknown';
 };
 
 // ─── Sync Helpers ─────────────────────────────────────────────────────────────

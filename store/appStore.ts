@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod } from '../types';
+import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord } from '../types';
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
@@ -13,7 +13,8 @@ import {
   syncTransmitters, syncBirds, syncAlerts,
   batchWriteArgosPositions, deleteCollection,
   batchWriteDocuments, batchDeleteDocuments,
-  loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords
+  loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords,
+  recordStatusTransition, loadStatusHistoryForTransmitter, loadAllStatusHistory
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
@@ -102,6 +103,8 @@ interface AppState {
   positions: Position[];
   users: User[];
   staticTestPeriods: StaticTestPeriod[];
+  statusHistoryRecords: StatusHistoryRecord[];
+  loadStatusHistory: (platform_id?: string) => Promise<void>;
   
   // Authentication State
   currentUser: any | null;
@@ -225,6 +228,9 @@ const processTransmitterStatusUpdates = async (
       });
     }
     updates.derived_status = derived;
+
+    // Archive status transition by date in Firebase Firestore
+    await recordStatusTransition(String(t.platform_id), derived, t.bird_id, 'system', `System evaluated status: ${derived}`);
   }
 
   // Battery Low Alert Check (Threshold < 3.5V)
@@ -454,6 +460,7 @@ export const useAppStore = create<AppState>()(
       positions: [],
       users: [],
       staticTestPeriods: [],
+      statusHistoryRecords: [],
       
       // Auth Default State
       currentUser: null,
@@ -731,6 +738,7 @@ export const useAppStore = create<AppState>()(
 
         set({ transmitters: updatedTransmitters, lastSaved: nowIso });
         await saveDocument('transmitters', transmitter.id, updates);
+        await recordStatusTransition(String(transmitter.platform_id), 'Dead', transmitter.bird_id, user.name || user.email || 'User', 'Manually marked as Dead');
         logUserActivity(user.id || user.email, user.email || '', 'DATA_UPDATE', `Marked PTT ${transmitter.platform_id} as Dead`);
       },
 
@@ -761,6 +769,21 @@ export const useAppStore = create<AppState>()(
       loadStaticTestArchive: async () => {
         const periods = await loadCollection<StaticTestPeriod>('static_test_periods');
         set({ staticTestPeriods: periods });
+      },
+
+      loadStatusHistory: async (platform_id?: string) => {
+        if (platform_id) {
+          const history = await loadStatusHistoryForTransmitter(platform_id);
+          set(state => ({
+            statusHistoryRecords: [
+              ...state.statusHistoryRecords.filter(r => String(r.platform_id) !== String(platform_id)),
+              ...history
+            ]
+          }));
+        } else {
+          const history = await loadAllStatusHistory();
+          set({ statusHistoryRecords: history });
+        }
       },
 
       // ─── Argos → Firebase Direct Sync ───────────────────────────────────────
@@ -1062,12 +1085,13 @@ export const useAppStore = create<AppState>()(
           // purgeZeroCoordinates disabled on init — zero coords are now filtered at ingestion time
           // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
-          const [fsTransmitters, fsBirds, fsAlerts, fsUsers, fsStaticPeriods] = await Promise.all([
+          const [fsTransmitters, fsBirds, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
             loadRecentAlerts<Alert>(),
             loadCollection<User>('users'),
             loadCollection<StaticTestPeriod>('static_test_periods'),
+            loadAllStatusHistory()
           ]);
 
           // Load only the latest GPS and Doppler position for each transmitter
@@ -1132,6 +1156,7 @@ export const useAppStore = create<AppState>()(
             alerts: mergedAlerts,
             users: mergedUsers,
             staticTestPeriods: fsStaticPeriods || [],
+            statusHistoryRecords: fsStatusHistory || [],
             firestoreReady: true,
             currentUserRole: role,
             currentUserPermissions: permissions,

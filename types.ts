@@ -63,6 +63,20 @@ export interface StaticTestPeriod {
   expiry_alert_sent?: boolean;
 }
 
+export interface StatusHistoryRecord {
+  id: string;
+  transmitter_id: string;
+  platform_id: string;
+  bird_id?: string;
+  status: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead';
+  start_date: string;
+  end_date?: string | null;
+  duration_days?: number;
+  set_by?: string;
+  comment?: string;
+  created_at: string;
+}
+
 export interface Position {
   id: string;
   transmitter_id: string;
