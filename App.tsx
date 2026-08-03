@@ -387,6 +387,17 @@ const App = () => {
   const urlTab = searchParams.get('tab');
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
+  const [showIOSIntro, setShowIOSIntro] = useState(() => isIOSMode);
+
+  useEffect(() => {
+    if (isIOSMode) {
+      const timer = setTimeout(() => {
+        setShowIOSIntro(false);
+      }, 2300);
+      return () => clearTimeout(timer);
+    }
+  }, [isIOSMode]);
+
   if (authLoading) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
@@ -432,39 +443,87 @@ const App = () => {
 
   return (
     <div className={`${darkMode ? 'dark' : ''} h-full`}>
+      {/* Intro Splash Animation with Logo for iOS App */}
+      {showIOSIntro && (
+        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950 text-white pointer-events-none transition-all duration-700">
+          <style>{`
+            @keyframes logoIntroZoom {
+              0% {
+                transform: scale(2.6);
+                opacity: 0;
+                filter: blur(12px);
+              }
+              22% {
+                transform: scale(1.25);
+                opacity: 1;
+                filter: blur(0px);
+              }
+              70% {
+                transform: scale(0.95);
+                opacity: 0.95;
+                filter: blur(0px);
+              }
+              100% {
+                transform: scale(0.2);
+                opacity: 0;
+                filter: blur(12px);
+              }
+            }
+          `}</style>
+          <div className="animate-[logoIntroZoom_2.3s_cubic-bezier(0.16,1,0.3,1)_forwards] flex flex-col items-center justify-center p-6 text-center">
+            <img 
+              src="/ministry-logo-pure-white.png" 
+              alt="Ministry Logo" 
+              className="w-72 max-w-[85vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
+            />
+            <div className="text-white text-base font-black tracking-widest font-mono uppercase opacity-90">
+              Houbara Tracker v2.0
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
+              <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading iOS App...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300 pt-[env(safe-area-inset-top,0px)]">
 
-        {sidebarOpen && (
+        {!isIOSMode && sidebarOpen && (
           <div
             className="fixed inset-0 z-[990] bg-black/50 backdrop-blur-sm lg:hidden"
             onClick={toggleSidebar}
           />
         )}
 
-        <div className={`
-            fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
-            ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
-        `}>
-           <Sidebar />
-        </div>
+        {!isIOSMode && (
+          <div className={`
+              fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
+              ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
+          `}>
+             <Sidebar />
+          </div>
+        )}
 
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
           {/* Top Header */}
           <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
             <div className="flex items-center gap-4 flex-1">
-              <button
-                onClick={toggleSidebar}
-                onTouchEnd={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleSidebar();
-                }}
-                className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
-                aria-label="Toggle Sidebar"
-                style={{ minWidth: 44, minHeight: 44, touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-              >
-                <Menu size={20} />
-              </button>
+              {!isIOSMode && (
+                <button
+                  onClick={toggleSidebar}
+                  onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleSidebar();
+                  }}
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  aria-label="Toggle Sidebar"
+                  style={{ minWidth: 44, minHeight: 44, touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+                >
+                  <Menu size={20} />
+                </button>
+              )}
 
               {/* Functional Global Search */}
               <GlobalSearch onNavigate={handleNavigate} />
