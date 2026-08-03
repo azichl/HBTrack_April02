@@ -132,7 +132,11 @@ export const DataUpload = () => {
       syncArgosToFirebase, 
       importTransmitters, importBirds, assignTransmitterToBird, transmitters,
   } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'manual' | 'api'>('manual');
+
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+
+  const [activeTab, setActiveTab] = useState<'manual' | 'api'>(isIOSMode ? 'api' : 'manual');
 
   // Manual Upload State
   const [dragActive, setDragActive] = useState(false);
