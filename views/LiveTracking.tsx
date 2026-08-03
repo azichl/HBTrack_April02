@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -419,6 +419,7 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
+    const navTargetSetRef = useRef(false);
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -469,11 +470,16 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
                     } else {
                         setActiveTabMode('single');
                     }
-                    if (setNavTarget) {
+                    // Only call setNavTarget once per popup open to prevent infinite re-render loop
+                    if (setNavTarget && !navTargetSetRef.current) {
+                        navTargetSetRef.current = true;
                         setNavTarget({id: pos.transmitter_id, lat: pos.lat, lon: pos.lon});
                     }
                 },
-                popupclose: () => setIsOpen(false)
+                popupclose: () => {
+                    setIsOpen(false);
+                    navTargetSetRef.current = false;
+                }
             }}
         >
             <Tooltip 
@@ -994,7 +1000,10 @@ export const LiveTracking = () => {
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number, accuracy: number, heading?: number | null} | null>(null);
   const [isTrackingUser, setIsTrackingUser] = useState(false);
   const watchIdRef = useRef<number | null>(null);
-  const [navTarget, setNavTarget] = useState<{id: string, lat: number, lon: number} | null>(null);
+  const [navTarget, setNavTargetRaw] = useState<{id: string, lat: number, lon: number} | null>(null);
+  const setNavTarget = useCallback((target: {id: string, lat: number, lon: number} | null) => {
+    setNavTargetRaw(target);
+  }, []);
 
   const toggleUserTracking = () => {
       if (isTrackingUser) {
