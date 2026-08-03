@@ -437,11 +437,17 @@ export const Database = () => {
 
       {/* Content Area */}
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 h-full flex flex-col">
-        {databaseActiveTab === 'Monitoring'   && <Monitoring />}
-        {databaseActiveTab === 'Transmitters' && <Transmitters />}
-        {databaseActiveTab === 'Birds'        && <Birds />}
-        {databaseActiveTab === 'Argos Data'   && <ArgosData />}
-        {databaseActiveTab === 'Data Upload'  && <DataUpload />}
+        {isIOSMode ? (
+          <DataUpload />
+        ) : (
+          <>
+            {databaseActiveTab === 'Monitoring'   && <Monitoring />}
+            {databaseActiveTab === 'Transmitters' && <Transmitters />}
+            {databaseActiveTab === 'Birds'        && <Birds />}
+            {databaseActiveTab === 'Argos Data'   && <ArgosData />}
+            {databaseActiveTab === 'Data Upload'  && <DataUpload />}
+          </>
+        )}
       </div>
     </div>
   );

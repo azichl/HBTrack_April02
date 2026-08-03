@@ -759,22 +759,26 @@ export const DataUpload = () => {
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Data Ingestion</h2>
-          <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">Import tracking data via File Upload or Argos CLS API.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
+            {isIOSMode ? "Import tracking data via Argos CLS API." : "Import tracking data via File Upload or Argos CLS API."}
+          </p>
         </div>
-        <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
-            <button 
-                onClick={() => setActiveTab('manual')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'manual' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-            >
-                Manual Upload
-            </button>
-            <button 
-                onClick={() => setActiveTab('api')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'api' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-            >
-                API Integration
-            </button>
-        </div>
+        {!isIOSMode && (
+          <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
+              <button 
+                  onClick={() => setActiveTab('manual')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'manual' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+              >
+                  Manual Upload
+              </button>
+              <button 
+                  onClick={() => setActiveTab('api')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'api' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+              >
+                  API Integration
+              </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden flex-1 p-4">
