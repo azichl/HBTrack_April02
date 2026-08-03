@@ -2241,26 +2241,26 @@ export const LiveTracking = () => {
 
         {/* Smart Geo-Search Bar (Top Center) */}
         {!isMeasuring && (
-        <div className={`absolute ${isIOSMode ? 'top-3 left-1/2 -translate-x-1/2 w-[calc(100vw-110px)] max-w-xs sm:max-w-sm' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
+        <div className={`absolute ${isIOSMode ? 'top-3 left-1/2 -translate-x-1/2 w-[55vw] max-w-[210px] xs:max-w-[240px]' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
              <div className="relative group shadow-lg rounded-xl w-full">
                  <form 
                     onSubmit={handleGeoSearch}
                     className={`flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 ${isIOSMode ? 'w-full' : 'w-64 sm:w-80 focus-within:w-72 sm:focus-within:w-96'} focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden`}
                  >
-                     <Globe className="ml-2.5 sm:ml-3 text-blue-500 flex-shrink-0" size={16} />
+                     <Globe className="ml-2 text-blue-500 flex-shrink-0" size={14} />
                      <input 
                          type="text" 
                          value={geoQuery}
                          onChange={(e) => setGeoQuery(e.target.value)}
                          placeholder="Search Google Maps..."
-                         className="w-full py-2 px-2 sm:py-2.5 sm:px-3 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-800 placeholder-gray-400"
+                         className="w-full py-1.5 px-1.5 sm:py-2 sm:px-2.5 text-[11px] sm:text-xs bg-transparent border-none focus:ring-0 outline-none text-gray-800 placeholder-gray-400"
                      />
                      <button 
                          type="submit"
                          disabled={isGeoSearching || !geoQuery.trim()}
-                         className="bg-blue-600 hover:bg-blue-700 text-white p-2 sm:p-2.5 transition-colors disabled:bg-gray-300 flex-shrink-0"
+                         className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 sm:p-2 transition-colors disabled:bg-gray-300 flex-shrink-0"
                      >
-                        {isGeoSearching ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
+                        {isGeoSearching ? <Loader2 className="animate-spin" size={14} /> : <Search size={14} />}
                      </button>
                  </form>
              </div>
