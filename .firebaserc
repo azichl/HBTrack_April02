@@ -2,17 +2,6 @@
   "projects": {
     "default": "trackapp-v2"
   },
-  "targets": {
-    "trackapp-v2": {
-      "hosting": {
-        "app1": [
-          "trackapp-v2"
-        ],
-        "app2": [
-          "houbara-tracker"
-        ]
-      }
-    }
-  },
+  "targets": {},
   "etags": {}
 }
