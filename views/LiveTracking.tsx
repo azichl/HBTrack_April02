@@ -694,9 +694,9 @@ class LiveTrackingErrorBoundary extends React.Component<
     { children: React.ReactNode },
     { hasError: boolean; errorCount: number }
 > {
+    state: { hasError: boolean; errorCount: number } = { hasError: false, errorCount: 0 };
     constructor(props: { children: React.ReactNode }) {
         super(props);
-        this.state = { hasError: false, errorCount: 0 };
     }
     static getDerivedStateFromError() {
         return { hasError: true };
@@ -1067,8 +1067,15 @@ const LiveTrackingInner = () => {
           setIsTrackingUser(true);
           if ('geolocation' in navigator) {
               watchIdRef.current = navigator.geolocation.watchPosition(
-                  (pos) => setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, heading: pos.coords.heading }),
-                  (err) => { console.error(err); setIsTrackingUser(false); },
+                  (pos) => {
+                      const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, heading: pos.coords.heading };
+                      setUserLocation(loc);
+                      setCustomFlyTo({ lat: loc.lat, lon: loc.lon });
+                  },
+                  (err) => { 
+                      console.error("GPS location error:", err); 
+                      setIsTrackingUser(false); 
+                  },
                   { enableHighAccuracy: true, maximumAge: 0 }
               );
           } else {
@@ -1596,40 +1603,47 @@ const LiveTrackingInner = () => {
     closeAllDropdowns(); // Close other UI elements
 
     try {
+        // Try Nominatim OSM Geocoding first (instant, free, accurate for any location/city/country name)
+        const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(geoQuery.trim())}`);
+        if (nomRes.ok) {
+            const nomData = await nomRes.json();
+            if (Array.isArray(nomData) && nomData.length > 0) {
+                const lat = parseFloat(nomData[0].lat);
+                const lon = parseFloat(nomData[0].lon);
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    setCustomFlyTo({ lat, lon });
+                    setSearchMarkerPos({ lat, lon, label: nomData[0].display_name || geoQuery });
+                    return;
+                }
+            }
+        }
+
         const apiKey = process.env.API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
-        if (!apiKey) {
-           console.warn("No Gemini API key available for search.");
-           return;
+        if (apiKey) {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{ text: `User Query: "${geoQuery}"\nFind the coordinates for this location using Google Search.\nReturn ONLY the latitude and longitude in this format: [COORDS: lat, lon]` }]
+                    }]
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+                const aiCoordMatch = fullText.match(/\[COORDS:\s*(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)\]/);
+                if (aiCoordMatch) {
+                    const lat = parseFloat(aiCoordMatch[1]);
+                    const lon = parseFloat(aiCoordMatch[3]);
+                    setCustomFlyTo({ lat, lon });
+                    setSearchMarkerPos({ lat, lon, label: geoQuery });
+                }
+            }
         }
-
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: `User Query: "${geoQuery}"\nFind the coordinates for this location using Google Search.\nReturn ONLY the latitude and longitude in this format: [COORDS: lat, lon]` }]
-                }]
-            })
-        });
-
-        if (!res.ok) throw new Error("Gemini API request failed");
-        
-        const data = await res.json();
-        const fullText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        
-        // Extract Coords
-        const aiCoordMatch = fullText.match(/\[COORDS:\s*(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)\]/);
-        if (aiCoordMatch) {
-            const lat = parseFloat(aiCoordMatch[1]);
-            const lon = parseFloat(aiCoordMatch[3]);
-            setCustomFlyTo({ lat, lon });
-            setSearchMarkerPos({ lat, lon, label: geoQuery });
-        } else {
-            console.warn("No coordinates found for query");
-        }
-
     } catch (err) {
-        console.error(err);
+        console.error("Geo search error:", err);
     } finally {
         setIsGeoSearching(false);
     }
@@ -2526,6 +2540,212 @@ const LiveTrackingInner = () => {
                       <Maximize size={16} />
                       <span>Screen</span>
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* iOS Layer Control Popup */}
+              {layerOpen && (
+                <div className="absolute top-full left-0 mt-2 bg-white p-4 rounded-xl shadow-2xl w-64 border border-gray-200 animate-in fade-in slide-in-from-top-2 z-[1000]" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-400"/> Map Layers</h4>
+                    <button onClick={() => setLayerOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="space-y-1 mb-4">
+                    {layers.map(layer => (
+                      <button
+                        key={layer.id}
+                        onClick={() => { setActiveLayer(layer.id); setActiveBaseLayer(layer.id); setLayerOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between ${
+                          activeLayer === layer.id 
+                            ? 'bg-brand-50 text-brand-700 font-medium' 
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {layer.name}
+                        {activeLayer === layer.id && <CheckCircle2 size={14} className="text-brand-500" />}
+                      </button>
+                    ))}
+                  </div>
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pt-3 border-t border-gray-100">Overlays</h4>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={showLabels}
+                        onChange={(e) => setShowLabels(e.target.checked)}
+                        className="rounded text-brand-500 focus:ring-brand-500" 
+                      />
+                      <span className="text-sm text-gray-700">Google Labels</span>
+                    </label>
+                  </div>
+
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pt-3 border-t border-gray-100">GEE Satellite Layers</h4>
+                  <div className="flex gap-1.5">
+                    {(['ndvi', 'savi', 'ndwi', 'lst'] as const).map(layer => (
+                      <button
+                        key={layer}
+                        onClick={() => {
+                          if (activeGeeLayer === layer) {
+                            setActiveGeeLayer(null);
+                          } else {
+                            setActiveGeeLayer(layer);
+                          }
+                        }}
+                        className={`flex-1 py-1.5 text-[9px] font-bold uppercase tracking-wide rounded-md border transition-all flex items-center justify-center gap-1 ${
+                          activeGeeLayer === layer
+                            ? 'bg-brand-50 text-brand-700 border-brand-300'
+                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {layer === 'ndvi' && <Satellite size={11} />}
+                        {layer === 'savi' && <Satellite size={11} />}
+                        {layer === 'ndwi' && <Droplets size={11} />}
+                        {layer === 'lst' && <ThermometerSun size={11} />}
+                        {layer.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* iOS Weather Control Popup */}
+              {weatherOpen && (
+                <div className="absolute top-full left-0 mt-2 bg-white p-4 rounded-xl shadow-2xl w-64 border border-gray-200 animate-in fade-in slide-in-from-top-2 z-[1000]" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-100">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-400"/> Weather Layers</h4>
+                    <button onClick={() => setWeatherOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {weatherLayers.map(layer => (
+                      <button
+                        key={layer.id}
+                        onClick={() => { setActiveWeatherLayer(layer.id); setWeatherOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between ${
+                          activeWeatherLayer === layer.id 
+                            ? 'bg-brand-50 text-brand-700 font-medium' 
+                            : 'text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {layer.name}
+                        {activeWeatherLayer === layer.id && <CheckCircle2 size={14} className="text-brand-500" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* iOS History Control Popup */}
+              {historyOpen && (
+                <div
+                  className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-2xl w-72 max-w-[85vw] border border-gray-200 animate-in fade-in slide-in-from-top-2 flex flex-col overflow-hidden z-[1000]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between p-3.5 bg-white border-b border-gray-100 flex-shrink-0 select-none">
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><GripHorizontal size={14} className="text-gray-400"/> Track History</h4>
+                    <div className="flex items-center gap-2">
+                      {isHistoryLoading && <Loader2 size={14} className="text-brand-500 animate-spin" />}
+                      <button onClick={() => setHistoryOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="p-4 pt-3 overflow-y-auto custom-scrollbar max-h-[55vh]">
+                    {selectedTransmitterIds.length === 0 ? (
+                      <p className="text-xs text-gray-500 italic">Please select a transmitter to view history.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                          <span className="text-xs font-semibold text-gray-700">Show Tracks</span>
+                          <button 
+                            onClick={() => setShowHistory(!showHistory)}
+                            className={`w-9 h-5 rounded-full transition-colors relative ${showHistory ? 'bg-brand-600' : 'bg-gray-300'}`}
+                          >
+                            <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${showHistory ? 'translate-x-4' : ''}`} />
+                          </button>
+                        </div>
+                        
+                        {showHistory && (
+                          <div className="space-y-3 pt-2">
+                            <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                              <button 
+                                onClick={() => setHistoryMode('preset')}
+                                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${historyMode === 'preset' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+                              >
+                                Preset
+                              </button>
+                              <button 
+                                onClick={() => setHistoryMode('custom')}
+                                className={`flex-1 text-xs font-medium py-1.5 rounded-md transition-all ${historyMode === 'custom' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+                              >
+                                Custom Date
+                              </button>
+                            </div>
+
+                            {historyMode === 'preset' ? (
+                              <div className="space-y-1">
+                                {['24h', '7d', '30d', '1y', '2y'].map(range => (
+                                  <button
+                                    key={range}
+                                    onClick={() => setHistoryPreset(range as any)}
+                                    className={`w-full text-left px-3 py-2 rounded-md text-sm flex items-center justify-between ${
+                                      historyPreset === range 
+                                        ? 'bg-brand-50 text-brand-700 font-medium' 
+                                        : 'text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    {range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
+                                    {historyPreset === range && <CheckCircle2 size={14} className="text-brand-500" />}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="space-y-3 p-2 bg-gray-50 rounded-lg">
+                                <div>
+                                  <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">Start Date</label>
+                                  <input 
+                                    type="date"
+                                    value={customDates.start}
+                                    onChange={(e) => setCustomDates({...customDates, start: e.target.value})}
+                                    className="w-full text-xs p-2 border border-gray-200 rounded outline-none focus:border-brand-500"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] uppercase font-bold text-gray-500 mb-1 block">End Date</label>
+                                  <input 
+                                    type="date"
+                                    value={customDates.end}
+                                    onChange={(e) => setCustomDates({...customDates, end: e.target.value})}
+                                    className="w-full text-xs p-2 border border-gray-200 rounded outline-none focus:border-brand-500"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* GPS / Doppler Filter */}
+                            <div className="pt-2 border-t border-gray-100">
+                              <label className="text-[10px] uppercase font-bold text-gray-400 mb-2 block">Location Type</label>
+                              <div className="flex bg-gray-100 p-0.5 rounded-lg">
+                                {['All', 'GPS', 'Doppler'].map(type => (
+                                  <button 
+                                    key={type}
+                                    onClick={() => setHistoryFixType(type as any)}
+                                    className={`flex-1 text-[10px] font-bold py-1.5 rounded-md transition-all uppercase ${historyFixType === type ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500'}`}
+                                  >
+                                    {type}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

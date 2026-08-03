@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import UniformTypeIdentifiers
+import CoreLocation
 
 struct WebView: UIViewRepresentable {
     let url: URL
@@ -14,6 +15,10 @@ struct WebView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> WKWebView {
+        // Request native iOS location permissions
+        let locationManager = CLLocationManager()
+        locationManager.requestWhenInUseAuthorization()
+
         // Clear cached JS/CSS files on startup to ensure latest bundle loads
         WKWebsiteDataStore.default().removeData(
             ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache],
