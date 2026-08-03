@@ -387,19 +387,16 @@ const App = () => {
   const urlTab = searchParams.get('tab');
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
-  const [showIOSIntro, setShowIOSIntro] = useState(() => isIOSMode);
+  const [showAppIntro, setShowAppIntro] = useState(true);
 
   useEffect(() => {
-    if (isIOSMode) {
-      const timer = setTimeout(() => {
-        setShowIOSIntro(false);
-      }, 3600);
-      return () => clearTimeout(timer);
-    }
-  }, [isIOSMode]);
+    const timer = setTimeout(() => {
+      setShowAppIntro(false);
+    }, 3600);
+    return () => clearTimeout(timer);
+  }, []);
 
-  // On iOS mode, bypass the generic spinner screen and display the logo intro splash instead
-  if (authLoading && !isIOSMode) {
+  if (authLoading && !showAppIntro) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-500"></div>
@@ -407,7 +404,7 @@ const App = () => {
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser && !showAppIntro) {
     return <Login />;
   }
 
@@ -434,7 +431,50 @@ const App = () => {
 
   if (isStandalone) {
      return (
-        <div className={`${darkMode ? 'dark' : ''} h-screen w-screen bg-gray-50 dark:bg-slate-900 overflow-hidden flex flex-col`}>
+        <div className={`${darkMode ? 'dark' : ''} h-screen w-screen bg-gray-50 dark:bg-slate-900 overflow-hidden flex flex-col relative`}>
+             {/* Intro Splash Animation with Logo */}
+             {showAppIntro && (
+               <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950 text-white pointer-events-none transition-all duration-700">
+                 <style>{`
+                   @keyframes logoIntroZoom {
+                     0% {
+                       transform: scale(2.2);
+                       opacity: 0;
+                       filter: blur(8px);
+                     }
+                     20% {
+                       transform: scale(1.1);
+                       opacity: 1;
+                       filter: blur(0px);
+                     }
+                     75% {
+                       transform: scale(1.0);
+                       opacity: 1;
+                       filter: blur(0px);
+                     }
+                     100% {
+                       transform: scale(0.3);
+                       opacity: 0;
+                       filter: blur(10px);
+                     }
+                   }
+                 `}</style>
+                 <div className="animate-[logoIntroZoom_3.6s_cubic-bezier(0.16,1,0.3,1)_forwards] flex flex-col items-center justify-center p-6 text-center">
+                   <img 
+                     src="/ministry-logo-pure-white.png" 
+                     alt="Ministry Logo" 
+                     className="w-80 max-w-[88vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
+                   />
+                   <div className="text-white text-base font-black tracking-widest font-mono uppercase opacity-90">
+                     Houbara Tracker v2.0
+                   </div>
+                   <div className="mt-3 flex items-center gap-2">
+                     <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
+                     <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading Application...</span>
+                   </div>
+                 </div>
+               </div>
+             )}
              <main className="flex-1 overflow-y-auto p-4 md:p-6">
                 {renderContent()}
              </main>
@@ -444,8 +484,8 @@ const App = () => {
 
   return (
     <div className={`${darkMode ? 'dark' : ''} h-full`}>
-      {/* Intro Splash Animation with Logo for iOS App */}
-      {showIOSIntro && (
+      {/* Intro Splash Animation with Logo for Web & iOS App */}
+      {showAppIntro && (
         <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950 text-white pointer-events-none transition-all duration-700">
           <style>{`
             @keyframes logoIntroZoom {
@@ -482,7 +522,7 @@ const App = () => {
             </div>
             <div className="mt-3 flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
-              <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading iOS App...</span>
+              <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading Application...</span>
             </div>
           </div>
         </div>
