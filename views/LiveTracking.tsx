@@ -426,6 +426,12 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
 
+    const isIOSMode = useMemo(() => {
+        if (typeof window === 'undefined') return false;
+        const params = new URLSearchParams(window.location.search);
+        return params.get('mode') === 'ios' || params.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+    }, []);
+
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
         if (!latestPositions || latestPositions.length === 0) return [pos];
@@ -601,7 +607,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 <span>Lon: {currentPos.lon?.toFixed(4)}</span>
                             </div>
                             
-                            <div className="grid grid-cols-2 gap-2 mt-3">
+                            <div className={`grid ${isIOSMode ? 'grid-cols-1' : 'grid-cols-2'} gap-2 mt-3`}>
                                 <button 
                                     onClick={() => {
                                         setSelectedTransmitterIds([currentPos.transmitter_id]);
@@ -611,12 +617,14 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 >
                                     <History size={12} /> Focus & History
                                 </button>
-                                <button 
-                                    onClick={handleAIAnalysis}
-                                    className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
-                                >
-                                    <BrainCircuit size={12} /> AI Forecast
-                                </button>
+                                {!isIOSMode && (
+                                    <button 
+                                        onClick={handleAIAnalysis}
+                                        className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
+                                    >
+                                        <BrainCircuit size={12} /> AI Forecast
+                                    </button>
+                                )}
                             </div>
 
                             <div className="mt-2">
@@ -630,7 +638,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 </a>
                             </div>
 
-                            {currentTransmitter && (
+                            {!isIOSMode && currentTransmitter && (
                                 <div className="mt-2">
                                     {currentTransmitter.derived_status === 'Dead' ? (
                                         currentUserRole === 'Administrator' && (
@@ -2580,33 +2588,6 @@ const LiveTrackingInner = () => {
                       />
                       <span className="text-sm text-gray-700">Google Labels</span>
                     </label>
-                  </div>
-
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pt-3 border-t border-gray-100">GEE Satellite Layers</h4>
-                  <div className="flex gap-1.5">
-                    {(['ndvi', 'savi', 'ndwi', 'lst'] as const).map(layer => (
-                      <button
-                        key={layer}
-                        onClick={() => {
-                          if (activeGeeLayer === layer) {
-                            setActiveGeeLayer(null);
-                          } else {
-                            setActiveGeeLayer(layer);
-                          }
-                        }}
-                        className={`flex-1 py-1.5 text-[9px] font-bold uppercase tracking-wide rounded-md border transition-all flex items-center justify-center gap-1 ${
-                          activeGeeLayer === layer
-                            ? 'bg-brand-50 text-brand-700 border-brand-300'
-                            : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        {layer === 'ndvi' && <Satellite size={11} />}
-                        {layer === 'savi' && <Satellite size={11} />}
-                        {layer === 'ndwi' && <Droplets size={11} />}
-                        {layer === 'lst' && <ThermometerSun size={11} />}
-                        {layer.toUpperCase()}
-                      </button>
-                    ))}
                   </div>
                 </div>
               )}
