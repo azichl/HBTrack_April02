@@ -402,7 +402,7 @@ interface TransmitterMarkerProps {
 }
 
 // Extracted Marker Component to fix Popup data staleness issue & support Group Selection for overlapping markers
-const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({ 
+const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({ 
     pos, 
     transmitter, 
     bird, 
@@ -419,7 +419,12 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
-    const navTargetSetRef = useRef(false);
+    // Ref to store setNavTarget so we can call it without re-render dependency
+    const setNavTargetRef = useRef(setNavTarget);
+    setNavTargetRef.current = setNavTarget;
+    // Stable ref for pos data to use in deferred callback
+    const posRef = useRef(pos);
+    posRef.current = pos;
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -463,22 +468,30 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
             position={[pos.lat, pos.lon]}
             icon={getStatusIcon(status)}
             eventHandlers={{
+                click: () => {
+                    // Decouple navTarget state update from Leaflet popup lifecycle
+                    // Using setTimeout(0) ensures the state update happens AFTER
+                    // Leaflet finishes its popup open/close cycle, preventing
+                    // the re-render cascade that destroys the popup DOM
+                    const fn = setNavTargetRef.current;
+                    const p = posRef.current;
+                    if (fn) {
+                        setTimeout(() => {
+                            fn({id: p.transmitter_id, lat: p.lat, lon: p.lon});
+                        }, 0);
+                    }
+                },
                 popupopen: () => {
+                    // Only local state updates here — these don't propagate to parent
                     setIsOpen(true);
                     if (overlappingPositions.length > 1) {
                         setActiveTabMode('group');
                     } else {
                         setActiveTabMode('single');
                     }
-                    // Only call setNavTarget once per popup open to prevent infinite re-render loop
-                    if (setNavTarget && !navTargetSetRef.current) {
-                        navTargetSetRef.current = true;
-                        setNavTarget({id: pos.transmitter_id, lat: pos.lat, lon: pos.lon});
-                    }
                 },
                 popupclose: () => {
                     setIsOpen(false);
-                    navTargetSetRef.current = false;
                 }
             }}
         >
@@ -674,6 +687,57 @@ const TransmitterMarker: React.FC<TransmitterMarkerProps> = ({
         </Marker>
     );
 };
+
+// Memoize to prevent re-renders when parent state (like navTarget) changes
+const TransmitterMarker = React.memo(TransmitterMarkerInner, (prevProps, nextProps) => {
+    return (
+        prevProps.pos === nextProps.pos &&
+        prevProps.transmitter === nextProps.transmitter &&
+        prevProps.bird === nextProps.bird &&
+        prevProps.timeZone === nextProps.timeZone &&
+        prevProps.isTrackingUser === nextProps.isTrackingUser &&
+        prevProps.latestPositions === nextProps.latestPositions &&
+        prevProps.transmitters === nextProps.transmitters &&
+        prevProps.birds === nextProps.birds
+    );
+});
+
+// ErrorBoundary to catch render crashes and auto-recover instead of blank screen
+class LiveTrackingErrorBoundary extends React.Component<
+    { children: React.ReactNode },
+    { hasError: boolean; errorCount: number }
+> {
+    constructor(props: { children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false, errorCount: 0 };
+    }
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    componentDidCatch(error: any, info: any) {
+        console.error('LiveTracking ErrorBoundary caught:', error, info);
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full bg-gray-50 dark:bg-slate-900 p-8">
+                    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 max-w-md text-center">
+                        <div className="text-4xl mb-3">⚠️</div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Something went wrong</h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">The map view encountered an error. Click below to reload.</p>
+                        <button
+                            onClick={() => this.setState({ hasError: false, errorCount: this.state.errorCount + 1 })}
+                            className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold text-sm"
+                        >
+                            🔄 Reload View
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 interface StaticTestClusterMarkerProps {
     cluster: { lat: number; lon: number; positions: any[] };
@@ -945,7 +1009,7 @@ const formatCoordinateSystems = (lat: number, lon: number) => {
     };
 };
 
-export const LiveTracking = () => {
+const LiveTrackingInner = () => {
   const { 
       transmitters, 
       birds, 
@@ -3243,3 +3307,9 @@ export const LiveTracking = () => {
     </div>
   );
 };
+
+export const LiveTracking = () => (
+    <LiveTrackingErrorBoundary>
+        <LiveTrackingInner />
+    </LiveTrackingErrorBoundary>
+);
