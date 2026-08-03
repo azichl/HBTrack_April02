@@ -154,9 +154,9 @@ export const DataUpload = () => {
     baseUrl: 'https://api.groupcls.com/telemetry/api/v1'
   });
   
-  // Date State for Bulk
+  // Date State for Bulk (Default last 3 days)
   const [dateRange, setDateRange] = useState({
-      start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default last 30 days
+      start: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default last 3 days
       end: new Date().toISOString().split('T')[0]
   });
 
@@ -858,31 +858,36 @@ export const DataUpload = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setDateMode('custom')}
-                className={`py-2 text-xs font-bold rounded-lg transition-all ${dateMode === 'custom' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm border border-gray-200 dark:border-slate-700' : 'text-gray-500 hover:text-gray-800'}`}
+                onClick={() => {
+                  setDateMode('custom');
+                  const end = new Date().toISOString().split('T')[0];
+                  const start = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                  setDateRange({ start, end });
+                }}
+                className={`py-1.5 text-xs font-bold rounded-lg transition-all ${dateMode === 'custom' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm border border-gray-200 dark:border-slate-700' : 'text-gray-500 hover:text-gray-800'}`}
               >
                 Custom Date
               </button>
             </div>
 
             {dateMode === 'custom' && (
-              <div className="grid grid-cols-2 gap-2 mt-3 animate-in fade-in slide-in-from-top-1">
+              <div className="grid grid-cols-2 gap-2 mt-2 animate-in fade-in slide-in-from-top-1">
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1">Start Date</label>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Start Date</label>
                   <input 
                     type="date" 
                     value={dateRange.start}
                     onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                    className="w-full px-2.5 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-800 dark:text-white"
+                    className="w-full px-2 py-1.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-medium text-gray-800 dark:text-white"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1">End Date</label>
+                  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">End Date</label>
                   <input 
                     type="date" 
                     value={dateRange.end}
                     onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                    className="w-full px-2.5 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-800 dark:text-white"
+                    className="w-full px-2 py-1.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-medium text-gray-800 dark:text-white"
                   />
                 </div>
               </div>
