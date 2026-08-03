@@ -205,6 +205,8 @@ const MapEventsHandler = ({
     setSharedMapCenter?: (center: [number, number]) => void;
     setSharedMapZoom?: (zoom: number) => void;
 }) => {
+    const moveTimeoutRef = useRef<any>(null);
+
     useMapEvents({
         click: (e) => {
             closeDropdowns();
@@ -220,14 +222,18 @@ const MapEventsHandler = ({
         },
         moveend: (e) => {
             if (setSharedMapCenter && setSharedMapZoom) {
-                const map = e.target;
-                const c = map.getCenter();
-                const z = map.getZoom();
-                setSharedMapCenter([c.lat, c.lng]);
-                setSharedMapZoom(z);
+                if (moveTimeoutRef.current) clearTimeout(moveTimeoutRef.current);
+                moveTimeoutRef.current = setTimeout(() => {
+                    const map = e.target;
+                    const c = map.getCenter();
+                    const z = map.getZoom();
+                    setSharedMapCenter([c.lat, c.lng]);
+                    setSharedMapZoom(z);
+                }, 300);
             }
         }
     });
+
     return null;
 };
 
@@ -419,12 +425,6 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
-    // Ref to store setNavTarget so we can call it without re-render dependency
-    const setNavTargetRef = useRef(setNavTarget);
-    setNavTargetRef.current = setNavTarget;
-    // Stable ref for pos data to use in deferred callback
-    const posRef = useRef(pos);
-    posRef.current = pos;
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -468,21 +468,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
             position={[pos.lat, pos.lon]}
             icon={getStatusIcon(status)}
             eventHandlers={{
-                click: () => {
-                    // Decouple navTarget state update from Leaflet popup lifecycle
-                    // Using setTimeout(0) ensures the state update happens AFTER
-                    // Leaflet finishes its popup open/close cycle, preventing
-                    // the re-render cascade that destroys the popup DOM
-                    const fn = setNavTargetRef.current;
-                    const p = posRef.current;
-                    if (fn) {
-                        setTimeout(() => {
-                            fn({id: p.transmitter_id, lat: p.lat, lon: p.lon});
-                        }, 0);
-                    }
-                },
                 popupopen: () => {
-                    // Only local state updates here — these don't propagate to parent
                     setIsOpen(true);
                     if (overlappingPositions.length > 1) {
                         setActiveTabMode('group');
@@ -492,6 +478,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                 },
                 popupclose: () => {
                     setIsOpen(false);
+                    setSelectedSinglePos(null);
                 }
             }}
         >
