@@ -857,23 +857,23 @@ export const DataUpload = () => {
 
             {dateMode === 'custom' && (
               <div className="grid grid-cols-2 gap-3 mt-3 animate-in fade-in slide-in-from-top-1">
-                <div className="bg-gray-50 dark:bg-slate-900/80 p-2.5 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Start Date</label>
+                <div className="bg-gray-100 dark:bg-slate-900/90 p-2.5 rounded-xl border border-gray-200 dark:border-slate-700">
+                  <label className="block text-[9px] font-extrabold text-gray-500 uppercase tracking-wider mb-0.5">START DATE</label>
                   <input 
                     type="date" 
                     value={dateRange.start}
                     onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-                    className="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-transparent text-xs font-bold text-gray-800 dark:text-white outline-none border-none p-0 focus:ring-0"
                   />
                 </div>
 
-                <div className="bg-gray-50 dark:bg-slate-900/80 p-2.5 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">End Date</label>
+                <div className="bg-gray-100 dark:bg-slate-900/90 p-2.5 rounded-xl border border-gray-200 dark:border-slate-700">
+                  <label className="block text-[9px] font-extrabold text-gray-500 uppercase tracking-wider mb-0.5">END DATE</label>
                   <input 
                     type="date" 
                     value={dateRange.end}
                     onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-                    className="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg px-2 py-1.5 text-xs font-bold text-gray-800 dark:text-white outline-none focus:ring-2 focus:ring-brand-500"
+                    className="w-full bg-transparent text-xs font-bold text-gray-800 dark:text-white outline-none border-none p-0 focus:ring-0"
                   />
                 </div>
               </div>
