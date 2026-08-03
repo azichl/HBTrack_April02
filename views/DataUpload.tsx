@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UploadCloud, FileSpreadsheet, CheckCircle, Database, FileText, Server, Globe, Key, RefreshCw, ShieldCheck, Activity, User, Lock, Play, Table as TableIcon, Download, ToggleLeft, ToggleRight, Link as LinkIcon, List, Clock, BarChart3, Wifi, Layers, Globe2, AlertTriangle, Calendar, Link2, FileType, Radio, Info, HelpCircle, FileDown, ChevronDown } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, CheckCircle, Database, FileText, Server, Globe, Key, RefreshCw, ShieldCheck, Activity, User, Lock, Play, Table as TableIcon, Download, ToggleLeft, ToggleRight, Link as LinkIcon, List, Clock, BarChart3, Wifi, Layers, Globe2, AlertTriangle, Calendar, Link2, FileType, Radio, Info, HelpCircle, FileDown, ChevronDown, X } from 'lucide-react';
 import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
 import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird as BirdType } from '../types';
@@ -176,6 +176,11 @@ export const DataUpload = () => {
   
   // Realtime State
   const [lastCheckpoint, setLastCheckpoint] = useState<string>('0');
+
+  // iOS Specific Mobile UI State
+  const [dateMode, setDateMode] = useState<'24h' | 'custom'>('24h');
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const operations = [
     { value: "retrieve-bulk", label: "Bulk Message Retrieval" },
@@ -627,6 +632,9 @@ export const DataUpload = () => {
     setLogs([]);
     setRawResponse('');
     setSyncStats(null);
+    if (isIOSMode) {
+      setShowLogModal(true);
+    }
     addLog(`Initiating connection process [${isSimulationMode ? 'SIMULATION' : 'LIVE'}]...`);
     setPreviewData([]);
 
@@ -649,6 +657,11 @@ export const DataUpload = () => {
             
             addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items. Synced to Firebase.`);
             setSyncStats({transmitters: 0, positions: 0});
+            if (isIOSMode) {
+              setShowSuccessToast(true);
+              setTimeout(() => setShowLogModal(false), 2000);
+              setTimeout(() => setShowSuccessToast(false), 5000);
+            }
         }, 1000);
         return;
     }
@@ -721,6 +734,12 @@ export const DataUpload = () => {
         setApiStatus('success');
         addLog(`Operation Complete. Store Updated.`);
 
+        if (isIOSMode) {
+          setShowSuccessToast(true);
+          setTimeout(() => setShowLogModal(false), 2000);
+          setTimeout(() => setShowSuccessToast(false), 5000);
+        }
+
     } catch (error: any) {
         setApiStatus('error');
         addLog(`ERROR: ${error.message}`);
@@ -753,6 +772,183 @@ export const DataUpload = () => {
   };
 
   const guide = getDataGuide();
+
+  if (isIOSMode) {
+    return (
+      <div className="space-y-4 p-2 max-w-md mx-auto animate-in fade-in duration-300">
+        {/* Title Tile */}
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 rounded-xl">
+              <UploadCloud size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black text-gray-900 dark:text-white">CLS Data Upload</h2>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Field API Ingestion</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-full border border-green-200 dark:border-green-800 text-[10px] font-bold">
+            <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <span>Ready</span>
+          </div>
+        </div>
+
+        {/* Credentials & Options Form Card */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm space-y-4">
+          {/* Username Input */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Username</label>
+            <div className="relative">
+              <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                value={apiConfig.username}
+                onChange={(e) => setApiConfig({...apiConfig, username: e.target.value})}
+                placeholder="username"
+                className="w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none text-gray-800 dark:text-white font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Password Input */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Password</label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="password" 
+                value={apiConfig.password}
+                onChange={(e) => setApiConfig({...apiConfig, password: e.target.value})}
+                placeholder="••••••••"
+                className="w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none text-gray-800 dark:text-white font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Target Client ID */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">Target Client ID</label>
+            <div className="relative">
+              <Key size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input 
+                type="text" 
+                value={apiConfig.clientId}
+                onChange={(e) => setApiConfig({...apiConfig, clientId: e.target.value})}
+                placeholder="api-telemetry"
+                className="w-full pl-10 pr-3 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-brand-500 outline-none text-gray-800 dark:text-white font-medium"
+              />
+            </div>
+          </div>
+
+          {/* Time Horizon Selection */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1.5">Time Horizon</label>
+            <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-slate-900 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setDateMode('24h');
+                  const end = new Date().toISOString().split('T')[0];
+                  const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                  setDateRange({ start, end });
+                }}
+                className={`py-2 text-xs font-bold rounded-lg transition-all ${dateMode === '24h' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm border border-gray-200 dark:border-slate-700' : 'text-gray-500 hover:text-gray-800'}`}
+              >
+                Last 24 Hours
+              </button>
+              <button
+                type="button"
+                onClick={() => setDateMode('custom')}
+                className={`py-2 text-xs font-bold rounded-lg transition-all ${dateMode === 'custom' ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm border border-gray-200 dark:border-slate-700' : 'text-gray-500 hover:text-gray-800'}`}
+              >
+                Custom Date
+              </button>
+            </div>
+
+            {dateMode === 'custom' && (
+              <div className="grid grid-cols-2 gap-2 mt-3 animate-in fade-in slide-in-from-top-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1">Start Date</label>
+                  <input 
+                    type="date" 
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                    className="w-full px-2.5 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-800 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-500 mb-1">End Date</label>
+                  <input 
+                    type="date" 
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                    className="w-full px-2.5 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-xs font-medium text-gray-800 dark:text-white"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Prominent Execute Request Button */}
+          <button 
+            type="button"
+            onClick={handleExecuteApi}
+            disabled={apiStatus === 'testing'}
+            className="w-full py-3 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+          >
+            {apiStatus === 'testing' ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} />}
+            {apiStatus === 'testing' ? 'Connecting to CLS API...' : 'Execute Request'}
+          </button>
+        </div>
+
+        {/* Success Toast */}
+        {showSuccessToast && (
+          <div className="bg-green-600 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center justify-between text-xs font-bold animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={18} />
+              <span>CLS Data Upload Completed Successfully ✓</span>
+            </div>
+          </div>
+        )}
+
+        {/* Execution Logs Modal Popup */}
+        {showLogModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-gray-900 text-white rounded-2xl w-full max-w-sm border border-gray-800 shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="p-3 bg-gray-950 border-b border-gray-800 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2.5 h-2.5 rounded-full ${apiStatus === 'testing' ? 'bg-amber-400 animate-ping' : apiStatus === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider">
+                    {apiStatus === 'testing' ? 'Uploading CLS Data...' : apiStatus === 'success' ? 'Upload Complete!' : 'Execution Logs'}
+                  </span>
+                </div>
+                <button onClick={() => setShowLogModal(false)} className="text-gray-400 hover:text-white p-1">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-3 font-mono text-[11px] overflow-y-auto flex-1 max-h-[250px] space-y-1.5">
+                {logs.length === 0 && <span className="text-gray-500 italic">Connecting to CLS API...</span>}
+                {logs.map((log, i) => (
+                  <div key={i} className="text-gray-300 border-b border-gray-800/40 pb-1">
+                    <span className="text-blue-400 mr-1">{log.split(']')[0]}]</span>
+                    <span>{log.split(']')[1]}</span>
+                  </div>
+                ))}
+              </div>
+
+              {syncStats && (
+                <div className="p-3 bg-green-950/70 border-t border-green-800 text-green-400 font-mono text-xs">
+                  <div>✔ Transmitters Updated: {syncStats.transmitters}</div>
+                  <div>✔ New Positions Created: {syncStats.positions}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 h-[calc(100vh-140px)] flex flex-col">
