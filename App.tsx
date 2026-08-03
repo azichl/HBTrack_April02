@@ -393,12 +393,13 @@ const App = () => {
     if (isIOSMode) {
       const timer = setTimeout(() => {
         setShowIOSIntro(false);
-      }, 2300);
+      }, 3600);
       return () => clearTimeout(timer);
     }
   }, [isIOSMode]);
 
-  if (authLoading) {
+  // On iOS mode, bypass the generic spinner screen and display the logo intro splash instead
+  if (authLoading && !isIOSMode) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-500"></div>
@@ -449,32 +450,32 @@ const App = () => {
           <style>{`
             @keyframes logoIntroZoom {
               0% {
-                transform: scale(2.6);
+                transform: scale(2.2);
                 opacity: 0;
-                filter: blur(12px);
+                filter: blur(8px);
               }
-              22% {
-                transform: scale(1.25);
+              20% {
+                transform: scale(1.1);
                 opacity: 1;
                 filter: blur(0px);
               }
-              70% {
-                transform: scale(0.95);
-                opacity: 0.95;
+              75% {
+                transform: scale(1.0);
+                opacity: 1;
                 filter: blur(0px);
               }
               100% {
-                transform: scale(0.2);
+                transform: scale(0.3);
                 opacity: 0;
-                filter: blur(12px);
+                filter: blur(10px);
               }
             }
           `}</style>
-          <div className="animate-[logoIntroZoom_2.3s_cubic-bezier(0.16,1,0.3,1)_forwards] flex flex-col items-center justify-center p-6 text-center">
+          <div className="animate-[logoIntroZoom_3.6s_cubic-bezier(0.16,1,0.3,1)_forwards] flex flex-col items-center justify-center p-6 text-center">
             <img 
               src="/ministry-logo-pure-white.png" 
               alt="Ministry Logo" 
-              className="w-72 max-w-[85vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
+              className="w-80 max-w-[88vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
             />
             <div className="text-white text-base font-black tracking-widest font-mono uppercase opacity-90">
               Houbara Tracker v2.0
