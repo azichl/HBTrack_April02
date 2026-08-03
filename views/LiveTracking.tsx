@@ -2290,7 +2290,7 @@ const LiveTrackingInner = () => {
             >
                  <div className="flex items-center gap-2 text-yellow-400">
                       <Ruler size={18} />
-                      <span className="text-sm font-bold whitespace-nowrap">Measurement Mode</span>
+                      <span className="text-sm font-bold whitespace-nowrap">{isIOSMode ? 'Distance' : 'Measurement Mode'}</span>
                  </div>
                  
                  <div className="h-5 w-px bg-slate-600 mx-1"></div>
