@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets } from 'lucide-react';
+import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
@@ -1113,6 +1113,10 @@ export const LiveTracking = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  
+  const searchParams = useMemo(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams(), []);
+  const isIOSMode = useMemo(() => searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS)), [searchParams]);
   const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDonut, setIsDraggingDonut] = useState(false);
   const donutDragStartRef = useRef({ x: 0, y: 0 });
@@ -2237,26 +2241,26 @@ export const LiveTracking = () => {
 
         {/* Smart Geo-Search Bar (Top Center) */}
         {!isMeasuring && (
-        <div className="absolute top-16 sm:top-4 left-1/2 -translate-x-1/2 z-[390] flex flex-col items-center max-w-[calc(100vw-32px)]">
+        <div className={`absolute ${isIOSMode ? 'top-3 left-1/2 -translate-x-1/2 w-[calc(100vw-110px)] max-w-xs sm:max-w-sm' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
              <div className="relative group shadow-lg rounded-xl w-full">
                  <form 
                     onSubmit={handleGeoSearch}
-                    className="flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 w-64 sm:w-80 focus-within:w-72 sm:focus-within:w-96 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden"
+                    className={`flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 ${isIOSMode ? 'w-full' : 'w-64 sm:w-80 focus-within:w-72 sm:focus-within:w-96'} focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden`}
                  >
-                     <Globe className="ml-3 text-blue-500 flex-shrink-0" size={18} />
+                     <Globe className="ml-2.5 sm:ml-3 text-blue-500 flex-shrink-0" size={16} />
                      <input 
                          type="text" 
                          value={geoQuery}
                          onChange={(e) => setGeoQuery(e.target.value)}
                          placeholder="Search Google Maps..."
-                         className="w-full py-2.5 px-3 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-800 placeholder-gray-400"
+                         className="w-full py-2 px-2 sm:py-2.5 sm:px-3 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-800 placeholder-gray-400"
                      />
                      <button 
                          type="submit"
                          disabled={isGeoSearching || !geoQuery.trim()}
-                         className="bg-blue-600 hover:bg-blue-700 text-white p-2.5 transition-colors disabled:bg-gray-300"
+                         className="bg-blue-600 hover:bg-blue-700 text-white p-2 sm:p-2.5 transition-colors disabled:bg-gray-300 flex-shrink-0"
                      >
-                        {isGeoSearching ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
+                        {isGeoSearching ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
                      </button>
                  </form>
              </div>
@@ -2337,7 +2341,138 @@ export const LiveTracking = () => {
         })()}
 
         {/* Map Controls (Left) */}
-        <div className="absolute top-4 left-4 flex flex-col gap-2 z-[500]">
+        {isIOSMode ? (
+          <div className="absolute top-3 left-3 z-[500]">
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMobileToolsOpen(!mobileToolsOpen);
+                }}
+                className={`p-2.5 bg-white rounded-xl shadow-lg border border-gray-200 transition-all flex items-center justify-center ${mobileToolsOpen ? 'bg-brand-50 text-brand-600 ring-2 ring-brand-500/50' : 'text-gray-700'}`}
+                title="Map Tools & Search"
+              >
+                <SlidersHorizontal size={18} />
+              </button>
+
+              {mobileToolsOpen && (
+                <div 
+                  className="absolute top-full left-0 mt-2 w-72 bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-gray-200 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 z-[900]"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* PTT ID Search Bar Inside Gathered Tools */}
+                  <div className="relative">
+                    <div className={`flex items-center bg-gray-50 rounded-xl border border-gray-200 p-1.5 transition-all ${isSearchFocused || searchQuery ? 'ring-2 ring-brand-500 bg-white' : ''}`}>
+                      <Search size={16} className="ml-1 text-gray-400 flex-shrink-0" />
+                      <input 
+                        type="text" 
+                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs Selected` : "Search PTT ID..."}
+                        value={searchQuery}
+                        onFocus={() => setIsSearchFocused(true)}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full py-1 px-1.5 text-xs bg-transparent border-none focus:ring-0 outline-none text-gray-700 placeholder-gray-400"
+                      />
+                      {selectedTransmitterIds.length > 0 && (
+                        <button onClick={clearSelection} className="mr-1 text-gray-400 hover:text-red-500">
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {isSearchFocused && (
+                      <div className="absolute top-full left-0 mt-1 w-full bg-white rounded-xl shadow-xl border border-gray-100 max-h-[220px] overflow-hidden flex flex-col z-[1000]">
+                        <div className="p-1.5 border-b border-gray-100 flex gap-1 bg-gray-50">
+                          <button onClick={selectAllFiltered} className="flex-1 py-1 text-[10px] font-bold text-brand-700 bg-brand-50 rounded">Select All</button>
+                          <button onClick={clearSelection} className="flex-1 py-1 text-[10px] font-bold text-gray-600 bg-white border rounded">Clear</button>
+                          <button onClick={() => setIsSearchFocused(false)} className="px-1.5 text-gray-400"><X size={12} /></button>
+                        </div>
+                        <div className="overflow-y-auto flex-1 max-h-[160px]">
+                          {searchResults.length > 0 ? (
+                            searchResults.map(t => {
+                              const isSelected = selectedTransmitterIds.includes(String(t.platform_id || ''));
+                              return (
+                                <div 
+                                  key={t.id} 
+                                  onClick={() => handleSearchToggle(String(t.platform_id || ''))}
+                                  className={`px-3 py-2 text-xs border-b border-gray-50 flex justify-between items-center cursor-pointer ${isSelected ? 'bg-brand-50' : 'hover:bg-gray-50'}`}
+                                >
+                                  <span className="font-bold text-gray-900">{t.platform_id}</span>
+                                  <span className={`w-2 h-2 rounded-full ${t.derived_status === 'active' || t.status === 'Active' ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="p-3 text-xs text-gray-400 text-center italic">No PTT found</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick Action Tools Grid */}
+                  <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-100">
+                    <button 
+                      onClick={() => { closeAllDropdowns(); setLayerOpen(!layerOpen); setMobileToolsOpen(false); }}
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${layerOpen ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <Layers size={16} />
+                      <span>Layers</span>
+                    </button>
+
+                    <button 
+                      onClick={() => { closeAllDropdowns(); setWeatherOpen(!weatherOpen); setMobileToolsOpen(false); }}
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${weatherOpen ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <CloudSun size={16} />
+                      <span>Weather</span>
+                    </button>
+
+                    <button 
+                      onClick={() => { closeAllDropdowns(); setHistoryOpen(!historyOpen); setMobileToolsOpen(false); }}
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${historyOpen ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <History size={16} />
+                      <span>History</span>
+                    </button>
+
+                    <button 
+                      onClick={() => { closeAllDropdowns(); setIsMeasuring(!isMeasuring); if(!isMeasuring) setMeasurePoints([]); setMobileToolsOpen(false); }}
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${isMeasuring ? 'bg-yellow-50 text-yellow-600 border border-yellow-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <Ruler size={16} />
+                      <span>Ruler</span>
+                    </button>
+
+                    <button 
+                      onClick={() => { closeAllDropdowns(); toggleUserTracking(); setMobileToolsOpen(false); }}
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${isTrackingUser ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <Crosshair size={16} />
+                      <span>GPS</span>
+                    </button>
+
+                    <button 
+                      onClick={() => { closeAllDropdowns(); setShowDonutWidget(!showDonutWidget); setMobileToolsOpen(false); }}
+                      className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${showDonutWidget ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
+                    >
+                      <PieChartIcon size={16} />
+                      <span>Stats</span>
+                    </button>
+
+                    <button 
+                      onClick={() => { toggleFullscreen(); setMobileToolsOpen(false); }}
+                      className="p-2 rounded-xl bg-gray-50 text-gray-700 hover:bg-gray-100 flex flex-col items-center justify-center gap-1 text-[10px] font-bold"
+                    >
+                      <Maximize size={16} />
+                      <span>Screen</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="absolute top-4 left-4 flex flex-col gap-2 z-[500]">
             {/* Layer Control */}
             <div className="relative">
                 <button 
@@ -2638,6 +2773,7 @@ export const LiveTracking = () => {
                 {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
             </button>
         </div>
+        )}
 
         {/* Floating Draggable Network Status Donut Chart (Default at Bottom-Right, Fully Movable via Drag and Drop, Transparent Background, Numbers on Slices) */}
         {showDonutWidget && (
@@ -2700,120 +2836,129 @@ export const LiveTracking = () => {
           </div>
         )}
 
-        {/* Search Bar */}
-        <div className="absolute top-4 left-14 sm:left-16 z-[400] max-w-[calc(100vw-170px)] sm:max-w-none">
-            <div className="relative group">
-                <div className={`flex items-center bg-white rounded-lg shadow-md border border-gray-200 transition-all duration-200 ${isSearchFocused || searchQuery ? 'w-44 xs:w-56 sm:w-64 ring-2 ring-brand-500 border-transparent' : 'w-32 xs:w-44 sm:w-56'}`}>
-                    <Search size={16} className="ml-2.5 sm:ml-3 text-gray-400 flex-shrink-0" />
-                    <input 
-                        type="text" 
-                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs` : "Search ID..."}
-                        value={searchQuery}
-                        onFocus={() => setIsSearchFocused(true)}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full py-2 px-1.5 sm:py-2.5 sm:px-2 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-700 placeholder-gray-400"
-                    />
-                    {selectedTransmitterIds.length > 0 && (
-                        <button 
-                            onClick={clearSelection}
-                            className="mr-2 text-gray-400 hover:text-red-500 flex-shrink-0"
-                            title="Clear All Selections"
-                        >
-                            <X size={16} />
-                        </button>
-                    )}
-                </div>
+        {/* Search Bar (Desktop Only) */}
+        {!isIOSMode && (
+          <div className="absolute top-4 left-14 sm:left-16 z-[400] max-w-[calc(100vw-170px)] sm:max-w-none">
+              <div className="relative group">
+                  <div className={`flex items-center bg-white rounded-lg shadow-md border border-gray-200 transition-all duration-200 ${isSearchFocused || searchQuery ? 'w-44 xs:w-56 sm:w-64 ring-2 ring-brand-500 border-transparent' : 'w-32 xs:w-44 sm:w-56'}`}>
+                      <Search size={16} className="ml-2.5 sm:ml-3 text-gray-400 flex-shrink-0" />
+                      <input 
+                          type="text" 
+                          placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs` : "Search ID..."}
+                          value={searchQuery}
+                          onFocus={() => setIsSearchFocused(true)}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full py-2 px-1.5 sm:py-2.5 sm:px-2 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-700 placeholder-gray-400"
+                      />
+                      {selectedTransmitterIds.length > 0 && (
+                          <button 
+                              onClick={clearSelection}
+                              className="mr-2 text-gray-400 hover:text-red-500 flex-shrink-0"
+                              title="Clear All Selections"
+                          >
+                              <X size={16} />
+                          </button>
+                      )}
+                  </div>
 
-                {isSearchFocused && (
-                    <div className="absolute top-full left-0 mt-2 w-64 sm:w-72 bg-white rounded-xl shadow-xl border border-gray-100 max-h-[350px] sm:max-h-[400px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
-                        <div className="p-2 border-b border-gray-100 flex gap-2 bg-gray-50">
-                            <button 
-                                onClick={selectAllFiltered}
-                                className="flex-1 px-2 py-1.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 rounded transition-colors"
-                            >
-                                Select All Filtered
-                            </button>
-                            <button 
-                                onClick={clearSelection}
-                                className="flex-1 px-2 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded transition-colors"
-                            >
-                                Clear Selection
-                            </button>
-                             <button 
-                                onClick={() => setIsSearchFocused(false)}
-                                className="px-2 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 rounded transition-colors"
-                            >
-                                <X size={14} />
-                            </button>
-                        </div>
+                  {isSearchFocused && (
+                      <div className="absolute top-full left-0 mt-2 w-64 sm:w-72 bg-white rounded-xl shadow-xl border border-gray-100 max-h-[350px] sm:max-h-[400px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
+                          <div className="p-2 border-b border-gray-100 flex gap-2 bg-gray-50">
+                              <button 
+                                  onClick={selectAllFiltered}
+                                  className="flex-1 px-2 py-1.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 rounded transition-colors"
+                              >
+                                  Select All Filtered
+                              </button>
+                              <button 
+                                  onClick={clearSelection}
+                                  className="flex-1 px-2 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 hover:bg-gray-100 rounded transition-colors"
+                              >
+                                  Clear Selection
+                              </button>
+                               <button 
+                                  onClick={() => setIsSearchFocused(false)}
+                                  className="px-2 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 rounded transition-colors"
+                              >
+                                  <X size={14} />
+                              </button>
+                          </div>
 
-                        <div className="overflow-y-auto flex-1">
-                            {searchResults.length > 0 ? (
-                                searchResults.map(t => {
-                                    const bird = birds.find(b => b.id === t.bird_id);
-                                    const isSelected = selectedTransmitterIds.includes(String(t.platform_id || ''));
-                                    return (
-                                        <div
-                                            key={t.id}
-                                            onClick={() => handleSearchToggle(String(t.platform_id || ''))}
-                                            className={`w-full text-left px-4 py-3 border-b border-gray-50 last:border-none flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
-                                        >
-                                            <div className="flex items-center gap-3 overflow-hidden">
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-brand-500 border-brand-500' : 'border-gray-300 bg-white'}`}>
-                                                    {isSelected && <Check size={12} className="text-white" />}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-sm font-bold text-gray-900 truncate">{t.platform_id}</div>
-                                                    <div className="text-xs text-gray-500 truncate">{bird?.ring_id || 'Unassigned'}</div>
-                                                </div>
-                                            </div>
-                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${(() => {
-                                                const s = t.derived_status || t.status;
-                                                if (s === 'Active' || s === 'active') return 'bg-green-500';
-                                                if (s === 'Inactive' || s === 'inactive') return 'bg-slate-900';
-                                                if (s === 'Dead' || s === 'dead') return 'bg-red-600';
-                                                if (s === 'Static test') return 'bg-[#FFEA00]';
-                                                return 'bg-[#FFAA33]';
-                                            })()}`}></div>
-                                        </div>
-                                    );
-                                })
-                            ) : (
-                                <div className="px-4 py-8 text-sm text-gray-500 text-center italic">No transmitters found</div>
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
+                          <div className="overflow-y-auto flex-1">
+                              {searchResults.length > 0 ? (
+                                  searchResults.map(t => {
+                                      const bird = birds.find(b => b.id === t.bird_id);
+                                      const isSelected = selectedTransmitterIds.includes(String(t.platform_id || ''));
+                                      return (
+                                          <div
+                                              key={t.id}
+                                              onClick={() => handleSearchToggle(String(t.platform_id || ''))}
+                                              className={`w-full text-left px-4 py-3 border-b border-gray-50 last:border-none flex items-center justify-between cursor-pointer transition-colors ${isSelected ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
+                                          >
+                                              <div className="flex items-center gap-3 overflow-hidden">
+                                                  <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'bg-brand-500 border-brand-500' : 'border-gray-300 bg-white'}`}>
+                                                      {isSelected && <Check size={12} className="text-white" />}
+                                                  </div>
+                                                  <div className="min-w-0">
+                                                      <div className="text-sm font-bold text-gray-900 truncate">{t.platform_id}</div>
+                                                      <div className="text-xs text-gray-500 truncate">{bird?.ring_id || 'Unassigned'}</div>
+                                                  </div>
+                                              </div>
+                                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${(() => {
+                                                  const s = t.derived_status || t.status;
+                                                  if (s === 'Active' || s === 'active') return 'bg-green-500';
+                                                  if (s === 'Inactive' || s === 'inactive') return 'bg-slate-900';
+                                                  if (s === 'Dead' || s === 'dead') return 'bg-red-600';
+                                                  if (s === 'Static test') return 'bg-[#FFEA00]';
+                                                  return 'bg-[#FFAA33]';
+                                              })()}`}></div>
+                                          </div>
+                                      );
+                                  })
+                              ) : (
+                                  <div className="px-4 py-8 text-sm text-gray-500 text-center italic">No transmitters found</div>
+                              )}
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
+        )}
 
         {/* Status Filter Dropdown */}
-        <div className="absolute top-4 right-3 sm:right-4 z-[400]">
+        <div className={`absolute ${isIOSMode ? 'top-3 right-3' : 'top-4 right-3 sm:right-4'} z-[400]`}>
              <div className="relative">
                 <button
                     onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setStatusDropdownOpen(!statusDropdownOpen); }}
-                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-colors"
+                    className={`flex items-center justify-center bg-white rounded-xl shadow-md hover:bg-gray-50 border border-gray-200 transition-all ${
+                      isIOSMode ? 'p-2.5' : 'gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2'
+                    }`}
+                    title="Filter Transmitters by Status"
                 >
-                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
                         selectedStatus === 'active' ? 'bg-green-500' : 
                         selectedStatus === 'inactive' ? 'bg-slate-900' : 
                         selectedStatus === 'dead' ? 'bg-red-600' :
                         selectedStatus === 'mortality' ? 'bg-[#FFAA33]' : 
                         selectedStatus === 'static' ? 'bg-[#FFEA00]' : 'bg-gray-900'
                     }`} />
-                    <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] xs:max-w-[110px] sm:max-w-none truncate">
-                        {selectedStatus === 'all' ? 'All Statuses' : 
-                         selectedStatus === 'mortality' ? 'Mortality' : 
-                         selectedStatus === 'static' ? 'Static test' : 
-                         selectedStatus === 'dead' ? 'Dead' :
-                         selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
-                    </span>
-                    <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
+                    {!isIOSMode && (
+                      <>
+                        <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] xs:max-w-[110px] sm:max-w-none truncate">
+                            {selectedStatus === 'all' ? 'All Statuses' : 
+                             selectedStatus === 'mortality' ? 'Mortality' : 
+                             selectedStatus === 'static' ? 'Static test' : 
+                             selectedStatus === 'dead' ? 'Dead' :
+                             selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
+                        </span>
+                        <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
+                      </>
+                    )}
                 </button>
                 
                 {statusDropdownOpen && (
                     <div 
-                        className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2" 
+                        className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2 z-[900]" 
                         onClick={(e) => e.stopPropagation()}
                         style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                     >
