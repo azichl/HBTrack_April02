@@ -1112,7 +1112,7 @@ export const LiveTracking = () => {
   // Fullscreen & Floating Donut State
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showDonutWidget, setShowDonutWidget] = useState(true);
+  const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
   const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDonut, setIsDraggingDonut] = useState(false);
   const donutDragStartRef = useRef({ x: 0, y: 0 });
@@ -2237,19 +2237,19 @@ export const LiveTracking = () => {
 
         {/* Smart Geo-Search Bar (Top Center) */}
         {!isMeasuring && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center">
-             <div className="relative group shadow-lg rounded-xl">
+        <div className="absolute top-16 sm:top-4 left-1/2 -translate-x-1/2 z-[390] flex flex-col items-center max-w-[calc(100vw-32px)]">
+             <div className="relative group shadow-lg rounded-xl w-full">
                  <form 
                     onSubmit={handleGeoSearch}
-                    className="flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 w-80 focus-within:w-96 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden"
+                    className="flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 w-64 sm:w-80 focus-within:w-72 sm:focus-within:w-96 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden"
                  >
                      <Globe className="ml-3 text-blue-500 flex-shrink-0" size={18} />
                      <input 
                          type="text" 
                          value={geoQuery}
                          onChange={(e) => setGeoQuery(e.target.value)}
-                         placeholder="Search Google Maps & Info..."
-                         className="w-full py-2.5 px-3 text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-800 placeholder-gray-400"
+                         placeholder="Search Google Maps..."
+                         className="w-full py-2.5 px-3 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-800 placeholder-gray-400"
                      />
                      <button 
                          type="submit"
@@ -2701,17 +2701,17 @@ export const LiveTracking = () => {
         )}
 
         {/* Search Bar */}
-        <div className="absolute top-4 left-16 z-[400]">
+        <div className="absolute top-4 left-14 sm:left-16 z-[400] max-w-[calc(100vw-170px)] sm:max-w-none">
             <div className="relative group">
-                <div className={`flex items-center bg-white rounded-lg shadow-md border border-gray-200 transition-all duration-200 ${isSearchFocused || searchQuery ? 'w-64 ring-2 ring-brand-500 border-transparent' : 'w-56'}`}>
-                    <Search size={18} className="ml-3 text-gray-400 flex-shrink-0" />
+                <div className={`flex items-center bg-white rounded-lg shadow-md border border-gray-200 transition-all duration-200 ${isSearchFocused || searchQuery ? 'w-44 xs:w-56 sm:w-64 ring-2 ring-brand-500 border-transparent' : 'w-32 xs:w-44 sm:w-56'}`}>
+                    <Search size={16} className="ml-2.5 sm:ml-3 text-gray-400 flex-shrink-0" />
                     <input 
                         type="text" 
-                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs Selected` : "Search ID..."}
+                        placeholder={selectedTransmitterIds.length > 0 ? `${selectedTransmitterIds.length} PTTs` : "Search ID..."}
                         value={searchQuery}
                         onFocus={() => setIsSearchFocused(true)}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full py-2.5 px-2 text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-700 placeholder-gray-400"
+                        className="w-full py-2 px-1.5 sm:py-2.5 sm:px-2 text-xs sm:text-sm bg-transparent border-none focus:ring-0 outline-none text-gray-700 placeholder-gray-400"
                     />
                     {selectedTransmitterIds.length > 0 && (
                         <button 
@@ -2725,7 +2725,7 @@ export const LiveTracking = () => {
                 </div>
 
                 {isSearchFocused && (
-                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-100 max-h-[400px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
+                    <div className="absolute top-full left-0 mt-2 w-64 sm:w-72 bg-white rounded-xl shadow-xl border border-gray-100 max-h-[350px] sm:max-h-[400px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2">
                         <div className="p-2 border-b border-gray-100 flex gap-2 bg-gray-50">
                             <button 
                                 onClick={selectAllFiltered}
@@ -2788,27 +2788,27 @@ export const LiveTracking = () => {
         </div>
 
         {/* Status Filter Dropdown */}
-        <div className="absolute top-4 right-4 z-[400]">
+        <div className="absolute top-4 right-3 sm:right-4 z-[400]">
              <div className="relative">
                 <button
                     onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setStatusDropdownOpen(!statusDropdownOpen); }}
-                    className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-colors"
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-50 border border-gray-200 transition-colors"
                 >
-                    <div className={`w-2.5 h-2.5 rounded-full ${
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                         selectedStatus === 'active' ? 'bg-green-500' : 
                         selectedStatus === 'inactive' ? 'bg-slate-900' : 
                         selectedStatus === 'dead' ? 'bg-red-600' :
                         selectedStatus === 'mortality' ? 'bg-[#FFAA33]' : 
                         selectedStatus === 'static' ? 'bg-[#FFEA00]' : 'bg-gray-900'
                     }`} />
-                    <span className="text-sm font-medium text-gray-700">
+                    <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] xs:max-w-[110px] sm:max-w-none truncate">
                         {selectedStatus === 'all' ? 'All Statuses' : 
-                         selectedStatus === 'mortality' ? 'Potential Mortality' : 
+                         selectedStatus === 'mortality' ? 'Mortality' : 
                          selectedStatus === 'static' ? 'Static test' : 
                          selectedStatus === 'dead' ? 'Dead' :
                          selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1)}
                     </span>
-                    <ChevronDown size={16} className="text-gray-400" />
+                    <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />
                 </button>
                 
                 {statusDropdownOpen && (
