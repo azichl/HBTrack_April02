@@ -6,48 +6,93 @@
     "source": "functions",
     "runtime": "nodejs20"
   },
-  "hosting": {
-    "public": "dist",
-    "headers": [
-      {
-        "source": "**/*.@(js|css)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=3600"
-          }
-        ]
-      },
-      {
-        "source": "index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      }
-    ],
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "/proxy/argos",
-        "function": "proxyArgosApi"
-      },
-      {
-        "source": "/getGEETileUrl",
-        "function": "getGEETileUrl"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "predeploy": "npm run build"
-  }
+  "hosting": [
+    {
+      "target": "app1",
+      "public": "dist",
+      "headers": [
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=3600"
+            }
+          ]
+        },
+        {
+          "source": "index.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        }
+      ],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/proxy/argos",
+          "function": "proxyArgosApi"
+        },
+        {
+          "source": "/getGEETileUrl",
+          "function": "getGEETileUrl"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "predeploy": "npm run build"
+    },
+    {
+      "target": "app2",
+      "public": "dist",
+      "headers": [
+        {
+          "source": "**/*.@(js|css)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=3600"
+            }
+          ]
+        },
+        {
+          "source": "index.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        }
+      ],
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**"
+      ],
+      "rewrites": [
+        {
+          "source": "/proxy/argos",
+          "function": "proxyArgosApi"
+        },
+        {
+          "source": "/getGEETileUrl",
+          "function": "getGEETileUrl"
+        },
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ]
+    }
+  ]
 }
-
