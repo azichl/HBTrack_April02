@@ -2282,29 +2282,29 @@ const LiveTrackingInner = () => {
         {/* Measurement Tool Overlay Controls */}
         {isMeasuring && (
             <div 
-                className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[500] flex items-center gap-3 bg-slate-900/90 backdrop-blur text-white px-4 py-2 rounded-full shadow-xl border border-slate-700 cursor-grab active:cursor-grabbing select-none animate-in fade-in slide-in-from-bottom-4"
+                className={`absolute ${isIOSMode ? 'bottom-12' : 'bottom-10'} left-1/2 -translate-x-1/2 z-[500] flex items-center gap-2 sm:gap-3 bg-slate-900/90 backdrop-blur text-white px-3.5 sm:px-4 py-2 rounded-full shadow-xl border border-slate-700 cursor-grab active:cursor-grabbing select-none animate-in fade-in slide-in-from-bottom-4 max-w-[95vw]`}
                 style={{ 
                     transform: `translate(calc(-50% + ${measureToolOffset.x}px), ${measureToolOffset.y}px)`
                 }}
                 onMouseDown={handleMeasureToolMouseDown}
             >
-                 <div className="flex items-center gap-2 text-yellow-400">
-                      <Ruler size={18} />
-                      <span className="text-sm font-bold whitespace-nowrap">{isIOSMode ? 'Distance' : 'Measurement Mode'}</span>
+                 <div className="flex items-center gap-1.5 text-yellow-400 flex-shrink-0">
+                      <Ruler size={16} />
+                      <span className="text-xs sm:text-sm font-bold whitespace-nowrap">{isIOSMode ? 'Distance' : 'Measurement Mode'}</span>
                  </div>
                  
-                 <div className="h-5 w-px bg-slate-600 mx-1"></div>
+                 <div className="h-4 sm:h-5 w-px bg-slate-600 mx-0.5 sm:mx-1 flex-shrink-0"></div>
                  
-                 <div className="text-sm font-mono font-bold min-w-[60px] text-center">
+                 <div className="text-xs sm:text-sm font-mono font-bold whitespace-nowrap text-center px-1 flex-shrink-0">
                       {formatDistance(calculateTotalDistance)}
                  </div>
 
-                 <div className="h-5 w-px bg-slate-600 mx-1"></div>
+                 <div className="h-4 sm:h-5 w-px bg-slate-600 mx-0.5 sm:mx-1 flex-shrink-0"></div>
 
-                 <div className="flex items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+                 <div className="flex items-center gap-1 flex-shrink-0" onMouseDown={(e) => e.stopPropagation()}>
                       <button 
                         onClick={() => setMeasurePoints([])}
-                        className="p-1.5 hover:bg-slate-700 rounded-full text-gray-400 hover:text-white transition-colors"
+                        className="p-1 sm:p-1.5 hover:bg-slate-700 rounded-full text-gray-400 hover:text-white transition-colors"
                         title="Clear Points"
                         disabled={measurePoints.length === 0}
                       >
@@ -2312,7 +2312,7 @@ const LiveTrackingInner = () => {
                       </button>
                       <button 
                         onClick={() => { setIsMeasuring(false); setMeasurePoints([]); }}
-                        className="p-1.5 hover:bg-red-900/50 rounded-full text-red-400 hover:text-red-300 transition-colors"
+                        className="p-1 sm:p-1.5 hover:bg-red-900/50 rounded-full text-red-400 hover:text-red-300 transition-colors"
                         title="Exit Measurement Mode"
                       >
                          <X size={18} />
