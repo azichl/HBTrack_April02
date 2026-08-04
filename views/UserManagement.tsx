@@ -159,14 +159,19 @@ export const UserManagement = () => {
     return ROLE_DEFAULTS[r] || ROLE_DEFAULTS['Viewer'];
   };
 
+  // Filter users based on role visibility (hide Managers from non-Managers)
+  const visibleUsers = currentUserRole === 'Manager' 
+    ? users 
+    : users.filter(u => u.role !== 'Manager');
+
   // Stats
-  const totalUsers = users.length;
-  const activeUsers = users.filter(u => u.status === 'active').length;
-  const adminUsers = users.filter(u => u.role === 'Administrator' || u.role === 'Manager').length;
-  const dataUsers = users.filter(u => u.role === 'Researcher' || u.role === 'Data Entry').length;
+  const totalUsers = visibleUsers.length;
+  const activeUsers = visibleUsers.filter(u => u.status === 'active').length;
+  const adminUsers = visibleUsers.filter(u => u.role === 'Administrator' || u.role === 'Manager').length;
+  const dataUsers = visibleUsers.filter(u => u.role === 'Researcher' || u.role === 'Data Entry').length;
 
   // Filtered Users
-  const filteredUsers = users.filter(u => 
+  const filteredUsers = visibleUsers.filter(u => 
     (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
     (roleFilter === 'All Roles' || u.role === roleFilter)
