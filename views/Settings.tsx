@@ -17,7 +17,21 @@ export const Settings = () => {
     simpleMode, toggleSimpleMode
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState('profile');
+  const isIOSMode = React.useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+  }, []);
+
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const isIOS = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+      if (isIOS) return 'preferences';
+    }
+    return 'profile';
+  });
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
@@ -70,18 +84,27 @@ export const Settings = () => {
       });
 
       // Handle password change if filled
-      if (security.newPassword && security.currentPassword) {
+      if (security.newPassword || security.currentPassword) {
+        if (!security.currentPassword) {
+          throw new Error('Please enter your current password');
+        }
+        if (!security.newPassword) {
+          throw new Error('Please enter a new password');
+        }
         if (security.newPassword !== security.confirmPassword) {
           throw new Error('New passwords do not match');
         }
         if (security.newPassword.length < 6) {
           throw new Error('New password must be at least 6 characters');
         }
-        // Re-authenticate before password change
+        // Re-authenticate before password change in Firebase Auth
         const credential = EmailAuthProvider.credential(user.email!, security.currentPassword);
         await reauthenticateWithCredential(user, credential);
         await updatePassword(user, security.newPassword);
         setSecurity({ currentPassword: '', newPassword: '', confirmPassword: '', twoFactor: security.twoFactor });
+        setSaveMessage('Password updated successfully in Firebase!');
+        setTimeout(() => setSaveMessage(null), 4000);
+        return;
       }
 
       setSaveMessage('Settings saved successfully!');
@@ -93,15 +116,17 @@ export const Settings = () => {
     }
   };
 
-  const tabs = [
+  const allTabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'preferences', label: 'Preferences', icon: Monitor },
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
+  const tabs = isIOSMode ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') : allTabs;
+
   return (
-    <div className="max-w-5xl mx-auto space-y-6 animate-fade-in pb-10">
+    <div className={`max-w-5xl mx-auto space-y-6 animate-fade-in pb-16 ${isIOSMode ? 'pt-2 pr-10' : ''}`}>
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -367,7 +392,9 @@ export const Settings = () => {
                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                        <input 
                          type="password" 
-                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 transition-shadow"
+                         value={security.currentPassword}
+                         onChange={e => setSecurity({...security, currentPassword: e.target.value})}
+                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-gray-900 dark:text-white"
                          placeholder="••••••••"
                        />
                     </div>
@@ -378,7 +405,9 @@ export const Settings = () => {
                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                        <input 
                          type="password" 
-                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 transition-shadow"
+                         value={security.newPassword}
+                         onChange={e => setSecurity({...security, newPassword: e.target.value})}
+                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-gray-900 dark:text-white"
                          placeholder="••••••••"
                        />
                     </div>
@@ -389,11 +418,22 @@ export const Settings = () => {
                        <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                        <input 
                          type="password" 
-                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 transition-shadow"
+                         value={security.confirmPassword}
+                         onChange={e => setSecurity({...security, confirmPassword: e.target.value})}
+                         className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 transition-shadow text-gray-900 dark:text-white"
                          placeholder="••••••••"
                        />
                     </div>
                   </div>
+
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving || !security.currentPassword || !security.newPassword}
+                    className="w-full py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <Lock size={16} />}
+                    Update Password in Firebase
+                  </button>
               </div>
 
               <div className="pt-6 border-t border-gray-100 dark:border-slate-700">

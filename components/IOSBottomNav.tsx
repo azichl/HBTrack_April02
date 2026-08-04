@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Map, UploadCloud } from 'lucide-react';
+import { LayoutDashboard, Map, UploadCloud, Settings as SettingsIcon } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 
 interface IOSBottomNavProps {
@@ -36,6 +36,13 @@ export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectT
       icon: UploadCloud,
       onClick: handleDataUploadClick,
       isActive: activeTab === 'Database' || activeTab === 'Data Upload'
+    },
+    {
+      id: 'Settings',
+      label: 'Settings',
+      icon: SettingsIcon,
+      onClick: () => onSelectTab('Settings'),
+      isActive: activeTab === 'Settings'
     }
   ];
 
