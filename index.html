@@ -31,6 +31,13 @@
         font-family: 'Sakkal Majalla', 'Inter', sans-serif !important; 
       }
 
+      /* Fix for massive password dots on iOS Safari caused by custom font */
+      input[type="password"] {
+        font-family: caption, system-ui, -apple-system, sans-serif !important;
+        font-size: 12px !important; /* Reduced size by ~50% as requested */
+        letter-spacing: 0.15em !important;
+      }
+
       /* Global sleek scrollbar for Chrome/Safari compatibility */
       ::-webkit-scrollbar {
         width: 8px;
