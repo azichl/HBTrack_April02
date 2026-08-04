@@ -338,12 +338,10 @@ const App = () => {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, [currentUser]);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      setAuthLoading(false);
-
       if (user && !firestoreInitialized.current) {
         try {
           // Verify App Access
@@ -356,13 +354,15 @@ const App = () => {
              const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
 
              if (isIOSMode && !appAccess.includes('ios')) {
-                alert("Access Denied: You do not have permission to access the iOS App.");
+                setAccessError("account not activated");
                 await signOut(auth);
+                setAuthLoading(false);
                 return;
              }
              if (!isIOSMode && !appAccess.includes('web')) {
-                alert("Access Denied: You do not have permission to access the Web App.");
+                setAccessError("account not activated");
                 await signOut(auth);
+                setAuthLoading(false);
                 return;
              }
           }
@@ -370,12 +370,19 @@ const App = () => {
           console.error("Failed to verify user access", err);
         }
 
+        setAccessError(null);
+        setCurrentUser(user);
         firestoreInitialized.current = true;
         // Log Session Start when user successfully authenticates
         logUserActivity(user.uid, user.email || '', 'SESSION_START', 'User logged in');
         
         await initializeFromFirestore();
         liveUnsubRef.current = subscribeToLivePositions();
+        setAuthLoading(false);
+      } else if (user) {
+        // If already initialized, just set user
+        setCurrentUser(user);
+        setAuthLoading(false);
       }
 
       if (!user) {
@@ -431,7 +438,7 @@ const App = () => {
   }
 
   if (!currentUser && !showAppIntro) {
-    return <Login />;
+    return <Login externalError={accessError} />;
   }
 
   const renderContent = () => {

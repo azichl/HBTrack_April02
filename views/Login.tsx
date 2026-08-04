@@ -5,10 +5,16 @@ import { ShieldAlert, LogIn, Lock, Mail, Activity } from 'lucide-react';
 import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
 
-export const Login = () => {
+export const Login = ({ externalError }: { externalError?: string | null }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(externalError || null);
+
+  React.useEffect(() => {
+    if (externalError) {
+      setError(externalError);
+    }
+  }, [externalError]);
   const [loading, setLoading] = useState(false);
   
   const { setCurrentUser } = useAppStore();
