@@ -90,6 +90,9 @@ exports.createAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
       lastActive: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       permissions: getDefaultPermissions(role || "viewer"),
+      appAccess: ["web", "ios"], // Default to both
+      iosPttVisibility: "all",
+      iosVisiblePtts: [],
     };
 
     await db.collection("users").doc(userRecord.uid).set(userDoc);
@@ -135,6 +138,9 @@ exports.listAppUsers = onRequest({ cors: true, maxInstances: 5 }, async (req, re
       createdAt: profiles[u.uid]?.createdAt || u.metadata.creationTime || "",
       emailVerified: u.emailVerified,
       permissions: profiles[u.uid]?.permissions || getDefaultPermissions("viewer"),
+      appAccess: profiles[u.uid]?.appAccess || ["web", "ios"],
+      iosPttVisibility: profiles[u.uid]?.iosPttVisibility || "all",
+      iosVisiblePtts: profiles[u.uid]?.iosVisiblePtts || [],
     }));
 
     res.json({ users });
@@ -155,7 +161,7 @@ exports.updateAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
   if (!caller) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { uid, role, status, name, permissions } = req.body;
+    const { uid, role, status, name, permissions, appAccess, iosPttVisibility, iosVisiblePtts } = req.body;
     if (!uid) return res.status(400).json({ error: "uid is required" });
 
     const updates = {};
@@ -163,6 +169,9 @@ exports.updateAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
     if (status !== undefined) updates.status = status;
     if (name !== undefined) updates.name = name;
     if (permissions !== undefined) updates.permissions = permissions;
+    if (appAccess !== undefined) updates.appAccess = appAccess;
+    if (iosPttVisibility !== undefined) updates.iosPttVisibility = iosPttVisibility;
+    if (iosVisiblePtts !== undefined) updates.iosVisiblePtts = iosVisiblePtts;
 
     // Update Firestore doc
     await db.collection("users").doc(uid).set(updates, { merge: true });

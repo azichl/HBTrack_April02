@@ -47,7 +47,7 @@ const RoleBadge = ({ role }: { role: Role }) => {
 };
 
 export const UserManagement = () => {
-  const { users, addUser, updateUser, deleteUser: deleteUserFromStore } = useAppStore();
+  const { users, addUser, updateUser, deleteUser: deleteUserFromStore, transmitters } = useAppStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,7 +100,10 @@ export const UserManagement = () => {
             role: mapFirebaseRole(u.role) as Role,
             status: u.status === 'active' ? 'active' : 'inactive',
             permissions: mapPermissions(u.role),
-            lastLogin: u.lastActive || undefined
+            lastLogin: u.lastActive || undefined,
+            appAccess: u.appAccess || ['web', 'ios'],
+            iosPttVisibility: u.iosPttVisibility || 'all',
+            iosVisiblePtts: u.iosVisiblePtts || []
           });
         } else {
           updateUser(u.id, {
@@ -108,7 +111,10 @@ export const UserManagement = () => {
             email: u.email,
             role: mapFirebaseRole(u.role) as Role,
             status: u.status === 'active' ? 'active' : 'inactive',
-            lastLogin: u.lastActive || undefined
+            lastLogin: u.lastActive || undefined,
+            appAccess: u.appAccess || ['web', 'ios'],
+            iosPttVisibility: u.iosPttVisibility || 'all',
+            iosVisiblePtts: u.iosVisiblePtts || []
           });
         }
       });
@@ -167,7 +173,10 @@ export const UserManagement = () => {
     email: '',
     role: 'Viewer',
     status: 'active',
-    permissions: ROLE_DEFAULTS['Viewer']
+    permissions: ROLE_DEFAULTS['Viewer'],
+    appAccess: ['web', 'ios'],
+    iosPttVisibility: 'all',
+    iosVisiblePtts: []
   });
 
   const handleOpenModal = (user?: UserType) => {
@@ -183,7 +192,10 @@ export const UserManagement = () => {
         email: '',
         role: 'Viewer',
         status: 'active',
-        permissions: ROLE_DEFAULTS['Viewer']
+        permissions: ROLE_DEFAULTS['Viewer'],
+        appAccess: ['web', 'ios'],
+        iosPttVisibility: 'all',
+        iosVisiblePtts: []
       });
     }
     setIsModalOpen(true);
@@ -220,6 +232,9 @@ export const UserManagement = () => {
           role: mapRoleToFirebase(formData.role as Role),
           status: formData.status,
           name: formData.name,
+          appAccess: formData.appAccess,
+          iosPttVisibility: formData.iosPttVisibility,
+          iosVisiblePtts: formData.iosVisiblePtts
         });
         updateUser(editingUser.id, formData);
       } else {
@@ -242,6 +257,9 @@ export const UserManagement = () => {
           role: formData.role as Role,
           status: 'active',
           permissions: formData.permissions || ROLE_DEFAULTS['Viewer'],
+          appAccess: formData.appAccess || ['web', 'ios'],
+          iosPttVisibility: formData.iosPttVisibility || 'all',
+          iosVisiblePtts: formData.iosVisiblePtts || [],
           lastLogin: undefined
         });
       }
@@ -674,6 +692,91 @@ export const UserManagement = () => {
                       })}
                    </div>
                 </div>
+
+                {/* App Access Control */}
+                <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 mt-4">
+                   <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                      <Lock size={14} className="text-gray-500" />
+                      App Access
+                   </h4>
+                   <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                         <input 
+                            type="checkbox" 
+                            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                            checked={formData.appAccess?.includes('web')} 
+                            onChange={(e) => {
+                               const access = formData.appAccess || [];
+                               setFormData({ ...formData, appAccess: e.target.checked ? [...access, 'web'] : access.filter(a => a !== 'web') });
+                            }} 
+                         />
+                         <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Web App</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                         <input 
+                            type="checkbox" 
+                            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                            checked={formData.appAccess?.includes('ios')} 
+                            onChange={(e) => {
+                               const access = formData.appAccess || [];
+                               setFormData({ ...formData, appAccess: e.target.checked ? [...access, 'ios'] : access.filter(a => a !== 'ios') });
+                            }} 
+                         />
+                         <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">iOS App</span>
+                      </label>
+                   </div>
+                </div>
+
+                {/* iOS PTT Visibility */}
+                {formData.appAccess?.includes('ios') && (
+                  <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 mt-4">
+                     <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">iOS App PTT Visibility</h4>
+                     <div className="flex flex-col gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                           <input 
+                              type="radio" 
+                              name="iosPttVisibility" 
+                              className="text-brand-600 focus:ring-brand-500"
+                              checked={formData.iosPttVisibility === 'all'} 
+                              onChange={() => setFormData({ ...formData, iosPttVisibility: 'all' })} 
+                           />
+                           <span className="text-sm text-gray-700 dark:text-gray-300">All PTTs</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                           <input 
+                              type="radio" 
+                              name="iosPttVisibility" 
+                              className="text-brand-600 focus:ring-brand-500"
+                              checked={formData.iosPttVisibility === 'custom'} 
+                              onChange={() => setFormData({ ...formData, iosPttVisibility: 'custom' })} 
+                           />
+                           <span className="text-sm text-gray-700 dark:text-gray-300">Specific PTTs</span>
+                        </label>
+                        
+                        {formData.iosPttVisibility === 'custom' && (
+                           <div className="mt-2 pl-6">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select which PTTs this user can view on the iOS app:</p>
+                              <div className="max-h-32 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 grid grid-cols-2 gap-2">
+                                 {transmitters.map(t => (
+                                    <label key={t.platform_id} className="flex items-center gap-2 cursor-pointer text-xs hover:bg-gray-50 dark:hover:bg-slate-700 p-1 rounded">
+                                       <input 
+                                          type="checkbox" 
+                                          className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                          checked={formData.iosVisiblePtts?.includes(t.platform_id)} 
+                                          onChange={(e) => {
+                                             const ptts = formData.iosVisiblePtts || [];
+                                             setFormData({ ...formData, iosVisiblePtts: e.target.checked ? [...ptts, t.platform_id] : ptts.filter(p => p !== t.platform_id) });
+                                          }} 
+                                       />
+                                       <span className="truncate text-gray-700 dark:text-gray-300">{t.platform_id} {t.bird_id ? `(${t.bird_id})` : ''}</span>
+                                    </label>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
+                     </div>
+                  </div>
+                )}
 
                 <div className="pt-2 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 mt-6">
                   <label className="flex items-center gap-2 cursor-pointer">

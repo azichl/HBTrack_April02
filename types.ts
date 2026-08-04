@@ -10,6 +10,9 @@ export interface User {
   status: 'active' | 'inactive';
   lastLogin?: string;
   permissions: string[]; // List of accessible modules/actions
+  appAccess?: ('web' | 'ios')[];
+  iosPttVisibility?: 'all' | 'custom';
+  iosVisiblePtts?: string[];
 }
 
 export interface Bird {

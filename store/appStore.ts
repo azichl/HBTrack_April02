@@ -1127,11 +1127,18 @@ export const useAppStore = create<AppState>()(
           const currentUser = get().currentUser;
           let role: Role = 'Viewer';
           let permissions: string[] = ['View Data'];
+          let iosPttVisibility = 'all';
+          let iosVisiblePtts: string[] = [];
+          let appAccess = ['web', 'ios'];
+          
           if (currentUser) {
             const userProfile = mergedUsers.find(u => u.id === currentUser.uid || u.email === currentUser.email);
             if (userProfile) {
               role = userProfile.role || 'Viewer';
               permissions = userProfile.permissions || ['View Data'];
+              iosPttVisibility = userProfile.iosPttVisibility || 'all';
+              iosVisiblePtts = userProfile.iosVisiblePtts || [];
+              appAccess = userProfile.appAccess || ['web', 'ios'];
             } else {
               // check if it's the first user or the super admin
               const isFirstUser = mergedUsers.length === 0 || currentUser.email === 'achlih21@gmail.com';
@@ -1147,7 +1154,10 @@ export const useAppStore = create<AppState>()(
                 email: currentUser.email || '',
                 role: role,
                 status: 'active' as const,
-                permissions: permissions
+                permissions: permissions,
+                appAccess: ['web', 'ios'],
+                iosPttVisibility: 'all',
+                iosVisiblePtts: []
               };
               mergedUsers.push(newUserProfile);
               fireAndForget(() => saveDocument('users', currentUser.uid, newUserProfile));
@@ -1168,11 +1178,33 @@ export const useAppStore = create<AppState>()(
             }
           }
 
+          let finalTransmitters = mergedTransmitters;
+          let finalPositions = recentPositions;
+          let finalAlerts = mergedAlerts;
+
+          const searchParams = new URLSearchParams(window.location.search);
+          const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+
+          if (isIOSMode && iosPttVisibility === 'custom') {
+            finalTransmitters = mergedTransmitters.filter(t => iosVisiblePtts.includes(t.platform_id));
+            
+            finalPositions = recentPositions.filter(p => {
+               const t = mergedTransmitters.find(tx => tx.id === p.transmitter_id);
+               return t && iosVisiblePtts.includes(t.platform_id);
+            });
+            
+            finalAlerts = mergedAlerts.filter(a => {
+               if (!a.transmitter_id) return true; // keep system-wide alerts
+               const t = mergedTransmitters.find(tx => tx.id === a.transmitter_id);
+               return t && iosVisiblePtts.includes(t.platform_id);
+            });
+          }
+
           set({
-            transmitters: mergedTransmitters,
+            transmitters: finalTransmitters,
             birds: mergedBirds,
-            positions: recentPositions,
-            alerts: mergedAlerts,
+            positions: finalPositions,
+            alerts: finalAlerts,
             users: mergedUsers,
             staticTestPeriods: fsStaticPeriods || [],
             statusHistoryRecords: fsStatusHistory || [],

@@ -1,7 +1,8 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './firebase';
+import { auth, db } from './firebase';
+import { getDoc, doc } from 'firebase/firestore';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import { logUserActivity } from './services/activityLogger';
 import { Login } from './views/Login';
@@ -344,6 +345,31 @@ const App = () => {
       setAuthLoading(false);
 
       if (user && !firestoreInitialized.current) {
+        try {
+          // Verify App Access
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+             const userData = userDoc.data();
+             const appAccess = userData.appAccess || ['web', 'ios'];
+             
+             const searchParams = new URLSearchParams(window.location.search);
+             const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+
+             if (isIOSMode && !appAccess.includes('ios')) {
+                alert("Access Denied: You do not have permission to access the iOS App.");
+                await signOut(auth);
+                return;
+             }
+             if (!isIOSMode && !appAccess.includes('web')) {
+                alert("Access Denied: You do not have permission to access the Web App.");
+                await signOut(auth);
+                return;
+             }
+          }
+        } catch (err) {
+          console.error("Failed to verify user access", err);
+        }
+
         firestoreInitialized.current = true;
         // Log Session Start when user successfully authenticates
         logUserActivity(user.uid, user.email || '', 'SESSION_START', 'User logged in');

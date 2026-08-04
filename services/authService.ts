@@ -46,6 +46,9 @@ export interface AppUser {
   createdAt: string;
   emailVerified?: boolean;
   permissions: Record<string, boolean>;
+  appAccess?: ('web' | 'ios')[];
+  iosPttVisibility?: 'all' | 'custom';
+  iosVisiblePtts?: string[];
 }
 
 /** List all application users (Firebase Auth + Firestore profiles) */
@@ -67,7 +70,15 @@ export async function createUser(
 /** Update an existing user's profile */
 export async function updateUserProfile(
   uid: string, 
-  updates: { role?: string; status?: string; name?: string; permissions?: Record<string, boolean> }
+  updates: { 
+    role?: string; 
+    status?: string; 
+    name?: string; 
+    permissions?: Record<string, boolean>;
+    appAccess?: ('web' | 'ios')[];
+    iosPttVisibility?: 'all' | 'custom';
+    iosVisiblePtts?: string[];
+  }
 ): Promise<void> {
   await callFunction('updateAppUser', 'PUT', { uid, ...updates });
 }
