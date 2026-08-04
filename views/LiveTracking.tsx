@@ -2204,16 +2204,22 @@ const LiveTrackingInner = () => {
                             e.stopPropagation(); 
                             setTempPopup(null);
                         }}
-                        className="text-center cursor-pointer hover:bg-gray-50 transition-colors rounded p-1" 
+                        className="text-center cursor-pointer hover:bg-gray-50 transition-colors rounded" 
                         title="Click to close"
-                        style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+                        style={{
+                            fontFamily: "'Sakkal Majalla', sans-serif",
+                            padding: isIOSMode ? '2px 4px' : '4px'
+                        }}
                     >
-                        <div className="text-xs text-gray-500 font-medium uppercase mb-1">{tempPopup.description}</div>
-                        <div className={`text-3xl font-bold ${
-                            tempPopup.temp > 30 ? 'text-red-500' : 
-                            tempPopup.temp > 20 ? 'text-orange-500' : 
-                            tempPopup.temp > 10 ? 'text-brand-500' : 'text-blue-500'
-                        }`}>
+                        <div style={{ fontSize: isIOSMode ? '7px' : undefined }} className={isIOSMode ? 'text-gray-500 font-medium uppercase mb-0.5' : 'text-xs text-gray-500 font-medium uppercase mb-1'}>{tempPopup.description}</div>
+                        <div
+                            style={{ fontSize: isIOSMode ? '15px' : undefined }}
+                            className={`font-bold ${isIOSMode ? '' : 'text-3xl'} ${
+                                tempPopup.temp > 30 ? 'text-red-500' : 
+                                tempPopup.temp > 20 ? 'text-orange-500' : 
+                                tempPopup.temp > 10 ? 'text-brand-500' : 'text-blue-500'
+                            }`}
+                        >
                             {Math.round(tempPopup.temp)}°C
                         </div>
                     </div>
