@@ -343,7 +343,7 @@ export const Dashboard = () => {
                 <Radio size={20} className="text-brand-600 dark:text-brand-400" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">Transmitters Status Breakdown</h3>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">Transmitters Status</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Real-time health & operational status of deployed PTTs</p>
               </div>
             </div>
