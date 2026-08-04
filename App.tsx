@@ -386,6 +386,8 @@ const App = () => {
       }
 
       if (!user) {
+        setCurrentUser(null);
+        setAuthLoading(false);
         firestoreInitialized.current = false;
         if (liveUnsubRef.current) {
           liveUnsubRef.current();
