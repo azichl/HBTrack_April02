@@ -1894,6 +1894,7 @@ const LiveTrackingInner = () => {
   }, [isDraggingDonut]);
 
   const closeAllDropdowns = () => {
+    setMobileToolsOpen(false);
     setLayerOpen(false);
     setWeatherOpen(false);
     setStatusDropdownOpen(false);
