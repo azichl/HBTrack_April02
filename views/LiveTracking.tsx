@@ -2198,28 +2198,22 @@ const LiveTrackingInner = () => {
 
             {/* Weather Popup */}
             {tempPopup && (
-                <Popup position={[tempPopup.lat, tempPopup.lon]}>
+                <Popup position={[tempPopup.lat, tempPopup.lon]} className="weather-mini-popup">
                     <div 
                         onClick={(e) => {
                             e.stopPropagation(); 
                             setTempPopup(null);
                         }}
-                        className="text-center cursor-pointer hover:bg-gray-50 transition-colors rounded" 
+                        className="text-center cursor-pointer hover:bg-gray-50 transition-colors rounded py-0.5 px-1" 
                         title="Click to close"
-                        style={{
-                            fontFamily: "'Sakkal Majalla', sans-serif",
-                            padding: isIOSMode ? '2px 4px' : '4px'
-                        }}
+                        style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                     >
-                        <div style={{ fontSize: isIOSMode ? '7px' : undefined }} className={isIOSMode ? 'text-gray-500 font-medium uppercase mb-0.5' : 'text-xs text-gray-500 font-medium uppercase mb-1'}>{tempPopup.description}</div>
-                        <div
-                            style={{ fontSize: isIOSMode ? '15px' : undefined }}
-                            className={`font-bold ${isIOSMode ? '' : 'text-3xl'} ${
-                                tempPopup.temp > 30 ? 'text-red-500' : 
-                                tempPopup.temp > 20 ? 'text-orange-500' : 
-                                tempPopup.temp > 10 ? 'text-brand-500' : 'text-blue-500'
-                            }`}
-                        >
+                        <div className="text-[9px] text-gray-500 font-semibold uppercase tracking-tight mb-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{tempPopup.description}</div>
+                        <div className={`text-base font-bold leading-none ${
+                            tempPopup.temp > 30 ? 'text-red-500' : 
+                            tempPopup.temp > 20 ? 'text-orange-500' : 
+                            tempPopup.temp > 10 ? 'text-brand-500' : 'text-blue-500'
+                        }`}>
                             {Math.round(tempPopup.temp)}°C
                         </div>
                     </div>

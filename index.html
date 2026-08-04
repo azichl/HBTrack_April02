@@ -96,6 +96,29 @@
       .leaflet-popup-tip-container {
         overflow: visible !important;
       }
+
+      /* Mini Weather Popup styling (reduced box size by 70%) */
+      .leaflet-popup.weather-mini-popup .leaflet-popup-content-wrapper,
+      .weather-mini-popup .leaflet-popup-content-wrapper {
+        min-width: 96px !important;
+        width: 96px !important;
+        max-width: 110px !important;
+        padding: 4px 6px !important;
+        border-radius: 10px !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+      }
+      .leaflet-popup.weather-mini-popup .leaflet-popup-content,
+      .weather-mini-popup .leaflet-popup-content {
+        min-width: 84px !important;
+        width: 100% !important;
+        margin: 0 !important;
+        line-height: 1.1 !important;
+      }
+      .weather-mini-popup .leaflet-popup-close-button {
+        padding: 2px 4px 0 0 !important;
+        font-size: 10px !important;
+        color: #94a3b8 !important;
+      }
     </style>
     <script>
       tailwind.config = {
