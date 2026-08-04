@@ -1190,13 +1190,13 @@ export const useAppStore = create<AppState>()(
             finalTransmitters = mergedTransmitters.filter(t => visibleIds.has(String(t.platform_id)));
             
             finalPositions = recentPositions.filter(p => {
-               const t = mergedTransmitters.find(tx => tx.id === p.transmitter_id);
+               const t = mergedTransmitters.find(tx => String(tx.platform_id) === String(p.transmitter_id) || tx.id === p.transmitter_id);
                return t && visibleIds.has(String(t.platform_id));
             });
             
             finalAlerts = mergedAlerts.filter(a => {
                if (!a.transmitter_id) return true; // keep system-wide alerts
-               const t = mergedTransmitters.find(tx => tx.id === a.transmitter_id);
+               const t = mergedTransmitters.find(tx => String(tx.platform_id) === String(a.transmitter_id) || tx.id === a.transmitter_id);
                return t && visibleIds.has(String(t.platform_id));
             });
           }
