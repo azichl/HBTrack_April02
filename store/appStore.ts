@@ -1186,17 +1186,18 @@ export const useAppStore = create<AppState>()(
           const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
 
           if (isIOSMode && iosPttVisibility === 'custom') {
-            finalTransmitters = mergedTransmitters.filter(t => iosVisiblePtts.includes(t.platform_id));
+            const visibleIds = new Set(iosVisiblePtts.map(id => String(id)));
+            finalTransmitters = mergedTransmitters.filter(t => visibleIds.has(String(t.platform_id)));
             
             finalPositions = recentPositions.filter(p => {
                const t = mergedTransmitters.find(tx => tx.id === p.transmitter_id);
-               return t && iosVisiblePtts.includes(t.platform_id);
+               return t && visibleIds.has(String(t.platform_id));
             });
             
             finalAlerts = mergedAlerts.filter(a => {
                if (!a.transmitter_id) return true; // keep system-wide alerts
                const t = mergedTransmitters.find(tx => tx.id === a.transmitter_id);
-               return t && iosVisiblePtts.includes(t.platform_id);
+               return t && visibleIds.has(String(t.platform_id));
             });
           }
 
@@ -1359,7 +1360,29 @@ export const useAppStore = create<AppState>()(
             const currentPositions = [...state.positions];
             let changed = false;
 
+            const { currentUser } = get();
+            
+            // Retrieve iOS filters from userProfile or cache
+            const searchParams = new URLSearchParams(window.location.search);
+            const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+            
+            // If iOS mode, filter incoming live positions too!
+            let visibleIds: Set<string> | null = null;
+            if (isIOSMode && currentUser) {
+               // Need to find the profile in users list since we don't have userProfile stored at root state directly
+               const usersList = get().users;
+               const profile = usersList.find(u => u.id === currentUser.uid);
+               if (profile && profile.iosPttVisibility === 'custom') {
+                  visibleIds = new Set((profile.iosVisiblePtts || []).map(id => String(id)));
+               }
+            }
+
             firestorePositions.forEach(p => {
+               // iOS restriction check
+               if (visibleIds && !visibleIds.has(String(p.transmitter_id))) {
+                  return;
+               }
+
                const latNum = Number(p.lat);
                const lonNum = Number(p.lon);
                const validCoords = !(latNum === 0 && lonNum === 0) && !isNaN(latNum) && !isNaN(lonNum);
