@@ -1965,8 +1965,8 @@ const LiveTrackingInner = () => {
   const renderTrackingMap = () => (
     <div className="relative w-full h-full" style={{ height: '100%', width: '100%', minHeight: '400px' }}>
         <MapContainer 
-            center={sharedMapCenter} 
-            zoom={sharedMapZoom} 
+            center={isIOSMode ? [38.0, 58.0] : sharedMapCenter} 
+            zoom={isIOSMode ? 3.8 : sharedMapZoom} 
             minZoom={3}
             maxBounds={[[-90, -180], [90, 180]]}
             className={`w-full h-full z-0 ${isMeasuring ? 'cursor-crosshair' : ''}`}
