@@ -22,6 +22,7 @@ const SYSTEM_PERMISSIONS = [
 ];
 
 const ROLE_DEFAULTS: Record<Role, string[]> = {
+  'Manager': SYSTEM_PERMISSIONS, // All permissions including App Access Management
   'Administrator': SYSTEM_PERMISSIONS, // All permissions including API Integration
   'Researcher': ['View Data', 'Generate Reports', 'Live Tracking', 'Manage Alerts', 'Manage Database'],
   'Field Coordinator': ['Live Tracking', 'Manage Transmitters', 'Upload Data'],
@@ -31,6 +32,8 @@ const ROLE_DEFAULTS: Record<Role, string[]> = {
 
 const RoleBadge = ({ role }: { role: Role }) => {
   switch (role) {
+    case 'Manager':
+      return <span className="px-3 py-1 text-xs font-medium bg-rose-100 text-rose-800 rounded-full border border-rose-200">Manager</span>;
     case 'Administrator':
       return <span className="px-3 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">Administrator</span>;
     case 'Researcher':
@@ -47,7 +50,7 @@ const RoleBadge = ({ role }: { role: Role }) => {
 };
 
 export const UserManagement = () => {
-  const { users, addUser, updateUser, deleteUser: deleteUserFromStore, transmitters } = useAppStore();
+  const { users, addUser, updateUser, deleteUser: deleteUserFromStore, transmitters, currentUserRole } = useAppStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,6 +132,7 @@ export const UserManagement = () => {
   // Map Cloud Function roles to app roles
   const mapFirebaseRole = (role: string): Role => {
     const map: Record<string, Role> = {
+      'manager': 'Manager',
       'admin': 'Administrator',
       'researcher': 'Researcher',
       'field_operator': 'Field Coordinator',
@@ -140,6 +144,7 @@ export const UserManagement = () => {
 
   const mapRoleToFirebase = (role: Role): string => {
     const map: Record<Role, string> = {
+      'Manager': 'manager',
       'Administrator': 'admin',
       'Researcher': 'researcher',
       'Field Coordinator': 'field_operator',
@@ -157,7 +162,7 @@ export const UserManagement = () => {
   // Stats
   const totalUsers = users.length;
   const activeUsers = users.filter(u => u.status === 'active').length;
-  const adminUsers = users.filter(u => u.role === 'Administrator').length;
+  const adminUsers = users.filter(u => u.role === 'Administrator' || u.role === 'Manager').length;
   const dataUsers = users.filter(u => u.role === 'Researcher' || u.role === 'Data Entry').length;
 
   // Filtered Users
@@ -634,7 +639,7 @@ export const UserManagement = () => {
                 <div>
                   <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Role Assignment</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {(['Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer'] as Role[]).map(role => (
+                    {(currentUserRole === 'Manager' ? ['Manager', 'Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer'] : ['Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer'] as Role[]).map(role => (
                       <label 
                         key={role}
                         className={`cursor-pointer relative flex flex-col p-3 rounded-lg border transition-all ${
@@ -693,89 +698,93 @@ export const UserManagement = () => {
                    </div>
                 </div>
 
-                {/* App Access Control */}
-                <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 mt-4">
-                   <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <Lock size={14} className="text-gray-500" />
-                      App Access
-                   </h4>
-                   <div className="flex gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                         <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                            checked={formData.appAccess?.includes('web')} 
-                            onChange={(e) => {
-                               const access = formData.appAccess || [];
-                               setFormData({ ...formData, appAccess: e.target.checked ? [...access, 'web'] : access.filter(a => a !== 'web') });
-                            }} 
-                         />
-                         <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Web App</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                         <input 
-                            type="checkbox" 
-                            className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                            checked={formData.appAccess?.includes('ios')} 
-                            onChange={(e) => {
-                               const access = formData.appAccess || [];
-                               setFormData({ ...formData, appAccess: e.target.checked ? [...access, 'ios'] : access.filter(a => a !== 'ios') });
-                            }} 
-                         />
-                         <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">iOS App</span>
-                      </label>
-                   </div>
-                </div>
+                {/* App Access Control (Only Managers can see and edit this) */}
+                {currentUserRole === 'Manager' && (
+                  <>
+                    <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 mt-4">
+                       <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                          <Lock size={14} className="text-gray-500" />
+                          App Access
+                       </h4>
+                       <div className="flex gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                             <input 
+                                type="checkbox" 
+                                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                checked={formData.appAccess?.includes('web')} 
+                                onChange={(e) => {
+                                   const access = formData.appAccess || [];
+                                   setFormData({ ...formData, appAccess: e.target.checked ? [...access, 'web'] : access.filter(a => a !== 'web') });
+                                }} 
+                             />
+                             <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Web App</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                             <input 
+                                type="checkbox" 
+                                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                checked={formData.appAccess?.includes('ios')} 
+                                onChange={(e) => {
+                                   const access = formData.appAccess || [];
+                                   setFormData({ ...formData, appAccess: e.target.checked ? [...access, 'ios'] : access.filter(a => a !== 'ios') });
+                                }} 
+                             />
+                             <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">iOS App</span>
+                          </label>
+                       </div>
+                    </div>
 
-                {/* iOS PTT Visibility */}
-                {formData.appAccess?.includes('ios') && (
-                  <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 mt-4">
-                     <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">iOS App PTT Visibility</h4>
-                     <div className="flex flex-col gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                           <input 
-                              type="radio" 
-                              name="iosPttVisibility" 
-                              className="text-brand-600 focus:ring-brand-500"
-                              checked={formData.iosPttVisibility === 'all'} 
-                              onChange={() => setFormData({ ...formData, iosPttVisibility: 'all' })} 
-                           />
-                           <span className="text-sm text-gray-700 dark:text-gray-300">All PTTs</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                           <input 
-                              type="radio" 
-                              name="iosPttVisibility" 
-                              className="text-brand-600 focus:ring-brand-500"
-                              checked={formData.iosPttVisibility === 'custom'} 
-                              onChange={() => setFormData({ ...formData, iosPttVisibility: 'custom' })} 
-                           />
-                           <span className="text-sm text-gray-700 dark:text-gray-300">Specific PTTs</span>
-                        </label>
-                        
-                        {formData.iosPttVisibility === 'custom' && (
-                           <div className="mt-2 pl-6">
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select which PTTs this user can view on the iOS app:</p>
-                              <div className="max-h-32 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 grid grid-cols-2 gap-2">
-                                 {transmitters.map(t => (
-                                    <label key={t.platform_id} className="flex items-center gap-2 cursor-pointer text-xs hover:bg-gray-50 dark:hover:bg-slate-700 p-1 rounded">
-                                       <input 
-                                          type="checkbox" 
-                                          className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                                          checked={formData.iosVisiblePtts?.includes(t.platform_id)} 
-                                          onChange={(e) => {
-                                             const ptts = formData.iosVisiblePtts || [];
-                                             setFormData({ ...formData, iosVisiblePtts: e.target.checked ? [...ptts, t.platform_id] : ptts.filter(p => p !== t.platform_id) });
-                                          }} 
-                                       />
-                                       <span className="truncate text-gray-700 dark:text-gray-300">{t.platform_id} {t.bird_id ? `(${t.bird_id})` : ''}</span>
-                                    </label>
-                                 ))}
-                              </div>
-                           </div>
-                        )}
-                     </div>
-                  </div>
+                    {/* iOS PTT Visibility */}
+                    {formData.appAccess?.includes('ios') && (
+                      <div className="bg-gray-50 dark:bg-slate-900/50 p-4 rounded-xl border border-gray-200 dark:border-slate-700 mt-4">
+                         <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">iOS App PTT Visibility</h4>
+                         <div className="flex flex-col gap-3">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                               <input 
+                                  type="radio" 
+                                  name="iosPttVisibility" 
+                                  className="text-brand-600 focus:ring-brand-500"
+                                  checked={formData.iosPttVisibility === 'all'} 
+                                  onChange={() => setFormData({ ...formData, iosPttVisibility: 'all' })} 
+                               />
+                               <span className="text-sm text-gray-700 dark:text-gray-300">All PTTs</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                               <input 
+                                  type="radio" 
+                                  name="iosPttVisibility" 
+                                  className="text-brand-600 focus:ring-brand-500"
+                                  checked={formData.iosPttVisibility === 'custom'} 
+                                  onChange={() => setFormData({ ...formData, iosPttVisibility: 'custom' })} 
+                               />
+                               <span className="text-sm text-gray-700 dark:text-gray-300">Specific PTTs</span>
+                            </label>
+                            
+                            {formData.iosPttVisibility === 'custom' && (
+                               <div className="mt-2 pl-6">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select which PTTs this user can view on the iOS app:</p>
+                                  <div className="max-h-32 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 grid grid-cols-2 gap-2">
+                                     {transmitters.map(t => (
+                                        <label key={t.platform_id} className="flex items-center gap-2 cursor-pointer text-xs hover:bg-gray-50 dark:hover:bg-slate-700 p-1 rounded">
+                                           <input 
+                                              type="checkbox" 
+                                              className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                              checked={formData.iosVisiblePtts?.includes(t.platform_id)} 
+                                              onChange={(e) => {
+                                                 const ptts = formData.iosVisiblePtts || [];
+                                                 setFormData({ ...formData, iosVisiblePtts: e.target.checked ? [...ptts, t.platform_id] : ptts.filter(p => p !== t.platform_id) });
+                                              }} 
+                                           />
+                                           <span className="truncate text-gray-700 dark:text-gray-300">{t.platform_id} {t.bird_id ? `(${t.bird_id})` : ''}</span>
+                                        </label>
+                                     ))}
+                                  </div>
+                               </div>
+                            )}
+                         </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 <div className="pt-2 flex items-center justify-between border-t border-gray-100 dark:border-slate-700 mt-6">

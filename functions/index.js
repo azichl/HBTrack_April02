@@ -408,6 +408,7 @@ exports.getGEETileUrl = onRequest({ cors: true, maxInstances: 5, timeoutSeconds:
 
 function getDefaultPermissions(role) {
   switch (role) {
+    case "manager":
     case "admin":
       return {
         viewTracking: true, editBirds: true, manageUsers: true,

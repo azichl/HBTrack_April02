@@ -1143,7 +1143,7 @@ export const useAppStore = create<AppState>()(
               // check if it's the first user or the super admin
               const isFirstUser = mergedUsers.length === 0 || currentUser.email === 'achlih21@gmail.com';
               if (isFirstUser) {
-                role = 'Administrator';
+                role = 'Manager';
                 permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'System Settings'];
               }
               
@@ -1165,11 +1165,11 @@ export const useAppStore = create<AppState>()(
 
             // GUARANTEE SUPER ADMIN ROLE
             if (currentUser.email === 'achlih21@gmail.com') {
-              role = 'Administrator';
+              role = 'Manager';
               permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'System Settings'];
               
               // Also update the database document just in case it had Viewer loaded
-              if (userProfile && userProfile.role !== 'Administrator') {
+              if (userProfile && userProfile.role !== 'Manager') {
                 const updatedProfile = { ...userProfile, role, permissions };
                 const index = mergedUsers.findIndex(u => u.id === userProfile.id);
                 if (index !== -1) mergedUsers[index] = updatedProfile;

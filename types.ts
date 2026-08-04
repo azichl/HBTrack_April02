@@ -1,5 +1,5 @@
 
-export type Role = 'Administrator' | 'Researcher' | 'Field Coordinator' | 'Data Entry' | 'Viewer';
+export type Role = 'Manager' | 'Administrator' | 'Researcher' | 'Field Coordinator' | 'Data Entry' | 'Viewer';
 
 export interface User {
   id: string;
