@@ -54,6 +54,7 @@ export const UserManagement = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pttSearchTerm, setPttSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('All Roles');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -192,6 +193,7 @@ export const UserManagement = () => {
   const handleOpenModal = (user?: UserType) => {
     setError(null);
     setPassword('');
+    setPttSearchTerm('');
     if (user) {
       setEditingUser(user);
       setFormData(user);
@@ -767,9 +769,23 @@ export const UserManagement = () => {
                             
                             {formData.iosPttVisibility === 'custom' && (
                                <div className="mt-2 pl-6">
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Select which PTTs this user can view on the iOS app:</p>
-                                  <div className="max-h-32 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 grid grid-cols-2 gap-2">
-                                     {transmitters.map(t => (
+                                  <div className="flex flex-col gap-2 mb-2">
+                                     <p className="text-xs text-gray-500 dark:text-gray-400">Select which PTTs this user can view on the iOS app:</p>
+                                     <div className="relative">
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                           type="text"
+                                           placeholder="Search PTT ID..."
+                                           value={pttSearchTerm}
+                                           onChange={(e) => setPttSearchTerm(e.target.value)}
+                                           className="w-full pl-9 pr-3 py-1.5 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors"
+                                        />
+                                     </div>
+                                  </div>
+                                  <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-slate-700 rounded-lg p-2 bg-white dark:bg-slate-800 grid grid-cols-2 gap-2">
+                                     {transmitters
+                                        .filter(t => t.platform_id.toLowerCase().includes(pttSearchTerm.toLowerCase()) || (t.bird_id && t.bird_id.toLowerCase().includes(pttSearchTerm.toLowerCase())))
+                                        .map(t => (
                                         <label key={t.platform_id} className="flex items-center gap-2 cursor-pointer text-xs hover:bg-gray-50 dark:hover:bg-slate-700 p-1 rounded">
                                            <input 
                                               type="checkbox" 
