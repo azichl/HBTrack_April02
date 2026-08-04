@@ -1167,6 +1167,7 @@ const LiveTrackingInner = () => {
   // Weather Map State
   const [weatherType, setWeatherType] = useState("temp");
   const [searchLocation, setSearchLocation] = useState("");
+  const [windyBulkOpen, setWindyBulkOpen] = useState(false);
 
   // Shared State
   const [tempPopup, setTempPopup] = useState<{lat: number, lon: number, temp: number, description: string} | null>(null);
@@ -1895,6 +1896,7 @@ const LiveTrackingInner = () => {
 
   const closeAllDropdowns = () => {
     setMobileToolsOpen(false);
+    setWindyBulkOpen(false);
     setLayerOpen(false);
     setWeatherOpen(false);
     setStatusDropdownOpen(false);
@@ -3356,54 +3358,123 @@ const LiveTrackingInner = () => {
 
     return (
         <div className="relative w-full h-full">
-            <div className="absolute top-0 left-0 right-0 z-[500] bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
-                 <div className="flex items-center gap-4">
-                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                        <Cloud className="text-brand-500" size={20} />
-                        Weather Analysis
-                    </h3>
-                    <div className="h-6 w-px bg-gray-200" />
-                    <div className="flex gap-2">
-                         {weatherOptions.map(opt => (
-                            <button
-                                key={opt.value}
-                                onClick={() => {
-                                    setWeatherType(opt.value);
-                                    setActiveWeatherLayer(opt.layerId);
-                                }}
-                                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                                    weatherType === opt.value 
-                                    ? 'bg-brand-500 text-white shadow-md shadow-brand-100' 
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                            >
-                                {opt.label}
-                            </button>
-                         ))}
-                    </div>
-                 </div>
-                 
-                 <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                        <input 
-                            type="text" 
-                            placeholder="Search location..." 
-                            value={searchLocation}
-                            onChange={(e) => setSearchLocation(e.target.value)}
-                            className="pl-9 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm w-64 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                        />
-                    </div>
-                    <button 
-                        onClick={toggleFullscreen}
-                        className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                    >
-                         {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                    </button>
-                 </div>
-            </div>
+            {isIOSMode ? (
+              /* iOS Mode: Remove top header bar ("Weather Analysis" removed). Bulk tools icon on top-left + Fullscreen button directly under it */
+              <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setWindyBulkOpen(!windyBulkOpen);
+                    }}
+                    className={`p-2.5 bg-white rounded-xl shadow-lg border border-gray-200 transition-all flex items-center justify-center ${
+                      windyBulkOpen ? 'bg-brand-50 text-brand-600 ring-2 ring-brand-500/50' : 'text-gray-700'
+                    }`}
+                    title="Weather Layer Options"
+                  >
+                    <SlidersHorizontal size={18} />
+                  </button>
 
-            <div className="w-full h-full pt-16 bg-slate-900">
+                  {windyBulkOpen && (
+                    <div 
+                      className="absolute top-full left-0 mt-2 bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-gray-200 w-52 flex flex-col gap-1 z-[900] animate-in fade-in slide-in-from-top-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 px-1 flex items-center gap-1.5 border-b border-gray-100 pb-1.5">
+                        <CloudSun size={14} className="text-brand-500" /> Weather Layers
+                      </h4>
+                      {weatherOptions.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            setWeatherType(opt.value);
+                            setActiveWeatherLayer(opt.layerId);
+                            setWindyBulkOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-between ${
+                            weatherType === opt.value
+                              ? 'bg-brand-50 text-brand-700 border border-brand-200'
+                              : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span>{opt.label}</span>
+                          {weatherType === opt.value && <CheckCircle2 size={14} className="text-brand-500" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Standalone Fullscreen Button directly under the bulk icons button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  className={`p-2.5 bg-white rounded-xl shadow-lg border border-gray-200 transition-all flex items-center justify-center ${
+                    isFullscreen ? 'bg-brand-50 text-brand-600 ring-2 ring-brand-500/50' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title={isFullscreen ? "Exit Fullscreen" : "Maximize Map"}
+                >
+                  {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                </button>
+              </div>
+            ) : (
+              /* Web Mode Header Bar */
+              <div className="absolute top-0 left-0 right-0 z-[500] bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
+                   <div className="flex items-center gap-4">
+                      <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                          <Cloud className="text-brand-500" size={20} />
+                          Weather Analysis
+                      </h3>
+                      <div className="h-6 w-px bg-gray-200" />
+                      <div className="flex gap-2">
+                           {weatherOptions.map(opt => (
+                              <button
+                                  key={opt.value}
+                                  onClick={() => {
+                                      setWeatherType(opt.value);
+                                      setActiveWeatherLayer(opt.layerId);
+                                  }}
+                                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                                      weatherType === opt.value 
+                                      ? 'bg-brand-500 text-white shadow-md shadow-brand-100' 
+                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                  }`}
+                              >
+                                  {opt.label}
+                              </button>
+                           ))}
+                      </div>
+                   </div>
+                   
+                   <div className="flex items-center gap-3">
+                      <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                          <input 
+                              type="text" 
+                              placeholder="Search location..." 
+                              value={searchLocation}
+                              onChange={(e) => setSearchLocation(e.target.value)}
+                              className="pl-9 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm w-64 focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
+                          />
+                      </div>
+                      <button 
+                          onClick={toggleFullscreen}
+                          className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+                      >
+                           {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                      </button>
+                   </div>
+              </div>
+            )}
+
+            <div className={`w-full h-full ${isIOSMode ? 'pt-0' : 'pt-16'} bg-slate-900`}>
                 <iframe
                     src={windyUrl}
                     className="w-full h-full border-none"
