@@ -126,35 +126,44 @@ export const Settings = () => {
   const tabs = isIOSMode ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') : allTabs;
 
   return (
-    <div className={`max-w-5xl mx-auto space-y-6 animate-fade-in pb-16 ${isIOSMode ? 'pt-2 pr-10' : ''}`}>
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your account preferences and system settings</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
-            <RotateCcw size={16} /> Reset to Default
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={isSaving}
-            className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70"
-          >
-            {isSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} />}
-            Save Changes
-          </button>
-        </div>
-        {saveMessage && (
-          <div className={`text-sm font-medium px-4 py-2 rounded-lg ${saveMessage.startsWith('Error') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'}`}>
-            {saveMessage}
+    <div className={`max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isIOSMode ? 'pt-1 px-1' : ''}`}>
+      {/* Header (Web Mode Only) */}
+      {!isIOSMode && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your account preferences and system settings</p>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-3">
+            <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+              <RotateCcw size={16} /> Reset to Default
+            </button>
+            <button 
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70"
+            >
+              {isSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} />}
+              Save Changes
+            </button>
+          </div>
+          {saveMessage && (
+            <div className={`text-sm font-medium px-4 py-2 rounded-lg ${saveMessage.startsWith('Error') ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'}`}>
+              {saveMessage}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Save Message Alert for iOS Mode */}
+      {isIOSMode && saveMessage && (
+        <div className={`text-sm font-medium px-4 py-2 rounded-xl border ${saveMessage.startsWith('Error') ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'}`}>
+          {saveMessage}
+        </div>
+      )}
 
       {/* Tabs */}
-      <div className="flex overflow-x-auto pb-1 md:pb-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-1">
+      <div className={`flex overflow-x-auto pb-1 md:pb-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-1 ${isIOSMode ? 'pr-14' : ''}`}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
