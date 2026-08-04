@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>HBTrack</string>
+	<string>RAF Tracking</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>RAF Tracking</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
@@ -28,11 +28,11 @@
 		<true/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>HBTrack requires access to the camera to scan transmitter QR codes and take document photos for data ingestion.</string>
+	<string>RAF Tracking requires access to the camera to scan transmitter QR codes and take document photos for data ingestion.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>HBTrack uses your location to display your current position relative to Houbara tracking locations on the live map.</string>
+	<string>RAF Tracking uses your location to display your current position relative to Houbara tracking locations on the live map.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>HBTrack requires photo library access to upload data spreadsheets and Argos CSV files.</string>
+	<string>RAF Tracking requires photo library access to upload data spreadsheets and Argos CSV files.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

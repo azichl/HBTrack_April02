@@ -11,6 +11,7 @@
 		A11111112800000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11111112800000000000002 /* ContentView.swift */; };
 		A11111112800000000000003 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B11111112800000000000003 /* WebView.swift */; };
 		A11111112800000000000004 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B11111112800000000000004 /* WebKit.framework */; };
+		A11111112800000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B11111112800000000000005 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		B11111112800000000000003 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
 		B11111112800000000000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B11111112800000000000004 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		B11111112800000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +52,7 @@
 				B11111112800000000000002 /* ContentView.swift */,
 				B11111112800000000000003 /* WebView.swift */,
 				B11111112800000000000004 /* Info.plist */,
+				B11111112800000000000005 /* Assets.xcassets */,
 			);
 			path = HBTrack;
 			sourceTree = "<group>";
@@ -128,6 +131,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A11111112800000000000005 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
