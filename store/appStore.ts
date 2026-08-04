@@ -462,8 +462,8 @@ export const useAppStore = create<AppState>()(
       setGeeNdwiTileUrl: (url) => set({ geeNdwiTileUrl: url }),
       setActiveGeeLayer: (layer) => set({ activeGeeLayer: layer }),
 
-      sharedMapCenter: [24.0, 45.0],
-      sharedMapZoom: 5,
+      sharedMapCenter: [38.0, 58.0],
+      sharedMapZoom: 3.8,
       activeBaseLayer: 'google_hybrid',
       setSharedMapCenter: (center) => set({ sharedMapCenter: center }),
       setSharedMapZoom: (zoom) => set({ sharedMapZoom: zoom }),
