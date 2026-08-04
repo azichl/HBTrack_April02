@@ -3248,50 +3248,88 @@ const LiveTrackingInner = () => {
              </div>
         </div>
 
+
         {/* Legend */}
         {activeWeatherLayer === 'temp_new' && (
-             <div 
-                className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur rounded-xl shadow-xl border border-gray-200 z-[400] w-96 select-none"
-                style={{ 
-                    transform: `translate(calc(-50% + ${legendOffset.x}px), ${legendOffset.y}px)`,
-                    cursor: isDraggingLegend ? 'grabbing' : 'grab'
-                }}
-                onMouseDown={handleLegendMouseDown}
-             >
-                 <div className="px-4 py-2 flex items-center justify-between border-b border-gray-100 bg-gray-50/50 rounded-t-xl">
-                     <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
-                        <GripHorizontal size={14} className="text-gray-400" />
-                        Temperature (°C)
-                     </div>
-                 </div>
-                 <div className="p-4">
-                    <div className="h-6 rounded-md w-full mb-1 shadow-inner border border-gray-100 relative" 
-                        style={{ 
-                            background: 'linear-gradient(to right, #30123b, #466be3, #28bceb, #32f298, #a4fc3c, #eecf3a, #fb7e21, #d02f05, #7a0403)' 
-                        }} 
-                    >
-                        {/* Ticks for every 5 degrees assuming range -40 to 40 for simplicity mapping to gradient */}
-                        {Array.from({length: 17}).map((_, i) => (
-                             <div 
-                                key={i} 
-                                className="absolute bottom-0 h-2 w-px bg-white/50" 
-                                style={{ left: `${(i / 16) * 100}%` }}
-                             />
-                        ))}
+            isIOSMode ? (
+                /* iOS: vertical compact legend on left side, 50% reduced size */
+                <div
+                    className="absolute left-2 z-[400] select-none"
+                    style={{ bottom: '80px' }}
+                >
+                    <div className="bg-white/90 backdrop-blur rounded-lg shadow-lg border border-gray-200 px-1.5 py-2 flex flex-col items-center gap-1" style={{ width: 28 }}>
+                        {/* Title rotated */}
+                        <span className="text-gray-500 font-bold" style={{ fontSize: 7, writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: 0.5, whiteSpace: 'nowrap', marginBottom: 2 }}>Temp (°C)</span>
+                        {/* Gradient bar - vertical, top=hot, bottom=cold */}
+                        <div
+                            className="rounded-sm border border-gray-100 shadow-inner relative"
+                            style={{
+                                width: 12,
+                                height: 90,
+                                background: 'linear-gradient(to bottom, #7a0403, #d02f05, #fb7e21, #eecf3a, #a4fc3c, #32f298, #28bceb, #466be3, #30123b)'
+                            }}
+                        >
+                            {/* Ticks every 10°C */}
+                            {[0, 0.25, 0.5, 0.75, 1].map((pos, i) => (
+                                <div
+                                    key={i}
+                                    className="absolute right-0 w-1.5 h-px bg-white/60"
+                                    style={{ top: `${pos * 100}%` }}
+                                />
+                            ))}
+                        </div>
+                        {/* Labels: top=40, bottom=-40 */}
+                        <div className="flex flex-col items-center justify-between" style={{ height: 90, position: 'absolute', right: 2, top: 28 }}>
+                            {['40','20','0','-20','-40'].map((label, i) => (
+                                <span key={i} className="text-gray-500 leading-none" style={{ fontSize: 6, fontWeight: 600 }}>{label}</span>
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex justify-between text-[10px] font-medium text-gray-500 px-0.5 mt-1">
-                        <span>-40</span>
-                        <span>-30</span>
-                        <span>-20</span>
-                        <span>-10</span>
-                        <span>0</span>
-                        <span>10</span>
-                        <span>20</span>
-                        <span>30</span>
-                        <span>40</span>
+                </div>
+            ) : (
+                /* Web: original horizontal draggable legend at bottom center */
+                <div
+                    className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur rounded-xl shadow-xl border border-gray-200 z-[400] w-96 select-none"
+                    style={{
+                        transform: `translate(calc(-50% + ${legendOffset.x}px), ${legendOffset.y}px)`,
+                        cursor: isDraggingLegend ? 'grabbing' : 'grab'
+                    }}
+                    onMouseDown={handleLegendMouseDown}
+                >
+                    <div className="px-4 py-2 flex items-center justify-between border-b border-gray-100 bg-gray-50/50 rounded-t-xl">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-600">
+                           <GripHorizontal size={14} className="text-gray-400" />
+                           Temperature (°C)
+                        </div>
                     </div>
-                 </div>
-             </div>
+                    <div className="p-4">
+                       <div className="h-6 rounded-md w-full mb-1 shadow-inner border border-gray-100 relative"
+                           style={{
+                               background: 'linear-gradient(to right, #30123b, #466be3, #28bceb, #32f298, #a4fc3c, #eecf3a, #fb7e21, #d02f05, #7a0403)'
+                           }}
+                       >
+                           {Array.from({length: 17}).map((_, i) => (
+                                <div
+                                   key={i}
+                                   className="absolute bottom-0 h-2 w-px bg-white/50"
+                                   style={{ left: `${(i / 16) * 100}%` }}
+                                />
+                           ))}
+                       </div>
+                       <div className="flex justify-between text-[10px] font-medium text-gray-500 px-0.5 mt-1">
+                           <span>-40</span>
+                           <span>-30</span>
+                           <span>-20</span>
+                           <span>-10</span>
+                           <span>0</span>
+                           <span>10</span>
+                           <span>20</span>
+                           <span>30</span>
+                           <span>40</span>
+                       </div>
+                    </div>
+                </div>
+            )
         )}
     </div>
   );
