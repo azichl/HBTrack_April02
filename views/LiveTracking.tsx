@@ -2424,7 +2424,7 @@ const LiveTrackingInner = () => {
 
         {/* Map Controls (Left) */}
         {isIOSMode ? (
-          <div className="absolute top-3 left-3 z-[500]">
+          <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
             <div className="relative">
               <button
                 onClick={(e) => {
@@ -2491,8 +2491,8 @@ const LiveTrackingInner = () => {
                     )}
                   </div>
 
-                  {/* Quick Action Tools Grid */}
-                  <div className="grid grid-cols-4 gap-2 pt-1 border-t border-gray-100">
+                  {/* Quick Action Tools Grid (Balanced 3x2 Grid: Layers, Weather, History, Ruler, GPS, Stats) */}
+                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-gray-100">
                     <button 
                       onClick={() => { closeAllDropdowns(); setLayerOpen(!layerOpen); setMobileToolsOpen(false); }}
                       className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 text-[10px] font-bold transition-all ${layerOpen ? 'bg-brand-50 text-brand-600 border border-brand-200' : 'bg-gray-50 text-gray-700 hover:bg-gray-100'}`}
@@ -2539,14 +2539,6 @@ const LiveTrackingInner = () => {
                     >
                       <PieChartIcon size={16} />
                       <span>Stats</span>
-                    </button>
-
-                    <button 
-                      onClick={() => { toggleFullscreen(); setMobileToolsOpen(false); }}
-                      className="p-2 rounded-xl bg-gray-50 text-gray-700 hover:bg-gray-100 flex flex-col items-center justify-center gap-1 text-[10px] font-bold"
-                    >
-                      <Maximize size={16} />
-                      <span>Screen</span>
                     </button>
                   </div>
                 </div>
@@ -2731,6 +2723,23 @@ const LiveTrackingInner = () => {
                 </div>
               )}
             </div>
+
+            {/* Standalone Fullscreen Button directly under the bulk icons button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleFullscreen();
+              }}
+              className={`p-2.5 bg-white rounded-xl shadow-lg border border-gray-200 transition-all flex items-center justify-center ${isFullscreen ? 'bg-brand-50 text-brand-600 ring-2 ring-brand-500/50' : 'text-gray-700 hover:bg-gray-50'}`}
+              title={isFullscreen ? "Exit Fullscreen" : "Maximize Map"}
+            >
+              {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+            </button>
           </div>
         ) : (
           <div className="absolute top-4 left-4 flex flex-col gap-2 z-[500]">
