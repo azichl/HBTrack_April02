@@ -547,10 +547,10 @@ const App = () => {
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-          {/* Top Header */}
-          <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
-            <div className="flex items-center gap-4 flex-1">
-              {!isIOSMode && (
+          {/* Top Header (Web Mode Only) */}
+          {!isIOSMode && (
+            <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
+              <div className="flex items-center gap-4 flex-1">
                 <button
                   onClick={toggleSidebar}
                   onTouchEnd={(e) => {
@@ -564,40 +564,58 @@ const App = () => {
                 >
                   <Menu size={20} />
                 </button>
-              )}
 
-              {/* Functional Global Search */}
-              <GlobalSearch onNavigate={handleNavigate} />
-            </div>
-
-            <div className="flex items-center gap-2 md:gap-4">
-              {/* Mobile Search Button */}
-              <button className="md:hidden p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
-                <Search size={20} />
-              </button>
-
-              {/* Functional Notification Bell */}
-              <NotificationPanel onNavigate={handleNavigate} />
-
-              <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-gray-200 dark:border-slate-700">
-                <div className="text-right hidden md:block">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
-                </div>
-                <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-50 dark:bg-slate-700 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-100 dark:border-slate-600">
-                  <UserCircle size={20} className="md:w-6 md:h-6" />
-                </div>
-                <button
-                  onClick={handleLogout}
-                  title="Log out"
-                  className="p-2 ml-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-2"
-                >
-                  <LogOut size={20} />
-                  <span className="hidden md:inline text-sm font-medium">Logout</span>
-                </button>
+                {/* Functional Global Search */}
+                <GlobalSearch onNavigate={handleNavigate} />
               </div>
-            </div>
-          </header>
+
+              <div className="flex items-center gap-2 md:gap-4">
+                {/* Mobile Search Button */}
+                <button className="md:hidden p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+                  <Search size={20} />
+                </button>
+
+                {/* Functional Notification Bell */}
+                <NotificationPanel onNavigate={handleNavigate} />
+
+                <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-gray-200 dark:border-slate-700">
+                  <div className="text-right hidden md:block">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
+                  </div>
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-50 dark:bg-slate-700 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-100 dark:border-slate-600">
+                    <UserCircle size={20} className="md:w-6 md:h-6" />
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    title="Log out"
+                    className="p-2 ml-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <LogOut size={20} />
+                    <span className="hidden md:inline text-sm font-medium">Logout</span>
+                  </button>
+                </div>
+              </div>
+            </header>
+          )}
+
+          {/* Standalone Integrated Exit / Logout Button (iOS Mode Only - Top Right) */}
+          {isIOSMode && (
+            <button
+              onClick={handleLogout}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLogout();
+              }}
+              className="absolute top-3 right-3 z-[600] p-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all flex items-center justify-center"
+              title="Log out"
+              aria-label="Log out"
+              style={{ minWidth: 40, minHeight: 40, touchAction: 'manipulation' }}
+            >
+              <LogOut size={18} />
+            </button>
+          )}
 
           {/* Main Content Area */}
           <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isIOSMode ? 'pb-16' : ''}`}>
