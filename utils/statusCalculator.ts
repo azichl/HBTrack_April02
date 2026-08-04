@@ -124,11 +124,12 @@ export function evaluateTransmitterStatus(
 
   const latestPos = allSorted[allSorted.length - 1];
   const latestTime = safeParseTimestamp(latestPos.timestamp);
-  const now = new Date().getTime();
+  // Reference timestamp baseline (evaluating against 01/08/2026 baseline date or current time)
+  const refTime = Math.max(new Date().getTime(), Date.UTC(2026, 7, 1)); // 01/08/2026
 
-  // 1. Check Inactive (> 10 days since last transmission)
-  const daysSinceLastFix = (now - latestTime) / (1000 * 60 * 60 * 24);
-  if (daysSinceLastFix > 10) {
+  // 1. Check Inactive (> 30 days since last transmission rule from 01/08/2026)
+  const daysSinceLastFix = (refTime - latestTime) / (1000 * 60 * 60 * 24);
+  if (daysSinceLastFix > 30) {
     return { status: 'Inactive', isNesting: false };
   }
 

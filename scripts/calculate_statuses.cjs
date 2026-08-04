@@ -58,8 +58,8 @@ function evaluateTransmitterStatus(transmitter, positions) {
   const latestTime = new Date(latestPos.timestamp).getTime();
   const now = Date.now();
 
-  // 1. Inactive (> 10 days)
-  if ((now - latestTime) / (1000 * 60 * 60 * 24) > 10) return 'Inactive';
+  // 1. Inactive (> 30 days)
+  if ((now - latestTime) / (1000 * 60 * 60 * 24) > 30) return 'Inactive';
 
   // If no quality positions, default to Active
   if (qualityPositions.length === 0) return 'Active';
