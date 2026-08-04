@@ -465,9 +465,6 @@ const App = () => {
                      alt="Ministry Logo" 
                      className="w-80 max-w-[88vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
                    />
-                   <div className="text-white text-base font-black tracking-widest font-mono uppercase opacity-90">
-                     Houbara Tracker v2.0
-                   </div>
                    <div className="mt-3 flex items-center gap-2">
                      <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
                      <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading Application...</span>
@@ -517,9 +514,7 @@ const App = () => {
               alt="Ministry Logo" 
               className="w-80 max-w-[88vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
             />
-            <div className="text-white text-base font-black tracking-widest font-mono uppercase opacity-90">
-              Houbara Tracker v2.0
-            </div>
+
             <div className="mt-3 flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
               <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading Application...</span>
