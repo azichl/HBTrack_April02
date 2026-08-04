@@ -3197,7 +3197,7 @@ const LiveTrackingInner = () => {
         )}
 
         {/* Status Filter Dropdown */}
-        <div className={`absolute ${isIOSMode ? 'top-3 right-14' : 'top-4 right-3 sm:right-4'} z-[400]`}>
+        <div className={`absolute ${isIOSMode ? 'top-3 right-3' : 'top-4 right-3 sm:right-4'} z-[400]`}>
              <div className="relative">
                 <button
                     onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setStatusDropdownOpen(!statusDropdownOpen); }}
