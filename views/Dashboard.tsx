@@ -327,35 +327,47 @@ export const Dashboard = () => {
     return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
   }, []);
 
+  const [isIPad, setIsIPad] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const checkIPad = () => {
+        setIsIPad((window.innerWidth >= 768 && window.innerHeight >= 1024) || (window.innerWidth >= 1024 && window.innerHeight >= 768));
+      };
+      checkIPad();
+      window.addEventListener('resize', checkIPad);
+      return () => window.removeEventListener('resize', checkIPad);
+    }
+  }, []);
+
   if (isIOSMode) {
     return (
       <div className="p-2 sm:p-4 max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto space-y-3 animate-fade-in pb-16">
         {/* iOS Transmitters Status Breakdown Card Only */}
-        <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50/50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-md relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute -top-4 -right-4 p-6 opacity-5 pointer-events-none">
-            <Radio size={140} className="text-brand-600 dark:text-brand-400" />
+        <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50/50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 p-5 md:p-10 rounded-2xl md:rounded-[2rem] border border-slate-200/80 dark:border-slate-700 shadow-md md:shadow-2xl relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute -top-4 -right-4 md:-top-8 md:-right-8 p-6 md:p-12 opacity-5 pointer-events-none">
+            <Radio size={isIPad ? 280 : 140} className="text-brand-600 dark:text-brand-400" />
           </div>
 
           {/* Card Header */}
-          <div className="flex items-center justify-between w-full z-10 mb-2">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-brand-50 dark:bg-brand-900/30 rounded-xl border border-brand-100 dark:border-brand-800/50">
-                <Radio size={20} className="text-brand-600 dark:text-brand-400" />
+          <div className="flex items-center justify-between w-full z-10 mb-2 md:mb-6">
+            <div className="flex items-center gap-2.5 md:gap-5">
+              <div className="p-2 md:p-4 bg-brand-50 dark:bg-brand-900/30 rounded-xl md:rounded-2xl border border-brand-100 dark:border-brand-800/50">
+                <Radio size={isIPad ? 40 : 20} className="text-brand-600 dark:text-brand-400" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-gray-900 dark:text-white leading-tight">Transmitters Status</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Real-time health & operational status of deployed PTTs</p>
+                <h3 className="text-base md:text-3xl font-bold text-gray-900 dark:text-white leading-tight">Transmitters Status</h3>
+                <p className="text-xs md:text-xl text-gray-500 dark:text-gray-400 mt-1 md:mt-2">Real-time health & operational status of deployed PTTs</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-700/80 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-600 flex-shrink-0">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total:</span>
-              <strong className="text-slate-900 dark:text-white font-bold text-sm">{activeLiveTransmitters.length}</strong>
+            <div className="flex items-center gap-1.5 md:gap-3 bg-slate-100 dark:bg-slate-700/80 px-3 md:px-6 py-1 md:py-3 rounded-full border border-slate-200 dark:border-slate-600 flex-shrink-0">
+              <span className="text-xs md:text-xl text-slate-500 dark:text-slate-400 font-medium">Total:</span>
+              <strong className="text-slate-900 dark:text-white font-bold text-sm md:text-2xl">{activeLiveTransmitters.length}</strong>
             </div>
           </div>
           
           {/* Main Donut Chart Container */}
-          <div className="h-[280px] w-full z-10 my-1 relative flex items-center justify-center">
+          <div className="h-[280px] md:h-[560px] w-full z-10 my-1 md:my-4 relative flex items-center justify-center">
              {transmitterStatusData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -363,13 +375,13 @@ export const Dashboard = () => {
                     data={transmitterStatusData} 
                     cx="50%" 
                     cy="50%" 
-                    innerRadius={65} 
-                    outerRadius={110} 
+                    innerRadius={isIPad ? 130 : 65} 
+                    outerRadius={isIPad ? 220 : 110} 
                     paddingAngle={3} 
                     dataKey="value" 
                     stroke="#ffffff"
-                    strokeWidth={2}
-                    labelLine={{ stroke: '#9ca3af', strokeWidth: 1.5 }}
+                    strokeWidth={isIPad ? 4 : 2}
+                    labelLine={{ stroke: '#9ca3af', strokeWidth: isIPad ? 3 : 1.5 }}
                     label={renderCustomizedLabel}
                     animationDuration={1200}
                   >
@@ -378,10 +390,10 @@ export const Dashboard = () => {
                     ))}
                   </Pie>
                   {/* Center Donut Label */}
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-900 dark:fill-white font-black text-2xl">
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-900 dark:fill-white font-black text-2xl md:text-5xl">
                     {activeLiveTransmitters.length}
                   </text>
-                  <text x="50%" y="57%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-400 dark:fill-gray-500 font-bold text-[10px] uppercase tracking-wider">
+                  <text x="50%" y="57%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-400 dark:fill-gray-500 font-bold text-[10px] md:text-[20px] uppercase tracking-wider">
                     Units
                   </text>
                   <RechartsTooltip 
@@ -394,17 +406,17 @@ export const Dashboard = () => {
           </div>
 
           {/* Status Breakdown Pills - Adaptable Grid */}
-          <div className="z-10 mt-2 pt-3 border-t border-slate-100 dark:border-slate-700/60 grid grid-cols-2 gap-2 w-full">
+          <div className="z-10 mt-2 md:mt-8 pt-3 md:pt-6 border-t border-slate-100 dark:border-slate-700/60 grid grid-cols-2 gap-2 md:gap-4 w-full">
             {transmitterStatusData.map((st) => (
               <div 
                 key={st.name} 
-                className="flex items-center justify-between gap-1.5 bg-white dark:bg-slate-750 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs transition-all w-full min-w-0"
+                className="flex items-center justify-between gap-1.5 md:gap-3 bg-white dark:bg-slate-750 px-3 md:px-6 py-2 md:py-4 rounded-xl md:rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-2xs md:shadow-md transition-all w-full min-w-0"
               >
-                <div className="flex items-center gap-1.5 min-w-0 truncate">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: st.color }} />
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">{st.name}:</span>
+                <div className="flex items-center gap-1.5 md:gap-3 min-w-0 truncate">
+                  <span className="w-2.5 h-2.5 md:w-5 md:h-5 rounded-full flex-shrink-0" style={{ backgroundColor: st.color }} />
+                  <span className="text-xs md:text-xl font-semibold text-slate-700 dark:text-slate-300 truncate">{st.name}:</span>
                 </div>
-                <span className="text-xs font-black px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white flex-shrink-0">
+                <span className="text-xs md:text-xl font-black px-1.5 md:px-3 py-0.5 md:py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white flex-shrink-0">
                   {st.value}
                 </span>
               </div>
@@ -412,12 +424,12 @@ export const Dashboard = () => {
           </div>
 
           {/* Last Data Update Timestamp Info in the same window */}
-          <div className="z-10 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-            <div className="flex items-center gap-1.5">
-              <Activity size={14} className="text-brand-600 animate-pulse" />
+          <div className="z-10 mt-4 md:mt-8 pt-3 md:pt-6 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs md:text-xl text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-1.5 md:gap-3">
+              <Activity size={isIPad ? 24 : 14} className="text-brand-600 animate-pulse" />
               <span>Last Data Update:</span>
             </div>
-            <span className="font-semibold text-gray-900 dark:text-gray-200 tracking-wide" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+            <span className="font-semibold text-gray-900 dark:text-gray-200 tracking-wide md:text-2xl" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
               {lastIngestDate}
             </span>
           </div>
