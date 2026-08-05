@@ -481,6 +481,9 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                     } else {
                         setActiveTabMode('single');
                     }
+                    if (setNavTarget) {
+                        setNavTarget({id: pos.transmitter_id, lat: pos.lat, lon: pos.lon});
+                    }
                 },
                 popupclose: () => {
                     setIsOpen(false);
