@@ -117,7 +117,7 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
         </form>
         
         <div className="mt-8 text-center text-xs text-slate-500">
-           Protected by Google Firebase Authentication. <br/>
+           Protected by Google Cloud Authentication. <br/>
            Access restricted to authorized personnel only.
         </div>
       </div>
