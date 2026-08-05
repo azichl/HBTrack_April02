@@ -2326,7 +2326,7 @@ const LiveTrackingInner = () => {
 
         {/* Smart Geo-Search Bar (Top Center) */}
         {!isMeasuring && (
-        <div className={`absolute ${isIOSMode ? 'top-3 left-1/2 -translate-x-1/2 w-[55vw] max-w-[210px] xs:max-w-[240px]' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
+        <div className={`absolute ${isIOSMode ? 'top-3 left-1/2 -translate-x-1/2 w-[55vw] max-w-[210px] xs:max-w-[240px] md:max-w-md' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
              <div className="relative group shadow-lg rounded-xl w-full">
                  <form 
                     onSubmit={handleGeoSearch}

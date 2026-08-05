@@ -126,7 +126,7 @@ export const Settings = () => {
   const tabs = isIOSMode ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') : allTabs;
 
   return (
-    <div className={`max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isIOSMode ? 'pt-1 px-1' : ''}`}>
+    <div className={`w-full max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isIOSMode ? 'pt-1 px-1' : ''}`}>
       {/* Header (Web Mode Only) */}
       {!isIOSMode && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -383,7 +383,7 @@ export const Settings = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Protect your account and data</p>
               </div>
 
-              <div className="max-w-md space-y-4">
+              <div className="max-w-2xl space-y-4">
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Current Password</label>
                     <div className="relative">

@@ -329,7 +329,7 @@ export const Dashboard = () => {
 
   if (isIOSMode) {
     return (
-      <div className="p-2 sm:p-4 max-w-lg mx-auto space-y-3 animate-fade-in pb-16">
+      <div className="p-2 sm:p-4 max-w-3xl md:max-w-4xl lg:max-w-5xl mx-auto space-y-3 animate-fade-in pb-16">
         {/* iOS Transmitters Status Breakdown Card Only */}
         <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50/50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700 shadow-md relative overflow-hidden flex flex-col justify-between">
           <div className="absolute -top-4 -right-4 p-6 opacity-5 pointer-events-none">
