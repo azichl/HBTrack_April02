@@ -110,7 +110,7 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
             ) : (
               <>
                 <LogIn className="h-5 w-5" />
-                Sign In to Platform
+                Sign in
               </>
             )}
           </button>
