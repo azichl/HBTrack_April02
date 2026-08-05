@@ -1079,9 +1079,31 @@ const LiveTrackingInner = () => {
           if ('geolocation' in navigator) {
               watchIdRef.current = navigator.geolocation.watchPosition(
                   (pos) => {
-                      const loc = { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, heading: pos.coords.heading };
-                      setUserLocation(loc);
-                      setCustomFlyTo({ lat: loc.lat, lon: loc.lon });
+                      setUserLocation(prev => {
+                          let computedHeading = pos.coords.heading;
+                          if ((computedHeading === null || isNaN(computedHeading)) && prev) {
+                              const lat1 = prev.lat * Math.PI / 180;
+                              const lat2 = pos.coords.latitude * Math.PI / 180;
+                              const dLon = (pos.coords.longitude - prev.lon) * Math.PI / 180;
+                              const y = Math.sin(dLon) * Math.cos(lat2);
+                              const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+                              const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                              
+                              // Only update heading if moved > 1 meter to avoid jitter
+                              const R = 6371e3;
+                              const dLat = (pos.coords.latitude - prev.lat) * Math.PI / 180;
+                              const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2) * Math.sin(dLon/2);
+                              const dist = R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+                              
+                              if (dist > 1) {
+                                  computedHeading = brng;
+                              } else {
+                                  computedHeading = prev.heading;
+                              }
+                          }
+                          return { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, heading: computedHeading };
+                      });
+                      setCustomFlyTo({ lat: pos.coords.latitude, lon: pos.coords.longitude });
                   },
                   (err) => { 
                       console.error("GPS location error:", err); 
@@ -2113,7 +2135,7 @@ const LiveTrackingInner = () => {
                             const xB = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
                             bearing = (Math.atan2(yB, xB) * 180 / Math.PI + 360) % 360;
                         }
-                        const rotation = userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : bearing;
+                        const rotation = userLocation.heading !== null && userLocation.heading !== undefined && !isNaN(userLocation.heading) ? userLocation.heading : 0;
 
                         return (
                             <Marker
