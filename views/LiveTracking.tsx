@@ -633,7 +633,13 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                             <div className="mt-2">
                                 <a
                                     href={`https://earth.google.com/web/search/${currentPos.lat},${currentPos.lon}`}
-                                    target="_blank"
+                                    target={isIOSMode ? "_top" : "_blank"}
+                                    onClick={(e) => {
+                                        if (isIOSMode) {
+                                            e.preventDefault();
+                                            window.location.href = `https://earth.google.com/web/search/${currentPos.lat},${currentPos.lon}`;
+                                        }
+                                    }}
                                     rel="noopener noreferrer"
                                     className="w-full py-1.5 bg-blue-50 text-blue-700 font-semibold rounded hover:bg-blue-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1 border border-blue-200"
                                 >
@@ -1062,6 +1068,7 @@ const LiveTrackingInner = () => {
   const [userLocation, setUserLocation] = useState<{lat: number, lon: number, accuracy: number, heading?: number | null} | null>(null);
   const [isTrackingUser, setIsTrackingUser] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const hasFlownToUserRef = useRef(false);
   const [navTarget, setNavTargetRaw] = useState<{id: string, lat: number, lon: number} | null>(null);
   const setNavTarget = useCallback((target: {id: string, lat: number, lon: number} | null) => {
     setNavTargetRaw(target);
@@ -1074,8 +1081,10 @@ const LiveTrackingInner = () => {
           setIsTrackingUser(false);
           setUserLocation(null);
           setNavTarget(null);
+          hasFlownToUserRef.current = false;
       } else {
           setIsTrackingUser(true);
+          hasFlownToUserRef.current = false;
           if ('geolocation' in navigator) {
               watchIdRef.current = navigator.geolocation.watchPosition(
                   (pos) => {
@@ -1103,7 +1112,11 @@ const LiveTrackingInner = () => {
                           }
                           return { lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy, heading: computedHeading };
                       });
-                      setCustomFlyTo({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+                      
+                      if (!hasFlownToUserRef.current) {
+                          setCustomFlyTo({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+                          hasFlownToUserRef.current = true;
+                      }
                   },
                   (err) => { 
                       console.error("GPS location error:", err); 
