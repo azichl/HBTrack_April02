@@ -3392,7 +3392,7 @@ const LiveTrackingInner = () => {
       return latestPositions.map(p => `${p.lat},${p.lon}`).join(';');
     };
     const transmitterCoords = getTransmitterUrl();
-    const windyUrl = `https://embed.windy.com/embed2.html?lat=${centerLat}&lon=${centerLon}&detailLat=${centerLat}&detailLon=${centerLon}&width=100%&height=100%&zoom=6&level=surface&overlay=${weatherType}&product=ecmwf&menu=&message=&marker=${transmitterCoords || 'true'}&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
+    const windyUrl = `https://embed.windy.com/embed2.html?lat=${centerLat}&lon=${centerLon}&detailLat=${centerLat}&detailLon=${centerLon}&zoom=6&level=surface&overlay=${weatherType}&product=ecmwf&menu=&message=&marker=${transmitterCoords}&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
 
     return (
         <div className="relative w-full h-full">
