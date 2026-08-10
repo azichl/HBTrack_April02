@@ -980,8 +980,8 @@ interface HistoricalMarkerProps {
     timeZone: string;
 }
 
-// Extracted Component for Historical Points to handle lazy-loading
-const HistoricalMarker: React.FC<HistoricalMarkerProps> = ({ 
+// Extracted Component for Historical Points to handle lazy-loading (memoized to prevent UI thread lag)
+const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({ 
     point, 
     pttId, 
     color, 
@@ -1014,7 +1014,7 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = ({
             </Popup>
         </CircleMarker>
     );
-};
+});
 
 // Coordinate formatting helper
 const formatCoordinateSystems = (lat: number, lon: number) => {
@@ -2090,26 +2090,34 @@ const LiveTrackingInner = () => {
             )}
             
             {/* Historical Tracks */}
-            {showHistory && historyPaths.map((hp) => (
-                <React.Fragment key={hp.id}>
-                    {/* The line connecting all points */}
-                    <Polyline 
-                        positions={hp.path.map(p => [p.lat, p.lon])} 
-                        pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
-                    />
-                    
-                    {/* Dots for every historical fix */}
-                    {hp.path.map((point, idx) => (
-                         <HistoricalMarker
-                            key={`${hp.id}-${idx}`}
-                            point={point}
-                            pttId={hp.id}
-                            color={hp.color}
-                            timeZone={timeZone}
-                         />
-                    ))}
-                </React.Fragment>
-            ))}
+            {showHistory && historyPaths.map((hp) => {
+                const fullPath = hp.path;
+                // Downsample circle markers if path is large to keep mobile/iOS smooth at 60fps
+                const maxMarkers = 150;
+                const step = fullPath.length > maxMarkers ? Math.ceil(fullPath.length / maxMarkers) : 1;
+                const displayedPoints = fullPath.filter((_, idx) => idx === 0 || idx === fullPath.length - 1 || idx % step === 0);
+
+                return (
+                    <React.Fragment key={hp.id}>
+                        {/* The line connecting 100% of all historical points */}
+                        <Polyline 
+                            positions={fullPath.map(p => [p.lat, p.lon])} 
+                            pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
+                        />
+                        
+                        {/* Optimized dots along the historical track */}
+                        {displayedPoints.map((point, idx) => (
+                             <HistoricalMarker
+                                key={`${hp.id}-${point.timestamp}-${idx}`}
+                                point={point}
+                                pttId={hp.id}
+                                color={hp.color}
+                                timeZone={timeZone}
+                             />
+                        ))}
+                    </React.Fragment>
+                );
+            })}
             
             <ZoomControl position="bottomright" />
             <ScaleControl position="bottomleft" />
