@@ -167,25 +167,54 @@ const MapController = ({
     selectedPos, 
     customFlyTo 
 }: { 
-    selectedPos: { lat: number, lon: number } | null, 
+    selectedPos: { lat: number, lon: number, transmitter_id?: any } | null, 
     customFlyTo: { lat: number, lon: number } | null 
 }) => {
     const map = useMap();
+    const lastFlownKeyRef = useRef<string | null>(null);
+    const lastCustomFlyToRef = useRef<string | null>(null);
     
     useEffect(() => {
         if (selectedPos) {
-            map.flyTo([selectedPos.lat, selectedPos.lon], 9, { animate: true });
+            const posKey = `${selectedPos.transmitter_id || ''}_${selectedPos.lat}_${selectedPos.lon}`;
+            if (lastFlownKeyRef.current !== posKey) {
+                lastFlownKeyRef.current = posKey;
+                map.flyTo([selectedPos.lat, selectedPos.lon], 9, { animate: true });
+            }
+        } else {
+            lastFlownKeyRef.current = null;
         }
     }, [selectedPos, map]);
 
     useEffect(() => {
         if (customFlyTo) {
-            map.flyTo([customFlyTo.lat, customFlyTo.lon], 10, { animate: true });
+            const customKey = `${customFlyTo.lat}_${customFlyTo.lon}`;
+            if (lastCustomFlyToRef.current !== customKey) {
+                lastCustomFlyToRef.current = customKey;
+                map.flyTo([customFlyTo.lat, customFlyTo.lon], 10, { animate: true });
+            }
+        } else {
+            lastCustomFlyToRef.current = null;
         }
     }, [customFlyTo, map]);
 
     return null;
 };
+
+// Ensures Leaflet recalculates dimensions when returning to tracking tab
+const MapResizeHandler = ({ viewMode }: { viewMode: string }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (viewMode === 'tracking') {
+            const timer = setTimeout(() => {
+                map.invalidateSize();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [viewMode, map]);
+    return null;
+};
+
 
 // Handles clicking on map to close dropdowns and handle left-click interactions
 const MapEventsHandler = ({ 
@@ -2003,8 +2032,8 @@ const LiveTrackingInner = () => {
   const renderTrackingMap = () => (
     <div className="relative w-full h-full" style={{ height: '100%', width: '100%', minHeight: '400px' }}>
         <MapContainer 
-            center={isIOSMode ? [38.0, 58.0] : sharedMapCenter} 
-            zoom={isIOSMode ? 3.8 : sharedMapZoom} 
+            center={sharedMapCenter} 
+            zoom={sharedMapZoom} 
             minZoom={3}
             maxBounds={[[-90, -180], [90, 180]]}
             className={`w-full h-full z-0 ${isMeasuring ? 'cursor-crosshair' : ''}`}
@@ -2012,6 +2041,7 @@ const LiveTrackingInner = () => {
             zoomControl={false}
         >
             <MapController selectedPos={flyToPos} customFlyTo={customFlyTo} />
+            <MapResizeHandler viewMode={viewMode} />
             
             <MapEventsHandler 
                 closeDropdowns={closeAllDropdowns} 
@@ -2035,9 +2065,12 @@ const LiveTrackingInner = () => {
 
             {activeWeatherLayer !== 'none' && (
                 <TileLayer
+                    key={activeWeatherLayer}
                     url={`https://tile.openweathermap.org/map/${activeWeatherLayer}/{z}/{x}/{y}.png?appid=${WEATHER_API_KEY}`}
                     attribution='&copy; OpenWeatherMap'
                     zIndex={600}
+                    maxNativeZoom={18}
+                    maxZoom={19}
                     className="filter contrast-150 saturate-[3] brightness-110"
                 />
             )}
@@ -3385,14 +3418,15 @@ const LiveTrackingInner = () => {
   );
   
   const renderWeatherMap = () => {
-    const centerLat = latestPositions.length > 0 ? latestPositions[0].lat : 24.4539;
-    const centerLon = latestPositions.length > 0 ? latestPositions[0].lon : 54.3773;
+    const centerLat = sharedMapCenter ? sharedMapCenter[0] : (latestPositions.length > 0 ? latestPositions[0].lat : 24.4539);
+    const centerLon = sharedMapCenter ? sharedMapCenter[1] : (latestPositions.length > 0 ? latestPositions[0].lon : 54.3773);
+    const zoomLevel = sharedMapZoom || 6;
     const getTransmitterUrl = () => {
       if (latestPositions.length === 0) return '';
       return latestPositions.map(p => `${p.lat},${p.lon}`).join(';');
     };
     const transmitterCoords = getTransmitterUrl();
-    const windyUrl = `https://embed.windy.com/embed2.html?lat=${centerLat}&lon=${centerLon}&detailLat=${centerLat}&detailLon=${centerLon}&zoom=6&level=surface&overlay=${weatherType}&product=ecmwf&menu=&message=&marker=${transmitterCoords}&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
+    const windyUrl = `https://embed.windy.com/embed2.html?lat=${centerLat}&lon=${centerLon}&detailLat=${centerLat}&detailLon=${centerLon}&zoom=${zoomLevel}&level=surface&overlay=${weatherType}&product=ecmwf&menu=&message=&marker=${transmitterCoords}&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
 
     return (
         <div className="relative w-full h-full">
@@ -3600,9 +3634,15 @@ const LiveTrackingInner = () => {
             ref={containerRef} 
             className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? '!fixed !inset-0 !z-[9999] !p-0 !m-0 !rounded-none !border-none !w-screen !h-[100dvh] !max-w-none !max-h-none' : ''}`}
         >
-            {viewMode === 'tracking' ? renderTrackingMap() : 
-             viewMode === 'weather' ? renderWeatherMap() : 
-             renderWeatherMap2()}
+            <div className={`w-full h-full ${viewMode === 'tracking' ? 'block' : 'hidden'}`}>
+                {renderTrackingMap()}
+            </div>
+            <div className={`w-full h-full ${viewMode === 'weather' ? 'block' : 'hidden'}`}>
+                {renderWeatherMap()}
+            </div>
+            <div className={`w-full h-full ${viewMode === 'weather2' ? 'block' : 'hidden'}`}>
+                {renderWeatherMap2()}
+            </div>
         </div>
 
         {/* Mark as Dead Confirmation Modal */}
