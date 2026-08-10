@@ -12,6 +12,7 @@ The app uses a lightweight SwiftUI `WKWebView` wrapper to load the React web app
 |------|--------|-------------|
 | **03/08/2026 23:43** | `cce6304` (web) | **Last known stable iOS version** — Working: Map Layers popup, Weather popup, History panel, GPS fly-to, Layers/Weather/History tools. iOS-only: hides AI Forecast, GEE satellite layers, Mark as Dead button. Distance measurement tool working. |
 | **04/08/2026 08:50** | `eb429d2` (ios) | Added RAF Tracking App Icon (white background, all iOS sizes) + updated display name |
+| **10/08/2026 11:15** | `e0e8b86` (ios) | Fixed live map weather layer zoom/navigation resets + optimized PTT history load speed & iOS UI responsiveness |
 
 ---
 
