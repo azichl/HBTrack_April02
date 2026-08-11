@@ -226,8 +226,10 @@ export const Settings = () => {
                     className="w-full"
                     buttonClassName="pl-10 pr-4 py-2.5"
                     options={[
+                      { value: 'system', label: 'System Local Time (Device Timezone)' },
                       { value: 'UTC', label: 'UTC (Coordinated Universal Time)' },
                       { value: 'Asia/Qatar', label: 'Asia/Qatar (GMT+3)' },
+                      { value: 'Asia/Riyadh', label: 'Asia/Riyadh (GMT+3)' },
                       { value: 'Asia/Dubai', label: 'Asia/Dubai (GMT+4)' },
                       { value: 'Asia/Almaty', label: 'Asia/Almaty (GMT+5)' }
                     ]}

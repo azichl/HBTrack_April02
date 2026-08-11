@@ -1,6 +1,14 @@
 
 
-export const formatDateTime = (isoString?: string | null, timeZone: string = 'UTC'): string => {
+export const getSystemTimeZone = (): string => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch (e) {
+    return 'UTC';
+  }
+};
+
+export const formatDateTime = (isoString?: string | null, timeZone?: string): string => {
   if (!isoString) return '-';
   try {
     // Ensure the timestamp is parsed as UTC if it lacks a timezone indicator (like Z or +00:00)
@@ -14,6 +22,13 @@ export const formatDateTime = (isoString?: string | null, timeZone: string = 'UT
     const date = new Date(parsedString);
     if (isNaN(date.getTime())) return '-';
     
+    // Determine target timezone: if specified and not 'system'/'auto'/'local', use it.
+    // Otherwise default to the system device's local timezone.
+    let targetTz = timeZone;
+    if (!targetTz || targetTz === 'system' || targetTz === 'auto' || targetTz === 'local') {
+      targetTz = getSystemTimeZone();
+    }
+    
     return new Intl.DateTimeFormat('en-GB', {
       year: 'numeric',
       month: '2-digit',
@@ -22,7 +37,7 @@ export const formatDateTime = (isoString?: string | null, timeZone: string = 'UT
       minute: '2-digit',
       second: '2-digit',
       hour12: false,
-      timeZone: timeZone
+      timeZone: targetTz
     }).format(date).replace(',', '');
   } catch (e) {
     return '-';

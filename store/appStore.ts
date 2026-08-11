@@ -438,7 +438,7 @@ export const useAppStore = create<AppState>()(
       notificationsEnabled: true,
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
 
-      timeZone: 'UTC',
+      timeZone: 'system',
       setTimeZone: (tz) => set({ timeZone: tz }),
       
       argosPositions: [],
