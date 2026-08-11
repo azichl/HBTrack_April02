@@ -376,8 +376,8 @@ export const Dashboard = () => {
                     data={transmitterStatusData} 
                     cx="50%" 
                     cy="50%" 
-                    innerRadius={isIPad ? 100 : 52} 
-                    outerRadius={isIPad ? 165 : 82} 
+                    innerRadius={isIPad ? 100 : 65} 
+                    outerRadius={isIPad ? 165 : 110} 
                     paddingAngle={3} 
                     dataKey="value" 
                     stroke="#ffffff"
