@@ -37,7 +37,20 @@
         if (isIOS) {
           var style = document.createElement('style');
           style.id = 'ios-font-override';
-          style.innerHTML = '* { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif !important; }';
+          style.innerHTML = `
+            * { 
+              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif !important; 
+            }
+            .text-xs { font-size: 11px !important; line-height: 15px !important; }
+            .text-sm { font-size: 13px !important; line-height: 18px !important; }
+            .text-base { font-size: 14px !important; line-height: 20px !important; }
+            .text-lg { font-size: 16px !important; line-height: 22px !important; }
+            .text-xl { font-size: 18px !important; line-height: 24px !important; }
+            .text-2xl { font-size: 20px !important; line-height: 26px !important; }
+            .text-3xl { font-size: 24px !important; line-height: 30px !important; }
+            .text-4xl { font-size: 28px !important; line-height: 34px !important; }
+            .text-5xl { font-size: 34px !important; line-height: 40px !important; }
+          `;
           document.head.appendChild(style);
         }
       })();
