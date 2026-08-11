@@ -16,6 +16,7 @@ import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/a
 const renderCustomizedLabel = (props: any) => {
   const { cx, cy, midAngle, innerRadius, outerRadius, value, name, x, y } = props;
   const RADIAN = Math.PI / 180;
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 640 || window.location.search.includes('mode=ios'));
   
   // Inner text position (number)
   const insideRadius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -31,11 +32,10 @@ const renderCustomizedLabel = (props: any) => {
         x={x} 
         y={y} 
         fill="currentColor" 
-        className="text-slate-700 dark:text-slate-300" 
+        className="text-slate-700 dark:text-slate-300 font-medium" 
         textAnchor={x > cx ? 'start' : 'end'} 
         dominantBaseline="central" 
-        fontSize={16} 
-        fontWeight="600"
+        fontSize={isMobile ? 11 : 13} 
       >
         {name}
       </text>
@@ -45,7 +45,7 @@ const renderCustomizedLabel = (props: any) => {
         fill="#ffffff" 
         textAnchor="middle" 
         dominantBaseline="central" 
-        fontSize={14} 
+        fontSize={isMobile ? 11 : 13} 
         fontWeight="bold"
       >
         {value}
@@ -376,8 +376,8 @@ export const Dashboard = () => {
                     data={transmitterStatusData} 
                     cx="50%" 
                     cy="50%" 
-                    innerRadius={isIPad ? 100 : 65} 
-                    outerRadius={isIPad ? 165 : 110} 
+                    innerRadius={isIPad ? 100 : 52} 
+                    outerRadius={isIPad ? 165 : 82} 
                     paddingAngle={3} 
                     dataKey="value" 
                     stroke="#ffffff"
