@@ -58,7 +58,7 @@ export const ReportConfiguration: React.FC<ReportConfigurationProps> = ({
                 value={dateRange.start}
                 onChange={(e) => onDateRangeChange({ ...dateRange, start: e.target.value })}
                 className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md text-xs text-gray-900 dark:text-gray-200 focus:ring-1 focus:ring-brand-500 outline-none"
-                style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+
               />
               <span className="text-[9px] text-gray-400 mt-0.5 block">Start Date</span>
             </div>
@@ -68,7 +68,7 @@ export const ReportConfiguration: React.FC<ReportConfigurationProps> = ({
                 value={dateRange.end}
                 onChange={(e) => onDateRangeChange({ ...dateRange, end: e.target.value })}
                 className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md text-xs text-gray-900 dark:text-gray-200 focus:ring-1 focus:ring-brand-500 outline-none"
-                style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+
               />
               <span className="text-[9px] text-gray-400 mt-0.5 block">End Date</span>
             </div>
@@ -82,7 +82,7 @@ export const ReportConfiguration: React.FC<ReportConfigurationProps> = ({
           <button
             onClick={() => setIsTransmittersOpen(!isTransmittersOpen)}
             className="w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md text-xs text-gray-900 dark:text-gray-200 focus:ring-1 focus:ring-brand-500 outline-none flex items-center justify-between"
-            style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+
           >
             <span className="truncate">{getTransmitterLabel()}</span>
             <ChevronDown size={14} className="text-gray-500 flex-shrink-0 ml-1" />
@@ -104,7 +104,7 @@ export const ReportConfiguration: React.FC<ReportConfigurationProps> = ({
                         ? 'bg-brand-50 text-brand-700 dark:bg-slate-700 dark:text-brand-400 font-bold' 
                         : 'text-gray-700 dark:text-gray-300'
                     }`}
-                    style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
+    
                   >
                     {opt.label}
                   </button>

@@ -519,8 +519,8 @@ export const ArgosData = () => {
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.msgType}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.dopplerError}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatDateTime(row.timestamp, timeZone)}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{row.lat}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>{row.lon}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.lat}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.lon}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.satellite}</td>
                           <td className="px-4 py-2.5 text-sm text-right">
                             <button
