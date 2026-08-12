@@ -15,7 +15,7 @@ import {
   batchWriteDocuments, batchDeleteDocuments,
   loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords,
   recordStatusTransition, loadStatusHistoryForTransmitter, loadAllStatusHistory,
-  saveLastIngestTime, loadLastIngestTime
+  saveLastIngestTime, loadLastIngestTime, subscribeToLastIngestTime
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
@@ -1362,10 +1362,17 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      // ─── Real-Time Position Listener ────────────────────────────────────────
+      // ─── Real-Time Position & Ingestion Listener ────────────────────────────────────────
       subscribeToLivePositions: () => {
+        // Real-time listener for last data update / ingestion timestamp
+        const unsubIngest = subscribeToLastIngestTime((ts) => {
+          if (ts) {
+            set({ lastIngestTime: ts });
+          }
+        });
+
         // Only listen for new positions generated from today onwards to avoid huge reads
-        return subscribeToRecentPositions(1, (firestorePositions) => {
+        const unsubPositions = subscribeToRecentPositions(1, (firestorePositions) => {
           // Merge incoming new positions into the store (retaining older ones loaded initially)
           set((state) => {
             const currentPositions = [...state.positions];
@@ -1414,6 +1421,11 @@ export const useAppStore = create<AppState>()(
             return changed ? { positions: currentPositions } : {};
           });
         });
+
+        return () => {
+          unsubIngest();
+          unsubPositions();
+        };
       },
 
       // ─── Simulation ─────────────────────────────────────────────────────────

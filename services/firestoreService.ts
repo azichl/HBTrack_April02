@@ -37,6 +37,23 @@ export const loadLastIngestTime = async (): Promise<string | null> => {
   return null;
 };
 
+/** Real-time listener for last data update / ingestion timestamp */
+export const subscribeToLastIngestTime = (
+  callback: (timestampIso: string | null) => void
+): (() => void) => {
+  const docRef = doc(db, 'system_status', 'ingestion');
+  return onSnapshot(docRef, (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      callback(data.last_ingest_time || null);
+    } else {
+      callback(null);
+    }
+  }, (error) => {
+    console.warn('[Firestore] Error subscribing to last_ingest_time:', error);
+  });
+};
+
 // ─── Single Document Operations ───────────────────────────────────────────────
 
 /** Saves or updates a document (merge mode) */
