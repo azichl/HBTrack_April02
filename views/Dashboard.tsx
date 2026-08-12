@@ -10,7 +10,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend 
 } from 'recharts';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, getSystemTimeZone } from '../utils/formatting';
 import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/accuracyCalculator';
 
 const renderCustomizedLabel = (props: any) => {
@@ -55,7 +55,7 @@ const renderCustomizedLabel = (props: any) => {
 };
 
 export const Dashboard = () => {
-  const { transmitters, birds, alerts, positions, timeZone, setActiveTab } = useAppStore();
+  const { transmitters, birds, alerts, positions, timeZone, setActiveTab, lastIngestTime } = useAppStore();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -239,10 +239,12 @@ export const Dashboard = () => {
     return positions.filter(p => new Date(p.timestamp).getTime() >= dayAgo).length;
   }, [positions]);
 
-  // Determine last ingest from actual data
-  const lastIngestDate = positions.length > 0 
-      ? formatDateTime(new Date(Math.max(...positions.map(d => new Date(d.timestamp).getTime()))).toISOString(), timeZone)
-      : 'No Data';
+  // Ingestion date/time (the moment when data update occurred, formatted in device system timezone)
+  const lastIngestDate = useMemo(() => {
+    const rawIngest = lastIngestTime || (positions.length > 0 ? positions[0].timestamp : null);
+    if (!rawIngest) return 'No Data';
+    return formatDateTime(rawIngest, getSystemTimeZone());
+  }, [lastIngestTime, positions]);
 
   // Current calendar month key for static test active filtering
   const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);

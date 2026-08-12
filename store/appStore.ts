@@ -14,7 +14,8 @@ import {
   batchWriteArgosPositions, deleteCollection,
   batchWriteDocuments, batchDeleteDocuments,
   loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords,
-  recordStatusTransition, loadStatusHistoryForTransmitter, loadAllStatusHistory
+  recordStatusTransition, loadStatusHistoryForTransmitter, loadAllStatusHistory,
+  saveLastIngestTime, loadLastIngestTime
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
@@ -104,6 +105,8 @@ interface AppState {
   
   // System State
   lastSaved: string;
+  lastIngestTime: string | null;
+  setLastIngestTime: (ts: string) => void;
   firestoreReady: boolean;
 
   // Data — all sourced from Firebase
@@ -470,6 +473,8 @@ export const useAppStore = create<AppState>()(
       setActiveBaseLayer: (layer) => set({ activeBaseLayer: layer }),
       
       lastSaved: new Date().toISOString(),
+      lastIngestTime: null,
+      setLastIngestTime: (ts) => set({ lastIngestTime: ts }),
       firestoreReady: false,
 
       // All data arrays start empty — loaded from Firebase on auth
@@ -1057,10 +1062,14 @@ export const useAppStore = create<AppState>()(
               ? mergedPositions.slice(mergedPositions.length - 2000) 
               : mergedPositions;
 
+          const nowIso = new Date().toISOString();
+          await saveLastIngestTime(nowIso);
+
           set({ 
               transmitters: newTransmitters, 
               positions: cappedPositions,
-              lastSaved: new Date().toISOString() 
+              lastIngestTime: nowIso,
+              lastSaved: nowIso 
           });
 
           onProgress?.(`✅ Done: ${tUpdated} transmitters, ${pCreated} positions, ${incomingMessages.length} raw records`);
@@ -1104,13 +1113,14 @@ export const useAppStore = create<AppState>()(
           // purgeZeroCoordinates disabled on init — zero coords are now filtered at ingestion time
           // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
-          const [fsTransmitters, fsBirds, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory] = await Promise.all([
+          const [fsTransmitters, fsBirds, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory, fsLastIngest] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
             loadRecentAlerts<Alert>(),
             loadCollection<User>('users'),
             loadCollection<StaticTestPeriod>('static_test_periods'),
-            loadAllStatusHistory()
+            loadAllStatusHistory(),
+            loadLastIngestTime()
           ]);
 
           // Load only the latest GPS and Doppler position for each transmitter
@@ -1209,6 +1219,7 @@ export const useAppStore = create<AppState>()(
             users: mergedUsers,
             staticTestPeriods: fsStaticPeriods || [],
             statusHistoryRecords: fsStatusHistory || [],
+            lastIngestTime: fsLastIngest || null,
             firestoreReady: true,
             currentUserRole: role,
             currentUserPermissions: permissions,

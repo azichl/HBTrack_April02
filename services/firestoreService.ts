@@ -1,11 +1,41 @@
 import { 
-  collection, doc, setDoc, getDocs, onSnapshot, query, deleteDoc, 
+  collection, doc, getDoc, setDoc, getDocs, onSnapshot, query, deleteDoc, 
   writeBatch, where, orderBy, limit, startAfter, getCountFromServer,
   DocumentSnapshot, addDoc, updateDoc, Timestamp, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ArgosMessage, StatusHistoryRecord } from '../types';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
+
+// ─── System Ingestion Metadata ────────────────────────────────────────────────
+
+/** Saves or updates last data update / ingestion timestamp in Firestore */
+export const saveLastIngestTime = async (timestampIso?: string): Promise<string> => {
+  const ts = timestampIso || new Date().toISOString();
+  try {
+    await saveDocument('system_status', 'ingestion', {
+      id: 'ingestion',
+      last_ingest_time: ts,
+      updated_at: ts
+    });
+  } catch (e) {
+    console.warn('[Firestore] Error saving last_ingest_time:', e);
+  }
+  return ts;
+};
+
+/** Loads last data update / ingestion timestamp from Firestore */
+export const loadLastIngestTime = async (): Promise<string | null> => {
+  try {
+    const docSnap = await getDoc(doc(db, 'system_status', 'ingestion'));
+    if (docSnap.exists()) {
+      return docSnap.data().last_ingest_time || null;
+    }
+  } catch (e) {
+    console.warn('[Firestore] Error loading last_ingest_time:', e);
+  }
+  return null;
+};
 
 // ─── Single Document Operations ───────────────────────────────────────────────
 
