@@ -1014,6 +1014,16 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
             </Popup>
         </CircleMarker>
     );
+}, (prevProps, nextProps) => {
+    return (
+        prevProps.pttId === nextProps.pttId &&
+        prevProps.color === nextProps.color &&
+        prevProps.timeZone === nextProps.timeZone &&
+        prevProps.point.lat === nextProps.point.lat &&
+        prevProps.point.lon === nextProps.point.lon &&
+        prevProps.point.timestamp === nextProps.point.timestamp &&
+        prevProps.point.type === nextProps.point.type
+    );
 });
 
 // Coordinate formatting helper
@@ -2036,6 +2046,7 @@ const LiveTrackingInner = () => {
             zoom={sharedMapZoom} 
             minZoom={3}
             maxBounds={[[-90, -180], [90, 180]]}
+            preferCanvas={true}
             className={`w-full h-full z-0 ${isMeasuring ? 'cursor-crosshair' : ''}`}
             style={{ height: '100%', width: '100%' }}
             zoomControl={false}
@@ -2090,26 +2101,37 @@ const LiveTrackingInner = () => {
             )}
             
             {/* Historical Tracks */}
-            {showHistory && historyPaths.map((hp) => (
-                <React.Fragment key={hp.id}>
-                    {/* The line connecting all points */}
-                    <Polyline 
-                        positions={hp.path.map(p => [p.lat, p.lon])} 
-                        pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
-                    />
-                    
-                    {/* Dots for every historical fix */}
-                    {hp.path.map((point, idx) => (
-                         <HistoricalMarker
-                            key={`${hp.id}-${idx}`}
-                            point={point}
-                            pttId={hp.id}
-                            color={hp.color}
-                            timeZone={timeZone}
-                         />
-                    ))}
-                </React.Fragment>
-            ))}
+            {showHistory && historyPaths.map((hp) => {
+                const fullPath = hp.path;
+                // Render 100% of all historical track points on Polyline.
+                // Optimize circle markers if path is large to keep mobile/iOS smooth at 60fps.
+                const maxMarkers = 150;
+                const step = fullPath.length > maxMarkers ? Math.ceil(fullPath.length / maxMarkers) : 1;
+                const displayedPoints = step > 1 
+                    ? fullPath.filter((_, idx) => idx === 0 || idx === fullPath.length - 1 || idx % step === 0)
+                    : fullPath;
+
+                return (
+                    <React.Fragment key={hp.id}>
+                        {/* The line connecting 100% of all historical points */}
+                        <Polyline 
+                            positions={fullPath.map(p => [p.lat, p.lon])} 
+                            pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
+                        />
+                        
+                        {/* Optimized dots along the historical track */}
+                        {displayedPoints.map((point, idx) => (
+                             <HistoricalMarker
+                                key={`${hp.id}-${point.timestamp}-${idx}`}
+                                point={point}
+                                pttId={hp.id}
+                                color={hp.color}
+                                timeZone={timeZone}
+                             />
+                        ))}
+                    </React.Fragment>
+                );
+            })}
             
             <ZoomControl position="bottomright" />
             <ScaleControl position="bottomleft" />
@@ -3423,15 +3445,16 @@ const LiveTrackingInner = () => {
     const zoomLevel = sharedMapZoom || 6;
     const getTransmitterUrl = () => {
       if (latestPositions.length === 0) return '';
-      return latestPositions.map(p => `${p.lat},${p.lon}`).join(';');
+      // Limit to 10 coords max to keep embed URL concise for mobile WebKit
+      return latestPositions.slice(0, 10).map(p => `${p.lat},${p.lon}`).join(';');
     };
-    const transmitterCoords = getTransmitterUrl();
+    const transmitterCoords = encodeURIComponent(getTransmitterUrl());
     const windyUrl = `https://embed.windy.com/embed2.html?lat=${centerLat}&lon=${centerLon}&detailLat=${centerLat}&detailLon=${centerLon}&zoom=${zoomLevel}&level=surface&overlay=${weatherType}&product=ecmwf&menu=&message=&marker=${transmitterCoords}&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=default&metricTemp=default&radarRange=-1`;
 
     return (
         <div className="relative w-full h-full">
             {isIOSMode ? (
-              /* iOS Mode: Remove top header bar ("Weather Analysis" removed). Bulk tools icon on top-left + Fullscreen button directly under it */
+              /* iOS Mode: Bulk tools icon on top-left + Fullscreen button directly under it */
               <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
                 <div className="relative">
                   <button
@@ -3477,7 +3500,6 @@ const LiveTrackingInner = () => {
                   )}
                 </div>
 
-                {/* Standalone Fullscreen Button directly under the bulk icons button */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -3507,21 +3529,21 @@ const LiveTrackingInner = () => {
                       <div className="h-6 w-px bg-gray-200" />
                       <div className="flex gap-2">
                            {weatherOptions.map(opt => (
-                              <button
-                                  key={opt.value}
-                                  onClick={() => {
-                                      setWeatherType(opt.value);
-                                      setActiveWeatherLayer(opt.layerId);
-                                  }}
-                                  className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                                      weatherType === opt.value 
-                                      ? 'bg-brand-500 text-white shadow-md shadow-brand-100' 
-                                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                  }`}
-                              >
-                                  {opt.label}
-                              </button>
-                           ))}
+                               <button
+                                   key={opt.value}
+                                   onClick={() => {
+                                       setWeatherType(opt.value);
+                                       setActiveWeatherLayer(opt.layerId);
+                                   }}
+                                   className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                                       weatherType === opt.value 
+                                       ? 'bg-brand-500 text-white shadow-md shadow-brand-100' 
+                                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                   }`}
+                               >
+                                   {opt.label}
+                               </button>
+                            ))}
                       </div>
                    </div>
                    
@@ -3551,6 +3573,7 @@ const LiveTrackingInner = () => {
                     src={windyUrl}
                     className="w-full h-full border-none"
                     title="Windy Weather Map"
+                    allow="geolocation; autoplay; encrypted-media"
                 />
             </div>
         </div>
@@ -3558,32 +3581,54 @@ const LiveTrackingInner = () => {
   };
 
   const renderWeatherMap2 = () => {
-    const centerLat = latestPositions.length > 0 ? latestPositions[0].lat : 36.0;
-    const centerLon = latestPositions.length > 0 ? latestPositions[0].lon : 59.0;
+    const centerLat = sharedMapCenter ? sharedMapCenter[0] : (latestPositions.length > 0 ? latestPositions[0].lat : 36.0);
+    const centerLon = sharedMapCenter ? sharedMapCenter[1] : (latestPositions.length > 0 ? latestPositions[0].lon : 59.0);
     const meteoblueUrl = `https://www.meteoblue.com/en/weather/maps/widget?apikey=${METEOBLUE_API_KEY}#coords=5/${centerLat}/${centerLon}&map=windAnimation~rainbow~auto~10%20m%20above%20gnd~none`;
 
     return (
         <div className="relative w-full h-full">
-            <div className="absolute top-0 left-0 right-0 z-[500] bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
-                 <div className="flex items-center gap-4">
-                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                        <Satellite className="text-brand-500" size={20} />
-                        Satellite Weather (Meteoblue)
-                    </h3>
-                 </div>
-                 <button 
-                    onClick={toggleFullscreen}
-                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
-                 >
-                      {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
-                 </button>
-            </div>
-            <div className="w-full h-full pt-16 bg-slate-900">
+            {isIOSMode ? (
+              <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleFullscreen();
+                  }}
+                  className={`p-2.5 bg-white rounded-xl shadow-lg border border-gray-200 transition-all flex items-center justify-center ${
+                    isFullscreen ? 'bg-brand-50 text-brand-600 ring-2 ring-brand-500/50' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                  title={isFullscreen ? "Exit Fullscreen" : "Maximize Map"}
+                >
+                  {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                </button>
+              </div>
+            ) : (
+              <div className="absolute top-0 left-0 right-0 z-[500] bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
+                   <div className="flex items-center gap-4">
+                      <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                          <Satellite className="text-brand-500" size={20} />
+                          Satellite Weather (Meteoblue)
+                      </h3>
+                   </div>
+                   <button 
+                      onClick={toggleFullscreen}
+                      className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors"
+                   >
+                        {isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}
+                   </button>
+              </div>
+            )}
+            <div className={`w-full h-full ${isIOSMode ? 'pt-0' : 'pt-16'} bg-slate-900`}>
                 <iframe
                     src={meteoblueUrl}
                     className="w-full h-full border-none"
                     title="Meteoblue Weather Map"
-                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                    allow="geolocation; autoplay; encrypted-media"
                 />
             </div>
         </div>
