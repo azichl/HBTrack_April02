@@ -757,38 +757,31 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   };
 
   // Helper: process a Firestore doc snapshot into a position record
-  const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): { rec: any | null, isOlderThanStart: boolean } => {
+  const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
     const d = docSnap.data();
     const docTs = safeParseDate(d.timestamp);
-    if (isNaN(docTs)) return { rec: null, isOlderThanStart: false };
-    if (docTs < startMs) return { rec: null, isOlderThanStart: true };
-    if (docTs > endMs) return { rec: null, isOlderThanStart: false };
+    if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
 
     const lat = Number(d.lat);
     let lon = Number(d.lon);
-    if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) {
-      return { rec: null, isOlderThanStart: false };
-    }
+    if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return null;
 
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
 
     const dedupeKey = `${docTs}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
-    if (seenKeys.has(dedupeKey)) return { rec: null, isOlderThanStart: false };
+    if (seenKeys.has(dedupeKey)) return null;
     seenKeys.add(dedupeKey);
 
     return {
-      rec: {
-        id: docSnap.id,
-        transmitter_id: pidStr,
-        platformId: pidStr,
-        lat, lon,
-        timestamp: d.timestamp,
-        lc: d.lc || '',
-        satellite: d.satellite || '',
-        locationType: classifyLocType(String(d.lc || ''), String(d.locationType || '')),
-        speed_kmh: d.speed_kmh || 0,
-      },
-      isOlderThanStart: false
+      id: docSnap.id,
+      transmitter_id: pidStr,
+      platformId: pidStr,
+      lat, lon,
+      timestamp: d.timestamp,
+      lc: d.lc || '',
+      satellite: d.satellite || '',
+      locationType: classifyLocType(String(d.lc || ''), String(d.locationType || '')),
+      speed_kmh: d.speed_kmh || 0,
     };
   };
 
@@ -798,35 +791,19 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       const seenKeys = new Set<string>();
       let pttDocs: any[] = [];
 
-      // ── Primary: query argos_positions ordered by timestamp desc ──
+      // ── Primary: query argos_positions ──
       try {
         const qArgos = query(
           collection(db, 'argos_positions'),
-          where('platformId', '==', pidStr),
-          orderBy('timestamp', 'desc'),
-          limit(2000)
+          where('platformId', '==', pidStr)
         );
         const snap = await getDocs(qArgos);
-        for (const ds of snap.docs) {
-          const { rec, isOlderThanStart } = processDoc(ds, pidStr, seenKeys);
+        snap.forEach((ds: any) => {
+          const rec = processDoc(ds, pidStr, seenKeys);
           if (rec) pttDocs.push(rec);
-          if (isOlderThanStart) break;
-        }
+        });
       } catch (e) {
-        try {
-          const qArgosFallback = query(
-            collection(db, 'argos_positions'),
-            where('platformId', '==', pidStr),
-            limit(2000)
-          );
-          const snap = await getDocs(qArgosFallback);
-          snap.forEach((ds: any) => {
-            const { rec } = processDoc(ds, pidStr, seenKeys);
-            if (rec) pttDocs.push(rec);
-          });
-        } catch (errFallback) {
-          console.warn(`[Firestore] argos_positions fallback query failed for ${pidStr}:`, errFallback);
-        }
+        console.warn(`[Firestore] argos_positions query failed for ${pidStr}:`, e);
       }
 
       // ── Fallback: only query positions if argos_positions returned nothing ──
@@ -834,31 +811,15 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         try {
           const qPos = query(
             collection(db, 'positions'),
-            where('transmitter_id', '==', pidStr),
-            orderBy('timestamp', 'desc'),
-            limit(2000)
+            where('transmitter_id', '==', pidStr)
           );
           const snap = await getDocs(qPos);
-          for (const ds of snap.docs) {
-            const { rec, isOlderThanStart } = processDoc(ds, pidStr, seenKeys);
+          snap.forEach((ds: any) => {
+            const rec = processDoc(ds, pidStr, seenKeys);
             if (rec) pttDocs.push(rec);
-            if (isOlderThanStart) break;
-          }
+          });
         } catch (e) {
-          try {
-            const qPosFallback = query(
-              collection(db, 'positions'),
-              where('transmitter_id', '==', pidStr),
-              limit(2000)
-            );
-            const snap = await getDocs(qPosFallback);
-            snap.forEach((ds: any) => {
-              const { rec } = processDoc(ds, pidStr, seenKeys);
-              if (rec) pttDocs.push(rec);
-            });
-          } catch (errFallback) {
-            console.warn(`[Firestore] positions fallback query failed for ${pidStr}:`, errFallback);
-          }
+          console.warn(`[Firestore] positions query failed for ${pidStr}:`, e);
         }
       }
 
