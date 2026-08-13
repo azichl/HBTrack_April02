@@ -88,8 +88,18 @@ exports.resolveAuthEmail = onRequest({ cors: true, maxInstances: 10 }, async (re
       const uUsername = (data.username || "").toLowerCase().trim();
       const uPhone = (data.phone || "").replace(/[\s\-\(\)]/g, "").trim();
 
+      // Match explicit username, email, or phone
       if (uEmail === cleanLower || uUsername === cleanLower || (cleanPhone && uPhone && uPhone === cleanPhone)) {
         foundEmail = data.email;
+        return;
+      }
+
+      // Fallback: Match email prefix (e.g. 'john' for 'john@domain.com') if user has no explicit username or if it matches
+      if (uEmail && uEmail.includes("@")) {
+        const emailPrefix = uEmail.split("@")[0].toLowerCase().trim();
+        if (emailPrefix === cleanLower) {
+          foundEmail = data.email;
+        }
       }
     });
 
@@ -208,7 +218,7 @@ exports.listAppUsers = onRequest({ cors: true, maxInstances: 5 }, async (req, re
       id: u.uid,
       name: u.displayName || profiles[u.uid]?.name || u.email.split("@")[0],
       email: u.email,
-      username: profiles[u.uid]?.username || "",
+      username: profiles[u.uid]?.username || (u.email ? u.email.split("@")[0] : ""),
       phone: profiles[u.uid]?.phone || u.phoneNumber || "",
       role: profiles[u.uid]?.role || "viewer",
       status: u.disabled ? "inactive" : (profiles[u.uid]?.status || "active"),
