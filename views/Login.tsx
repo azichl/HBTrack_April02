@@ -23,25 +23,56 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    try {
-      let targetEmail = identifier.trim();
+    const cleanId = identifier.trim();
+    if (!cleanId) {
+      setError("Please enter your username.");
+      setLoading(false);
+      return;
+    }
 
-      // Resolve username/pseudonym or phone to registered email
-      try {
-        targetEmail = await resolveIdentifierToEmail(identifier);
-      } catch (resErr: any) {
-        if (!identifier.includes('@')) {
-          throw new Error(resErr.message || "No account found matching this username, email, or phone number.");
+    try {
+      let targetEmail = cleanId;
+
+      // Tier 1: If user entered a full email address, attempt direct sign in first
+      if (cleanId.includes('@')) {
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, cleanId, password);
+          setCurrentUser(userCredential.user);
+          return;
+        } catch (emailErr: any) {
+          if (emailErr.code === 'auth/wrong-password' || emailErr.code === 'auth/invalid-credential') {
+            throw emailErr;
+          }
         }
       }
 
+      // Tier 2: Try resolving identifier via Cloud Function
+      let resolved = false;
+      try {
+        targetEmail = await resolveIdentifierToEmail(cleanId);
+        resolved = true;
+      } catch (resErr: any) {
+        console.warn("Identifier resolution endpoint unavailable or user not found:", resErr);
+      }
+
+      // Tier 3: Fallback if resolution didn't return an email
+      if (!resolved && !cleanId.includes('@')) {
+        targetEmail = `${cleanId.toLowerCase()}@trackapp.org`;
+      }
+
       const userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
-      // Auth state observer in App.tsx will handle setting the user
       setCurrentUser(userCredential.user);
     } catch (err: any) {
       console.error("Login failed", err);
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
-        setError("Failed to sign in. Please check your credentials.");
+      if (
+        err.code === 'auth/wrong-password' || 
+        err.code === 'auth/user-not-found' || 
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/invalid-email'
+      ) {
+        setError("Failed to sign in. Please check your username and password.");
+      } else if (err.message && err.message.includes('Failed to fetch')) {
+        setError("Network error. Please check your internet connection or try again.");
       } else {
         setError(err.message || "Failed to sign in. Please check your credentials.");
       }
