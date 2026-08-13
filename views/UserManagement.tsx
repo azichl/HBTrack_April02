@@ -101,6 +101,8 @@ export const UserManagement = () => {
             id: u.id,
             name: u.name,
             email: u.email,
+            username: u.username,
+            phone: u.phone,
             role: mapFirebaseRole(u.role) as Role,
             status: u.status === 'active' ? 'active' : 'inactive',
             permissions: mapPermissions(u.role),
@@ -113,6 +115,8 @@ export const UserManagement = () => {
           updateUser(u.id, {
             name: u.name,
             email: u.email,
+            username: u.username,
+            phone: u.phone,
             role: mapFirebaseRole(u.role) as Role,
             status: u.status === 'active' ? 'active' : 'inactive',
             lastLogin: u.lastActive || undefined,
@@ -174,7 +178,9 @@ export const UserManagement = () => {
   // Filtered Users
   const filteredUsers = visibleUsers.filter(u => 
     (u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.username && u.username.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    (u.phone && u.phone.includes(searchQuery))) &&
     (roleFilter === 'All Roles' || u.role === roleFilter)
   );
 
@@ -182,6 +188,8 @@ export const UserManagement = () => {
   const [formData, setFormData] = useState<Partial<UserType>>({
     name: '',
     email: '',
+    username: '',
+    phone: '',
     role: 'Viewer',
     status: 'active',
     permissions: ROLE_DEFAULTS['Viewer'],
@@ -202,6 +210,8 @@ export const UserManagement = () => {
       setFormData({
         name: '',
         email: '',
+        username: '',
+        phone: '',
         role: 'Viewer',
         status: 'active',
         permissions: ROLE_DEFAULTS['Viewer'],
@@ -244,6 +254,8 @@ export const UserManagement = () => {
           role: mapRoleToFirebase(formData.role as Role),
           status: formData.status,
           name: formData.name,
+          username: formData.username,
+          phone: formData.phone,
           appAccess: formData.appAccess,
           iosPttVisibility: formData.iosPttVisibility,
           iosVisiblePtts: formData.iosVisiblePtts
@@ -260,12 +272,16 @@ export const UserManagement = () => {
           formData.email!,
           password,
           formData.name!,
-          mapRoleToFirebase(formData.role as Role)
+          mapRoleToFirebase(formData.role as Role),
+          formData.username,
+          formData.phone
         );
         addUser({
           id: result.id,
           name: formData.name!,
           email: formData.email!,
+          username: formData.username,
+          phone: formData.phone,
           role: formData.role as Role,
           status: 'active',
           permissions: formData.permissions || ROLE_DEFAULTS['Viewer'],
@@ -442,8 +458,18 @@ export const UserManagement = () => {
                           {user.name.charAt(0)}
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                            <span>{user.name}</span>
+                            {user.username && (
+                              <span className="text-xs font-normal text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/30 px-1.5 py-0.5 rounded">
+                                @{user.username}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                            <span>{user.email}</span>
+                            {user.phone && <span className="text-gray-400">• {user.phone}</span>}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -617,6 +643,26 @@ export const UserManagement = () => {
                       placeholder="john@houbaratracker.com"
                     />
                   </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pseudonym / Username</label>
+                    <input 
+                      type="text"
+                      value={formData.username || ''}
+                      onChange={e => setFormData({...formData, username: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                      placeholder="e.g. johndoe, scout1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
+                    <input 
+                      type="tel"
+                      value={formData.phone || ''}
+                      onChange={e => setFormData({...formData, phone: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                      placeholder="e.g. +974 5512 3456"
+                    />
+                  </div>
                 </div>
 
                 {/* Password (only for new users) */}
@@ -646,7 +692,7 @@ export const UserManagement = () => {
                 <div>
                   <h4 className="text-sm font-bold text-gray-900 dark:text-white mb-3">Role Assignment</h4>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {(currentUserRole === 'Manager' ? ['Manager', 'Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer'] : ['Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer'] as Role[]).map(role => (
+                    {((currentUserRole === 'Manager' ? ['Manager', 'Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer'] : ['Administrator', 'Researcher', 'Field Coordinator', 'Data Entry', 'Viewer']) as Role[]).map(role => (
                       <label 
                         key={role}
                         className={`cursor-pointer relative flex flex-col p-3 rounded-lg border transition-all ${

@@ -57,8 +57,82 @@ async function verifyAuth(req) {
 // ─── User Management Functions ────────────────────────────────────────────────
 
 /**
+ * Resolve identifier (email, username/pseudonym, or phone) to user's registered email
+ * POST body: { identifier }
+ */
+exports.resolveAuthEmail = onRequest({ cors: true, maxInstances: 10 }, async (req, res) => {
+  if (req.method !== "POST") return res.status(405).send("Method not allowed");
+
+  try {
+    const { identifier } = req.body || {};
+    if (!identifier || typeof identifier !== "string") {
+      return res.status(400).json({ error: "identifier is required" });
+    }
+
+    const clean = identifier.trim();
+    if (!clean) {
+      return res.status(400).json({ error: "identifier cannot be empty" });
+    }
+
+    const cleanLower = clean.toLowerCase();
+    const cleanPhone = clean.replace(/[\s\-\(\)]/g, "");
+
+    // 1. Search Firestore profiles collection
+    const usersSnap = await db.collection("users").get();
+    let foundEmail = null;
+
+    usersSnap.forEach((doc) => {
+      if (foundEmail) return;
+      const data = doc.data();
+      const uEmail = (data.email || "").toLowerCase().trim();
+      const uUsername = (data.username || "").toLowerCase().trim();
+      const uPhone = (data.phone || "").replace(/[\s\-\(\)]/g, "").trim();
+
+      if (uEmail === cleanLower || uUsername === cleanLower || (cleanPhone && uPhone && uPhone === cleanPhone)) {
+        foundEmail = data.email;
+      }
+    });
+
+    if (foundEmail) {
+      return res.json({ email: foundEmail });
+    }
+
+    // 2. If clean identifier is formatted as an email, try direct Firebase Auth lookup
+    if (clean.includes("@")) {
+      try {
+        const userRecord = await admin.auth().getUserByEmail(clean);
+        if (userRecord && userRecord.email) {
+          return res.json({ email: userRecord.email });
+        }
+      } catch (authErr) {
+        // Not found in Auth
+      }
+      return res.json({ email: clean });
+    }
+
+    // 3. Try Firebase Auth lookup by phone number
+    if (cleanPhone) {
+      try {
+        const phoneArg = cleanPhone.startsWith("+") ? cleanPhone : `+${cleanPhone}`;
+        const userRecord = await admin.auth().getUserByPhoneNumber(phoneArg);
+        if (userRecord && userRecord.email) {
+          return res.json({ email: userRecord.email });
+        }
+      } catch (authErr) {
+        // Not found in Auth
+      }
+    }
+
+    return res.status(404).json({ error: "No account found matching this username, email, or phone number." });
+  } catch (error) {
+    console.error("resolveAuthEmail error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * Create a new Firebase Auth user + Firestore profile document
- * POST body: { email, password, displayName, role }
+ * POST body: { email, password, displayName, role, username, phone }
  */
 exports.createAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, res) => {
   if (req.method !== "POST") return res.status(405).send("Method not allowed");
@@ -67,7 +141,7 @@ exports.createAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
   if (!caller) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { email, password, displayName, role } = req.body;
+    const { email, password, displayName, role, username, phone } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: "email and password are required" });
@@ -85,6 +159,8 @@ exports.createAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
       id: userRecord.uid,
       name: displayName || email.split("@")[0],
       email: email,
+      username: username ? username.trim() : "",
+      phone: phone ? phone.trim() : "",
       role: role || "viewer",
       status: "active",
       lastActive: new Date().toISOString(),
@@ -132,6 +208,8 @@ exports.listAppUsers = onRequest({ cors: true, maxInstances: 5 }, async (req, re
       id: u.uid,
       name: u.displayName || profiles[u.uid]?.name || u.email.split("@")[0],
       email: u.email,
+      username: profiles[u.uid]?.username || "",
+      phone: profiles[u.uid]?.phone || u.phoneNumber || "",
       role: profiles[u.uid]?.role || "viewer",
       status: u.disabled ? "inactive" : (profiles[u.uid]?.status || "active"),
       lastActive: profiles[u.uid]?.lastActive || u.metadata.lastSignInTime || "",
@@ -152,7 +230,7 @@ exports.listAppUsers = onRequest({ cors: true, maxInstances: 5 }, async (req, re
 
 /**
  * Update a user's role/status in Firestore
- * PUT body: { uid, role?, status?, name? }
+ * PUT body: { uid, role?, status?, name?, username?, phone? }
  */
 exports.updateAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, res) => {
   if (req.method !== "PUT") return res.status(405).send("Method not allowed");
@@ -161,13 +239,15 @@ exports.updateAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
   if (!caller) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { uid, role, status, name, permissions, appAccess, iosPttVisibility, iosVisiblePtts } = req.body;
+    const { uid, role, status, name, username, phone, permissions, appAccess, iosPttVisibility, iosVisiblePtts } = req.body;
     if (!uid) return res.status(400).json({ error: "uid is required" });
 
     const updates = {};
     if (role !== undefined) updates.role = role;
     if (status !== undefined) updates.status = status;
     if (name !== undefined) updates.name = name;
+    if (username !== undefined) updates.username = username;
+    if (phone !== undefined) updates.phone = phone;
     if (permissions !== undefined) updates.permissions = permissions;
     if (appAccess !== undefined) updates.appAccess = appAccess;
     if (iosPttVisibility !== undefined) updates.iosPttVisibility = iosPttVisibility;

@@ -1165,8 +1165,8 @@ export const useAppStore = create<AppState>()(
                 role: role,
                 status: 'active' as const,
                 permissions: permissions,
-                appAccess: ['web', 'ios'],
-                iosPttVisibility: 'all',
+                appAccess: ['web', 'ios'] as ('web' | 'ios')[],
+                iosPttVisibility: 'all' as const,
                 iosVisiblePtts: []
               };
               mergedUsers.push(newUserProfile);

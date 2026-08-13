@@ -40,6 +40,8 @@ export interface AppUser {
   id: string;
   name: string;
   email: string;
+  username?: string;
+  phone?: string;
   role: string;
   status: string;
   lastActive: string;
@@ -49,6 +51,29 @@ export interface AppUser {
   appAccess?: ('web' | 'ios')[];
   iosPttVisibility?: 'all' | 'custom';
   iosVisiblePtts?: string[];
+}
+
+/** Resolve a username/pseudonym, phone number, or email to the target login email */
+export async function resolveIdentifierToEmail(identifier: string): Promise<string> {
+  const trimmed = identifier.trim();
+  if (!trimmed) throw new Error('Username, email, or phone number is required.');
+
+  const res = await fetch(`${FUNCTIONS_BASE_URL}/resolveAuthEmail`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier: trimmed })
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(errData.error || 'No account found matching this username, email, or phone number.');
+  }
+
+  const data = await res.json();
+  if (data && data.email) {
+    return data.email;
+  }
+  throw new Error('Could not resolve account email.');
 }
 
 /** List all application users (Firebase Auth + Firestore profiles) */
@@ -62,9 +87,11 @@ export async function createUser(
   email: string, 
   password: string, 
   displayName: string, 
-  role: string
+  role: string,
+  username?: string,
+  phone?: string
 ): Promise<AppUser> {
-  return callFunction('createAppUser', 'POST', { email, password, displayName, role });
+  return callFunction('createAppUser', 'POST', { email, password, displayName, role, username, phone });
 }
 
 /** Update an existing user's profile */
@@ -74,6 +101,8 @@ export async function updateUserProfile(
     role?: string; 
     status?: string; 
     name?: string; 
+    username?: string;
+    phone?: string;
     permissions?: Record<string, boolean>;
     appAccess?: ('web' | 'ios')[];
     iosPttVisibility?: 'all' | 'custom';

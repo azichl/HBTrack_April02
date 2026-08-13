@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { Component, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -736,11 +736,11 @@ const TransmitterMarker = React.memo(TransmitterMarkerInner, (prevProps, nextPro
 });
 
 // ErrorBoundary to catch render crashes and auto-recover instead of blank screen
-class LiveTrackingErrorBoundary extends React.Component<
+class LiveTrackingErrorBoundary extends Component<
     { children: React.ReactNode },
     { hasError: boolean; errorCount: number }
 > {
-    state: { hasError: boolean; errorCount: number } = { hasError: false, errorCount: 0 };
+    public state: { hasError: boolean; errorCount: number } = { hasError: false, errorCount: 0 };
     constructor(props: { children: React.ReactNode }) {
         super(props);
     }

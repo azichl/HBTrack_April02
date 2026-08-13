@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
-import { ShieldAlert, LogIn, Lock, Mail, Activity } from 'lucide-react';
-import { HoubaraIcon } from '../components/HoubaraIcon';
+import { ShieldAlert, LogIn, Lock, User, Activity } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { resolveIdentifierToEmail } from '../services/authService';
 
 export const Login = ({ externalError }: { externalError?: string | null }) => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(externalError || null);
 
@@ -24,12 +24,27 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
     setLoading(true);
     setError(null);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // Auth state observer in App.tsx or similar will handle setting the user
+      let targetEmail = identifier.trim();
+
+      // Resolve username/pseudonym or phone to registered email
+      try {
+        targetEmail = await resolveIdentifierToEmail(identifier);
+      } catch (resErr: any) {
+        if (!identifier.includes('@')) {
+          throw new Error(resErr.message || "No account found matching this username, email, or phone number.");
+        }
+      }
+
+      const userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
+      // Auth state observer in App.tsx will handle setting the user
       setCurrentUser(userCredential.user);
     } catch (err: any) {
       console.error("Login failed", err);
-      setError("Failed to sign in. Please check your credentials.");
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        setError("Failed to sign in. Please check your credentials.");
+      } else {
+        setError(err.message || "Failed to sign in. Please check your credentials.");
+      }
     } finally {
       setLoading(false);
     }
@@ -65,18 +80,18 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
         <form onSubmit={handleLogin} className="space-y-6">
           
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Email Address</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Username, Email, or Phone</label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-slate-500 group-focus-within:text-brand-400 transition-colors" />
+                <User className="h-5 w-5 text-slate-500 group-focus-within:text-brand-400 transition-colors" />
               </div>
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-white placeholder-slate-500 transition-all outline-none"
-                placeholder="admin@trackapp.org"
+                placeholder="admin@trackapp.org, johndoe, +974..."
               />
             </div>
           </div>
