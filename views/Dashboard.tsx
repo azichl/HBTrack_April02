@@ -241,10 +241,30 @@ export const Dashboard = () => {
 
   // Ingestion date/time (the moment when data update occurred, formatted in device system timezone)
   const lastIngestDate = useMemo(() => {
-    const rawIngest = lastIngestTime || (positions.length > 0 ? positions[0].timestamp : null);
-    if (!rawIngest) return 'No Data';
-    return formatDateTime(rawIngest, getSystemTimeZone());
-  }, [lastIngestTime, positions]);
+    if (lastIngestTime) {
+      return formatDateTime(lastIngestTime, getSystemTimeZone());
+    }
+    // Fallback: Find the latest (max) position timestamp or transmitter last_fix across system
+    let maxTs: number | null = null;
+    positions.forEach(p => {
+      const t = new Date(p.timestamp).getTime();
+      if (!isNaN(t) && (maxTs === null || t > maxTs)) {
+        maxTs = t;
+      }
+    });
+    if (!maxTs) {
+      transmitters.forEach(tx => {
+        if (tx.last_fix) {
+          const t = new Date(tx.last_fix).getTime();
+          if (!isNaN(t) && (maxTs === null || t > maxTs)) {
+            maxTs = t;
+          }
+        }
+      });
+    }
+    if (!maxTs) return 'No Data';
+    return formatDateTime(new Date(maxTs).toISOString(), getSystemTimeZone());
+  }, [lastIngestTime, positions, transmitters]);
 
   // Current calendar month key for static test active filtering
   const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);

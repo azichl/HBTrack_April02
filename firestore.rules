@@ -37,5 +37,9 @@ service cloud.firestore {
     match /user_activity_logs/{doc} {
       allow read, write: if request.auth != null;
     }
+    // System status & ingestion metadata
+    match /system_status/{doc} {
+      allow read, write: if request.auth != null;
+    }
   }
 }
