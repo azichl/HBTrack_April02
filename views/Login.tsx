@@ -66,7 +66,7 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
         <div className="flex flex-col items-center mb-8">
           <img src="/ministry-logo-pure-white.png" alt="Ministry Logo" className="w-full max-w-[320px] h-auto object-contain mb-4 drop-shadow-md" />
           <p className="text-slate-400 mt-2 text-sm text-center">
-            Advanced Ecological Monitoring & Geolocation Database
+            Ecological Monitoring & Geolocation Database
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
         <form onSubmit={handleLogin} className="space-y-6">
           
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Username, Email, or Phone</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Username</label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <User className="h-5 w-5 text-slate-500 group-focus-within:text-brand-400 transition-colors" />
@@ -91,7 +91,7 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-white placeholder-slate-500 transition-all outline-none"
-                placeholder="admin@trackapp.org, johndoe, +974..."
+                placeholder="Username"
               />
             </div>
           </div>
