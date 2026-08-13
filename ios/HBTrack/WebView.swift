@@ -44,7 +44,7 @@ struct WebView: UIViewRepresentable {
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.bounces = true
-        webView.customUserAgent = "HBTrack-iOS-App/2.0 (Mobile; iPhone)"
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/605.1.15 HBTrack-iOS-App/2.0"
 
         #if DEBUG
         if #available(iOS 16.4, *) {
