@@ -268,8 +268,9 @@ export const UserManagement = () => {
           setIsSaving(false);
           return;
         }
+        const effectiveEmail = formData.email?.trim() || `${(formData.username || 'user').trim().toLowerCase()}@trackapp.org`;
         const result = await createUser(
-          formData.email!,
+          effectiveEmail,
           password,
           formData.name!,
           mapRoleToFirebase(formData.role as Role),
@@ -279,7 +280,7 @@ export const UserManagement = () => {
         addUser({
           id: result.id,
           name: formData.name!,
-          email: formData.email!,
+          email: effectiveEmail,
           username: formData.username,
           phone: formData.phone,
           role: formData.role as Role,
@@ -630,37 +631,37 @@ export const UserManagement = () => {
                       value={formData.name}
                       onChange={e => setFormData({...formData, name: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                      placeholder="e.g. John Doe"
+                      placeholder="Full Name"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
                     <input 
-                      type="email" required
-                      value={formData.email}
-                      onChange={e => setFormData({...formData, email: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                      placeholder="john@houbaratracker.com"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Pseudonym / Username</label>
-                    <input 
-                      type="text"
+                      type="text" required
                       value={formData.username || ''}
                       onChange={e => setFormData({...formData, username: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                      placeholder="e.g. johndoe, scout1"
+                      placeholder="Username"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address (Optional)</label>
+                    <input 
+                      type="email"
+                      value={formData.email || ''}
+                      onChange={e => setFormData({...formData, email: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                      placeholder="Email Address"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number (Optional)</label>
                     <input 
                       type="tel"
                       value={formData.phone || ''}
                       onChange={e => setFormData({...formData, phone: e.target.value})}
                       className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                      placeholder="e.g. +974 5512 3456"
+                      placeholder="Phone Number"
                     />
                   </div>
                 </div>
