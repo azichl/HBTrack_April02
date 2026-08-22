@@ -6,28 +6,11 @@ import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import ReactMarkdown from 'react-markdown';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
-
-const safeParseTimestamp = (ts: any): number => {
-    if (!ts) return NaN;
-    if (typeof ts === 'number') return ts;
-    const str = String(ts);
-    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (dmyMatch) {
-        const [_, d, m, y, h, min, s] = dmyMatch;
-        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
-    }
-    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (dmyMatch2) {
-        const [_, d, m, y] = dmyMatch2;
-        return Date.UTC(Number(y), Number(m)-1, Number(d));
-    }
-    return new Date(str).getTime();
-};
 // Use exact user-requested hex colors for the map markers, adjusted size
 const createSvgIcon = (colorHex: string) => {
   return L.divIcon({
@@ -1627,6 +1610,9 @@ const LiveTrackingInner = () => {
             const validType = historyFixType === 'All' || fixType === historyFixType;
             return validCoords && validType;
         });
+
+        // Sort track points chronologically (oldest to newest) to prevent map polyline criss-crossing
+        track.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
         if (track.length > 0) {
              newPaths.push({

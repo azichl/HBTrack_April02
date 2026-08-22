@@ -20,22 +20,10 @@ import {
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
 import type { Role } from '../types';
+import { safeParseTimestamp } from '../utils/formatting';
 
 const safeParseDate = (ts: any): number => {
-    if (!ts) return NaN;
-    if (typeof ts === 'number') return ts;
-    const str = String(ts);
-    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (dmyMatch) {
-        const [_, d, m, y, h, min, s] = dmyMatch;
-        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
-    }
-    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (dmyMatch2) {
-        const [_, d, m, y] = dmyMatch2;
-        return Date.UTC(Number(y), Number(m)-1, Number(d));
-    }
-    return new Date(str).getTime();
+    return safeParseTimestamp(ts);
 };
 
 interface AppState {
