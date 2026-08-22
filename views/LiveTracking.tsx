@@ -5,29 +5,11 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } 
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
-import ReactMarkdown from 'react-markdown';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
-
-const safeParseTimestamp = (ts: any): number => {
-    if (!ts) return NaN;
-    if (typeof ts === 'number') return ts;
-    const str = String(ts);
-    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
-    if (dmyMatch) {
-        const [_, d, m, y, h, min, s] = dmyMatch;
-        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
-    }
-    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-    if (dmyMatch2) {
-        const [_, d, m, y] = dmyMatch2;
-        return Date.UTC(Number(y), Number(m)-1, Number(d));
-    }
-    return new Date(str).getTime();
-};
 // Use exact user-requested hex colors for the map markers, adjusted size
 const createSvgIcon = (colorHex: string) => {
   return L.divIcon({
@@ -1441,7 +1423,8 @@ const LiveTrackingInner = () => {
         }
 
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
-        if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && p.locationType !== historyFixType) return;
+        const locType = classifyLocationType(p.lc, p.locationType);
+        if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && locType !== historyFixType) return;
 
         const currentTs = safeParseTimestamp(p.timestamp);
         // Skip invalid dates
@@ -1609,24 +1592,26 @@ const LiveTrackingInner = () => {
         track = track.filter(p => {
             const numLat = Number(p.lat);
             const numLon = Number(p.lon);
-            const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
+            const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001) && Math.abs(numLat) <= 90 && Math.abs(numLon) <= 180;
 
-            // Compute exact location type (GPS vs Doppler)
-            const lcStr = String(p.lc || '').toUpperCase();
-            const rawType = String(p.locationType || '').toUpperCase();
-            let fixType: 'GPS' | 'Doppler' = 'Doppler';
-            if (rawType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
-                fixType = 'GPS';
-            } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
-                fixType = 'Doppler';
-            } else if (rawType === 'GPS') {
-                fixType = 'GPS';
+            const fixType = classifyLocationType(p.lc, p.locationType);
+            p.locationType = fixType;
+
+            let validType = false;
+            if (historyFixType === 'GPS') {
+                validType = fixType === 'GPS';
+            } else if (historyFixType === 'Doppler') {
+                validType = fixType === 'Doppler' && isHighQualityFix(p.lc, p.locationType);
+            } else {
+                // 'All': include GPS fixes and high-quality Doppler fixes (exclude poor LC 0, A, B, Z)
+                validType = isHighQualityFix(p.lc, p.locationType);
             }
 
-            p.locationType = fixType;
-            const validType = historyFixType === 'All' || fixType === historyFixType;
             return validCoords && validType;
         });
+
+        // Sort track points chronologically (oldest to newest) to prevent map polyline criss-crossing
+        track.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
         if (track.length > 0) {
              newPaths.push({
