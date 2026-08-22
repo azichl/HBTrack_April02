@@ -5,8 +5,7 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } 
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
-import ReactMarkdown from 'react-markdown';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
@@ -1424,7 +1423,8 @@ const LiveTrackingInner = () => {
         }
 
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
-        if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && p.locationType !== historyFixType) return;
+        const locType = classifyLocationType(p.lc, p.locationType);
+        if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && locType !== historyFixType) return;
 
         const currentTs = safeParseTimestamp(p.timestamp);
         // Skip invalid dates
@@ -1592,31 +1592,16 @@ const LiveTrackingInner = () => {
         track = track.filter(p => {
             const numLat = Number(p.lat);
             const numLon = Number(p.lon);
-            const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001);
+            const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001) && Math.abs(numLat) <= 90 && Math.abs(numLon) <= 180;
 
-            // Compute exact location type (GPS vs Doppler)
-            const lcStr = String(p.lc || '').toUpperCase();
-            const rawType = String(p.locationType || '').toUpperCase();
-            let fixType: 'GPS' | 'Doppler' = 'Doppler';
-            if (rawType === 'GPS' || lcStr === 'GPS' || lcStr === 'G') {
-                fixType = 'GPS';
-            } else if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcStr)) {
-                fixType = 'Doppler';
-            } else if (rawType === 'GPS') {
-                fixType = 'GPS';
-            }
-
+            // Compute exact location type using the unified classifier
+            const fixType = classifyLocationType(p.lc, p.locationType);
             p.locationType = fixType;
+
             const validType = historyFixType === 'All' || fixType === historyFixType;
+            const qualityOk = isHighQualityFix(p.lc, p.locationType);
 
-            // Quality filter: exclude poor-quality Doppler fixes (LC 0, A, B, Z)
-            // These have error radii > 1.5km and cause erratic polyline criss-crossing on the map.
-            // Only keep GPS fixes and good-quality Doppler fixes (LC 3, 2, 1).
-            // Fixes with unknown/empty LC are kept (assume decent quality).
-            const POOR_DOPPLER_CLASSES = ['0', 'A', 'B', 'Z'];
-            const isQualityFix = fixType === 'GPS' || !POOR_DOPPLER_CLASSES.includes(lcStr);
-
-            return validCoords && validType && isQualityFix;
+            return validCoords && validType && qualityOk;
         });
 
         // Sort track points chronologically (oldest to newest) to prevent map polyline criss-crossing

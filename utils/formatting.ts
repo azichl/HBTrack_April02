@@ -103,3 +103,54 @@ export function getCurrentYearMonthKey(): string {
   const m = String(d.getUTCMonth() + 1).padStart(2, '0');
   return `${y}-${m}`;
 }
+
+/**
+ * Accurately determines whether an Argos telemetry fix is GPS or Doppler.
+ * Rule: Location Classes '3', '2', '1', '0', 'A', 'B', 'Z' are EXCLUSIVELY Doppler.
+ * GPS fixes have LC 'GPS', 'G', or empty string with GPS locationType.
+ */
+export const classifyLocationType = (lc?: string, rawLocType?: string): 'GPS' | 'Doppler' => {
+  const lcUp = String(lc || '').trim().toUpperCase();
+  const rtUp = String(rawLocType || '').trim().toUpperCase();
+
+  // If LC is one of the Doppler location classes, it is ALWAYS Doppler
+  if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcUp)) {
+    return 'Doppler';
+  }
+
+  // If LC is GPS/G or rawLocType is GPS, it is GPS
+  if (lcUp === 'GPS' || lcUp === 'G' || rtUp === 'GPS') {
+    return 'GPS';
+  }
+
+  if (rtUp === 'DOPPLER') {
+    return 'Doppler';
+  }
+
+  return 'GPS';
+};
+
+/**
+ * Validates whether a fix is high quality (GPS or Doppler LC 3, 2, 1).
+ * Poor Doppler classes (0, A, B, Z) with error radii > 1.5km are excluded.
+ */
+export const isHighQualityFix = (lc?: string, locType?: string): boolean => {
+  const lcUp = String(lc || '').trim().toUpperCase();
+  const type = classifyLocationType(lc, locType);
+
+  if (type === 'GPS') {
+    return true;
+  }
+
+  // For Doppler, only accept high quality classes (3, 2, 1)
+  // LC 3: < 250m
+  // LC 2: 250 - 500m
+  // LC 1: 500 - 1500m
+  // LC 0, A, B, Z: > 1500m or unbounded error -> REJECT
+  if (['3', '2', '1'].includes(lcUp)) {
+    return true;
+  }
+
+  return false;
+};
+
