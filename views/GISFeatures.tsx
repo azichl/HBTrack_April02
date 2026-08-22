@@ -8,7 +8,6 @@ import JSZip from 'jszip';
 import readXlsxFile from 'read-excel-file';
 import { useAppStore } from '../store/appStore';
 import { getHistoricalPositions } from '../services/firestoreService';
-import { safeParseTimestamp } from '../utils/formatting';
 import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -309,7 +308,7 @@ export const GISFeatures = () => {
           const validPos = tPos.filter(p => !isNaN(p.lat) && !isNaN(p.lon) && (p.lat !== 0 || p.lon !== 0));
           if (validPos.length === 0) continue;
           
-          const sorted = [...validPos].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+          const sorted = [...validPos].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
           
           const lats = validPos.map(p => p.lat);
           const lons = validPos.map(p => p.lon);
@@ -405,7 +404,7 @@ export const GISFeatures = () => {
           const tPos = pos.filter(p => p.deviceId === pid);
           if (tPos.length === 0) continue;
           
-          const sorted = [...tPos].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+          const sorted = [...tPos].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
           for (let i = 0; i < sorted.length; i++) {
             const p = sorted[i];
@@ -751,7 +750,7 @@ export const GISFeatures = () => {
             const ptt = transmitters.find(t => t.bird_id === r.Individual_ID)?.platform_id;
             const tPos = pos.filter(p => p.deviceId === ptt && !isNaN(p.lat) && p.lat !== 0);
             if (tPos.length > 1) {
-              const sorted = tPos.sort((a,b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+              const sorted = tPos.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
               const first = sorted[0];
               const last = sorted[sorted.length - 1];
               r.DispersalDistance = Number((haversDistance(first.lat, first.lon, last.lat, last.lon) / 1000).toFixed(1));

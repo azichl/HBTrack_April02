@@ -4,7 +4,8 @@ import {
   DocumentSnapshot, addDoc, updateDoc, Timestamp, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix } from '../utils/formatting';
+import { ArgosMessage, StatusHistoryRecord } from '../types';
+import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
 
@@ -249,7 +250,20 @@ export const subscribeToCollection = <T>(
 // ─── Optimized Position Queries ────────────────────────────────────────────────
 
 const safeParseDate = (ts: any): number => {
-    return safeParseTimestamp(ts);
+    if (!ts) return NaN;
+    if (typeof ts === 'number') return ts;
+    const str = String(ts);
+    const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (dmyMatch) {
+        const [_, d, m, y, h, min, s] = dmyMatch;
+        return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s));
+    }
+    const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (dmyMatch2) {
+        const [_, d, m, y] = dmyMatch2;
+        return Date.UTC(Number(y), Number(m)-1, Number(d));
+    }
+    return new Date(str).getTime();
 };
 
 export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string | number)[]) => {
@@ -780,24 +794,30 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   const endMs   = endDate.getTime();
   const allResults: any[] = [];
 
+  // Helper: classify locationType from lc field
+  const classifyLocType = (lc: string, rawLocType: string): 'GPS' | 'Doppler' => {
+    const lcUp = lc.toUpperCase();
+    const rtUp = rawLocType.toUpperCase();
+    if (rtUp === 'GPS' || lcUp === 'GPS' || lcUp === 'G') return 'GPS';
+    if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcUp)) return 'Doppler';
+    return 'Doppler';
+  };
+
   // Helper: process a Firestore doc snapshot into a position record
   const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
     const d = docSnap.data();
-    const docTs = safeParseTimestamp(d.timestamp);
+    const docTs = safeParseDate(d.timestamp);
     if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
 
     const lat = Number(d.lat);
     let lon = Number(d.lon);
-    if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return null;
 
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
 
     const dedupeKey = `${docTs}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
     if (seenKeys.has(dedupeKey)) return null;
     seenKeys.add(dedupeKey);
-
-    const locType = classifyLocationType(d.lc, d.locationType);
-    if (!isHighQualityFix(d.lc, d.locationType)) return null;
 
     return {
       id: docSnap.id,
@@ -807,7 +827,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       timestamp: d.timestamp,
       lc: d.lc || '',
       satellite: d.satellite || '',
-      locationType: locType,
+      locationType: classifyLocType(String(d.lc || ''), String(d.locationType || '')),
       speed_kmh: d.speed_kmh || 0,
     };
   };
@@ -815,41 +835,45 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   try {
     for (const pttId of transmitterIds) {
       const pidStr = String(pttId);
-      const idNum = Number(pttId);
-      const isNumValid = !isNaN(idNum);
       const seenKeys = new Set<string>();
       let pttDocs: any[] = [];
 
-      // Helper to fetch and process query results
-      const fetchAndProcess = async (q: any) => {
+      // ── Primary: query argos_positions ──
+      try {
+        const qArgos = query(
+          collection(db, 'argos_positions'),
+          where('platformId', '==', pidStr)
+        );
+        const snap = await getDocs(qArgos);
+        snap.forEach((ds: any) => {
+          const rec = processDoc(ds, pidStr, seenKeys);
+          if (rec) pttDocs.push(rec);
+        });
+      } catch (e) {
+        console.warn(`[Firestore] argos_positions query failed for ${pidStr}:`, e);
+      }
+
+      // ── Fallback: only query positions if argos_positions returned nothing ──
+      if (pttDocs.length === 0) {
         try {
-          const snap = await getDocs(q);
+          const qPos = query(
+            collection(db, 'positions'),
+            where('transmitter_id', '==', pidStr)
+          );
+          const snap = await getDocs(qPos);
           snap.forEach((ds: any) => {
             const rec = processDoc(ds, pidStr, seenKeys);
             if (rec) pttDocs.push(rec);
           });
         } catch (e) {
-          // ignore index / query errors gracefully
+          console.warn(`[Firestore] positions query failed for ${pidStr}:`, e);
         }
-      };
-
-      // ── Query argos_positions (string & number) ──
-      await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', pidStr)));
-      if (isNumValid) {
-        await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', idNum)));
       }
-
-      // ── Query positions (string & number) ──
-      await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', pidStr)));
-      if (isNumValid) {
-        await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', idNum)));
-      }
-      await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', pidStr)));
 
       allResults.push(...pttDocs);
     }
 
-    allResults.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+    allResults.sort((a, b) => safeParseDate(a.timestamp) - safeParseDate(b.timestamp));
     console.log(`[Firestore] getHistoricalPositions returning ${allResults.length} records`);
     return allResults;
   } catch (error) {
