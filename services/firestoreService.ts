@@ -819,6 +819,15 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
     };
   };
 
+  // Quality filter: exclude poor Doppler fixes (LC 0, A, B, Z) with error > 1.5km
+  const POOR_DOPPLER_CLASSES = new Set(['0', 'A', 'B', 'Z']);
+  const isQualityFix = (rec: any): boolean => {
+    if (rec.locationType === 'GPS') return true;
+    const lcUp = String(rec.lc || '').toUpperCase();
+    if (POOR_DOPPLER_CLASSES.has(lcUp)) return false;
+    return true; // GPS, LC 3/2/1, or unknown LC
+  };
+
   try {
     for (const pttId of transmitterIds) {
       const pidStr = String(pttId);
@@ -834,7 +843,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         const snap = await getDocs(qArgos);
         snap.forEach((ds: any) => {
           const rec = processDoc(ds, pidStr, seenKeys);
-          if (rec) pttDocs.push(rec);
+          if (rec && isQualityFix(rec)) pttDocs.push(rec);
         });
       } catch (e) {
         console.warn(`[Firestore] argos_positions query failed for ${pidStr}:`, e);
@@ -850,7 +859,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
           const snap = await getDocs(qPos);
           snap.forEach((ds: any) => {
             const rec = processDoc(ds, pidStr, seenKeys);
-            if (rec) pttDocs.push(rec);
+            if (rec && isQualityFix(rec)) pttDocs.push(rec);
           });
         } catch (e) {
           console.warn(`[Firestore] positions query failed for ${pidStr}:`, e);

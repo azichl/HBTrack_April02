@@ -1608,7 +1608,15 @@ const LiveTrackingInner = () => {
 
             p.locationType = fixType;
             const validType = historyFixType === 'All' || fixType === historyFixType;
-            return validCoords && validType;
+
+            // Quality filter: exclude poor-quality Doppler fixes (LC 0, A, B, Z)
+            // These have error radii > 1.5km and cause erratic polyline criss-crossing on the map.
+            // Only keep GPS fixes and good-quality Doppler fixes (LC 3, 2, 1).
+            // Fixes with unknown/empty LC are kept (assume decent quality).
+            const POOR_DOPPLER_CLASSES = ['0', 'A', 'B', 'Z'];
+            const isQualityFix = fixType === 'GPS' || !POOR_DOPPLER_CLASSES.includes(lcStr);
+
+            return validCoords && validType && isQualityFix;
         });
 
         // Sort track points chronologically (oldest to newest) to prevent map polyline criss-crossing
