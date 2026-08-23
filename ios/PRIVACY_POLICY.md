@@ -3,25 +3,29 @@
 **Last Updated:** August 23, 2026
 
 ## Introduction
-This Privacy Policy describes how the RAF Tracking application ("we", "our", or "the App") collects, uses, and protects your information. The App is designed for tracking Houbara locations and live map navigation.
+This Privacy Policy describes how the RAF Tracking application ("we", "our", or "the App") handles account access, device capabilities, and data security. The App is an internal organizational tool designed for ecological researchers and field teams to monitor Houbara Bustard movement and perform live map navigation.
 
-## Information We Collect
-To provide our core functionality, the App requests access to the following device capabilities:
-* **Location (GPS):** We use your location data while the app is in use to display your current position relative to Houbara tracking locations on the live map and for GPS navigation.
+## Account Access & Provisioning
+* **Internal Team Access:** The App is designed strictly for authorized organization members and field staff.
+* **No Public Self-Registration:** Users cannot create accounts or submit personal registration information through the App.
+* **Administrator Provisioning:** All user accounts, login credentials, and permission levels are created and managed directly by organization Administrators and Managers.
 
-## How We Use Your Information
-The information collected is used solely for the internal functionality of the App:
-* To accurately map tracking locations relative to the user position.
-* To provide live GPS navigation on the interactive map.
+## Information We Collect & Device Permissions
+To provide core map tracking and navigation functionality, the App requests access to the following:
+* **Location (GPS):** We use your device location data while the App is in use strictly to display your real-time position relative to Houbara tracking locations on the interactive map and for field navigation.
+* **No Personal Data Collection:** The App does not collect, track, or share personal user data, contacts, or financial information.
 
-## Data Sharing and Disclosure
-We do not sell, trade, or otherwise transfer your personally identifiable information to outside parties. All data collected is used internally for the purposes of Houbara tracking and research.
+## How We Use Information
+Information accessed by the App is used solely for internal wildlife conservation monitoring:
+* To accurately display field team positions on the live map relative to tracked Houbara devices.
+* To provide interactive map navigation for conservation research.
 
-## Data Security
-We implement a variety of security measures to maintain the safety of your personal information when you enter, submit, or access your information within the App.
+## Data Sharing and Security
+* **No Third-Party Data Sharing:** We do not sell, trade, share, or transfer user information to third parties. All telemetry and tracking data remain internal to the organization.
+* **Data Security:** We implement industry-standard encryption and Firebase security measures to protect account credentials, telemetry data, and access permissions managed by organization Administrators.
 
 ## Changes to This Privacy Policy
-We may update our Privacy Policy from time to time. Any changes will be reflected on this page, and the "Last Updated" date will be updated accordingly.
+We may update our Privacy Policy from time to time. Any changes will be reflected on this page with an updated date.
 
 ## Contact Us
-If you have any questions regarding this Privacy Policy, please contact the development team.
+If you have any questions regarding this Privacy Policy or account access, please contact the system administration team.
