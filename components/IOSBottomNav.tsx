@@ -31,6 +31,16 @@ export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectT
       isActive: activeTab === 'Live Tracking'
     },
     {
+      id: 'Data Upload',
+      label: 'CLS Sync',
+      icon: UploadCloud,
+      onClick: () => {
+        setDatabaseActiveTab('Data Upload');
+        onSelectTab('Data Upload');
+      },
+      isActive: activeTab === 'Data Upload' || activeTab === 'CLS Sync'
+    },
+    {
       id: 'Settings',
       label: 'Settings',
       icon: SettingsIcon,

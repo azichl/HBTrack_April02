@@ -21,6 +21,7 @@ import { GISFeatures } from './views/GISFeatures';
 import { Settings } from './views/Settings';
 import { HelpSupport } from './views/HelpSupport';
 import { GeoSpatialAnalysis } from './views/GeoSpatialAnalysis';
+import { DataUpload } from './views/DataUpload';
 import { IOSBottomNav } from './components/IOSBottomNav';
 import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { HoubaraIcon } from './components/HoubaraIcon';
@@ -450,6 +451,9 @@ const App = () => {
       case 'Live Tracking': return <LiveTracking />;
       case 'AI Predictions': return <AIPredictions />;
       case 'Database': return <Database />;
+      case 'Data Upload':
+      case 'CLS Sync':
+        return <DataUpload />;
       case 'Monitoring': return <Monitoring />;
       case 'Reports': return <Reports />;
       case 'Geo Spatial Analysis': return <GeoSpatialAnalysis />;

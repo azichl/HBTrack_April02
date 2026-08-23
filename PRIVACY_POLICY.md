@@ -9,7 +9,6 @@ This Privacy Policy describes how the RAF Tracking application ("we", "our", or 
 To provide our core functionality, the App requests access to the following:
 * **Camera:** We require camera access strictly to scan transmitter QR codes and take document photos for data ingestion. 
 * **Location:** We use your location data while the app is in use to display your current position relative to Houbara tracking locations on the live map.
-* **Photo Library:** We request photo library access to allow you to upload data spreadsheets and Argos CSV files from your device.
 
 ## How We Use Your Information
 The information collected is used solely for the internal functionality of the App:

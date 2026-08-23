@@ -31,8 +31,6 @@
 	<string>RAF Tracking requires access to the camera to scan transmitter QR codes and take document photos for data ingestion.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RAF Tracking uses your location to display your current position relative to Houbara tracking locations on the live map.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>RAF Tracking requires photo library access to upload data spreadsheets and Argos CSV files.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
