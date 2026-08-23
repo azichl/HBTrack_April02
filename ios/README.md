@@ -85,7 +85,7 @@ This project is split into **two independent Git repositories** to keep iOS and 
 - **Interface**: SwiftUI + WKWebView (`UIViewRepresentable`)
 - **Permissions Configured (`Info.plist`)**:
   - Location (Live position marker on map)
-  - Camera & Photo Library (Data Upload spreadsheet/CSV ingestion)
+  - Camera (Scanning transmitter QR codes & data document ingestion)
   - Arbitrary Loads (Allows connection to local dev server and Firebase backend)
 
 ---
