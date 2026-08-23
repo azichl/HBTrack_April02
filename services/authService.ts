@@ -48,7 +48,8 @@ export interface AppUser {
   createdAt: string;
   emailVerified?: boolean;
   permissions: Record<string, boolean>;
-  appAccess?: ('web' | 'ios')[];
+  appAccess?: ('web' | 'ios' | 'ios_data_upload')[];
+  iosDataUpload?: boolean;
   iosPttVisibility?: 'all' | 'custom';
   iosVisiblePtts?: string[];
 }
@@ -104,7 +105,8 @@ export async function updateUserProfile(
     username?: string;
     phone?: string;
     permissions?: Record<string, boolean>;
-    appAccess?: ('web' | 'ios')[];
+    appAccess?: ('web' | 'ios' | 'ios_data_upload')[];
+    iosDataUpload?: boolean;
     iosPttVisibility?: 'all' | 'custom';
     iosVisiblePtts?: string[];
   }

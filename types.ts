@@ -12,7 +12,8 @@ export interface User {
   status: 'active' | 'inactive';
   lastLogin?: string;
   permissions: string[]; // List of accessible modules/actions
-  appAccess?: ('web' | 'ios')[];
+  appAccess?: ('web' | 'ios' | 'ios_data_upload')[];
+  iosDataUpload?: boolean;
   iosPttVisibility?: 'all' | 'custom';
   iosVisiblePtts?: string[];
 }

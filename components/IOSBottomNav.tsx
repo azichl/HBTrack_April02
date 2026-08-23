@@ -8,16 +8,12 @@ interface IOSBottomNavProps {
 }
 
 export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectTab }) => {
-  const { setDatabaseActiveTab, currentUserRole, currentUserPermissions } = useAppStore();
+  const { setDatabaseActiveTab, currentUserRole, currentUserAppAccess, currentUserIosDataUpload } = useAppStore();
 
   const canUploadData = 
     currentUserRole === 'Manager' || 
-    currentUserRole === 'Administrator' || 
-    (currentUserPermissions && (
-      currentUserPermissions.includes('Upload Data') || 
-      currentUserPermissions.includes('upload_data') || 
-      currentUserPermissions.includes('Manage Database')
-    ));
+    currentUserIosDataUpload === true ||
+    (currentUserAppAccess && currentUserAppAccess.includes('ios_data_upload'));
 
   const navItems = [
     {

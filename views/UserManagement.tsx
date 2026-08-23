@@ -257,6 +257,7 @@ export const UserManagement = () => {
           username: formData.username,
           phone: formData.phone,
           appAccess: formData.appAccess,
+          iosDataUpload: formData.iosDataUpload,
           iosPttVisibility: formData.iosPttVisibility,
           iosVisiblePtts: formData.iosVisiblePtts
         });
@@ -287,6 +288,7 @@ export const UserManagement = () => {
           status: 'active',
           permissions: formData.permissions || ROLE_DEFAULTS['Viewer'],
           appAccess: formData.appAccess || ['web', 'ios'],
+          iosDataUpload: formData.iosDataUpload || false,
           iosPttVisibility: formData.iosPttVisibility || 'all',
           iosVisiblePtts: formData.iosVisiblePtts || [],
           lastLogin: undefined
@@ -784,6 +786,26 @@ export const UserManagement = () => {
                                 }} 
                              />
                              <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">iOS App</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                             <input 
+                                type="checkbox" 
+                                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                checked={formData.appAccess?.includes('ios_data_upload') || formData.iosDataUpload === true} 
+                                onChange={(e) => {
+                                   const access = formData.appAccess || [];
+                                   const isChecked = e.target.checked;
+                                   const updatedAccess = isChecked 
+                                     ? [...access.filter(a => a !== 'ios_data_upload'), 'ios_data_upload' as const]
+                                     : access.filter(a => a !== 'ios_data_upload');
+                                   setFormData({ 
+                                     ...formData, 
+                                     appAccess: updatedAccess,
+                                     iosDataUpload: isChecked 
+                                   });
+                                }} 
+                             />
+                             <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">iOS Data Upload</span>
                           </label>
                        </div>
                     </div>

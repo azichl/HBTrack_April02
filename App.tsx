@@ -288,18 +288,14 @@ const NotificationPanel = ({ onNavigate }: { onNavigate: (tab: string) => void }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const App = () => {
-  const { activeTab, darkMode, sidebarOpen, toggleSidebar, currentUser, setCurrentUser, authLoading, setAuthLoading, initializeFromFirestore, subscribeToLivePositions, setActiveTab, currentUserRole, currentUserPermissions, setCurrentUserProfile } = useAppStore();
+  const { activeTab, darkMode, sidebarOpen, toggleSidebar, currentUser, setCurrentUser, authLoading, setAuthLoading, initializeFromFirestore, subscribeToLivePositions, setActiveTab, currentUserRole, currentUserPermissions, currentUserAppAccess, currentUserIosDataUpload, setCurrentUserProfile } = useAppStore();
   const liveUnsubRef = useRef<(() => void) | null>(null);
   const firestoreInitialized = useRef(false);
 
   const canUploadData = 
     currentUserRole === 'Manager' || 
-    currentUserRole === 'Administrator' || 
-    (currentUserPermissions && (
-      currentUserPermissions.includes('Upload Data') || 
-      currentUserPermissions.includes('upload_data') || 
-      currentUserPermissions.includes('Manage Database')
-    ));
+    currentUserIosDataUpload === true ||
+    (currentUserAppAccess && currentUserAppAccess.includes('ios_data_upload'));
 
   // Define auto-logout behavior on idle
   const handleIdle = useCallback(() => {
@@ -400,14 +396,11 @@ const App = () => {
                permissions = ['View Data'];
              }
 
-             if (role === 'Manager' || role === 'Administrator') {
-               if (!permissions.includes('Upload Data')) permissions.push('Upload Data');
-             }
-
-             setCurrentUserProfile(role, permissions);
+             const iosDataUpload = userData.iosDataUpload === true || appAccess.includes('ios_data_upload');
+             setCurrentUserProfile(role, permissions, appAccess, iosDataUpload);
           } else {
              if (user.email === 'admin@houbaratracker.com') {
-               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users']);
+               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users'], ['web', 'ios', 'ios_data_upload'], true);
              }
           }
         } catch (err) {

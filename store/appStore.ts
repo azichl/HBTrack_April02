@@ -128,7 +128,9 @@ interface AppState {
   // Role-Based Access Control
   currentUserRole: Role;
   currentUserPermissions: string[];
-  setCurrentUserProfile: (role: Role, permissions: string[]) => void;
+  currentUserAppAccess: string[];
+  currentUserIosDataUpload: boolean;
+  setCurrentUserProfile: (role: Role, permissions: string[], appAccess?: string[], iosDataUpload?: boolean) => void;
 
   kpi: KPI;
   
@@ -495,7 +497,14 @@ export const useAppStore = create<AppState>()(
       // RBAC
       currentUserRole: 'Viewer' as Role,
       currentUserPermissions: ['View Data'],
-      setCurrentUserProfile: (role, permissions) => set({ currentUserRole: role, currentUserPermissions: permissions }),
+      currentUserAppAccess: ['web', 'ios'],
+      currentUserIosDataUpload: false,
+      setCurrentUserProfile: (role, permissions, appAccess, iosDataUpload) => set({ 
+        currentUserRole: role, 
+        currentUserPermissions: permissions,
+        currentUserAppAccess: appAccess || ['web', 'ios'],
+        currentUserIosDataUpload: iosDataUpload !== undefined ? iosDataUpload : (appAccess ? appAccess.includes('ios_data_upload') : false)
+      }),
 
       kpi: {
         activeTransmitters: 0,
