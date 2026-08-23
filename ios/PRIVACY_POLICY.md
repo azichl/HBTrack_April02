@@ -3,18 +3,16 @@
 **Last Updated:** August 23, 2026
 
 ## Introduction
-This Privacy Policy describes how the RAF Tracking application ("we", "our", or "the App") collects, uses, and protects your information. The App is designed for tracking Houbara locations, scanning QR codes, and telemetry data ingestion.
+This Privacy Policy describes how the RAF Tracking application ("we", "our", or "the App") collects, uses, and protects your information. The App is designed for tracking Houbara locations and live map navigation.
 
 ## Information We Collect
 To provide our core functionality, the App requests access to the following device capabilities:
-* **Camera:** We require camera access strictly to scan transmitter QR codes and take document photos for data ingestion. 
-* **Location:** We use your location data while the app is in use to display your current position relative to Houbara tracking locations on the live map.
+* **Location (GPS):** We use your location data while the app is in use to display your current position relative to Houbara tracking locations on the live map and for GPS navigation.
 
 ## How We Use Your Information
 The information collected is used solely for the internal functionality of the App:
-* To facilitate the data ingestion process.
-* To accurately map tracking locations relative to the user.
-* To ensure data integrity when monitoring tracking devices.
+* To accurately map tracking locations relative to the user position.
+* To provide live GPS navigation on the interactive map.
 
 ## Data Sharing and Disclosure
 We do not sell, trade, or otherwise transfer your personally identifiable information to outside parties. All data collected is used internally for the purposes of Houbara tracking and research.
