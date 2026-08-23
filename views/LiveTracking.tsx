@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useM
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
+import { Transmitter } from '../types';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -717,13 +718,19 @@ const TransmitterMarker = React.memo(TransmitterMarkerInner, (prevProps, nextPro
 });
 
 // ErrorBoundary to catch render crashes and auto-recover instead of blank screen
-class LiveTrackingErrorBoundary extends Component<
-    { children: React.ReactNode },
-    { hasError: boolean; errorCount: number }
-> {
-    public state: { hasError: boolean; errorCount: number } = { hasError: false, errorCount: 0 };
-    constructor(props: { children: React.ReactNode }) {
+interface LiveTrackingErrorBoundaryProps {
+    children: React.ReactNode;
+}
+
+interface LiveTrackingErrorBoundaryState {
+    hasError: boolean;
+    errorCount: number;
+}
+
+class LiveTrackingErrorBoundary extends (React.Component as any) {
+    constructor(props: LiveTrackingErrorBoundaryProps) {
         super(props);
+        this.state = { hasError: false, errorCount: 0 };
     }
     static getDerivedStateFromError() {
         return { hasError: true };

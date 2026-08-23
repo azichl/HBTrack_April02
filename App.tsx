@@ -397,10 +397,12 @@ const App = () => {
              }
 
              const iosDataUpload = userData.iosDataUpload === true || appAccess.includes('ios_data_upload');
-             setCurrentUserProfile(role, permissions, appAccess, iosDataUpload);
+             const iosPttVisibility = userData.iosPttVisibility || 'all';
+             const iosVisiblePtts = Array.isArray(userData.iosVisiblePtts) ? userData.iosVisiblePtts : [];
+             setCurrentUserProfile(role, permissions, appAccess, iosDataUpload, iosPttVisibility, iosVisiblePtts);
           } else {
              if (user.email === 'admin@houbaratracker.com') {
-               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users'], ['web', 'ios', 'ios_data_upload'], true);
+               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users'], ['web', 'ios', 'ios_data_upload'], true, 'all', []);
              }
           }
         } catch (err) {

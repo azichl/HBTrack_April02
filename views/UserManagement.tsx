@@ -276,7 +276,11 @@ export const UserManagement = () => {
           formData.name!,
           mapRoleToFirebase(formData.role as Role),
           formData.username,
-          formData.phone
+          formData.phone,
+          formData.appAccess,
+          formData.iosDataUpload,
+          formData.iosPttVisibility,
+          formData.iosVisiblePtts
         );
         addUser({
           id: result.id,

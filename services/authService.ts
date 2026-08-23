@@ -90,9 +90,24 @@ export async function createUser(
   displayName: string, 
   role: string,
   username?: string,
-  phone?: string
+  phone?: string,
+  appAccess?: ('web' | 'ios' | 'ios_data_upload')[],
+  iosDataUpload?: boolean,
+  iosPttVisibility?: 'all' | 'custom',
+  iosVisiblePtts?: string[]
 ): Promise<AppUser> {
-  return callFunction('createAppUser', 'POST', { email, password, displayName, role, username, phone });
+  return callFunction('createAppUser', 'POST', { 
+    email, 
+    password, 
+    displayName, 
+    role, 
+    username, 
+    phone,
+    appAccess,
+    iosDataUpload,
+    iosPttVisibility,
+    iosVisiblePtts
+  });
 }
 
 /** Update an existing user's profile */

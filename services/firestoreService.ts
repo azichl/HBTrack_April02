@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
+import { ArgosMessage, StatusHistoryRecord, Transmitter } from '../types';
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
 

@@ -130,7 +130,9 @@ interface AppState {
   currentUserPermissions: string[];
   currentUserAppAccess: string[];
   currentUserIosDataUpload: boolean;
-  setCurrentUserProfile: (role: Role, permissions: string[], appAccess?: string[], iosDataUpload?: boolean) => void;
+  currentUserIosPttVisibility: 'all' | 'custom';
+  currentUserIosVisiblePtts: string[];
+  setCurrentUserProfile: (role: Role, permissions: string[], appAccess?: string[], iosDataUpload?: boolean, iosPttVisibility?: 'all' | 'custom', iosVisiblePtts?: string[]) => void;
 
   kpi: KPI;
   
@@ -205,6 +207,64 @@ interface AppState {
   // Simulation Actions
   generateLivePositions: () => void;
 }
+
+// Helpers for RBAC & iOS PTT Visibility Filtering
+export const checkIsIOSMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const searchParams = new URLSearchParams(window.location.search);
+  return searchParams.get('mode') === 'ios' || 
+         searchParams.get('app') === 'ios' || 
+         !!(window as any).isIOSApp || 
+         !!(window as any).isNativeIOS;
+};
+
+export const filterTransmittersForUser = (
+  transmitters: Transmitter[],
+  visibility: 'all' | 'custom' | undefined,
+  visiblePtts: string[] | undefined,
+  isIOS: boolean = checkIsIOSMode()
+): Transmitter[] => {
+  if (isIOS && visibility === 'custom' && Array.isArray(visiblePtts)) {
+    const visibleSet = new Set(visiblePtts.map(id => String(id)));
+    return transmitters.filter(t => visibleSet.has(String(t.platform_id)));
+  }
+  return transmitters;
+};
+
+export const filterPositionsForUser = (
+  positions: Position[],
+  transmitters: Transmitter[],
+  visibility: 'all' | 'custom' | undefined,
+  visiblePtts: string[] | undefined,
+  isIOS: boolean = checkIsIOSMode()
+): Position[] => {
+  if (isIOS && visibility === 'custom' && Array.isArray(visiblePtts)) {
+    const visibleSet = new Set(visiblePtts.map(id => String(id)));
+    return positions.filter(p => {
+      const t = transmitters.find(tx => String(tx.platform_id) === String(p.transmitter_id) || tx.id === p.transmitter_id);
+      return (t && visibleSet.has(String(t.platform_id))) || visibleSet.has(String(p.transmitter_id));
+    });
+  }
+  return positions;
+};
+
+export const filterAlertsForUser = (
+  alerts: Alert[],
+  transmitters: Transmitter[],
+  visibility: 'all' | 'custom' | undefined,
+  visiblePtts: string[] | undefined,
+  isIOS: boolean = checkIsIOSMode()
+): Alert[] => {
+  if (isIOS && visibility === 'custom' && Array.isArray(visiblePtts)) {
+    const visibleSet = new Set(visiblePtts.map(id => String(id)));
+    return alerts.filter(a => {
+      if (!a.transmitter_id) return true; // keep system-wide alerts
+      const t = transmitters.find(tx => String(tx.platform_id) === String(a.transmitter_id) || tx.id === a.transmitter_id);
+      return (t && visibleSet.has(String(t.platform_id))) || visibleSet.has(String(a.transmitter_id));
+    });
+  }
+  return alerts;
+};
 
 // Helper: fire-and-forget Firestore write (non-blocking)
 const fireAndForget = (fn: () => Promise<any>) => {
@@ -499,11 +559,15 @@ export const useAppStore = create<AppState>()(
       currentUserPermissions: ['View Data'],
       currentUserAppAccess: ['web', 'ios'],
       currentUserIosDataUpload: false,
-      setCurrentUserProfile: (role, permissions, appAccess, iosDataUpload) => set({ 
+      currentUserIosPttVisibility: 'all',
+      currentUserIosVisiblePtts: [],
+      setCurrentUserProfile: (role, permissions, appAccess, iosDataUpload, iosPttVisibility, iosVisiblePtts) => set({ 
         currentUserRole: role, 
         currentUserPermissions: permissions,
         currentUserAppAccess: appAccess || ['web', 'ios'],
-        currentUserIosDataUpload: iosDataUpload !== undefined ? iosDataUpload : (appAccess ? appAccess.includes('ios_data_upload') : false)
+        currentUserIosDataUpload: iosDataUpload !== undefined ? iosDataUpload : (appAccess ? appAccess.includes('ios_data_upload') : false),
+        currentUserIosPttVisibility: iosPttVisibility || 'all',
+        currentUserIosVisiblePtts: iosVisiblePtts || []
       }),
 
       kpi: {
@@ -711,7 +775,9 @@ export const useAppStore = create<AppState>()(
               
               const allTransmitters = Array.from(transMap.values());
               fireAndForget(() => syncTransmitters(allTransmitters));
-              return { transmitters: allTransmitters, lastSaved: new Date().toISOString() };
+              const isIOS = checkIsIOSMode();
+              const filtered = filterTransmittersForUser(allTransmitters, state.currentUserIosPttVisibility, state.currentUserIosVisiblePtts, isIOS);
+              return { transmitters: filtered, lastSaved: new Date().toISOString() };
           });
       },
 
@@ -824,8 +890,14 @@ export const useAppStore = create<AppState>()(
       // Argos API → mapArgosApiData() → syncArgosToFirebase() → Firebase
       // NO data is stored in zustand state arrays. NO LocalStorage.
       syncArgosToFirebase: async (incomingMessages, incomingDevices = [], onProgress) => {
-          const { transmitters, positions, addAlert } = get();
-          let newTransmitters = [...transmitters];
+          const { transmitters, positions, addAlert, currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
+          let existingDbTransmitters: Transmitter[] = [];
+          try {
+            existingDbTransmitters = await loadCollection<Transmitter>('transmitters');
+          } catch (e) {
+            console.warn('[AppStore] Could not load DB transmitters before sync, using store cache:', e);
+          }
+          let newTransmitters = existingDbTransmitters.length > 0 ? [...existingDbTransmitters] : [...transmitters];
           let tUpdated = 0;
           let pCreated = 0;
           const newPositionDocs: Position[] = [];
@@ -1074,9 +1146,13 @@ export const useAppStore = create<AppState>()(
           const nowIso = new Date().toISOString();
           await saveLastIngestTime(nowIso);
 
+          const isIOS = checkIsIOSMode();
+          const filteredTransmitters = filterTransmittersForUser(newTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, isIOS);
+          const filteredPositions = filterPositionsForUser(cappedPositions, newTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, isIOS);
+
           set({ 
-              transmitters: newTransmitters, 
-              positions: cappedPositions,
+              transmitters: filteredTransmitters, 
+              positions: filteredPositions,
               lastIngestTime: nowIso,
               lastSaved: nowIso 
           });
@@ -1149,9 +1225,10 @@ export const useAppStore = create<AppState>()(
           let iosPttVisibility = 'all';
           let iosVisiblePtts: string[] = [];
           let appAccess = ['web', 'ios'];
+          let userProfile: User | undefined;
           
           if (currentUser) {
-            const userProfile = mergedUsers.find(u => u.id === currentUser.uid || u.email === currentUser.email);
+            userProfile = mergedUsers.find(u => u.id === currentUser.uid || u.email === currentUser.email);
             if (userProfile) {
               role = userProfile.role || 'Viewer';
               permissions = userProfile.permissions || ['View Data'];
@@ -1197,28 +1274,10 @@ export const useAppStore = create<AppState>()(
             }
           }
 
-          let finalTransmitters = mergedTransmitters;
-          let finalPositions = recentPositions;
-          let finalAlerts = mergedAlerts;
-
-          const searchParams = new URLSearchParams(window.location.search);
-          const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
-
-          if (isIOSMode && iosPttVisibility === 'custom') {
-            const visibleIds = new Set(iosVisiblePtts.map(id => String(id)));
-            finalTransmitters = mergedTransmitters.filter(t => visibleIds.has(String(t.platform_id)));
-            
-            finalPositions = recentPositions.filter(p => {
-               const t = mergedTransmitters.find(tx => String(tx.platform_id) === String(p.transmitter_id) || tx.id === p.transmitter_id);
-               return t && visibleIds.has(String(t.platform_id));
-            });
-            
-            finalAlerts = mergedAlerts.filter(a => {
-               if (!a.transmitter_id) return true; // keep system-wide alerts
-               const t = mergedTransmitters.find(tx => String(tx.platform_id) === String(a.transmitter_id) || tx.id === a.transmitter_id);
-               return t && visibleIds.has(String(t.platform_id));
-            });
-          }
+          const isIOSMode = checkIsIOSMode();
+          const finalTransmitters = filterTransmittersForUser(mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, isIOSMode);
+          const finalPositions = filterPositionsForUser(recentPositions, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, isIOSMode);
+          const finalAlerts = filterAlertsForUser(mergedAlerts, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, isIOSMode);
 
           set({
             transmitters: finalTransmitters,
@@ -1232,6 +1291,10 @@ export const useAppStore = create<AppState>()(
             firestoreReady: true,
             currentUserRole: role,
             currentUserPermissions: permissions,
+            currentUserAppAccess: appAccess,
+            currentUserIosDataUpload: userProfile?.iosDataUpload === true || (appAccess && appAccess.includes('ios_data_upload')),
+            currentUserIosPttVisibility: iosPttVisibility as 'all' | 'custom',
+            currentUserIosVisiblePtts: iosVisiblePtts,
             lastSaved: new Date().toISOString()
           });
           
@@ -1361,7 +1424,10 @@ export const useAppStore = create<AppState>()(
 
           if (updated > 0) {
             const freshTransmitters = await loadCollection<Transmitter>('transmitters');
-            set({ transmitters: freshTransmitters });
+            const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
+            const isIOS = checkIsIOSMode();
+            const filteredTransmitters = filterTransmittersForUser(freshTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, isIOS);
+            set({ transmitters: filteredTransmitters });
             onProgress?.(`Updated derived_status for ${updated} transmitters.`);
           } else {
             onProgress?.('All transmitter statuses are up to date.');
@@ -1387,21 +1453,13 @@ export const useAppStore = create<AppState>()(
             const currentPositions = [...state.positions];
             let changed = false;
 
-            const { currentUser } = get();
-            
-            // Retrieve iOS filters from userProfile or cache
-            const searchParams = new URLSearchParams(window.location.search);
-            const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+            const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
+            const isIOSMode = checkIsIOSMode();
             
             // If iOS mode, filter incoming live positions too!
             let visibleIds: Set<string> | null = null;
-            if (isIOSMode && currentUser) {
-               // Need to find the profile in users list since we don't have userProfile stored at root state directly
-               const usersList = get().users;
-               const profile = usersList.find(u => u.id === currentUser.uid);
-               if (profile && profile.iosPttVisibility === 'custom') {
-                  visibleIds = new Set((profile.iosVisiblePtts || []).map(id => String(id)));
-               }
+            if (isIOSMode && currentUserIosPttVisibility === 'custom') {
+               visibleIds = new Set((currentUserIosVisiblePtts || []).map(id => String(id)));
             }
 
             firestorePositions.forEach(p => {

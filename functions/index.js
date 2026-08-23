@@ -151,7 +151,7 @@ exports.createAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
   if (!caller) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { email, password, displayName, role, username, phone } = req.body;
+    const { email, password, displayName, role, username, phone, permissions, appAccess, iosDataUpload, iosPttVisibility, iosVisiblePtts } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: "email and password are required" });
@@ -175,10 +175,11 @@ exports.createAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
       status: "active",
       lastActive: new Date().toISOString(),
       createdAt: new Date().toISOString(),
-      permissions: getDefaultPermissions(role || "viewer"),
-      appAccess: ["web", "ios"], // Default to both
-      iosPttVisibility: "all",
-      iosVisiblePtts: [],
+      permissions: permissions || getDefaultPermissions(role || "viewer"),
+      appAccess: appAccess || ["web", "ios"], // Default to both
+      iosDataUpload: iosDataUpload !== undefined ? !!iosDataUpload : false,
+      iosPttVisibility: iosPttVisibility || "all",
+      iosVisiblePtts: Array.isArray(iosVisiblePtts) ? iosVisiblePtts : [],
     };
 
     await db.collection("users").doc(userRecord.uid).set(userDoc);
@@ -249,7 +250,7 @@ exports.updateAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
   if (!caller) return res.status(401).json({ error: "Unauthorized" });
 
   try {
-    const { uid, role, status, name, username, phone, permissions, appAccess, iosPttVisibility, iosVisiblePtts } = req.body;
+    const { uid, role, status, name, username, phone, permissions, appAccess, iosDataUpload, iosPttVisibility, iosVisiblePtts } = req.body;
     if (!uid) return res.status(400).json({ error: "uid is required" });
 
     const updates = {};
@@ -260,6 +261,7 @@ exports.updateAppUser = onRequest({ cors: true, maxInstances: 5 }, async (req, r
     if (phone !== undefined) updates.phone = phone;
     if (permissions !== undefined) updates.permissions = permissions;
     if (appAccess !== undefined) updates.appAccess = appAccess;
+    if (iosDataUpload !== undefined) updates.iosDataUpload = iosDataUpload;
     if (iosPttVisibility !== undefined) updates.iosPttVisibility = iosPttVisibility;
     if (iosVisiblePtts !== undefined) updates.iosVisiblePtts = iosVisiblePtts;
 
