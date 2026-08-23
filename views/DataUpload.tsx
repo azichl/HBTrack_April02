@@ -5,20 +5,9 @@ import { useAppStore } from '../store/appStore';
 import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird as BirdType } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
-import { formatDateTime } from '../utils/formatting';
+import { formatDateTime, isValidCoordinate } from '../utils/formatting';
 
 // --- HELPERS ---
-
-// Filter out (0,0) coordinates which usually indicate failed fixes or default values
-const isValidCoordinate = (lat: string | number, lon: string | number): boolean => {
-    const latNum = Number(lat);
-    const lonNum = Number(lon);
-    // Check if both are exactly 0 (Null Island) or NaN
-    if ((latNum === 0 && lonNum === 0) || isNaN(latNum) || isNaN(lonNum)) {
-        return false;
-    }
-    return true;
-};
 
 // --- MAPPERS ---
 const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {

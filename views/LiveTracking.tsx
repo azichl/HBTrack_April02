@@ -4,8 +4,7 @@ import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useM
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
-import { Transmitter } from '../types';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
@@ -1418,7 +1417,7 @@ const LiveTrackingInner = () => {
         // Filter invalid zero coordinates for marker display
         const numLat = Number(p.lat);
         const numLon = Number(p.lon);
-        if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
+        if (!isValidCoordinate(numLat, numLon)) {
             return;
         }
 
@@ -1474,7 +1473,7 @@ const LiveTrackingInner = () => {
           numLon = Math.abs(numLon);
         }
 
-        if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
+        if (!isValidCoordinate(numLat, numLon)) {
             return;
         }
 
@@ -1593,7 +1592,7 @@ const LiveTrackingInner = () => {
         track = track.filter(p => {
             const numLat = Number(p.lat);
             const numLon = Number(p.lon);
-            const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001) && Math.abs(numLat) <= 90 && Math.abs(numLon) <= 180;
+            const validCoords = isValidCoordinate(numLat, numLon);
             if (!validCoords) return false;
 
             const fixType = classifyLocationType(p.lc, p.locationType);

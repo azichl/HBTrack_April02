@@ -1,13 +1,6 @@
 import { ArgosMessage, ArgosDevice, ArgosDoppler } from '../types';
-
-export const isValidCoordinate = (lat: string | number, lon: string | number): boolean => {
-    const latNum = Number(lat);
-    const lonNum = Number(lon);
-    if ((latNum === 0 && lonNum === 0) || isNaN(latNum) || isNaN(lonNum)) {
-        return false;
-    }
-    return true;
-};
+import { isValidCoordinate } from '../utils/formatting';
+export { isValidCoordinate };
 
 /**
  * Attempts to decode battery voltage from Argos raw data payload.
@@ -71,7 +64,7 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         let numLon = Number(lon);
         
         // Reject zero/invalid coordinates at ingestion
-        if (isNaN(numLat) || isNaN(numLon) || numLat === 0 || numLon === 0 || (Math.abs(numLat) <= 0.0001 && Math.abs(numLon) <= 0.0001)) {
+        if (!isValidCoordinate(numLat, numLon)) {
             return null;
         }
 

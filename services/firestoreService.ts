@@ -4,7 +4,7 @@ import {
   DocumentSnapshot, addDoc, updateDoc, Timestamp, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix } from '../utils/formatting';
+import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
 
@@ -314,7 +314,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
             locationType: d.locationType || 'GPS'
           };
         }).filter(item => {
-          return !isNaN(item.lat) && !isNaN(item.lon) && item.lat !== 0 && item.lon !== 0 && (Math.abs(item.lat) > 0.0001 || Math.abs(item.lon) > 0.0001);
+          return isValidCoordinate(item.lat, item.lon);
         });
 
         if (normalized.length === 0) return null;
@@ -453,7 +453,7 @@ export const batchWriteArgosPositions = async (
       const pidStr = String(msg.platformId);
       let lat = parseFloat(msg.lat);
       let lon = parseFloat(msg.lon);
-      if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001)) return; // skip zero coords
+      if (!isValidCoordinate(lat, lon)) return; // Strictly reject zero / near-zero coords
       
       // Auto-correct negative longitude to positive for transmitter 242086
       if (pidStr === '242086' && lon < 0) {
@@ -788,7 +788,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
 
     const lat = Number(d.lat);
     let lon = Number(d.lon);
-    if (isNaN(lat) || isNaN(lon) || lat === 0 || lon === 0 || (Math.abs(lat) <= 0.0001 && Math.abs(lon) <= 0.0001) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    if (!isValidCoordinate(lat, lon)) return null;
 
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
 
@@ -859,9 +859,10 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
 
 /** Save positions in batch, using composite key as document ID */
 export const savePositions = async (positions: Array<{ id: string; [key: string]: any }>) => {
-  if (positions.length === 0) return 0;
+  const validPositions = positions.filter(pos => isValidCoordinate(pos.lat, pos.lon));
+  if (validPositions.length === 0) return 0;
   
-  const documents = positions.map(pos => ({
+  const documents = validPositions.map(pos => ({
     id: pos.id,
     data: {
       transmitter_id: pos.transmitter_id,

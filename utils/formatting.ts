@@ -157,3 +157,24 @@ export const isHighQualityFix = (lc?: string, locType?: string): boolean => {
 
   return false;
 };
+
+/**
+ * Validates whether latitude and longitude are valid non-zero geographic coordinates.
+ * Strictly rejects:
+ * - NaN, null, undefined
+ * - Out of bounds (|lat| > 90 or |lon| > 180)
+ * - Exact zero (lat === 0 or lon === 0)
+ * - Near-zero / "Null Island" noise in Gulf of Guinea / Equatorial Guinea (|lat| < 1 && |lon| < 1)
+ */
+export const isValidCoordinate = (lat: any, lon: any): boolean => {
+  if (lat === undefined || lat === null || lon === undefined || lon === null) return false;
+  const numLat = typeof lat === 'number' ? lat : parseFloat(String(lat));
+  const numLon = typeof lon === 'number' ? lon : parseFloat(String(lon));
+
+  if (isNaN(numLat) || isNaN(numLon)) return false;
+  if (Math.abs(numLat) > 90 || Math.abs(numLon) > 180) return false;
+  if (numLat === 0 || numLon === 0) return false;
+  if (Math.abs(numLat) < 1 && Math.abs(numLon) < 1) return false;
+
+  return true;
+};

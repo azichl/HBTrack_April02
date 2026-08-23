@@ -525,3 +525,50 @@ function getDefaultPermissions(role) {
       };
   }
 }
+
+// ─── Database Cleanup: Purge (0,0) and Null Island noise coordinates ──────────
+
+exports.purgeInvalidZeroCoordinates = onRequest({ cors: true, timeoutSeconds: 540, memory: "512MiB" }, async (req, res) => {
+  try {
+    let deletedCount = 0;
+    const collections = ["argos_positions", "positions"];
+
+    for (const colName of collections) {
+      const snap = await db.collection(colName).get();
+      let batch = db.batch();
+      let countInBatch = 0;
+
+      for (const docSnap of snap.docs) {
+        const d = docSnap.data();
+        const lat = Number(d.lat !== undefined ? d.lat : d.latitude);
+        const lon = Number(d.lon !== undefined ? d.lon : d.longitude);
+
+        const isInvalid = isNaN(lat) || isNaN(lon) || 
+                          Math.abs(lat) > 90 || Math.abs(lon) > 180 ||
+                          lat === 0 || lon === 0 || 
+                          (Math.abs(lat) < 1 && Math.abs(lon) < 1);
+
+        if (isInvalid) {
+          batch.delete(docSnap.ref);
+          deletedCount++;
+          countInBatch++;
+          if (countInBatch >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            countInBatch = 0;
+          }
+        }
+      }
+
+      if (countInBatch > 0) {
+        await batch.commit();
+      }
+    }
+
+    console.log(`[Purge] Deleted ${deletedCount} invalid coordinates from Firestore.`);
+    res.json({ success: true, deletedCount });
+  } catch (error) {
+    console.error("Purge Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
