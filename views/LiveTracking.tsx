@@ -1203,7 +1203,8 @@ const LiveTrackingInner = () => {
   
   const [historyPaths, setHistoryPaths] = useState<Array<{
     id: string, 
-    path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, 
+    path: Array<{lat: number, lon: number, timestamp: string, type?: string}>,
+    polylinePath: Array<{lat: number, lon: number}>,
     color: string
   }>>([]);
 
@@ -1576,7 +1577,7 @@ const LiveTrackingInner = () => {
     }
 
     const rawPositions = rawHistoryCache.current;
-    const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, color: string}> = [];
+    const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, polylinePath: Array<{lat: number, lon: number}>, color: string}> = [];
     const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
 
     selectedTransmitterIds.forEach((pttId, index) => {
@@ -1589,34 +1590,40 @@ const LiveTrackingInner = () => {
           track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
         }
 
+        // Classify all fixes and filter valid coordinates
         track = track.filter(p => {
             const numLat = Number(p.lat);
             const numLon = Number(p.lon);
             const validCoords = !isNaN(numLat) && !isNaN(numLon) && numLat !== 0 && numLon !== 0 && (Math.abs(numLat) > 0.0001 || Math.abs(numLon) > 0.0001) && Math.abs(numLat) <= 90 && Math.abs(numLon) <= 180;
+            if (!validCoords) return false;
 
             const fixType = classifyLocationType(p.lc, p.locationType);
             p.locationType = fixType;
 
-            let validType = false;
-            if (historyFixType === 'GPS') {
-                validType = fixType === 'GPS';
-            } else if (historyFixType === 'Doppler') {
-                validType = fixType === 'Doppler' && isHighQualityFix(p.lc, p.locationType);
-            } else {
-                // 'All': include GPS fixes and high-quality Doppler fixes (exclude poor LC 0, A, B, Z)
-                validType = isHighQualityFix(p.lc, p.locationType);
-            }
-
-            return validCoords && validType;
+            // GPS/Doppler/All filter controls which MARKERS are visible
+            if (historyFixType === 'GPS') return fixType === 'GPS';
+            if (historyFixType === 'Doppler') return fixType === 'Doppler';
+            return true; // 'All': show all fixes
         });
 
-        // Sort track points chronologically (oldest to newest) to prevent map polyline criss-crossing
+        // Sort track points chronologically
         track.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+
+        // Build GPS-only polyline path (clean line, no criss-crossing from Doppler scatter)
+        // When GPS filter is active, polyline = all displayed GPS points
+        // When Doppler filter is active, polyline = only high-quality Doppler (LC 3, 2, 1)
+        // When All filter is active, polyline = GPS fixes only (clean track)
+        const polylinePoints = track.filter(p => {
+            if (historyFixType === 'GPS') return true; // all displayed points are GPS
+            if (historyFixType === 'Doppler') return isHighQualityFix(p.lc, p.locationType); // LC 3,2,1 only
+            return p.locationType === 'GPS'; // 'All': only GPS for clean polyline
+        });
 
         if (track.length > 0) {
              newPaths.push({
                  id: pttId,
                  path: track.map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp, type: p.locationType })),
+                 polylinePath: polylinePoints.map(p => ({ lat: p.lat, lon: p.lon })),
                  color: colors[index % colors.length]
              });
         }
@@ -2087,24 +2094,26 @@ const LiveTrackingInner = () => {
             
             {/* Historical Tracks */}
             {showHistory && historyPaths.map((hp) => {
-                const fullPath = hp.path;
-                // Render 100% of all historical track points on Polyline.
+                const allMarkerPoints = hp.path;
+                const linePath = hp.polylinePath || [];
                 // Optimize circle markers if path is large to keep mobile/iOS smooth at 60fps.
-                const maxMarkers = 150;
-                const step = fullPath.length > maxMarkers ? Math.ceil(fullPath.length / maxMarkers) : 1;
+                const maxMarkers = 300;
+                const step = allMarkerPoints.length > maxMarkers ? Math.ceil(allMarkerPoints.length / maxMarkers) : 1;
                 const displayedPoints = step > 1 
-                    ? fullPath.filter((_, idx) => idx === 0 || idx === fullPath.length - 1 || idx % step === 0)
-                    : fullPath;
+                    ? allMarkerPoints.filter((_, idx) => idx === 0 || idx === allMarkerPoints.length - 1 || idx % step === 0)
+                    : allMarkerPoints;
 
                 return (
                     <React.Fragment key={hp.id}>
-                        {/* The line connecting 100% of all historical points */}
-                        <Polyline 
-                            positions={fullPath.map(p => [p.lat, p.lon])} 
-                            pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
-                        />
+                        {/* Clean polyline through GPS-only fixes (no Doppler scatter criss-crossing) */}
+                        {linePath.length > 1 && (
+                            <Polyline 
+                                positions={linePath.map(p => [p.lat, p.lon])} 
+                                pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
+                            />
+                        )}
                         
-                        {/* Optimized dots along the historical track */}
+                        {/* All fix markers (GPS + Doppler) along the track */}
                         {displayedPoints.map((point, idx) => (
                              <HistoricalMarker
                                 key={`${hp.id}-${point.timestamp}-${idx}`}
