@@ -32,7 +32,7 @@ export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectT
     },
     {
       id: 'Data Upload',
-      label: 'CLS Sync',
+      label: 'Data Upload',
       icon: UploadCloud,
       onClick: () => {
         setDatabaseActiveTab('Data Upload');
