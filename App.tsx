@@ -22,6 +22,7 @@ import { Settings } from './views/Settings';
 import { HelpSupport } from './views/HelpSupport';
 import { GeoSpatialAnalysis } from './views/GeoSpatialAnalysis';
 import { DataUpload } from './views/DataUpload';
+import { Role } from './types';
 import { IOSBottomNav } from './components/IOSBottomNav';
 import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { HoubaraIcon } from './components/HoubaraIcon';
@@ -287,9 +288,18 @@ const NotificationPanel = ({ onNavigate }: { onNavigate: (tab: string) => void }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 const App = () => {
-  const { activeTab, darkMode, sidebarOpen, toggleSidebar, currentUser, setCurrentUser, authLoading, setAuthLoading, initializeFromFirestore, subscribeToLivePositions, setActiveTab } = useAppStore();
+  const { activeTab, darkMode, sidebarOpen, toggleSidebar, currentUser, setCurrentUser, authLoading, setAuthLoading, initializeFromFirestore, subscribeToLivePositions, setActiveTab, currentUserRole, currentUserPermissions, setCurrentUserProfile } = useAppStore();
   const liveUnsubRef = useRef<(() => void) | null>(null);
   const firestoreInitialized = useRef(false);
+
+  const canUploadData = 
+    currentUserRole === 'Manager' || 
+    currentUserRole === 'Administrator' || 
+    (currentUserPermissions && (
+      currentUserPermissions.includes('Upload Data') || 
+      currentUserPermissions.includes('upload_data') || 
+      currentUserPermissions.includes('Manage Database')
+    ));
 
   // Define auto-logout behavior on idle
   const handleIdle = useCallback(() => {
@@ -365,6 +375,39 @@ const App = () => {
                 await signOut(auth);
                 setAuthLoading(false);
                 return;
+             }
+
+             // Set RBAC profile
+             const rawRole = userData.role || 'Viewer';
+             const roleMap: Record<string, Role> = {
+               'manager': 'Manager',
+               'admin': 'Administrator',
+               'administrator': 'Administrator',
+               'researcher': 'Researcher',
+               'field_operator': 'Field Coordinator',
+               'field_coordinator': 'Field Coordinator',
+               'data_entry': 'Data Entry',
+               'viewer': 'Viewer'
+             };
+             const role: Role = roleMap[String(rawRole).toLowerCase()] || (rawRole as Role);
+
+             let permissions: string[] = [];
+             if (Array.isArray(userData.permissions)) {
+               permissions = userData.permissions;
+             } else if (userData.permissions && typeof userData.permissions === 'object') {
+               permissions = Object.keys(userData.permissions).filter(k => userData.permissions[k]);
+             } else {
+               permissions = ['View Data'];
+             }
+
+             if (role === 'Manager' || role === 'Administrator') {
+               if (!permissions.includes('Upload Data')) permissions.push('Upload Data');
+             }
+
+             setCurrentUserProfile(role, permissions);
+          } else {
+             if (user.email === 'admin@houbaratracker.com') {
+               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users']);
              }
           }
         } catch (err) {
@@ -453,6 +496,7 @@ const App = () => {
       case 'Database': return <Database />;
       case 'Data Upload':
       case 'CLS Sync':
+        if (!canUploadData) return <Dashboard />;
         return <DataUpload />;
       case 'Monitoring': return <Monitoring />;
       case 'Reports': return <Reports />;

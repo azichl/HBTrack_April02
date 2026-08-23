@@ -8,12 +8,16 @@ interface IOSBottomNavProps {
 }
 
 export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectTab }) => {
-  const { setDatabaseActiveTab } = useAppStore();
+  const { setDatabaseActiveTab, currentUserRole, currentUserPermissions } = useAppStore();
 
-  const handleDataUploadClick = () => {
-    setDatabaseActiveTab('Data Upload');
-    onSelectTab('Database');
-  };
+  const canUploadData = 
+    currentUserRole === 'Manager' || 
+    currentUserRole === 'Administrator' || 
+    (currentUserPermissions && (
+      currentUserPermissions.includes('Upload Data') || 
+      currentUserPermissions.includes('upload_data') || 
+      currentUserPermissions.includes('Manage Database')
+    ));
 
   const navItems = [
     {
@@ -30,7 +34,7 @@ export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectT
       onClick: () => onSelectTab('Live Tracking'),
       isActive: activeTab === 'Live Tracking'
     },
-    {
+    ...(canUploadData ? [{
       id: 'Data Upload',
       label: 'Data Upload',
       icon: UploadCloud,
@@ -39,7 +43,7 @@ export const IOSBottomNav: React.FC<IOSBottomNavProps> = ({ activeTab, onSelectT
         onSelectTab('Data Upload');
       },
       isActive: activeTab === 'Data Upload' || activeTab === 'CLS Sync'
-    },
+    }] : []),
     {
       id: 'Settings',
       label: 'Settings',
