@@ -1475,10 +1475,11 @@ export const useAppStore = create<AppState>()(
 
           // Ensure bidirectional ID linking between transmitters and birds
           fsTransmitters.forEach(t => {
-            if (t.bird_id) {
-              const matched = findBirdForTransmitter(fsBirds, t.bird_id);
-              if (matched) {
-                t.bird_id = matched.id;
+            const matched = findBirdForTransmitter(fsBirds, t);
+            if (matched) {
+              t.bird_id = matched.id;
+              if (!t.assigned_bird_ring) {
+                t.assigned_bird_ring = matched.ring_id;
               }
             }
           });

@@ -54,6 +54,7 @@ export interface Transmitter {
   radio_time?: string;
   comment?: string;
   deployed?: boolean;
+  assigned_bird_ring?: string;
 }
 
 export interface StaticTestPeriod {

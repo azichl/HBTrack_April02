@@ -180,19 +180,32 @@ export const isValidCoordinate = (lat: any, lon: any): boolean => {
 };
 
 /**
- * Seamlessly matches a transmitter's bird_id to a Bird object.
+ * Seamlessly matches a transmitter's bird_id or assigned_bird_ring to a Bird object.
  * Checks by b.id, b.ring_id, and prefix-stripped variants to ensure compatibility.
  */
-export const findBirdForTransmitter = (birds: any[], birdId?: string): any | undefined => {
-  if (!birdId || !birds || birds.length === 0) return undefined;
-  const target = String(birdId).trim();
-  const strippedTarget = target.replace(/^bird-/, '');
+export const findBirdForTransmitter = (birds: any[], birdIdOrTransmitter?: any): any | undefined => {
+  if (!birdIdOrTransmitter || !birds || birds.length === 0) return undefined;
+  let targetId = '';
+  let targetRing = '';
+  if (typeof birdIdOrTransmitter === 'string') {
+    targetId = birdIdOrTransmitter.trim();
+  } else if (typeof birdIdOrTransmitter === 'object') {
+    targetId = birdIdOrTransmitter.bird_id ? String(birdIdOrTransmitter.bird_id).trim() : '';
+    targetRing = birdIdOrTransmitter.assigned_bird_ring ? String(birdIdOrTransmitter.assigned_bird_ring).trim() : '';
+  }
+
+  const targets = [targetId, targetRing].filter(Boolean);
+  if (targets.length === 0) return undefined;
+
   return birds.find(b => {
     if (!b) return false;
-    if (b.id === target || b.ring_id === target) return true;
-    if (b.ring_id && b.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
-    if (b.id && b.id.replace(/^bird-/, '') === strippedTarget) return true;
-    return false;
+    return targets.some(target => {
+      const strippedTarget = target.replace(/^bird-/, '');
+      if (b.id === target || b.ring_id === target) return true;
+      if (b.ring_id && b.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
+      if (b.id && b.id.replace(/^bird-/, '') === strippedTarget) return true;
+      return false;
+    });
   });
 };
 
@@ -200,12 +213,20 @@ export const findBirdForTransmitter = (birds: any[], birdId?: string): any | und
  * Checks if a Bird is linked to a Transmitter.
  */
 export const isBirdLinkedToTransmitter = (bird: any, transmitter: any): boolean => {
-  if (!bird || !transmitter || !transmitter.bird_id) return false;
-  const target = String(transmitter.bird_id).trim();
-  const strippedTarget = target.replace(/^bird-/, '');
-  if (target === bird.id || target === bird.ring_id) return true;
-  if (bird.ring_id && bird.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
-  if (bird.id && bird.id.replace(/^bird-/, '') === strippedTarget) return true;
-  return false;
+  if (!bird || !transmitter) return false;
+  const targetId = transmitter.bird_id ? String(transmitter.bird_id).trim() : '';
+  const targetRing = transmitter.assigned_bird_ring ? String(transmitter.assigned_bird_ring).trim() : '';
+  
+  const targets = [targetId, targetRing].filter(Boolean);
+  if (targets.length === 0) return false;
+
+  return targets.some(target => {
+    const strippedTarget = target.replace(/^bird-/, '');
+    if (target === bird.id || target === bird.ring_id) return true;
+    if (bird.ring_id && bird.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
+    if (bird.id && bird.id.replace(/^bird-/, '') === strippedTarget) return true;
+    return false;
+  });
 };
+
 

@@ -226,9 +226,10 @@ export const Dashboard = () => {
       const s = t.derived_status || t.status;
       return s === 'Active' || s === 'active';
     });
-    return birds.filter(b => 
+    const linkedBirds = birds.filter(b => 
       activeTx.some(t => isBirdLinkedToTransmitter(b, t))
-    ).length;
+    );
+    return linkedBirds.length > 0 ? linkedBirds.length : activeTx.filter(t => t.bird_id || (t as any).assigned_bird_ring).length;
   }, [birds, transmitters]);
   const systemAlerts = alerts.filter(a => a.type !== 'ticket_created');
   const activeAlertsCount = systemAlerts.filter(a => a.status === 'active').length;
