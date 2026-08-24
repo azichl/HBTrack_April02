@@ -123,9 +123,11 @@ export const Transmitters = () => {
     if (editingTransmitter) {
       updateTransmitter(editingTransmitter.id, formData);
     } else {
+      const pid = String(formData.platform_id || '').replace(/^trans-/, '').trim();
       const newTransmitter: Transmitter = {
-        id: `trans-${Date.now()}`,
-        ...formData as Transmitter
+        id: `trans-${pid}`,
+        ...formData as Transmitter,
+        platform_id: pid
       };
       addTransmitter(newTransmitter);
     }

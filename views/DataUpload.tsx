@@ -315,35 +315,41 @@ export const DataUpload = () => {
         if (rawData.length === 0) throw new Error("No data found in file");
 
         if (uploadType === 'transmitters') {
-            const mappedTransmitters: Transmitter[] = rawData.map((row: any) => ({
-                id: `trans-${row.platform_id || Math.random().toString(36).substr(2,9)}`,
-                platform_id: row.platform_id || 'Unknown',
-                model: row.model || 'Unknown',
-                status: (row.status?.toLowerCase() === 'active' ? 'active' : row.status?.toLowerCase() === 'maintenance' ? 'maintenance' : 'inactive') as any,
-                bird_id: '',
-                battery_voltage: 4.0, 
-                last_fix: new Date().toISOString(),
-                duty_cycle: 'Unknown',
-                frequency: row.frequency,
-                hex_id: row.hex_id,
-                manufacturer: row.manufacturer,
-                deployed: row.status?.toLowerCase() === 'active'
-            })).filter((t: any) => t.platform_id && t.platform_id !== 'Unknown');
+            const mappedTransmitters: Transmitter[] = rawData.map((row: any) => {
+                const pid = String(row.platform_id || '').replace(/^trans-/, '').trim();
+                return {
+                    id: `trans-${pid}`,
+                    platform_id: pid,
+                    model: row.model || 'Unknown',
+                    status: (row.status?.toLowerCase() === 'active' ? 'active' : row.status?.toLowerCase() === 'maintenance' ? 'maintenance' : 'inactive') as any,
+                    bird_id: '',
+                    battery_voltage: 4.0, 
+                    last_fix: new Date().toISOString(),
+                    duty_cycle: 'Unknown',
+                    frequency: row.frequency,
+                    hex_id: row.hex_id,
+                    manufacturer: row.manufacturer,
+                    deployed: row.status?.toLowerCase() === 'active'
+                };
+            }).filter((t: any) => t.platform_id && t.platform_id !== 'Unknown');
 
             importTransmitters(mappedTransmitters);
             setUploadMessage(`Successfully imported ${mappedTransmitters.length} transmitters.`);
         } 
         else if (uploadType === 'birds') {
-             const mappedBirds: BirdType[] = rawData.map((row: any) => ({
-                id: `bird-${Math.random().toString(36).substr(2,9)}`,
-                ring_id: row.ring_id || 'Unknown',
-                species: row.species || 'Houbara Bustard',
-                sex: (row.sex === 'F' ? 'F' : 'M') as any,
-                hatch_date: row.hatch_date || new Date().toISOString(),
-                release_location: row.release_location,
-                release_lat: row.release_lat,
-                release_lon: row.release_lon
-            })).filter((b: any) => b.ring_id && b.ring_id !== 'Unknown');
+             const mappedBirds: BirdType[] = rawData.map((row: any) => {
+                const rid = String(row.ring_id || '').replace(/^bird-/, '').trim();
+                return {
+                    id: `bird-${rid}`,
+                    ring_id: rid,
+                    species: row.species || 'Houbara Bustard',
+                    sex: (row.sex === 'F' ? 'F' : 'M') as any,
+                    hatch_date: row.hatch_date || new Date().toISOString(),
+                    release_location: row.release_location,
+                    release_lat: row.release_lat,
+                    release_lon: row.release_lon
+                };
+            }).filter((b: any) => b.ring_id && b.ring_id !== 'Unknown');
             
             importBirds(mappedBirds);
             

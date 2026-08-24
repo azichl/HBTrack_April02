@@ -128,10 +128,12 @@ export const Birds = () => {
       const { id, ...updates } = formData as Bird;
       updateBird(birdId, updates);
     } else {
-      birdId = `bird-${Date.now()}`;
+      const rid = String(formData.ring_id || '').replace(/^bird-/, '').trim();
+      birdId = `bird-${rid}`;
       const newBird: Bird = {
         ...(formData as Bird),
         id: birdId,
+        ring_id: rid
       };
       addBird(newBird);
     }

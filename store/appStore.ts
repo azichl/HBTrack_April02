@@ -266,6 +266,203 @@ export const filterAlertsForUser = (
   return alerts;
 };
 
+// ─── Deduplication & Strict Uniqueness Helpers ──────────────────────────────
+export const deduplicateTransmitters = (transmitters: Transmitter[]): {
+  deduplicated: Transmitter[];
+  deletedDocIds: string[];
+  updatedCanonicalDocs: Transmitter[];
+} => {
+  const byPid = new Map<string, Transmitter[]>();
+  transmitters.forEach(t => {
+    const pid = String(t.platform_id || t.id || '').replace(/^trans-/, '').trim();
+    if (!pid) return;
+    if (!byPid.has(pid)) byPid.set(pid, []);
+    byPid.get(pid)!.push(t);
+  });
+
+  const deduplicated: Transmitter[] = [];
+  const deletedDocIds: string[] = [];
+  const updatedCanonicalDocs: Transmitter[] = [];
+
+  for (const [pid, group] of byPid.entries()) {
+    if (group.length === 1) {
+      const single = group[0];
+      const canonicalId = `trans-${pid}`;
+      if (single.id !== canonicalId) {
+        // Normalize ID to trans-${pid}
+        const updated = { ...single, id: canonicalId, platform_id: pid };
+        deduplicated.push(updated);
+        updatedCanonicalDocs.push(updated);
+        deletedDocIds.push(single.id);
+      } else {
+        deduplicated.push(single);
+      }
+      continue;
+    }
+
+    // Multiple documents found for the same platform_id!
+    // Pick the best primary document: prefer one with assigned bird, known model, etc.
+    const withBird = group.find(t => t.bird_id && t.bird_id.trim() !== '');
+    const withKnownModel = group.find(t => t.model && !t.model.includes('Unknown') && !t.model.includes('Auto-detected'));
+    const canonicalId = `trans-${pid}`;
+    
+    // Choose base record
+    const base = withBird || withKnownModel || group[0];
+
+    // Merge attributes from all records
+    let mergedBirdId = base.bird_id || '';
+    let mergedModel = base.model || 'Unknown';
+    let mergedManufacturer = base.manufacturer;
+    let mergedFrequency = base.frequency;
+    let mergedHexId = base.hex_id;
+    let mergedProgramRegion = base.program_region;
+    let mergedSiteLocation = base.site_location;
+    let mergedDutyCycle = base.duty_cycle || 'Unknown';
+    let mergedDeployed = base.deployed;
+    let mergedManualOverride = base.manual_status_override;
+    let mergedBattery = base.battery_voltage;
+    let latestLastFix = base.last_fix || '';
+    let derivedStatus = base.derived_status;
+    let status = base.status || 'active';
+
+    for (const t of group) {
+      if (!mergedBirdId && t.bird_id) mergedBirdId = t.bird_id;
+      if ((mergedModel === 'Unknown' || mergedModel.includes('Auto-detected')) && t.model && !t.model.includes('Auto-detected')) {
+        mergedModel = t.model;
+      }
+      if (!mergedManufacturer && t.manufacturer) mergedManufacturer = t.manufacturer;
+      if (!mergedFrequency && t.frequency) mergedFrequency = t.frequency;
+      if (!mergedHexId && t.hex_id) mergedHexId = t.hex_id;
+      if (!mergedProgramRegion && t.program_region) mergedProgramRegion = t.program_region;
+      if (!mergedSiteLocation && t.site_location) mergedSiteLocation = t.site_location;
+      if ((mergedDutyCycle === 'Unknown' || !mergedDutyCycle) && t.duty_cycle) mergedDutyCycle = t.duty_cycle;
+      if (t.deployed !== undefined) mergedDeployed = t.deployed;
+      if (t.manual_status_override) mergedManualOverride = t.manual_status_override;
+      if (t.battery_voltage !== undefined && (mergedBattery === undefined || t.battery_voltage > mergedBattery)) {
+        mergedBattery = t.battery_voltage;
+      }
+      if (t.last_fix) {
+        const tTs = safeParseDate(t.last_fix);
+        const currTs = safeParseDate(latestLastFix);
+        if (!isNaN(tTs) && (isNaN(currTs) || tTs > currTs)) {
+          latestLastFix = t.last_fix;
+        }
+      }
+      // If one status is 'Active' or 'Potential Mortality' and another is 'Static test', prefer the active status if bird is assigned
+      if (t.derived_status && t.derived_status !== 'Static test' && (derivedStatus === 'Static test' || !derivedStatus)) {
+        derivedStatus = t.derived_status;
+      }
+      if (t.status === 'active') status = 'active';
+    }
+
+    const mergedRecord: Transmitter = {
+      ...base,
+      id: canonicalId,
+      platform_id: pid,
+      bird_id: mergedBirdId,
+      model: mergedModel,
+      manufacturer: mergedManufacturer,
+      frequency: mergedFrequency,
+      hex_id: mergedHexId,
+      program_region: mergedProgramRegion,
+      site_location: mergedSiteLocation,
+      duty_cycle: mergedDutyCycle,
+      deployed: mergedDeployed,
+      manual_status_override: mergedManualOverride,
+      battery_voltage: mergedBattery,
+      last_fix: latestLastFix,
+      derived_status: derivedStatus,
+      status: status
+    };
+
+    deduplicated.push(mergedRecord);
+    updatedCanonicalDocs.push(mergedRecord);
+
+    // Any document whose id != canonicalId must be deleted from Firestore
+    group.forEach(t => {
+      if (t.id !== canonicalId) {
+        deletedDocIds.push(t.id);
+      }
+    });
+  }
+
+  return { deduplicated, deletedDocIds, updatedCanonicalDocs };
+};
+
+export const deduplicateBirds = (birds: Bird[]): {
+  deduplicated: Bird[];
+  deletedDocIds: string[];
+  updatedCanonicalDocs: Bird[];
+} => {
+  const byRid = new Map<string, Bird[]>();
+  birds.forEach(b => {
+    const rid = String(b.ring_id || b.id || '').replace(/^bird-/, '').trim();
+    if (!rid) return;
+    if (!byRid.has(rid)) byRid.set(rid, []);
+    byRid.get(rid)!.push(b);
+  });
+
+  const deduplicated: Bird[] = [];
+  const deletedDocIds: string[] = [];
+  const updatedCanonicalDocs: Bird[] = [];
+
+  for (const [rid, group] of byRid.entries()) {
+    const canonicalId = `bird-${rid}`;
+    if (group.length === 1) {
+      const single = group[0];
+      if (single.id !== canonicalId) {
+        const updated = { ...single, id: canonicalId, ring_id: rid };
+        deduplicated.push(updated);
+        updatedCanonicalDocs.push(updated);
+        deletedDocIds.push(single.id);
+      } else {
+        deduplicated.push(single);
+      }
+      continue;
+    }
+
+    const base = group[0];
+    let species = base.species || 'Houbara Bustard';
+    let sex = base.sex || 'M';
+    let hatchDate = base.hatch_date || '';
+    let releaseLocation = base.release_location || '';
+    let releaseLat = base.release_lat || '';
+    let releaseLon = base.release_lon || '';
+
+    for (const b of group) {
+      if (b.species) species = b.species;
+      if (b.sex) sex = b.sex;
+      if (b.hatch_date) hatchDate = b.hatch_date;
+      if (b.release_location) releaseLocation = b.release_location;
+      if (b.release_lat) releaseLat = b.release_lat;
+      if (b.release_lon) releaseLon = b.release_lon;
+    }
+
+    const mergedRecord: Bird = {
+      ...base,
+      id: canonicalId,
+      ring_id: rid,
+      species,
+      sex,
+      hatch_date: hatchDate,
+      release_location: releaseLocation,
+      release_lat: releaseLat,
+      release_lon: releaseLon
+    };
+
+    deduplicated.push(mergedRecord);
+    updatedCanonicalDocs.push(mergedRecord);
+
+    group.forEach(b => {
+      if (b.id !== canonicalId) {
+        deletedDocIds.push(b.id);
+      }
+    });
+  }
+
+  return { deduplicated, deletedDocIds, updatedCanonicalDocs };
+};
+
 // Helper: fire-and-forget Firestore write (non-blocking)
 const fireAndForget = (fn: () => Promise<any>) => {
   fn().catch(err => console.error('[Firestore Sync]', err));
@@ -647,9 +844,27 @@ export const useAppStore = create<AppState>()(
 
       // ─── Bird CRUD ──────────────────────────────────────────────────────────
       addBird: (bird) => {
-        logDbAction(get, 'DATA_CREATE', `Added Bird ${bird.ring_id}`);
-        set((state) => ({ birds: [bird, ...state.birds], lastSaved: new Date().toISOString() }));
-        fireAndForget(() => saveDocument('birds', bird.id, bird));
+        const rid = String(bird.ring_id || bird.id || '').replace(/^bird-/, '').trim();
+        const docId = `bird-${rid}`;
+        const normalizedBird: Bird = {
+          ...bird,
+          id: docId,
+          ring_id: rid
+        };
+
+        logDbAction(get, 'DATA_CREATE', `Added Bird ${rid}`);
+        set((state) => {
+          const existingIndex = state.birds.findIndex(b => String(b.ring_id).trim() === rid);
+          let updatedList: Bird[];
+          if (existingIndex >= 0) {
+            updatedList = [...state.birds];
+            updatedList[existingIndex] = { ...updatedList[existingIndex], ...normalizedBird };
+          } else {
+            updatedList = [normalizedBird, ...state.birds];
+          }
+          return { birds: updatedList, lastSaved: new Date().toISOString() };
+        });
+        fireAndForget(() => saveDocument('birds', docId, normalizedBird));
       },
       updateBird: (id, updates) => {
         logDbAction(get, 'DATA_UPDATE', `Updated Bird ID: ${id}`);
@@ -692,14 +907,17 @@ export const useAppStore = create<AppState>()(
       },
       importBirds: (newBirds) => {
          set((state) => {
-            const birdMap = new Map<string, Bird>(state.birds.map(b => [b.ring_id, b] as [string, Bird]));
+            const birdMap = new Map<string, Bird>(state.birds.map(b => [String(b.ring_id).trim(), b] as [string, Bird]));
             
             newBirds.forEach(bird => {
-                const existing = birdMap.get(bird.ring_id);
+                const rid = String(bird.ring_id || bird.id || '').replace(/^bird-/, '').trim();
+                if (!rid) return;
+                const canonicalId = `bird-${rid}`;
+                const existing = birdMap.get(rid);
                 if (existing) {
-                    birdMap.set(bird.ring_id, { ...existing, ...bird, id: existing.id });
+                    birdMap.set(rid, { ...existing, ...bird, id: canonicalId, ring_id: rid });
                 } else {
-                    birdMap.set(bird.ring_id, bird);
+                    birdMap.set(rid, { ...bird, id: canonicalId, ring_id: rid });
                 }
             });
             
@@ -711,12 +929,30 @@ export const useAppStore = create<AppState>()(
 
       // ─── Transmitter CRUD ───────────────────────────────────────────────────
       addTransmitter: (transmitter) => {
-          logDbAction(get, 'DATA_CREATE', `Added Transmitter ${transmitter.platform_id}`);
-          set((state) => ({ 
-              transmitters: [transmitter, ...state.transmitters],
-              lastSaved: new Date().toISOString()
-          }));
-          fireAndForget(() => saveDocument('transmitters', transmitter.id, transmitter));
+          const pid = String(transmitter.platform_id || transmitter.id || '').replace(/^trans-/, '').trim();
+          const docId = `trans-${pid}`;
+          const normalizedTx: Transmitter = {
+            ...transmitter,
+            id: docId,
+            platform_id: pid
+          };
+
+          logDbAction(get, 'DATA_CREATE', `Added Transmitter ${pid}`);
+          set((state) => {
+            const existingIndex = state.transmitters.findIndex(t => String(t.platform_id).trim() === pid);
+            let updatedList: Transmitter[];
+            if (existingIndex >= 0) {
+              updatedList = [...state.transmitters];
+              updatedList[existingIndex] = { ...updatedList[existingIndex], ...normalizedTx };
+            } else {
+              updatedList = [normalizedTx, ...state.transmitters];
+            }
+            return { 
+                transmitters: updatedList,
+                lastSaved: new Date().toISOString()
+            };
+          });
+          fireAndForget(() => saveDocument('transmitters', docId, normalizedTx));
       },
       updateTransmitter: (id, updates) => {
         logDbAction(get, 'DATA_UPDATE', `Updated Transmitter ID: ${id}`);
@@ -762,14 +998,17 @@ export const useAppStore = create<AppState>()(
       },
       importTransmitters: (newTransmitters) => {
           set((state) => {
-              const transMap = new Map<string, Transmitter>(state.transmitters.map(t => [t.platform_id, t] as [string, Transmitter]));
+              const transMap = new Map<string, Transmitter>(state.transmitters.map(t => [String(t.platform_id).trim(), t] as [string, Transmitter]));
               
               newTransmitters.forEach(t => {
-                  const existing = transMap.get(t.platform_id);
+                  const pid = String(t.platform_id || t.id || '').replace(/^trans-/, '').trim();
+                  if (!pid) return;
+                  const canonicalId = `trans-${pid}`;
+                  const existing = transMap.get(pid);
                   if (existing) {
-                      transMap.set(t.platform_id, { ...existing, ...t, id: existing.id });
+                      transMap.set(pid, { ...existing, ...t, id: canonicalId, platform_id: pid });
                   } else {
-                      transMap.set(t.platform_id, t);
+                      transMap.set(pid, { ...t, id: canonicalId, platform_id: pid });
                   }
               });
               
@@ -897,7 +1136,9 @@ export const useAppStore = create<AppState>()(
           } catch (e) {
             console.warn('[AppStore] Could not load DB transmitters before sync, using store cache:', e);
           }
-          let newTransmitters = existingDbTransmitters.length > 0 ? [...existingDbTransmitters] : [...transmitters];
+          const rawBaseList = existingDbTransmitters.length > 0 ? existingDbTransmitters : transmitters;
+          const { deduplicated: baseTransmitters } = deduplicateTransmitters(rawBaseList);
+          let newTransmitters = [...baseTransmitters];
           let tUpdated = 0;
           let pCreated = 0;
           const newPositionDocs: Position[] = [];
@@ -906,13 +1147,16 @@ export const useAppStore = create<AppState>()(
 
           // 1. Sync Devices List → Transmitters
           incomingDevices.forEach(device => {
-              const pid = String(device.deviceRef);
-              const index = newTransmitters.findIndex(t => String(t.platform_id) === pid);
+              const pid = String(device.deviceRef || '').replace(/^trans-/, '').trim();
+              if (!pid) return;
+              const index = newTransmitters.findIndex(t => String(t.platform_id || t.id).replace(/^trans-/, '').trim() === pid);
               if (index >= 0) {
                   const t = newTransmitters[index];
                   newTransmitters[index] = {
                       ...t,
-                      model: device.model || t.model,
+                      id: `trans-${pid}`,
+                      platform_id: pid,
+                      model: (t.model && !t.model.includes('Unknown') && !t.model.includes('Auto-detected')) ? t.model : (device.model || t.model),
                       manufacturer: device.manufacturer || t.manufacturer,
                       program_region: device.programRef || t.program_region,
                       status: device.active ? 'active' : 'inactive',
@@ -945,12 +1189,13 @@ export const useAppStore = create<AppState>()(
           incomingMessages.forEach(msg => {
               const lat = parseFloat(msg.lat);
               const lon = parseFloat(msg.lon);
-              const pid = String(msg.platformId);
+              const pid = String(msg.platformId || '').replace(/^trans-/, '').trim();
+              if (!pid) return;
               
               // Attempt to decode battery voltage from rawData
               const decodedBattery = msg.rawData ? decodeBatteryVoltage(msg.rawData) : undefined;
 
-              let tIndex = newTransmitters.findIndex(t => String(t.platform_id) === pid);
+              let tIndex = newTransmitters.findIndex(t => String(t.platform_id || t.id).replace(/^trans-/, '').trim() === pid);
               
               const parsedMsgTs = safeParseDate(msg.timestamp);
               const msgIsoTimestamp = !isNaN(parsedMsgTs) ? new Date(parsedMsgTs).toISOString() : msg.timestamp;
@@ -970,13 +1215,20 @@ export const useAppStore = create<AppState>()(
                   tIndex = newTransmitters.length - 1;
                   tUpdated++;
               } else {
-                  // Update existing transmitter with new battery if message is as new as current last_fix
+                  // Update existing transmitter with new battery / last_fix if message is as new as current last_fix
                   const t = newTransmitters[tIndex];
                   const parsedLastFix = safeParseDate(t.last_fix);
-                  if (decodedBattery !== undefined && (isNaN(parsedLastFix) || parsedMsgTs >= parsedLastFix)) {
+                  const isNewer = isNaN(parsedLastFix) || (!isNaN(parsedMsgTs) && parsedMsgTs >= parsedLastFix);
+                  const newBattery = (decodedBattery !== undefined && isNewer) ? decodedBattery : t.battery_voltage;
+                  const newLastFix = isNewer ? msgIsoTimestamp : t.last_fix;
+                  
+                  if (newBattery !== t.battery_voltage || newLastFix !== t.last_fix || t.id !== `trans-${pid}`) {
                       newTransmitters[tIndex] = {
                           ...t,
-                          battery_voltage: decodedBattery
+                          id: `trans-${pid}`,
+                          platform_id: pid,
+                          battery_voltage: newBattery,
+                          last_fix: newLastFix
                       };
                       tUpdated++;
                   }
@@ -1198,7 +1450,7 @@ export const useAppStore = create<AppState>()(
           // purgeZeroCoordinates disabled on init — zero coords are now filtered at ingestion time
           // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
-          const [fsTransmitters, fsBirds, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory, fsLastIngest] = await Promise.all([
+          const [fsTransmittersRaw, fsBirdsRaw, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory, fsLastIngest] = await Promise.all([
             loadCollection<Transmitter>('transmitters'),
             loadCollection<Bird>('birds'),
             loadRecentAlerts<Alert>(),
@@ -1207,6 +1459,35 @@ export const useAppStore = create<AppState>()(
             loadAllStatusHistory(),
             loadLastIngestTime()
           ]);
+
+          // Deduplicate transmitters & birds to guarantee strict uniqueness
+          const { deduplicated: fsTransmitters, deletedDocIds: txDupIds, updatedCanonicalDocs: txUpdatedDocs } = deduplicateTransmitters(fsTransmittersRaw);
+          const { deduplicated: fsBirds, deletedDocIds: birdDupIds, updatedCanonicalDocs: birdUpdatedDocs } = deduplicateBirds(fsBirdsRaw);
+
+          // Clean up duplicate Firestore documents in background
+          if (txDupIds.length > 0 || txUpdatedDocs.length > 0) {
+            fireAndForget(async () => {
+              for (const doc of txUpdatedDocs) {
+                await saveDocument('transmitters', doc.id, doc);
+              }
+              for (const id of txDupIds) {
+                await deleteDocument('transmitters', id);
+              }
+              console.log(`[AppStore] Cleaned up ${txDupIds.length} duplicate transmitter documents from Firestore.`);
+            });
+          }
+
+          if (birdDupIds.length > 0 || birdUpdatedDocs.length > 0) {
+            fireAndForget(async () => {
+              for (const doc of birdUpdatedDocs) {
+                await saveDocument('birds', doc.id, doc);
+              }
+              for (const id of birdDupIds) {
+                await deleteDocument('birds', id);
+              }
+              console.log(`[AppStore] Cleaned up ${birdDupIds.length} duplicate bird documents from Firestore.`);
+            });
+          }
 
           // Load only the latest GPS and Doppler position for each transmitter
           const fsPositions = await loadLatestPositionsPerTransmitter(fsTransmitters.map(t => t.platform_id));
@@ -1424,9 +1705,10 @@ export const useAppStore = create<AppState>()(
 
           if (updated > 0) {
             const freshTransmitters = await loadCollection<Transmitter>('transmitters');
+            const { deduplicated: deduplicatedFresh } = deduplicateTransmitters(freshTransmitters);
             const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
             const isIOS = checkIsIOSMode();
-            const filteredTransmitters = filterTransmittersForUser(freshTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, isIOS);
+            const filteredTransmitters = filterTransmittersForUser(deduplicatedFresh, currentUserIosPttVisibility, currentUserIosVisiblePtts, isIOS);
             set({ transmitters: filteredTransmitters });
             onProgress?.(`Updated derived_status for ${updated} transmitters.`);
           } else {
