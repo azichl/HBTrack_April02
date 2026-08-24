@@ -19,6 +19,7 @@ import {
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
+import { findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
 import type { Role } from '../types';
 
 const safeParseDate = (ts: any): number => {
@@ -286,17 +287,7 @@ export const deduplicateTransmitters = (transmitters: Transmitter[]): {
 
   for (const [pid, group] of byPid.entries()) {
     if (group.length === 1) {
-      const single = group[0];
-      const canonicalId = `trans-${pid}`;
-      if (single.id !== canonicalId) {
-        // Normalize ID to trans-${pid}
-        const updated = { ...single, id: canonicalId, platform_id: pid };
-        deduplicated.push(updated);
-        updatedCanonicalDocs.push(updated);
-        deletedDocIds.push(single.id);
-      } else {
-        deduplicated.push(single);
-      }
+      deduplicated.push(group[0]);
       continue;
     }
 
@@ -304,10 +295,8 @@ export const deduplicateTransmitters = (transmitters: Transmitter[]): {
     // Pick the best primary document: prefer one with assigned bird, known model, etc.
     const withBird = group.find(t => t.bird_id && t.bird_id.trim() !== '');
     const withKnownModel = group.find(t => t.model && !t.model.includes('Unknown') && !t.model.includes('Auto-detected'));
-    const canonicalId = `trans-${pid}`;
-    
-    // Choose base record
     const base = withBird || withKnownModel || group[0];
+    const canonicalId = base.id;
 
     // Merge attributes from all records
     let mergedBirdId = base.bird_id || '';
@@ -407,21 +396,13 @@ export const deduplicateBirds = (birds: Bird[]): {
   const updatedCanonicalDocs: Bird[] = [];
 
   for (const [rid, group] of byRid.entries()) {
-    const canonicalId = `bird-${rid}`;
     if (group.length === 1) {
-      const single = group[0];
-      if (single.id !== canonicalId) {
-        const updated = { ...single, id: canonicalId, ring_id: rid };
-        deduplicated.push(updated);
-        updatedCanonicalDocs.push(updated);
-        deletedDocIds.push(single.id);
-      } else {
-        deduplicated.push(single);
-      }
+      deduplicated.push(group[0]);
       continue;
     }
 
     const base = group[0];
+    const canonicalId = base.id;
     let species = base.species || 'Houbara Bustard';
     let sex = base.sex || 'M';
     let hatchDate = base.hatch_date || '';
@@ -487,7 +468,7 @@ const processTransmitterStatusUpdates = async (
 
   if (t.derived_status !== derived) {
     if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
-      const bird = getBirds().find(b => b.id === t.bird_id);
+      const bird = findBirdForTransmitter(getBirds(), t.bird_id);
       addAlert({
         id: `status-alert-${t.platform_id}-${Date.now()}`,
         type: derived === 'Inactive' ? 'no_fix' : 'speed_anomaly',
@@ -508,7 +489,7 @@ const processTransmitterStatusUpdates = async (
   // Battery Low Alert Check (Threshold < 3.5V)
   const v = Number(t.battery_voltage);
   if (!isNaN(v) && v > 0 && v < 3.5) {
-    const bird = getBirds().find(b => b.id === t.bird_id);
+    const bird = findBirdForTransmitter(getBirds(), t.bird_id);
     addAlert({
       id: `alert-battery-${t.platform_id}-${Date.now()}`,
       type: 'battery_low',
@@ -617,7 +598,7 @@ const processTransmitterStatusUpdates = async (
             const lastSafeDateStr = `${lastDayOfCurrentMonth}/${String(currentMonth + 1).padStart(2, '0')}/${currentYear}`;
             const nextMonthStart = new Date(currentYear, currentMonth + 1, 1);
             const nextMonthStr = nextMonthStart.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            const bird = getBirds().find(b => b.id === t.bird_id);
+            const bird = findBirdForTransmitter(getBirds(), t.bird_id);
 
             addAlert({
               id: `static-alert-${t.platform_id}-${currentMonthKey}`,
@@ -647,7 +628,7 @@ const processTransmitterStatusUpdates = async (
 
   // Handle Nesting behavior alert
   if (isNesting) {
-    const bird = getBirds().find(b => b.id === t.bird_id);
+    const bird = findBirdForTransmitter(getBirds(), t.bird_id);
     addAlert({
       id: `nesting-alert-${t.platform_id}-${Date.now()}`,
       type: 'nesting',
@@ -1491,6 +1472,16 @@ export const useAppStore = create<AppState>()(
 
           // Load only the latest GPS and Doppler position for each transmitter
           const fsPositions = await loadLatestPositionsPerTransmitter(fsTransmitters.map(t => t.platform_id));
+
+          // Ensure bidirectional ID linking between transmitters and birds
+          fsTransmitters.forEach(t => {
+            if (t.bird_id) {
+              const matched = findBirdForTransmitter(fsBirds, t.bird_id);
+              if (matched) {
+                t.bird_id = matched.id;
+              }
+            }
+          });
 
           // Firestore is the source of truth — use directly
           const mergedTransmitters = fsTransmitters;

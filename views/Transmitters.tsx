@@ -5,7 +5,7 @@ import { Transmitter, StatusHistoryRecord } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
-import { formatDateTime } from '../utils/formatting';
+import { formatDateTime, findBirdForTransmitter } from '../utils/formatting';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
 import { bulkDeleteRecords, recordStatusTransition } from '../services/firestoreService';
@@ -54,7 +54,7 @@ export const Transmitters = () => {
   // 1. Prepare Flattened Data
   const tableData = useMemo<TransmitterTableRow[]>(() => {
     return transmitters.map(t => {
-      const bird = birds.find(b => b.id === t.bird_id);
+      const bird = findBirdForTransmitter(birds, t.bird_id);
       return {
         ...t,
         bird_species: bird?.species || 'Unknown',

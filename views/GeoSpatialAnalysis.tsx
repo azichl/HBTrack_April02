@@ -21,7 +21,7 @@ import {
   Leaf,
   Droplets
 } from 'lucide-react';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
 import { getAuth } from 'firebase/auth';
 
 // Setup Map Center Updater helper component
@@ -176,7 +176,7 @@ export const GeoSpatialAnalysis = () => {
         return true;
       })
       .map(t => {
-        const bird = birds.find(b => b.id === t.bird_id);
+        const bird = findBirdForTransmitter(birds, t.bird_id);
         const pid = String(t.platform_id);
         const lastPos = positions.find(p => String(p.transmitter_id || (p as any).platformId) === pid);
         const status = t.derived_status || t.status || 'Active';

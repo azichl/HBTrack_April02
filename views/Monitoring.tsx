@@ -4,7 +4,7 @@ import { Map as MapIcon, Activity, Battery, Navigation, Download, RefreshCw, X, 
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { Position } from '../types';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
 import Draggable from 'react-draggable';
 import { saveDocument, deleteCoordinateRecord } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
@@ -166,7 +166,7 @@ export const Monitoring = () => {
         return true;
       })
       .map(t => {
-        const bird = birds.find(b => b.id === t.bird_id);
+        const bird = findBirdForTransmitter(birds, t.bird_id);
         const pid = String(t.platform_id);
         const pos = latestPositions.get(pid);
 

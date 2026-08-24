@@ -5,7 +5,7 @@ import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } 
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import Draggable from 'react-draggable';
@@ -457,7 +457,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     // Use current active single pos (either initial pos or user-clicked item in list)
     const currentPos = selectedSinglePos || pos;
     const currentTransmitter = transmitters.find(t => String(t.platform_id) === String(currentPos.transmitter_id)) || transmitter;
-    const currentBird = birds.find(b => b.id === currentTransmitter?.bird_id) || bird;
+    const currentBird = findBirdForTransmitter(birds, currentTransmitter?.bird_id) || bird;
 
     // Props are now passed directly to ensure reactivity
     const status = currentTransmitter?.derived_status || currentTransmitter?.status || 'inactive';
@@ -550,7 +550,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                             <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
                                 {overlappingPositions.map(itemPos => {
                                     const itemT = transmitters.find(t => String(t.platform_id) === String(itemPos.transmitter_id));
-                                    const itemB = birds.find(b => b.id === itemT?.bird_id);
+                                    const itemB = findBirdForTransmitter(birds, itemT?.bird_id);
                                     const itemStatus = itemT?.derived_status || itemT?.status || 'inactive';
                                     const isItemSel = currentPos.transmitter_id === itemPos.transmitter_id;
                                     
@@ -832,7 +832,7 @@ const StaticTestClusterMarker: React.FC<StaticTestClusterMarkerProps> = ({
                     <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 mt-2">
                         {cluster.positions.map(p => {
                             const itemT = transmitters.find(t => String(t.platform_id) === String(p.transmitter_id));
-                            const itemB = birds.find(b => b.id === itemT?.bird_id);
+                            const itemB = findBirdForTransmitter(birds, itemT?.bird_id);
 
                             return (
                                 <div 
@@ -926,7 +926,7 @@ const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
                 if (c.positions.length === 1) {
                     const pos = c.positions[0];
                     const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));
-                    const bird = birds.find(b => b.id === transmitter?.bird_id);
+                    const bird = findBirdForTransmitter(birds, transmitter?.bird_id);
                     return (
                         <TransmitterMarker 
                             key={pos.id || `static-single-${idx}`} 
@@ -2122,7 +2122,7 @@ const LiveTrackingInner = () => {
                 })
                 .map((pos) => {
                     const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));
-                    const bird = birds.find(b => b.id === transmitter?.bird_id);
+                    const bird = findBirdForTransmitter(birds, transmitter?.bird_id);
                     
                     return (
                         <TransmitterMarker 
@@ -3230,7 +3230,7 @@ const LiveTrackingInner = () => {
                           <div className="overflow-y-auto flex-1">
                               {searchResults.length > 0 ? (
                                   searchResults.map(t => {
-                                      const bird = birds.find(b => b.id === t.bird_id);
+                                      const bird = findBirdForTransmitter(birds, t.bird_id);
                                       const isSelected = selectedTransmitterIds.includes(String(t.platform_id || ''));
                                       return (
                                           <div

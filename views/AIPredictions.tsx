@@ -4,6 +4,7 @@ import { BrainCircuit, MapPin, TrendingUp, AlertTriangle, Calendar, Sparkles, Lo
 import ReactMarkdown from 'react-markdown';
 import { MigrationPrediction } from './MigrationPrediction';
 import { CustomSelect } from '../components/CustomSelect';
+import { findBirdForTransmitter } from '../utils/formatting';
 
 // Helper for bearing calculation
 const getBearing = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -69,7 +70,7 @@ export const AIPredictions = () => {
     return transmitters
       .filter(t => t.status === 'active')
       .map(t => {
-        const bird = birds.find(b => b.id === t.bird_id);
+        const bird = findBirdForTransmitter(birds, t.bird_id);
         const lastPos = positions.find(p => p.transmitter_id === t.platform_id);
         return { transmitter: t, bird, lastPos };
       })
@@ -88,7 +89,7 @@ export const AIPredictions = () => {
     }
 
     const transmitter = transmitters.find(t => t.platform_id === selectedTransmitterId);
-    const bird = birds.find(b => b.id === transmitter?.bird_id);
+    const bird = findBirdForTransmitter(birds, transmitter?.bird_id);
     const recentPositions = positions
         .filter(p => p.transmitter_id === selectedTransmitterId)
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())

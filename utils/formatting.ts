@@ -178,3 +178,34 @@ export const isValidCoordinate = (lat: any, lon: any): boolean => {
 
   return true;
 };
+
+/**
+ * Seamlessly matches a transmitter's bird_id to a Bird object.
+ * Checks by b.id, b.ring_id, and prefix-stripped variants to ensure compatibility.
+ */
+export const findBirdForTransmitter = (birds: any[], birdId?: string): any | undefined => {
+  if (!birdId || !birds || birds.length === 0) return undefined;
+  const target = String(birdId).trim();
+  const strippedTarget = target.replace(/^bird-/, '');
+  return birds.find(b => {
+    if (!b) return false;
+    if (b.id === target || b.ring_id === target) return true;
+    if (b.ring_id && b.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
+    if (b.id && b.id.replace(/^bird-/, '') === strippedTarget) return true;
+    return false;
+  });
+};
+
+/**
+ * Checks if a Bird is linked to a Transmitter.
+ */
+export const isBirdLinkedToTransmitter = (bird: any, transmitter: any): boolean => {
+  if (!bird || !transmitter || !transmitter.bird_id) return false;
+  const target = String(transmitter.bird_id).trim();
+  const strippedTarget = target.replace(/^bird-/, '');
+  if (target === bird.id || target === bird.ring_id) return true;
+  if (bird.ring_id && bird.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
+  if (bird.id && bird.id.replace(/^bird-/, '') === strippedTarget) return true;
+  return false;
+};
+

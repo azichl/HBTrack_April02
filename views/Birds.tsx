@@ -5,7 +5,7 @@ import { Bird } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
-import { formatDateTime } from '../utils/formatting';
+import { formatDateTime, isBirdLinkedToTransmitter } from '../utils/formatting';
 import { CustomSelect } from '../components/CustomSelect';
 
 type BirdTableRow = Bird & {
@@ -50,7 +50,7 @@ export const Birds = () => {
   // 1. Prepare Table Data
   const tableData = useMemo<BirdTableRow[]>(() => {
     return birds.map(bird => {
-      const transmitter = transmitters.find(t => t.bird_id === bird.id);
+      const transmitter = transmitters.find(t => isBirdLinkedToTransmitter(bird, t));
       return {
         ...bird,
         associated_ptt: transmitter ? transmitter.platform_id : null,
@@ -82,7 +82,7 @@ export const Birds = () => {
         const bird = birds.find(b => b.id === editingRecordId);
         if (bird) {
           setFormData({ ...bird });
-          const associatedTransmitter = transmitters.find(t => t.bird_id === bird.id);
+          const associatedTransmitter = transmitters.find(t => isBirdLinkedToTransmitter(bird, t));
           setSelectedTransmitterId(associatedTransmitter ? associatedTransmitter.id : '');
         }
       } else {
@@ -160,7 +160,7 @@ export const Birds = () => {
       setDatabaseActiveTab('Monitoring');
   };
 
-  const availableTransmitters = transmitters.filter(t => !t.bird_id || (editingBird && t.bird_id === editingBird.id));
+  const availableTransmitters = transmitters.filter(t => !t.bird_id || (editingBird && isBirdLinkedToTransmitter(editingBird, t)));
 
   return (
     <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col relative">

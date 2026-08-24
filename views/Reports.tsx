@@ -4,7 +4,7 @@ import { RefreshCw, LayoutGrid, FileText, ChevronDown } from 'lucide-react';
 import { ReportTemplateCard } from '../components/reports/ReportTemplateCard';
 import { ReportConfiguration } from '../components/reports/ReportConfiguration';
 import { format } from 'date-fns';
-import { formatDateTime, formatBattery } from '../utils/formatting';
+import { formatDateTime, formatBattery, findBirdForTransmitter } from '../utils/formatting';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -131,10 +131,8 @@ export const Reports = () => {
               }];
           case 'activity':
               return filteredSightings.slice(0, 1000).map(s => {
-                const bird = birds.find(b => {
-                    const t = filteredTransmitters.find(tr => tr.platform_id === s.transmitter_id);
-                    return t && t.bird_id === b.id;
-                });
+                const t = filteredTransmitters.find(tr => String(tr.platform_id) === String(s.transmitter_id));
+                const bird = findBirdForTransmitter(birds, t?.bird_id);
                 return {
                     'Species': bird?.species || 'Unknown',
                     'Ring ID': bird?.ring_id || 'Unassigned',
@@ -148,7 +146,7 @@ export const Reports = () => {
               });
           case 'health':
               return filteredTransmitters.map(t => {
-                const bird = birds.find(b => b.id === t.bird_id);
+                const bird = findBirdForTransmitter(birds, t.bird_id);
                 return {
                     'Transmitter ID': t.platform_id,
                     'Bird Ring ID': bird?.ring_id || 'Unassigned',
@@ -161,10 +159,8 @@ export const Reports = () => {
               });
           case 'migration':
               return filteredSightings.slice(0, 1000).map(s => {
-                const bird = birds.find(b => {
-                    const t = filteredTransmitters.find(tr => tr.platform_id === s.transmitter_id);
-                    return t && t.bird_id === b.id;
-                });
+                const t = filteredTransmitters.find(tr => String(tr.platform_id) === String(s.transmitter_id));
+                const bird = findBirdForTransmitter(birds, t?.bird_id);
                 return {
                     'Species': bird?.species || 'Unknown',
                     'Bird ID': bird?.ring_id || 'Unassigned',

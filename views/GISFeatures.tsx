@@ -8,6 +8,7 @@ import JSZip from 'jszip';
 import readXlsxFile from 'read-excel-file';
 import { useAppStore } from '../store/appStore';
 import { getHistoricalPositions } from '../services/firestoreService';
+import { findBirdForTransmitter } from '../utils/formatting';
 import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -111,7 +112,7 @@ export const GISFeatures = () => {
   // Transmitters selection helper
   const pttOptions = useMemo(() => {
     return transmitters.map(t => {
-      const bird = birds.find(b => b.id === t.bird_id);
+      const bird = findBirdForTransmitter(birds, t.bird_id);
       return {
         id: t.platform_id,
         label: `${t.platform_id}${bird ? ` — ${(bird as any).name || bird.species}` : ''}`,
@@ -677,7 +678,7 @@ export const GISFeatures = () => {
       else if (currentSubView === 'deployment-monitoring') {
         const groups: Record<string, any> = {};
         for (const t of transmitters) {
-          const bird = birds.find(b => b.id === t.bird_id) as any;
+          const bird = findBirdForTransmitter(birds, t.bird_id) as any;
           const taxon = bird?.species || 'Unknown Taxon';
           const origin = bird?.origin || 'Wild';
           const sex = bird?.sex || 'Unknown';
@@ -714,7 +715,7 @@ export const GISFeatures = () => {
       else if (currentSubView === 'post-release') {
         const results = [];
         for (const t of transmitters) {
-          const bird = birds.find(b => b.id === t.bird_id) as any;
+          const bird = findBirdForTransmitter(birds, t.bird_id) as any;
           if (!bird) continue;
           
           // Consider origin as 'Released' or fallback to include all if tracking post-release specifically

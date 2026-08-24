@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppStore } from '../store/appStore';
 import { Globe, Map, Settings, Navigation, Ruler, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { formatDateTime } from '../utils/formatting';
+import { formatDateTime, findBirdForTransmitter } from '../utils/formatting';
 
 
 
@@ -157,10 +157,8 @@ export const GeofenceAlerts = () => {
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                         {generatedAlerts.length > 0 ? generatedAlerts.map(alert => {
-                            const bird = birds.find(b => {
-                                const t = transmitters.find(tr => tr.platform_id === alert.transmitter_id);
-                                return t && t.bird_id === b.id;
-                            });
+                            const t = transmitters.find(tr => String(tr.platform_id) === String(alert.transmitter_id));
+                            const bird = findBirdForTransmitter(birds, t?.bird_id);
 
                             return (
                             <tr key={alert.id} className="hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors">

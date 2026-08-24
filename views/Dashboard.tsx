@@ -10,7 +10,7 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend 
 } from 'recharts';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, getSystemTimeZone } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, getSystemTimeZone, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
 import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/accuracyCalculator';
 
 const renderCustomizedLabel = (props: any) => {
@@ -171,7 +171,7 @@ export const Dashboard = () => {
   const filteredModalTransmitters = useMemo(() => {
     const q = txSearchQuery.toLowerCase().trim();
     return transmitters.filter(t => {
-      const bird = birds.find(b => b.id === t.bird_id);
+      const bird = findBirdForTransmitter(birds, t.bird_id);
       const matchId = String(t.platform_id).toLowerCase().includes(q);
       const matchBird = bird ? (bird.ring_id.toLowerCase().includes(q) || (bird as any).name?.toLowerCase().includes(q)) : false;
       return !q || matchId || matchBird;
@@ -221,13 +221,15 @@ export const Dashboard = () => {
   }, [transmitters]);
 
   // Dynamic counts
-  const activeBirdIds = transmitters
-    .filter(t => {
+  const activeBirdsCount = useMemo(() => {
+    const activeTx = transmitters.filter(t => {
       const s = t.derived_status || t.status;
       return s === 'Active' || s === 'active';
-    })
-    .map(t => t.bird_id);
-  const activeBirdsCount = birds.filter(b => activeBirdIds.includes(b.id)).length;
+    });
+    return birds.filter(b => 
+      activeTx.some(t => isBirdLinkedToTransmitter(b, t))
+    ).length;
+  }, [birds, transmitters]);
   const systemAlerts = alerts.filter(a => a.type !== 'ticket_created');
   const activeAlertsCount = systemAlerts.filter(a => a.status === 'active').length;
   const criticalAlertsCount = systemAlerts.filter(a => a.status === 'active' && a.severity === 'critical').length;
@@ -962,7 +964,7 @@ export const Dashboard = () => {
               {/* Transmitter Checkbox List */}
               <div className="flex-1 overflow-y-auto pr-1 space-y-1 custom-scrollbar">
                 {filteredModalTransmitters.map((t) => {
-                  const bird = birds.find((b) => b.id === t.bird_id);
+                  const bird = findBirdForTransmitter(birds, t.bird_id);
                   const isSelected = selectedAccuracyTxIds.includes(String(t.platform_id));
                   const status = t.derived_status || t.status;
 
