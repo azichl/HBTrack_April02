@@ -1,13 +1,12 @@
 import SwiftUI
 
 struct ContentView: View {
-    // Default target production URL
-    @State private var appURLString: String = "https://trackapp-v2.web.app"
+    // Target production URL
+    private let appURLString: String = "https://trackapp-v2.web.app"
     @State private var isLoading: Bool = true
     @State private var canGoBack: Bool = false
     @State private var hasError: Bool = false
     @State private var reloadTrigger: Bool = false
-    @State private var showSettings: Bool = false
 
     var currentURL: URL {
         URL(string: appURLString) ?? URL(string: "https://trackapp-v2.web.app")!
@@ -18,132 +17,74 @@ struct ContentView: View {
             Color(UIColor.systemBackground)
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Top Header Bar
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 8))
-                            .foregroundColor(.green)
-                        Text("HBTrack iOS")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                    }
+            if hasError {
+                // Native Offline / Connection Failure View
+                VStack(spacing: 20) {
+                    Image(systemName: "wifi.slash")
+                        .font(.system(size: 56))
+                        .foregroundColor(.secondary)
 
-                    Spacer()
+                    Text("Connection Unavailable")
+                        .font(.title2)
+                        .fontWeight(.bold)
 
-                    // Quick URL / Environment switcher
-                    Button(action: { showSettings.toggle() }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.gray)
-                    }
+                    Text("Please verify your cellular data or Wi-Fi connection and tap below to retry.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 36)
 
-                    Button(action: { reloadTrigger.toggle() }) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.accentColor)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color(UIColor.secondarySystemBackground))
-
-                // WKWebView Container
-                if hasError {
-                    // Offline / Failure View
-                    VStack(spacing: 16) {
-                        Image(systemName: "wifi.slash")
-                            .font(.system(size: 48))
-                            .foregroundColor(.gray)
-
-                        Text("Unable to Connect")
-                            .font(.title2)
-                            .bold()
-
-                        Text("Please check your internet connection or server settings and try again.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-
-                        Button(action: {
-                            hasError = false
-                            reloadTrigger.toggle()
-                        }) {
-                            HStack {
-                                Image(systemName: "arrow.clockwise")
-                                Text("Retry Connection")
-                            }
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(Color.blue)
-                            .cornerRadius(12)
+                    Button(action: {
+                        hasError = false
+                        reloadTrigger.toggle()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Retry Connection")
                         }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 14)
+                        .background(Color(red: 0.72, green: 0.58, blue: 0.33)) // Brand Aztec Gold
+                        .cornerRadius(14)
+                        .shadow(color: Color.black.opacity(0.15), radius: 6, x: 0, y: 3)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    WebView(
-                        url: currentURL,
-                        isLoading: $isLoading,
-                        canGoBack: $canGoBack,
-                        hasError: $hasError,
-                        reloadTrigger: reloadTrigger
-                    )
+                    .padding(.top, 8)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+            } else {
+                // Native Edge-to-Edge Container with pull-to-refresh
+                WebView(
+                    url: currentURL,
+                    isLoading: $isLoading,
+                    canGoBack: $canGoBack,
+                    hasError: $hasError,
+                    reloadTrigger: reloadTrigger
+                )
+                .ignoresSafeArea(.keyboard)
             }
 
-            // Top progress bar overlay
+            // Elegant Loading Overlay on startup
             if isLoading && !hasError {
-                VStack {
+                VStack(spacing: 12) {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(1.2)
-                        .padding(20)
-                        .background(Color(UIColor.systemBackground).opacity(0.85))
-                        .cornerRadius(16)
-                        .shadow(radius: 10)
+                        .progressViewStyle(CircularProgressViewStyle(tint: Color(red: 0.72, green: 0.58, blue: 0.33)))
+                        .scaleEffect(1.3)
+
+                    Text("Loading RAF Tracking...")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.secondary)
                 }
+                .padding(24)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color(UIColor.systemBackground).opacity(0.92))
+                        .shadow(color: Color.black.opacity(0.12), radius: 16, x: 0, y: 6)
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsSheet(appURLString: $appURLString, onSave: {
-                showSettings = false
-                reloadTrigger.toggle()
-            })
-        }
-    }
-}
-
-struct SettingsSheet: View {
-    @Binding var appURLString: String
-    var onSave: () -> Void
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("App Web Server URL")) {
-                    TextField("Enter web URL", text: $appURLString)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .keyboardType(.URL)
-
-                    Button("Reset to Production") {
-                        appURLString = "https://trackapp-v2.web.app"
-                    }
-
-                    Button("Use Local Dev Server (localhost:5173)") {
-                        appURLString = "http://localhost:5173"
-                    }
-                }
-            }
-            .navigationTitle("Server Config")
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() },
-                trailing: Button("Save") { onSave(); dismiss() }
-            )
         }
     }
 }
