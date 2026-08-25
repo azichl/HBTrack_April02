@@ -209,18 +209,13 @@ interface AppState {
   generateLivePositions: () => void;
 }
 
-// Helpers for RBAC & iOS PTT Visibility Filtering
-export const checkIsIOSMode = (): boolean => {
-  return false;
-};
-
+// Helpers for User-Level RBAC & PTT Visibility Filtering
 export const filterTransmittersForUser = (
   transmitters: Transmitter[],
   visibility: 'all' | 'custom' | undefined,
-  visiblePtts: string[] | undefined,
-  isIOS: boolean = checkIsIOSMode()
+  visiblePtts: string[] | undefined
 ): Transmitter[] => {
-  if (isIOS && visibility === 'custom' && Array.isArray(visiblePtts)) {
+  if (visibility === 'custom' && Array.isArray(visiblePtts) && visiblePtts.length > 0) {
     const visibleSet = new Set(visiblePtts.map(id => String(id)));
     return transmitters.filter(t => visibleSet.has(String(t.platform_id)));
   }
@@ -231,10 +226,9 @@ export const filterPositionsForUser = (
   positions: Position[],
   transmitters: Transmitter[],
   visibility: 'all' | 'custom' | undefined,
-  visiblePtts: string[] | undefined,
-  isIOS: boolean = checkIsIOSMode()
+  visiblePtts: string[] | undefined
 ): Position[] => {
-  if (isIOS && visibility === 'custom' && Array.isArray(visiblePtts)) {
+  if (visibility === 'custom' && Array.isArray(visiblePtts) && visiblePtts.length > 0) {
     const visibleSet = new Set(visiblePtts.map(id => String(id)));
     return positions.filter(p => {
       const t = transmitters.find(tx => String(tx.platform_id) === String(p.transmitter_id) || tx.id === p.transmitter_id);
@@ -248,10 +242,9 @@ export const filterAlertsForUser = (
   alerts: Alert[],
   transmitters: Transmitter[],
   visibility: 'all' | 'custom' | undefined,
-  visiblePtts: string[] | undefined,
-  isIOS: boolean = checkIsIOSMode()
+  visiblePtts: string[] | undefined
 ): Alert[] => {
-  if (isIOS && visibility === 'custom' && Array.isArray(visiblePtts)) {
+  if (visibility === 'custom' && Array.isArray(visiblePtts) && visiblePtts.length > 0) {
     const visibleSet = new Set(visiblePtts.map(id => String(id)));
     return alerts.filter(a => {
       if (!a.transmitter_id) return true; // keep system-wide alerts
@@ -1542,10 +1535,9 @@ export const useAppStore = create<AppState>()(
             }
           }
 
-          const isIOSMode = checkIsIOSMode();
-          const finalTransmitters = filterTransmittersForUser(mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, isIOSMode);
-          const finalPositions = filterPositionsForUser(recentPositions, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, isIOSMode);
-          const finalAlerts = filterAlertsForUser(mergedAlerts, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, isIOSMode);
+          const finalTransmitters = filterTransmittersForUser(mergedTransmitters, iosPttVisibility as any, iosVisiblePtts);
+          const finalPositions = filterPositionsForUser(recentPositions, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts);
+          const finalAlerts = filterAlertsForUser(mergedAlerts, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts);
 
           set({
             transmitters: finalTransmitters,
@@ -1723,16 +1715,15 @@ export const useAppStore = create<AppState>()(
             let changed = false;
 
             const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
-            const isIOSMode = checkIsIOSMode();
             
-            // If iOS mode, filter incoming live positions too!
+            // Filter incoming live positions if user has custom PTT visibility
             let visibleIds: Set<string> | null = null;
-            if (isIOSMode && currentUserIosPttVisibility === 'custom') {
+            if (currentUserIosPttVisibility === 'custom') {
                visibleIds = new Set((currentUserIosVisiblePtts || []).map(id => String(id)));
             }
 
             firestorePositions.forEach(p => {
-               // iOS restriction check
+               // Custom PTT visibility restriction check
                if (visibleIds && !visibleIds.has(String(p.transmitter_id))) {
                   return;
                }

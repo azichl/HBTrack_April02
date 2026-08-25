@@ -16,7 +16,7 @@ import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/a
 const renderCustomizedLabel = (props: any) => {
   const { cx, cy, midAngle, innerRadius, outerRadius, value, name, x, y } = props;
   const RADIAN = Math.PI / 180;
-  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 640 || window.location.search.includes('mode=ios'));
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   
   // Inner text position (number)
   const insideRadius = innerRadius + (outerRadius - innerRadius) * 0.5;

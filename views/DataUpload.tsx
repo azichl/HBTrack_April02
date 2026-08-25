@@ -623,8 +623,8 @@ export const DataUpload = () => {
     setApiStatus('testing');
     setLogs([]);
     setRawResponse('');
-    setSyncStats(null);
-    if (isIOSMode) {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobile) {
       setShowLogModal(true);
     }
     addLog(`Initiating connection process [${isSimulationMode ? 'SIMULATION' : 'LIVE'}]...`);
@@ -649,7 +649,7 @@ export const DataUpload = () => {
             
             addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items. Synced to Firebase.`);
             setSyncStats({transmitters: 0, positions: 0});
-            if (isIOSMode) {
+            if (isMobile) {
               setShowSuccessToast(true);
               setTimeout(() => setShowLogModal(false), 2000);
               setTimeout(() => setShowSuccessToast(false), 5000);
@@ -724,9 +724,8 @@ export const DataUpload = () => {
         
         setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
         setApiStatus('success');
-        addLog(`Operation Complete. Store Updated.`);
-
-        if (isIOSMode) {
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+        if (isMobile) {
           setShowSuccessToast(true);
           setTimeout(() => setShowLogModal(false), 2000);
           setTimeout(() => setShowSuccessToast(false), 5000);
