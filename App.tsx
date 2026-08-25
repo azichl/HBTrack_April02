@@ -406,9 +406,14 @@ const App = () => {
         // Log Session Start when user successfully authenticates
         logUserActivity(user.uid, user.email || '', 'SESSION_START', 'User logged in');
         
-        await initializeFromFirestore();
-        liveUnsubRef.current = subscribeToLivePositions();
-        setAuthLoading(false);
+        try {
+          await initializeFromFirestore();
+          liveUnsubRef.current = subscribeToLivePositions();
+        } catch (initErr) {
+          console.error("[App] initializeFromFirestore failed:", initErr);
+        } finally {
+          setAuthLoading(false);
+        }
       } else if (user) {
         // If already initialized, just set user
         setCurrentUser(user);
@@ -481,7 +486,7 @@ const App = () => {
   }
 
   const renderContent = () => {
-    switch (currentView) {
+    switch (activeTab) {
       case 'Dashboard': return <Dashboard />;
       case 'Real-Time Alerts': return <Alerts />;
       case 'Live Tracking': return <LiveTracking />;
@@ -501,7 +506,7 @@ const App = () => {
       case 'GIS Features': return <GISFeatures />;
       case 'Settings': return <Settings />;
       case 'Help & Support': return <HelpSupport />;
-      default: return <PlaceholderView title={currentView} />;
+      default: return <PlaceholderView title={activeTab} />;
     }
   };
 
