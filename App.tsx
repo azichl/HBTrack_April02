@@ -449,7 +449,15 @@ const App = () => {
   const searchParams = new URLSearchParams(window.location.search);
   const isStandalone = searchParams.get('standalone') === 'true';
   const urlTab = searchParams.get('tab');
-  const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const [showAppIntro, setShowAppIntro] = useState(true);
 
@@ -659,11 +667,14 @@ const App = () => {
           </header>
 
           {/* Main Content Area */}
-          <main className="flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col">
+          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isMobileScreen ? 'pb-16' : ''}`}>
             <div className="flex-1 overflow-y-auto p-4 md:p-6 w-full mx-auto flex flex-col h-full">
                {renderContent()}
             </div>
           </main>
+
+          {/* Render Mobile Bottom Tab Bar when on mobile screen width */}
+          {isMobileScreen && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
         </div>
       </div>
     </div>
