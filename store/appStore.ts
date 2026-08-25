@@ -211,12 +211,7 @@ interface AppState {
 
 // Helpers for RBAC & iOS PTT Visibility Filtering
 export const checkIsIOSMode = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const searchParams = new URLSearchParams(window.location.search);
-  return searchParams.get('mode') === 'ios' || 
-         searchParams.get('app') === 'ios' || 
-         !!(window as any).isIOSApp || 
-         !!(window as any).isNativeIOS;
+  return false;
 };
 
 export const filterTransmittersForUser = (

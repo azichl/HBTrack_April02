@@ -357,16 +357,7 @@ const App = () => {
              const userData = userDoc.data();
              const appAccess = userData.appAccess || ['web', 'ios'];
              
-             const searchParams = new URLSearchParams(window.location.search);
-             const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
-
-             if (isIOSMode && !appAccess.includes('ios')) {
-                setAccessError("account not activated");
-                await signOut(auth);
-                setAuthLoading(false);
-                return;
-             }
-             if (!isIOSMode && !appAccess.includes('web')) {
+             if (userData.status === 'inactive') {
                 setAccessError("account not activated");
                 await signOut(auth);
                 setAuthLoading(false);
@@ -457,7 +448,6 @@ const App = () => {
 
   const searchParams = new URLSearchParams(window.location.search);
   const isStandalone = searchParams.get('standalone') === 'true';
-  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
   const urlTab = searchParams.get('tab');
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
@@ -603,102 +593,77 @@ const App = () => {
 
       <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300 pt-[env(safe-area-inset-top,0px)]">
 
-        {!isIOSMode && sidebarOpen && (
+        {sidebarOpen && (
           <div
             className="fixed inset-0 z-[990] bg-black/50 backdrop-blur-sm lg:hidden"
             onClick={toggleSidebar}
           />
         )}
 
-        {!isIOSMode && (
-          <div className={`
-              fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
-              ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
-          `}>
-             <Sidebar />
-          </div>
-        )}
+        <div className={`
+            fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
+            ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
+        `}>
+           <Sidebar />
+        </div>
 
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-          {/* Top Header (Web Mode Only) */}
-          {!isIOSMode && (
-            <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
-              <div className="flex items-center gap-4 flex-1">
-                <button
-                  onClick={toggleSidebar}
-                  onTouchEnd={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      toggleSidebar();
-                  }}
-                  className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  aria-label="Toggle Sidebar"
-                  style={{ minWidth: 44, minHeight: 44, touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
-                >
-                  <Menu size={20} />
-                </button>
+          {/* Top Header */}
+          <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
+            <div className="flex items-center gap-4 flex-1">
+              <button
+                onClick={toggleSidebar}
+                onTouchEnd={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    toggleSidebar();
+                }}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500"
+                aria-label="Toggle Sidebar"
+                style={{ minWidth: 44, minHeight: 44, touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+              >
+                <Menu size={20} />
+              </button>
 
-                {/* Functional Global Search */}
-                <GlobalSearch onNavigate={handleNavigate} />
-              </div>
+              {/* Functional Global Search */}
+              <GlobalSearch onNavigate={handleNavigate} />
+            </div>
 
-              <div className="flex items-center gap-2 md:gap-4">
-                {/* Mobile Search Button */}
-                <button className="md:hidden p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
-                  <Search size={20} />
-                </button>
+            <div className="flex items-center gap-2 md:gap-4">
+              {/* Mobile Search Button */}
+              <button className="md:hidden p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full">
+                <Search size={20} />
+              </button>
 
-                {/* Functional Notification Bell */}
-                <NotificationPanel onNavigate={handleNavigate} />
+              {/* Functional Notification Bell */}
+              <NotificationPanel onNavigate={handleNavigate} />
 
-                <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-gray-200 dark:border-slate-700">
-                  <div className="text-right hidden md:block">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
-                  </div>
-                  <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-50 dark:bg-slate-700 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-100 dark:border-slate-600">
-                    <UserCircle size={20} className="md:w-6 md:h-6" />
-                  </div>
-                  <button
-                    onClick={handleLogout}
-                    title="Log out"
-                    className="p-2 ml-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-2"
-                  >
-                    <LogOut size={20} />
-                    <span className="hidden md:inline text-sm font-medium">Logout</span>
-                  </button>
+              <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-gray-200 dark:border-slate-700">
+                <div className="text-right hidden md:block">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
                 </div>
+                <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-50 dark:bg-slate-700 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-100 dark:border-slate-600">
+                  <UserCircle size={20} className="md:w-6 md:h-6" />
+                </div>
+                <button
+                  onClick={handleLogout}
+                  title="Log out"
+                  className="p-2 ml-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <LogOut size={20} />
+                  <span className="hidden md:inline text-sm font-medium">Logout</span>
+                </button>
               </div>
-            </header>
-          )}
-
-          {/* Standalone Integrated Exit / Logout Button (iOS Mode Only - Top Right) */}
-          {isIOSMode && (
-            <button
-              onClick={handleLogout}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleLogout();
-              }}
-              className="absolute top-3 right-3 z-[600] p-2.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-xl shadow-lg border border-gray-200 dark:border-slate-700 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all flex items-center justify-center"
-              title="Log out"
-              aria-label="Log out"
-              style={{ minWidth: 40, minHeight: 40, touchAction: 'manipulation' }}
-            >
-              <LogOut size={18} />
-            </button>
-          )}
+            </div>
+          </header>
 
           {/* Main Content Area */}
-          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isIOSMode ? 'pb-16' : ''}`}>
+          <main className="flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col">
             <div className="flex-1 overflow-y-auto p-4 md:p-6 w-full mx-auto flex flex-col h-full">
                {renderContent()}
             </div>
           </main>
-
-          {/* Render iOS Bottom Tab Bar when in iOS mode or mobile device */}
-          {isIOSMode && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
         </div>
       </div>
     </div>

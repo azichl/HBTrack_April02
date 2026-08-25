@@ -346,17 +346,10 @@ export const Dashboard = () => {
         .slice(0, 5);
   }, [transmitters]);
 
-  const isIOSMode = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const searchParams = new URLSearchParams(window.location.search);
-    return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
-  }, []);
-
   const [isIPad, setIsIPad] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const checkIPad = () => {
-        // Use 640px to capture iPad mini as well
         setIsIPad((window.innerWidth >= 640 && window.innerHeight >= 800) || (window.innerWidth >= 800 && window.innerHeight >= 640));
       };
       checkIPad();
@@ -365,104 +358,6 @@ export const Dashboard = () => {
     }
   }, []);
 
-  if (isIOSMode) {
-    return (
-      <div className="p-2 sm:p-4 max-w-3xl sm:max-w-4xl lg:max-w-5xl mx-auto space-y-3 animate-fade-in pb-16">
-        {/* iOS Transmitters Status Breakdown Card Only */}
-        <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50/50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-700 shadow-md sm:shadow-xl relative overflow-hidden flex flex-col justify-between">
-          <div className="absolute -top-4 -right-4 sm:-top-6 sm:-right-6 p-6 sm:p-10 opacity-5 pointer-events-none">
-            <Radio size={isIPad ? 210 : 140} className="text-brand-600 dark:text-brand-400" />
-          </div>
-
-          {/* Card Header */}
-          <div className="flex items-center justify-between w-full z-10 mb-2 sm:mb-5">
-            <div className="flex items-center gap-2.5 sm:gap-4">
-              <div className="p-2 sm:p-3 bg-brand-50 dark:bg-brand-900/30 rounded-xl sm:rounded-2xl border border-brand-100 dark:border-brand-800/50">
-                <Radio size={isIPad ? 30 : 20} className="text-brand-600 dark:text-brand-400" />
-              </div>
-              <div>
-                <h3 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-white leading-tight">Transmitters Status</h3>
-                <p className="text-xs sm:text-lg text-gray-500 dark:text-gray-400 mt-1 sm:mt-1.5">Real-time health & operational status of deployed PTTs</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-1.5 sm:gap-2.5 bg-slate-100 dark:bg-slate-700/80 px-3 sm:px-5 py-1 sm:py-2.5 rounded-full border border-slate-200 dark:border-slate-600 flex-shrink-0">
-              <span className="text-xs sm:text-base text-slate-500 dark:text-slate-400 font-medium">Total:</span>
-              <strong className="text-slate-900 dark:text-white font-bold text-sm sm:text-xl">{activeLiveTransmitters.length}</strong>
-            </div>
-          </div>
-          
-          {/* Main Donut Chart Container */}
-          <div className="h-[280px] sm:h-[420px] w-full z-10 my-1 sm:my-3 relative flex items-center justify-center">
-             {transmitterStatusData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie 
-                    data={transmitterStatusData} 
-                    cx="50%" 
-                    cy="50%" 
-                    innerRadius={isIPad ? 100 : 65} 
-                    outerRadius={isIPad ? 165 : 110} 
-                    paddingAngle={3} 
-                    dataKey="value" 
-                    stroke="#ffffff"
-                    strokeWidth={isIPad ? 3 : 2}
-                    labelLine={{ stroke: '#9ca3af', strokeWidth: isIPad ? 2 : 1.5 }}
-                    label={renderCustomizedLabel}
-                    animationDuration={1200}
-                  >
-                    {transmitterStatusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  {/* Center Donut Label */}
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-900 dark:fill-white font-black text-2xl sm:text-4xl">
-                    {activeLiveTransmitters.length}
-                  </text>
-                  <text x="50%" y="57%" textAnchor="middle" dominantBaseline="middle" className="fill-gray-400 dark:fill-gray-500 font-bold text-[10px] sm:text-[15px] uppercase tracking-wider">
-                    Units
-                  </text>
-                  <RechartsTooltip 
-                    contentStyle={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', backgroundColor: 'rgba(15, 23, 42, 0.95)', border: '1px solid #334155', color: '#fff', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)' }} 
-                    itemStyle={{ color: '#fff', fontWeight: 600 }} 
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : null}
-          </div>
-
-          {/* Status Breakdown Pills - Adaptable Grid */}
-          <div className="z-10 mt-2 sm:mt-6 pt-3 sm:pt-5 border-t border-slate-100 dark:border-slate-700/60 grid grid-cols-2 gap-2 sm:gap-3 w-full">
-            {transmitterStatusData.map((st) => (
-              <div 
-                key={st.name} 
-                className="flex items-center justify-between gap-1.5 sm:gap-2 bg-white dark:bg-slate-750 px-3 sm:px-5 py-2 sm:py-3 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-2xs sm:shadow-sm transition-all w-full min-w-0"
-              >
-                <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
-                  <span className="w-2.5 h-2.5 sm:w-4 sm:h-4 rounded-full flex-shrink-0" style={{ backgroundColor: st.color }} />
-                  <span className="text-[11px] sm:text-lg font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{st.name}:</span>
-                </div>
-                <span className="text-[11px] sm:text-lg font-black px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white flex-shrink-0 ml-1">
-                  {st.value}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Last Data Update Timestamp Info in the same window */}
-          <div className="z-10 mt-4 sm:mt-6 pt-3 sm:pt-5 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-between text-xs sm:text-lg text-gray-500 dark:text-gray-400">
-            <div className="flex items-center gap-1.5 sm:gap-2.5">
-              <Activity size={isIPad ? 20 : 14} className="text-brand-600 animate-pulse" />
-              <span>Last Data Update:</span>
-            </div>
-            <span className="font-semibold text-gray-900 dark:text-gray-200 tracking-wide sm:text-xl" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
-              {lastIngestDate}
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div 

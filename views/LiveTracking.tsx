@@ -437,11 +437,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
 
-    const isIOSMode = useMemo(() => {
-        if (typeof window === 'undefined') return false;
-        const params = new URLSearchParams(window.location.search);
-        return params.get('mode') === 'ios' || params.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
-    }, []);
+    const isIOSMode = false;
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -1256,8 +1252,7 @@ const LiveTrackingInner = () => {
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   
-  const searchParams = useMemo(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams(), []);
-  const isIOSMode = useMemo(() => searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS)), [searchParams]);
+  const isIOSMode = false;
   const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDonut, setIsDraggingDonut] = useState(false);
   const donutDragStartRef = useRef({ x: 0, y: 0 });
