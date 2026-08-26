@@ -720,6 +720,7 @@ interface LiveTrackingErrorBoundaryProps {
 
 interface LiveTrackingErrorBoundaryState {
     hasError: boolean;
+    error?: any;
     errorCount: number;
 }
 
@@ -728,8 +729,8 @@ class LiveTrackingErrorBoundary extends (React.Component as any) {
         super(props);
         this.state = { hasError: false, errorCount: 0 };
     }
-    static getDerivedStateFromError() {
-        return { hasError: true };
+    static getDerivedStateFromError(error: any) {
+        return { hasError: true, error };
     }
     componentDidCatch(error: any, info: any) {
         console.error('LiveTracking ErrorBoundary caught:', error, info);
@@ -741,9 +742,12 @@ class LiveTrackingErrorBoundary extends (React.Component as any) {
                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 max-w-md text-center">
                         <div className="text-4xl mb-3">⚠️</div>
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Something went wrong</h3>
+                        {this.state.error && (
+                            <p className="text-xs text-red-500 font-mono mb-3 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">{this.state.error.message || String(this.state.error)}</p>
+                        )}
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">The map view encountered an error. Click below to reload.</p>
                         <button
-                            onClick={() => this.setState({ hasError: false, errorCount: this.state.errorCount + 1 })}
+                            onClick={() => this.setState({ hasError: false, error: null, errorCount: this.state.errorCount + 1 })}
                             className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold text-sm"
                         >
                             🔄 Reload View
@@ -1250,6 +1254,7 @@ const LiveTrackingInner = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [isIOSMode, setIsIOSMode] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
