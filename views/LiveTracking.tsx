@@ -437,7 +437,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
 
-    const isIOSMode = false;
+    const isIOSMode = typeof window !== 'undefined' && window.innerWidth < 768;
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -1250,9 +1250,17 @@ const LiveTrackingInner = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
-  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
-  
-  const isIOSMode = false;
+  const [isIOSMode, setIsIOSMode] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleResize = () => {
+        setIsIOSMode(window.innerWidth < 768);
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
   const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDonut, setIsDraggingDonut] = useState(false);
   const donutDragStartRef = useRef({ x: 0, y: 0 });
