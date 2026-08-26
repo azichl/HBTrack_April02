@@ -15,9 +15,15 @@ struct WebView: UIViewRepresentable {
     }
 
     func makeUIView(context: Context) -> WKWebView {
-        // Request native iOS location permissions for field navigation
+        // Request native iOS location permissions
         let locationManager = CLLocationManager()
         locationManager.requestWhenInUseAuthorization()
+
+        // Clear cached JS/CSS files on startup to ensure latest bundle loads
+        WKWebsiteDataStore.default().removeData(
+            ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache],
+            modifiedSince: Date(timeIntervalSince1970: 0)
+        ) {}
 
         let configuration = WKWebViewConfiguration()
         configuration.allowsInlineMediaPlayback = true
@@ -28,21 +34,17 @@ struct WebView: UIViewRepresentable {
         preferences.allowsContentJavaScript = true
         configuration.defaultWebpagePreferences = preferences
 
+        // Inject JS flag indicating native iOS wrapper environment
+        let jsSource = "window.isIOSApp = true; window.isNativeIOS = true;"
+        let userScript = WKUserScript(source: jsSource, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        configuration.userContentController.addUserScript(userScript)
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.bounces = true
-        webView.scrollView.alwaysBounceVertical = true
-        webView.isOpaque = false
-        webView.backgroundColor = UIColor.systemBackground
-
-        // Add Native Pull-to-Refresh Control
-        let refreshControl = UIRefreshControl()
-        refreshControl.tintColor = UIColor(red: 0.72, green: 0.58, blue: 0.33, alpha: 1.0)
-        refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefreshControl(_:)), for: .valueChanged)
-        webView.scrollView.refreshControl = refreshControl
-        context.coordinator.refreshControl = refreshControl
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/605.1.15 HBTrack-iOS-App/2.0"
 
         #if DEBUG
         if #available(iOS 16.4, *) {
@@ -66,23 +68,12 @@ struct WebView: UIViewRepresentable {
     class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
         var parent: WebView
         var lastReloadTrigger: Bool = false
-        weak var refreshControl: UIRefreshControl?
 
         init(_ parent: WebView) {
             self.parent = parent
         }
 
-        @objc func handleRefreshControl(_ sender: UIRefreshControl) {
-            // Trigger haptic feedback
-            let generator = UIImpactFeedbackGenerator(style: .medium)
-            generator.impactOccurred()
-            
-            if let webView = sender.superview?.superview as? WKWebView {
-                webView.reload()
-            }
-        }
-
-        // Navigation state handlers
+        // Navigation failure handling
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             DispatchQueue.main.async {
                 self.parent.isLoading = true
@@ -94,7 +85,6 @@ struct WebView: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.canGoBack = webView.canGoBack
-                self.refreshControl?.endRefreshing()
             }
         }
 
@@ -102,7 +92,6 @@ struct WebView: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.hasError = true
-                self.refreshControl?.endRefreshing()
             }
         }
 
@@ -110,13 +99,12 @@ struct WebView: UIViewRepresentable {
             DispatchQueue.main.async {
                 self.parent.isLoading = false
                 self.parent.hasError = true
-                self.refreshControl?.endRefreshing()
             }
         }
 
-        // WKUIDelegate: Native Alert and Confirmation Presentation
+        // WKUIDelegate: Handle Javascript alerts & confirm dialogs cleanly inside native app
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
-            let alertController = UIAlertController(title: "RAF Tracking", message: message, preferredStyle: .alert)
+            let alertController = UIAlertController(title: "HBTrack", message: message, preferredStyle: .alert)
             alertController.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                let rootVC = windowScene.windows.first?.rootViewController {
@@ -127,7 +115,7 @@ struct WebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-            let alertController = UIAlertController(title: "RAF Tracking", message: message, preferredStyle: .alert)
+            let alertController = UIAlertController(title: "HBTrack", message: message, preferredStyle: .alert)
             alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
             alertController.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
             if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
