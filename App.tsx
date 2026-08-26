@@ -294,8 +294,13 @@ const App = () => {
 
   const canUploadData = 
     currentUserRole === 'Manager' || 
+    currentUserRole === 'Administrator' ||
+    currentUserRole === 'Researcher' ||
+    currentUserRole === 'Data Analyst' ||
+    currentUserRole === 'Data Entry' ||
     currentUserIosDataUpload === true ||
-    (currentUserAppAccess && currentUserAppAccess.includes('ios_data_upload'));
+    (currentUserAppAccess && currentUserAppAccess.includes('ios_data_upload')) ||
+    (currentUserPermissions && currentUserPermissions.includes('upload_data'));
 
   // Define auto-logout behavior on idle
   const handleIdle = useCallback(() => {

@@ -3616,48 +3616,48 @@ const LiveTrackingInner = () => {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-4">
+    <div className={`flex flex-col h-full ${isIOSMode ? 'space-y-2' : 'space-y-4'}`}>
         {/* Tab Switcher */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap flex-shrink-0">
+        <div className={`flex gap-1.5 ${isIOSMode ? 'bg-white/95 backdrop-blur-md shadow-sm border border-gray-200/80 rounded-2xl p-1.5 w-fit' : 'bg-gray-100 p-1 rounded-lg w-fit'} flex-wrap flex-shrink-0 z-[500]`}>
             <button
                 onClick={() => setViewMode('tracking')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                     viewMode === 'tracking' 
-                    ? 'bg-white text-brand-900 shadow-sm' 
+                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 shadow-sm border border-brand-200 dark:border-brand-800' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
                 <MapIcon size={14} className={viewMode === 'tracking' ? 'text-brand-500' : 'text-gray-400'} />
-                <span className="hidden sm:inline">Live</span> Tracking
+                <span>Tracking</span>
             </button>
             <button
                 onClick={() => setViewMode('weather')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                     viewMode === 'weather' 
-                    ? 'bg-white text-brand-900 shadow-sm' 
+                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 shadow-sm border border-brand-200 dark:border-brand-800' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
                 <Wind size={14} className={viewMode === 'weather' ? 'text-brand-500' : 'text-gray-400'} />
-                <span className="hidden sm:inline">Weather</span> Windy
+                <span>Windy</span>
             </button>
             <button
                 onClick={() => setViewMode('weather2')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
                     viewMode === 'weather2' 
-                    ? 'bg-white text-brand-900 shadow-sm' 
+                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 shadow-sm border border-brand-200 dark:border-brand-800' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
                 <Satellite size={14} className={viewMode === 'weather2' ? 'text-brand-500' : 'text-gray-400'} />
-                <span className="hidden sm:inline">Weather</span> Meteoblue
+                <span>Meteoblue</span>
             </button>
         </div>
 
         {/* Main Map Area */}
         <div 
             ref={containerRef} 
-            className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? '!fixed !inset-0 !z-[9999] !p-0 !m-0 !rounded-none !border-none !w-screen !h-[100dvh] !max-w-none !max-h-none' : ''}`}
+            className={`flex-1 rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? '!fixed !inset-0 !z-[9999] !p-0 !m-0 !rounded-none !border-none !w-screen !h-[100dvh] !max-w-none !max-h-none' : ''}`}
         >
             <div className={`w-full h-full ${viewMode === 'tracking' ? 'block' : 'hidden'}`}>
                 {renderTrackingMap()}
