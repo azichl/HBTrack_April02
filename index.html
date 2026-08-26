@@ -30,6 +30,31 @@
         font-family: 'Sakkal Majalla', 'Inter', sans-serif !important; 
       }
     </style>
+    <script>
+      (function() {
+        var params = new URLSearchParams(window.location.search);
+        var isIOS = params.get('mode') === 'ios' || params.get('app') === 'ios' || /iPhone|iPad|iPod/.test(navigator.userAgent) || window.isIOSApp || window.isNativeIOS;
+        if (isIOS) {
+          var style = document.createElement('style');
+          style.id = 'ios-font-override';
+          style.innerHTML = `
+            * { 
+              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif !important; 
+            }
+            .text-xs { font-size: 11px !important; line-height: 15px !important; }
+            .text-sm { font-size: 13px !important; line-height: 18px !important; }
+            .text-base { font-size: 14px !important; line-height: 20px !important; }
+            .text-lg { font-size: 16px !important; line-height: 22px !important; }
+            .text-xl { font-size: 18px !important; line-height: 24px !important; }
+            .text-2xl { font-size: 20px !important; line-height: 26px !important; }
+            .text-3xl { font-size: 24px !important; line-height: 30px !important; }
+            .text-4xl { font-size: 28px !important; line-height: 34px !important; }
+            .text-5xl { font-size: 34px !important; line-height: 40px !important; }
+          `;
+          document.head.appendChild(style);
+        }
+      })();
+    </script>
     <style>
       /* Fix for massive password dots on iOS Safari caused by custom font */
       input[type="password"] {
@@ -179,6 +204,30 @@
         }
       }
     </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "zustand": "https://aistudiocdn.com/zustand@^5.0.8",
+    "leaflet": "https://esm.sh/leaflet@1.9.4",
+    "react-leaflet": "https://esm.sh/react-leaflet@4.2.1?external=react,react-dom,leaflet",
+    "date-fns": "https://aistudiocdn.com/date-fns@^4.1.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "leaflet/": "https://aistudiocdn.com/leaflet@^1.9.4/",
+    "jszip": "https://esm.sh/jszip@3.10.1",
+    "read-excel-file": "https://esm.sh/read-excel-file@5.7.1",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1?external=react",
+    "zustand/": "https://aistudiocdn.com/zustand@^5.0.8/",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.1"
+  }
+}
+</script>
 </head>
   <body class="bg-gray-50 text-slate-900 h-screen overflow-hidden text-lg">
     <div id="root"></div>

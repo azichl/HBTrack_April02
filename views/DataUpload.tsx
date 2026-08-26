@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { UploadCloud, FileSpreadsheet, CheckCircle, Database, FileText, Server, Globe, Key, RefreshCw, ShieldCheck, Activity, User, Lock, Play, Table as TableIcon, Download, ToggleLeft, ToggleRight, Link as LinkIcon, List, Clock, BarChart3, Wifi, Layers, Globe2, AlertTriangle, Calendar, Link2, FileType, Radio, Info, HelpCircle, FileDown, ChevronDown, X } from 'lucide-react';
 import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
@@ -122,19 +122,10 @@ export const DataUpload = () => {
       importTransmitters, importBirds, assignTransmitterToBird, transmitters,
   } = useAppStore();
 
-  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const handleResize = () => {
-        setIsMobileScreen(window.innerWidth < 768);
-      };
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, []);
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
 
-  const [activeTab, setActiveTab] = useState<'manual' | 'api'>(isMobileScreen ? 'api' : 'manual');
+  const [activeTab, setActiveTab] = useState<'manual' | 'api'>(isIOSMode ? 'api' : 'manual');
 
   // Manual Upload State
   const [dragActive, setDragActive] = useState(false);
@@ -635,8 +626,8 @@ export const DataUpload = () => {
     setApiStatus('testing');
     setLogs([]);
     setRawResponse('');
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-    if (isMobile) {
+    setSyncStats(null);
+    if (isIOSMode) {
       setShowLogModal(true);
     }
     addLog(`Initiating connection process [${isSimulationMode ? 'SIMULATION' : 'LIVE'}]...`);
@@ -661,7 +652,7 @@ export const DataUpload = () => {
             
             addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items. Synced to Firebase.`);
             setSyncStats({transmitters: 0, positions: 0});
-            if (isMobile) {
+            if (isIOSMode) {
               setShowSuccessToast(true);
               setTimeout(() => setShowLogModal(false), 2000);
               setTimeout(() => setShowSuccessToast(false), 5000);
@@ -736,8 +727,9 @@ export const DataUpload = () => {
         
         setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
         setApiStatus('success');
-        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-        if (isMobile) {
+        addLog(`Operation Complete. Store Updated.`);
+
+        if (isIOSMode) {
           setShowSuccessToast(true);
           setTimeout(() => setShowLogModal(false), 2000);
           setTimeout(() => setShowSuccessToast(false), 5000);
@@ -776,9 +768,9 @@ export const DataUpload = () => {
 
   const guide = getDataGuide();
 
-  if (isMobileScreen) {
+  if (isIOSMode) {
     return (
-      <div className="space-y-4 p-2 max-w-md mx-auto animate-in fade-in duration-300 pb-16">
+      <div className="space-y-4 p-2 max-w-md mx-auto animate-in fade-in duration-300">
         {/* Title Tile */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -945,28 +937,30 @@ export const DataUpload = () => {
   }
 
   return (
-    <div className="space-y-4 flex flex-col">
+    <div className="space-y-4 h-[calc(100vh-140px)] flex flex-col">
       <div className="flex justify-between items-center flex-shrink-0">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Data Ingestion</h2>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
-            Import tracking data via Argos CLS API.
+            {isIOSMode ? "Import tracking data via Argos CLS API." : "Import tracking data via File Upload or Argos CLS API."}
           </p>
         </div>
-        <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
-            <button 
-                onClick={() => setActiveTab('manual')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'manual' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-            >
-                Manual Upload
-            </button>
-            <button 
-                onClick={() => setActiveTab('api')}
-                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'api' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
-            >
-                API Integration
-            </button>
-        </div>
+        {!isIOSMode && (
+          <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
+              <button 
+                  onClick={() => setActiveTab('manual')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'manual' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+              >
+                  Manual Upload
+              </button>
+              <button 
+                  onClick={() => setActiveTab('api')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === 'api' ? 'bg-white dark:bg-slate-700 text-brand-900 dark:text-brand-100 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}`}
+              >
+                  API Integration
+              </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden flex-1 p-4">

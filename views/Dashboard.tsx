@@ -16,7 +16,7 @@ import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/a
 const renderCustomizedLabel = (props: any) => {
   const { cx, cy, midAngle, innerRadius, outerRadius, value, name, x, y } = props;
   const RADIAN = Math.PI / 180;
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 640 || window.location.search.includes('mode=ios'));
   
   // Inner text position (number)
   const insideRadius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -346,25 +346,29 @@ export const Dashboard = () => {
         .slice(0, 5);
   }, [transmitters]);
 
-  const [isIPad, setIsIPad] = useState(false);
-  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  const isIOSMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+  }, []);
 
+  const [isIPad, setIsIPad] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const handleResize = () => {
+      const checkIPad = () => {
+        // Use 640px to capture iPad mini as well
         setIsIPad((window.innerWidth >= 640 && window.innerHeight >= 800) || (window.innerWidth >= 800 && window.innerHeight >= 640));
-        setIsMobileScreen(window.innerWidth < 768);
       };
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+      checkIPad();
+      window.addEventListener('resize', checkIPad);
+      return () => window.removeEventListener('resize', checkIPad);
     }
   }, []);
 
-  if (isMobileScreen) {
+  if (isIOSMode) {
     return (
       <div className="p-2 sm:p-4 max-w-3xl sm:max-w-4xl lg:max-w-5xl mx-auto space-y-3 animate-fade-in pb-16">
-        {/* Mobile Transmitters Status Breakdown Card Only */}
+        {/* iOS Transmitters Status Breakdown Card Only */}
         <div className="bg-gradient-to-br from-slate-50 via-white to-slate-50/50 dark:from-slate-800 dark:via-slate-800 dark:to-slate-850 p-5 sm:p-8 rounded-2xl sm:rounded-3xl border border-slate-200/80 dark:border-slate-700 shadow-md sm:shadow-xl relative overflow-hidden flex flex-col justify-between">
           <div className="absolute -top-4 -right-4 sm:-top-6 sm:-right-6 p-6 sm:p-10 opacity-5 pointer-events-none">
             <Radio size={isIPad ? 210 : 140} className="text-brand-600 dark:text-brand-400" />
@@ -459,7 +463,6 @@ export const Dashboard = () => {
       </div>
     );
   }
-
 
   return (
     <div 

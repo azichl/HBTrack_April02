@@ -16,7 +16,21 @@ export const Settings = () => {
     timeZone, setTimeZone,
     simpleMode, toggleSimpleMode
   } = useAppStore();
-  const [activeTab, setActiveTab] = useState('profile');
+
+  const isIOSMode = React.useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+  }, []);
+
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const isIOS = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+      if (isIOS) return 'preferences';
+    }
+    return 'profile';
+  });
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -102,23 +116,6 @@ export const Settings = () => {
     }
   };
 
-  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const handleResize = () => {
-        const isMob = window.innerWidth < 768;
-        setIsMobileScreen(isMob);
-        if (isMob && activeTab !== 'preferences' && activeTab !== 'security') {
-          setActiveTab('preferences');
-        }
-      };
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, [activeTab]);
-
   const allTabs = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -126,27 +123,25 @@ export const Settings = () => {
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
-  const tabs = isMobileScreen 
-    ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') 
-    : allTabs;
+  const tabs = isIOSMode ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') : allTabs;
 
   return (
-    <div className={`w-full max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isMobileScreen ? 'pt-1 px-1' : ''}`}>
-      {/* Header (Desktop Mode Only) */}
-      {!isMobileScreen && (
+    <div className={`w-full max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isIOSMode ? 'pt-1 px-1' : ''}`}>
+      {/* Header (Web Mode Only) */}
+      {!isIOSMode && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
-            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">Manage your account preferences and system settings</p>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">Manage your account preferences and system settings</p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-3 md:px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
-              <RotateCcw size={16} /> Reset
+            <button className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+              <RotateCcw size={16} /> Reset to Default
             </button>
             <button 
               onClick={handleSave}
               disabled={isSaving}
-              className="px-4 md:px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70"
+              className="px-6 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 flex items-center gap-2 shadow-sm transition-colors disabled:opacity-70"
             >
               {isSaving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} />}
               Save Changes
@@ -160,15 +155,15 @@ export const Settings = () => {
         </div>
       )}
 
-      {/* Save Message Alert for Mobile Screen */}
-      {isMobileScreen && saveMessage && (
+      {/* Save Message Alert for iOS Mode */}
+      {isIOSMode && saveMessage && (
         <div className={`text-sm font-medium px-4 py-2 rounded-xl border ${saveMessage.startsWith('Error') ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'}`}>
           {saveMessage}
         </div>
       )}
 
       {/* Tabs */}
-      <div className={`flex overflow-x-auto pb-1 md:pb-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-1 ${isMobileScreen ? 'pr-14' : ''}`}>
+      <div className={`flex overflow-x-auto pb-1 md:pb-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-1 ${isIOSMode ? 'pr-14' : ''}`}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -178,7 +173,7 @@ export const Settings = () => {
               onClick={() => setActiveTab(tab.id)}
               className={`flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 isActive 
-                  ? 'bg-brand-50 dark:bg-slate-700 text-brand-700 dark:text-brand-400 shadow-sm font-bold' 
+                  ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 shadow-sm' 
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'
               }`}
             >

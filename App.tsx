@@ -294,13 +294,8 @@ const App = () => {
 
   const canUploadData = 
     currentUserRole === 'Manager' || 
-    currentUserRole === 'Administrator' ||
-    currentUserRole === 'Researcher' ||
-    currentUserRole === 'Data Analyst' ||
-    currentUserRole === 'Data Entry' ||
     currentUserIosDataUpload === true ||
-    (currentUserAppAccess && currentUserAppAccess.includes('ios_data_upload')) ||
-    (currentUserPermissions && currentUserPermissions.includes('upload_data'));
+    (currentUserAppAccess && currentUserAppAccess.includes('ios_data_upload'));
 
   // Define auto-logout behavior on idle
   const handleIdle = useCallback(() => {
@@ -362,7 +357,16 @@ const App = () => {
              const userData = userDoc.data();
              const appAccess = userData.appAccess || ['web', 'ios'];
              
-             if (userData.status === 'inactive') {
+             const searchParams = new URLSearchParams(window.location.search);
+             const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+
+             if (isIOSMode && !appAccess.includes('ios')) {
+                setAccessError("account not activated");
+                await signOut(auth);
+                setAuthLoading(false);
+                return;
+             }
+             if (!isIOSMode && !appAccess.includes('web')) {
                 setAccessError("account not activated");
                 await signOut(auth);
                 setAuthLoading(false);
@@ -411,14 +415,9 @@ const App = () => {
         // Log Session Start when user successfully authenticates
         logUserActivity(user.uid, user.email || '', 'SESSION_START', 'User logged in');
         
-        try {
-          await initializeFromFirestore();
-          liveUnsubRef.current = subscribeToLivePositions();
-        } catch (initErr) {
-          console.error("[App] initializeFromFirestore failed:", initErr);
-        } finally {
-          setAuthLoading(false);
-        }
+        await initializeFromFirestore();
+        liveUnsubRef.current = subscribeToLivePositions();
+        setAuthLoading(false);
       } else if (user) {
         // If already initialized, just set user
         setCurrentUser(user);
@@ -458,16 +457,9 @@ const App = () => {
 
   const searchParams = new URLSearchParams(window.location.search);
   const isStandalone = searchParams.get('standalone') === 'true';
+  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
   const urlTab = searchParams.get('tab');
-  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobileScreen(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
   const [showAppIntro, setShowAppIntro] = useState(true);
 
@@ -478,7 +470,7 @@ const App = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  if (authLoading) {
+  if (authLoading && !showAppIntro) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-900">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-brand-500"></div>
@@ -486,12 +478,12 @@ const App = () => {
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser && !showAppIntro) {
     return <Login externalError={accessError} />;
   }
 
   const renderContent = () => {
-    switch (activeTab) {
+    switch (currentView) {
       case 'Dashboard': return <Dashboard />;
       case 'Real-Time Alerts': return <Alerts />;
       case 'Live Tracking': return <LiveTracking />;
@@ -511,7 +503,7 @@ const App = () => {
       case 'GIS Features': return <GISFeatures />;
       case 'Settings': return <Settings />;
       case 'Help & Support': return <HelpSupport />;
-      default: return <PlaceholderView title={activeTab} />;
+      default: return <PlaceholderView title={currentView} />;
     }
   };
 
@@ -611,26 +603,25 @@ const App = () => {
 
       <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300 pt-[env(safe-area-inset-top,0px)]">
 
-        {!isMobileScreen && (
-          <>
-            {sidebarOpen && (
-              <div
-                className="fixed inset-0 z-[990] bg-black/50 backdrop-blur-sm lg:hidden"
-                onClick={toggleSidebar}
-              />
-            )}
-            <div className={`
-                fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
-                ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
-            `}>
-               <Sidebar />
-            </div>
-          </>
+        {!isIOSMode && sidebarOpen && (
+          <div
+            className="fixed inset-0 z-[990] bg-black/50 backdrop-blur-sm lg:hidden"
+            onClick={toggleSidebar}
+          />
+        )}
+
+        {!isIOSMode && (
+          <div className={`
+              fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
+              ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
+          `}>
+             <Sidebar />
+          </div>
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-          {/* Top Header (Desktop Mode Only) */}
-          {!isMobileScreen && (
+          {/* Top Header (Web Mode Only) */}
+          {!isIOSMode && (
             <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
               <div className="flex items-center gap-4 flex-1">
                 <button
@@ -681,8 +672,8 @@ const App = () => {
             </header>
           )}
 
-          {/* Standalone Integrated Exit / Logout Button (Mobile Mode Only - Top Right) */}
-          {isMobileScreen && (
+          {/* Standalone Integrated Exit / Logout Button (iOS Mode Only - Top Right) */}
+          {isIOSMode && (
             <button
               onClick={handleLogout}
               onTouchEnd={(e) => {
@@ -700,14 +691,14 @@ const App = () => {
           )}
 
           {/* Main Content Area */}
-          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isMobileScreen ? 'pb-16' : ''}`}>
+          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isIOSMode ? 'pb-16' : ''}`}>
             <div className="flex-1 overflow-y-auto p-4 md:p-6 w-full mx-auto flex flex-col h-full">
                {renderContent()}
             </div>
           </main>
 
-          {/* Render Mobile Bottom Tab Bar when on mobile screen width */}
-          {isMobileScreen && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
+          {/* Render iOS Bottom Tab Bar when in iOS mode or mobile device */}
+          {isIOSMode && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
         </div>
       </div>
     </div>

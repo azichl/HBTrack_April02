@@ -437,7 +437,11 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
 
-    const isIOSMode = typeof window !== 'undefined' && window.innerWidth < 768;
+    const isIOSMode = useMemo(() => {
+        if (typeof window === 'undefined') return false;
+        const params = new URLSearchParams(window.location.search);
+        return params.get('mode') === 'ios' || params.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
+    }, []);
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -720,7 +724,6 @@ interface LiveTrackingErrorBoundaryProps {
 
 interface LiveTrackingErrorBoundaryState {
     hasError: boolean;
-    error?: any;
     errorCount: number;
 }
 
@@ -729,8 +732,8 @@ class LiveTrackingErrorBoundary extends (React.Component as any) {
         super(props);
         this.state = { hasError: false, errorCount: 0 };
     }
-    static getDerivedStateFromError(error: any) {
-        return { hasError: true, error };
+    static getDerivedStateFromError() {
+        return { hasError: true };
     }
     componentDidCatch(error: any, info: any) {
         console.error('LiveTracking ErrorBoundary caught:', error, info);
@@ -742,12 +745,9 @@ class LiveTrackingErrorBoundary extends (React.Component as any) {
                     <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-6 max-w-md text-center">
                         <div className="text-4xl mb-3">⚠️</div>
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Something went wrong</h3>
-                        {this.state.error && (
-                            <p className="text-xs text-red-500 font-mono mb-3 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">{this.state.error.message || String(this.state.error)}</p>
-                        )}
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">The map view encountered an error. Click below to reload.</p>
                         <button
-                            onClick={() => this.setState({ hasError: false, error: null, errorCount: this.state.errorCount + 1 })}
+                            onClick={() => this.setState({ hasError: false, errorCount: this.state.errorCount + 1 })}
                             className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors font-semibold text-sm"
                         >
                             🔄 Reload View
@@ -1255,17 +1255,9 @@ const LiveTrackingInner = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
-  const [isIOSMode, setIsIOSMode] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const handleResize = () => {
-        setIsIOSMode(window.innerWidth < 768);
-      };
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, []);
+  
+  const searchParams = useMemo(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams(), []);
+  const isIOSMode = useMemo(() => searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS)), [searchParams]);
   const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDonut, setIsDraggingDonut] = useState(false);
   const donutDragStartRef = useRef({ x: 0, y: 0 });
@@ -3621,48 +3613,48 @@ const LiveTrackingInner = () => {
   };
 
   return (
-    <div className={`flex flex-col h-full ${isIOSMode ? 'space-y-2' : 'space-y-4'}`}>
+    <div className="flex flex-col h-full space-y-4">
         {/* Tab Switcher */}
-        <div className={`flex gap-1.5 ${isIOSMode ? 'bg-white/95 backdrop-blur-md shadow-sm border border-gray-200/80 rounded-2xl p-1.5 w-fit' : 'bg-gray-100 p-1 rounded-lg w-fit'} flex-wrap flex-shrink-0 z-[500]`}>
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap flex-shrink-0">
             <button
                 onClick={() => setViewMode('tracking')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                     viewMode === 'tracking' 
-                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 shadow-sm border border-brand-200 dark:border-brand-800' 
+                    ? 'bg-white text-brand-900 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
                 <MapIcon size={14} className={viewMode === 'tracking' ? 'text-brand-500' : 'text-gray-400'} />
-                <span>Tracking</span>
+                <span className="hidden sm:inline">Live</span> Tracking
             </button>
             <button
                 onClick={() => setViewMode('weather')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                     viewMode === 'weather' 
-                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 shadow-sm border border-brand-200 dark:border-brand-800' 
+                    ? 'bg-white text-brand-900 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
                 <Wind size={14} className={viewMode === 'weather' ? 'text-brand-500' : 'text-gray-400'} />
-                <span>Windy</span>
+                <span className="hidden sm:inline">Weather</span> Windy
             </button>
             <button
                 onClick={() => setViewMode('weather2')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
                     viewMode === 'weather2' 
-                    ? 'bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 shadow-sm border border-brand-200 dark:border-brand-800' 
+                    ? 'bg-white text-brand-900 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
             >
                 <Satellite size={14} className={viewMode === 'weather2' ? 'text-brand-500' : 'text-gray-400'} />
-                <span>Meteoblue</span>
+                <span className="hidden sm:inline">Weather</span> Meteoblue
             </button>
         </div>
 
         {/* Main Map Area */}
         <div 
             ref={containerRef} 
-            className={`flex-1 rounded-2xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? '!fixed !inset-0 !z-[9999] !p-0 !m-0 !rounded-none !border-none !w-screen !h-[100dvh] !max-w-none !max-h-none' : ''}`}
+            className={`flex-1 rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-50 relative group ${isFullscreen ? '!fixed !inset-0 !z-[9999] !p-0 !m-0 !rounded-none !border-none !w-screen !h-[100dvh] !max-w-none !max-h-none' : ''}`}
         >
             <div className={`w-full h-full ${viewMode === 'tracking' ? 'block' : 'hidden'}`}>
                 {renderTrackingMap()}

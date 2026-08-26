@@ -21,21 +21,20 @@ The app uses a lightweight SwiftUI `WKWebView` wrapper to load the React web app
 
 ## 📱 Features & Module Filtering
 
-When launched, the iOS app loads the application and provides a streamlined mobile experience:
+When launched, the iOS app automatically loads with `?mode=ios` parameter. This instructs the React web app to display **ONLY**:
 1. **Dashboard** — System KPIs, transmitter counts, status overviews
 2. **Live Tracking Map** — Real-time Houbara bird positions, terrain layers, Layers/Weather/History tools
 3. **Data Upload / API Ingestion** — Argos API ingestion, CLS CSV import
-4. **Settings** — System Preferences (Dark/Light mode) & Security settings
 
-**Mobile/iOS-optimized map behavior:**
+**iOS-specific map behavior:**
 - ✅ Map Layers panel (switch basemap tiles)
 - ✅ Weather overlay popup
 - ✅ History panel (track position history)
 - ✅ GPS auto-fly to current location
 - ✅ Distance measurement tool
-- ❌ AI Forecast (hidden on mobile)
-- ❌ GEE satellite analysis layers (hidden on mobile)
-- ❌ Mark as Dead button (hidden on mobile)
+- ❌ AI Forecast (hidden on iOS)
+- ❌ GEE satellite analysis layers (hidden on iOS)
+- ❌ Mark as Dead button (hidden on iOS)
 
 ---
 
@@ -55,12 +54,12 @@ When launched, the iOS app loads the application and provides a streamlined mobi
 
 By default, the app loads:
 ```
-https://trackapp-v2.web.app
+https://trackapp-v2.web.app/?mode=ios
 ```
 
 ### Changing URL for Local Testing:
 - Tap the **Gear Icon ⚙️** at the top right of the iOS app header.
-- Choose **"Use Local Dev Server (localhost:5173)"** or enter your local IP address (e.g., `http://192.168.1.100:5173`).
+- Choose **"Use Local Dev Server (localhost:5173)"** or enter your local IP address (e.g., `http://192.168.1.100:5173/?mode=ios`).
 - Tap **Save** to reload the app immediately against your local Vite server (`npm run dev`).
 
 ---

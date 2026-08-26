@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
-    // Default target production URL
-    @State private var appURLString: String = "https://trackapp-v2.web.app"
+    // Default target URL (includes ?mode=ios parameter for automatic Dashboard, Live Map & Data Upload filtering)
+    @State private var appURLString: String = "https://trackapp-v2.web.app/?mode=ios"
     @State private var isLoading: Bool = true
     @State private var canGoBack: Bool = false
     @State private var hasError: Bool = false
@@ -10,7 +10,7 @@ struct ContentView: View {
     @State private var showSettings: Bool = false
 
     var currentURL: URL {
-        URL(string: appURLString) ?? URL(string: "https://trackapp-v2.web.app")!
+        URL(string: appURLString) ?? URL(string: "https://trackapp-v2.web.app/?mode=ios")!
     }
 
     var body: some View {
@@ -131,12 +131,16 @@ struct SettingsSheet: View {
                         .keyboardType(.URL)
 
                     Button("Reset to Production") {
-                        appURLString = "https://trackapp-v2.web.app"
+                        appURLString = "https://trackapp-v2.web.app/?mode=ios"
                     }
 
                     Button("Use Local Dev Server (localhost:5173)") {
-                        appURLString = "http://localhost:5173"
+                        appURLString = "http://localhost:5173/?mode=ios"
                     }
+                }
+
+                Section(footer: Text("Adding ?mode=ios filters navigation to Dashboard, Live Map & Data Ingestion.")) {
+                    EmptyView()
                 }
             }
             .navigationTitle("Server Config")
