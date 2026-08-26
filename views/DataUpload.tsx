@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UploadCloud, FileSpreadsheet, CheckCircle, Database, FileText, Server, Globe, Key, RefreshCw, ShieldCheck, Activity, User, Lock, Play, Table as TableIcon, Download, ToggleLeft, ToggleRight, Link as LinkIcon, List, Clock, BarChart3, Wifi, Layers, Globe2, AlertTriangle, Calendar, Link2, FileType, Radio, Info, HelpCircle, FileDown, ChevronDown, X } from 'lucide-react';
 import { HoubaraIcon } from '../components/HoubaraIcon';
 import { useAppStore } from '../store/appStore';
@@ -122,7 +122,19 @@ export const DataUpload = () => {
       importTransmitters, importBirds, assignTransmitterToBird, transmitters,
   } = useAppStore();
 
-  const [activeTab, setActiveTab] = useState<'manual' | 'api'>('api');
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleResize = () => {
+        setIsMobileScreen(window.innerWidth < 768);
+      };
+      handleResize();
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  const [activeTab, setActiveTab] = useState<'manual' | 'api'>(isMobileScreen ? 'api' : 'manual');
 
   // Manual Upload State
   const [dragActive, setDragActive] = useState(false);
@@ -763,18 +775,6 @@ export const DataUpload = () => {
   };
 
   const guide = getDataGuide();
-
-  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const handleResize = () => {
-        setIsMobileScreen(window.innerWidth < 768);
-      };
-      handleResize();
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, []);
 
   if (isMobileScreen) {
     return (
