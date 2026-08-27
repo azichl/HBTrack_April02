@@ -90,8 +90,7 @@ export const Sidebar = () => {
       }
   };
 
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   return (
     <div className="w-full h-full bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shadow-sm overflow-y-auto scrollbar-hide transition-colors duration-300">
@@ -144,7 +143,7 @@ export const Sidebar = () => {
           </>
         )}
 
-        {!isIOSMode && (
+        {!isMobileScreen && (
           <>
             {(hasPermission('Generate Reports') || hasPermission('Manage Alerts') || isAdmin) && (
               <>

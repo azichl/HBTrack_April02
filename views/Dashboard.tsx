@@ -16,7 +16,7 @@ import { calculateNormalAccuracy, calculateStaticTestAccuracy } from '../utils/a
 const renderCustomizedLabel = (props: any) => {
   const { cx, cy, midAngle, innerRadius, outerRadius, value, name, x, y } = props;
   const RADIAN = Math.PI / 180;
-  const isMobile = typeof window !== 'undefined' && (window.innerWidth < 640 || window.location.search.includes('mode=ios'));
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   
   // Inner text position (number)
   const insideRadius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -346,11 +346,7 @@ export const Dashboard = () => {
         .slice(0, 5);
   }, [transmitters]);
 
-  const isIOSMode = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const searchParams = new URLSearchParams(window.location.search);
-    return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
-  }, []);
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   const [isIPad, setIsIPad] = useState(false);
   useEffect(() => {
@@ -365,7 +361,7 @@ export const Dashboard = () => {
     }
   }, []);
 
-  if (isIOSMode) {
+  if (isMobileScreen) {
     return (
       <div className="p-2 sm:p-4 max-w-3xl sm:max-w-4xl lg:max-w-5xl mx-auto space-y-3 animate-fade-in pb-16">
         {/* iOS Transmitters Status Breakdown Card Only */}

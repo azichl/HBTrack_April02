@@ -437,11 +437,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     const [activeTabMode, setActiveTabMode] = useState<'group' | 'single'>('group');
     const [selectedSinglePos, setSelectedSinglePos] = useState<any>(pos);
 
-    const isIOSMode = useMemo(() => {
-        if (typeof window === 'undefined') return false;
-        const params = new URLSearchParams(window.location.search);
-        return params.get('mode') === 'ios' || params.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
-    }, []);
+    const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
     // Compute overlapping positions within 300 meters
     const overlappingPositions = useMemo(() => {
@@ -621,7 +617,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 <span>Lon: {currentPos.lon?.toFixed(4)}</span>
                             </div>
                             
-                            <div className={`grid ${isIOSMode ? 'grid-cols-1' : 'grid-cols-2'} gap-2 mt-3`}>
+                            <div className={`grid ${isMobileScreen ? 'grid-cols-1' : 'grid-cols-2'} gap-2 mt-3`}>
                                 <button 
                                     onClick={() => {
                                         setSelectedTransmitterIds([currentPos.transmitter_id]);
@@ -631,7 +627,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 >
                                     <History size={12} /> Focus & History
                                 </button>
-                                {!isIOSMode && (
+                                {!isMobileScreen && (
                                     <button 
                                         onClick={handleAIAnalysis}
                                         className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
@@ -644,9 +640,9 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                             <div className="mt-2">
                                 <a
                                     href={`https://earth.google.com/web/search/${currentPos.lat},${currentPos.lon}`}
-                                    target={isIOSMode ? "_top" : "_blank"}
+                                    target={isMobileScreen ? "_top" : "_blank"}
                                     onClick={(e) => {
-                                        if (isIOSMode) {
+                                        if (isMobileScreen) {
                                             e.preventDefault();
                                             window.location.href = `https://earth.google.com/web/search/${currentPos.lat},${currentPos.lon}`;
                                         }
@@ -658,7 +654,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 </a>
                             </div>
 
-                            {!isIOSMode && currentTransmitter && (
+                            {!isMobileScreen && currentTransmitter && (
                                 <div className="mt-2">
                                     {currentTransmitter.derived_status === 'Dead' ? (
                                         currentUserRole === 'Administrator' && (
@@ -1256,8 +1252,7 @@ const LiveTrackingInner = () => {
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   
-  const searchParams = useMemo(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams(), []);
-  const isIOSMode = useMemo(() => searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS)), [searchParams]);
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
   const [donutOffset, setDonutOffset] = useState({ x: 0, y: 0 });
   const [isDraggingDonut, setIsDraggingDonut] = useState(false);
   const donutDragStartRef = useRef({ x: 0, y: 0 });
@@ -2355,7 +2350,7 @@ const LiveTrackingInner = () => {
         {/* Measurement Tool Overlay Controls */}
         {isMeasuring && (
             <div 
-                className={`absolute ${isIOSMode ? 'bottom-12' : 'bottom-10'} left-1/2 -translate-x-1/2 z-[500] flex items-center gap-2 sm:gap-3 bg-slate-900/90 backdrop-blur text-white px-3.5 sm:px-4 py-2 rounded-full shadow-xl border border-slate-700 cursor-grab active:cursor-grabbing select-none animate-in fade-in slide-in-from-bottom-4 max-w-[95vw]`}
+                className={`absolute ${isMobileScreen ? 'bottom-12' : 'bottom-10'} left-1/2 -translate-x-1/2 z-[500] flex items-center gap-2 sm:gap-3 bg-slate-900/90 backdrop-blur text-white px-3.5 sm:px-4 py-2 rounded-full shadow-xl border border-slate-700 cursor-grab active:cursor-grabbing select-none animate-in fade-in slide-in-from-bottom-4 max-w-[95vw]`}
                 style={{ 
                     transform: `translate(calc(-50% + ${measureToolOffset.x}px), ${measureToolOffset.y}px)`
                 }}
@@ -2363,7 +2358,7 @@ const LiveTrackingInner = () => {
             >
                  <div className="flex items-center gap-1.5 text-yellow-400 flex-shrink-0">
                       <Ruler size={16} />
-                      <span className="text-xs sm:text-sm font-bold whitespace-nowrap">{isIOSMode ? 'Distance' : 'Measurement Mode'}</span>
+                      <span className="text-xs sm:text-sm font-bold whitespace-nowrap">{isMobileScreen ? 'Distance' : 'Measurement Mode'}</span>
                  </div>
                  
                  <div className="h-4 sm:h-5 w-px bg-slate-600 mx-0.5 sm:mx-1 flex-shrink-0"></div>
@@ -2396,11 +2391,11 @@ const LiveTrackingInner = () => {
 
         {/* Smart Geo-Search Bar (Top Center) */}
         {!isMeasuring && (
-        <div className={`absolute ${isIOSMode ? 'top-3 left-1/2 -translate-x-1/2 w-[55vw] max-w-[210px] xs:max-w-[240px] md:max-w-md' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
+        <div className={`absolute ${isMobileScreen ? 'top-3 left-1/2 -translate-x-1/2 w-[55vw] max-w-[210px] xs:max-w-[240px] md:max-w-md' : 'top-16 sm:top-4 left-1/2 -translate-x-1/2'} z-[390] flex flex-col items-center shadow-lg rounded-xl`}>
              <div className="relative group shadow-lg rounded-xl w-full">
                  <form 
                     onSubmit={handleGeoSearch}
-                    className={`flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 ${isIOSMode ? 'w-full' : 'w-64 sm:w-80 focus-within:w-72 sm:focus-within:w-96'} focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden`}
+                    className={`flex items-center bg-white rounded-xl border border-gray-200 transition-all duration-200 ${isMobileScreen ? 'w-full' : 'w-64 sm:w-80 focus-within:w-72 sm:focus-within:w-96'} focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent overflow-hidden`}
                  >
                      <Globe className="ml-2 text-blue-500 flex-shrink-0" size={14} />
                      <input 
@@ -2496,7 +2491,7 @@ const LiveTrackingInner = () => {
         })()}
 
         {/* Map Controls (Left) */}
-        {isIOSMode ? (
+        {isMobileScreen ? (
           <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
             <div className="relative">
               <button
@@ -3180,7 +3175,7 @@ const LiveTrackingInner = () => {
         )}
 
         {/* Search Bar (Desktop Only) */}
-        {!isIOSMode && (
+        {!isMobileScreen && (
           <div className="absolute top-4 left-14 sm:left-16 z-[400] max-w-[calc(100vw-170px)] sm:max-w-none">
               <div className="relative group">
                   <div className={`flex items-center bg-white rounded-lg shadow-md border border-gray-200 transition-all duration-200 ${isSearchFocused || searchQuery ? 'w-44 xs:w-56 sm:w-64 ring-2 ring-brand-500 border-transparent' : 'w-32 xs:w-44 sm:w-56'}`}>
@@ -3269,12 +3264,12 @@ const LiveTrackingInner = () => {
         )}
 
         {/* Status Filter Dropdown */}
-        <div className={`absolute ${isIOSMode ? 'top-3 right-3' : 'top-4 right-3 sm:right-4'} z-[400]`}>
+        <div className={`absolute ${isMobileScreen ? 'top-3 right-3' : 'top-4 right-3 sm:right-4'} z-[400]`}>
              <div className="relative">
                 <button
                     onClick={(e) => { e.stopPropagation(); closeAllDropdowns(); setStatusDropdownOpen(!statusDropdownOpen); }}
                     className={`flex items-center justify-center bg-white rounded-xl shadow-md hover:bg-gray-50 border border-gray-200 transition-all ${
-                      isIOSMode ? 'p-2.5' : 'gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2'
+                      isMobileScreen ? 'p-2.5' : 'gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2'
                     }`}
                     title="Filter Transmitters by Status"
                 >
@@ -3285,7 +3280,7 @@ const LiveTrackingInner = () => {
                         selectedStatus === 'mortality' ? 'bg-[#FFAA33]' : 
                         selectedStatus === 'static' ? 'bg-[#FFEA00]' : 'bg-gray-900'
                     }`} />
-                    {!isIOSMode && (
+                    {!isMobileScreen && (
                       <>
                         <span className="text-xs sm:text-sm font-medium text-gray-700 max-w-[80px] xs:max-w-[110px] sm:max-w-none truncate">
                             {selectedStatus === 'all' ? 'All Statuses' : 
@@ -3333,7 +3328,7 @@ const LiveTrackingInner = () => {
 
         {/* Legend */}
         {activeWeatherLayer === 'temp_new' && (
-            isIOSMode ? (
+            isMobileScreen ? (
                 /* iOS: vertical compact legend on left side, 50% reduced size */
                 <div
                     className="absolute left-2 z-[400] select-none"
@@ -3430,7 +3425,7 @@ const LiveTrackingInner = () => {
 
     return (
         <div className="relative w-full h-full">
-            {isIOSMode ? (
+            {isMobileScreen ? (
               /* iOS Mode: Bulk tools icon on top-left + Fullscreen button directly under it */
               <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
                 <div className="relative">
@@ -3545,7 +3540,7 @@ const LiveTrackingInner = () => {
               </div>
             )}
 
-            <div className={`w-full h-full ${isIOSMode ? 'pt-0' : 'pt-16'} bg-slate-900`}>
+            <div className={`w-full h-full ${isMobileScreen ? 'pt-0' : 'pt-16'} bg-slate-900`}>
                 <iframe
                     src={windyUrl}
                     className="w-full h-full border-none"
@@ -3564,7 +3559,7 @@ const LiveTrackingInner = () => {
 
     return (
         <div className="relative w-full h-full">
-            {isIOSMode ? (
+            {isMobileScreen ? (
               <div className="absolute top-3 left-3 z-[500] flex flex-col gap-2">
                 <button
                   onClick={(e) => {
@@ -3600,7 +3595,7 @@ const LiveTrackingInner = () => {
                    </button>
               </div>
             )}
-            <div className={`w-full h-full ${isIOSMode ? 'pt-0' : 'pt-16'} bg-slate-900`}>
+            <div className={`w-full h-full ${isMobileScreen ? 'pt-0' : 'pt-16'} bg-slate-900`}>
                 <iframe
                     src={meteoblueUrl}
                     className="w-full h-full border-none"

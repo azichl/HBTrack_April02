@@ -315,14 +315,13 @@ export const Database = () => {
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [showManageMenu, setShowManageMenu] = useState(false);
 
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   useEffect(() => {
-    if (isIOSMode) {
+    if (isMobileScreen) {
       setDatabaseActiveTab('Data Upload');
     }
-  }, [isIOSMode, setDatabaseActiveTab]);
+  }, [isMobileScreen, setDatabaseActiveTab]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -363,7 +362,7 @@ export const Database = () => {
       className={`space-y-4 transition-all duration-300 ${isFullscreen ? 'p-6 bg-gray-50 dark:bg-slate-900 overflow-y-auto h-screen w-screen fixed top-0 left-0 z-50' : ''}`}
     >
       {/* Header & Navigation — hidden on iOS mode to present clean Data Ingestion view */}
-      {!isIOSMode && (
+      {!isMobileScreen && (
         <div className="flex flex-row justify-between items-center gap-4">
           {/* Tab Navigation */}
           <div className="bg-white dark:bg-slate-800 p-1 rounded-xl border border-gray-200 dark:border-slate-700 inline-flex shadow-sm flex-nowrap overflow-x-auto gap-1 w-full md:w-auto">
@@ -437,7 +436,7 @@ export const Database = () => {
 
       {/* Content Area */}
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 h-full flex flex-col">
-        {isIOSMode ? (
+        {isMobileScreen ? (
           <DataUpload />
         ) : (
           <>

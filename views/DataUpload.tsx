@@ -122,10 +122,9 @@ export const DataUpload = () => {
       importTransmitters, importBirds, assignTransmitterToBird, transmitters,
   } = useAppStore();
 
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
-  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
-  const [activeTab, setActiveTab] = useState<'manual' | 'api'>(isIOSMode ? 'api' : 'manual');
+  const [activeTab, setActiveTab] = useState<'manual' | 'api'>(isMobileScreen ? 'api' : 'manual');
 
   // Manual Upload State
   const [dragActive, setDragActive] = useState(false);
@@ -627,7 +626,7 @@ export const DataUpload = () => {
     setLogs([]);
     setRawResponse('');
     setSyncStats(null);
-    if (isIOSMode) {
+    if (isMobileScreen) {
       setShowLogModal(true);
     }
     addLog(`Initiating connection process [${isSimulationMode ? 'SIMULATION' : 'LIVE'}]...`);
@@ -652,7 +651,7 @@ export const DataUpload = () => {
             
             addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items. Synced to Firebase.`);
             setSyncStats({transmitters: 0, positions: 0});
-            if (isIOSMode) {
+            if (isMobileScreen) {
               setShowSuccessToast(true);
               setTimeout(() => setShowLogModal(false), 2000);
               setTimeout(() => setShowSuccessToast(false), 5000);
@@ -729,7 +728,7 @@ export const DataUpload = () => {
         setApiStatus('success');
         addLog(`Operation Complete. Store Updated.`);
 
-        if (isIOSMode) {
+        if (isMobileScreen) {
           setShowSuccessToast(true);
           setTimeout(() => setShowLogModal(false), 2000);
           setTimeout(() => setShowSuccessToast(false), 5000);
@@ -768,7 +767,7 @@ export const DataUpload = () => {
 
   const guide = getDataGuide();
 
-  if (isIOSMode) {
+  if (isMobileScreen) {
     return (
       <div className="space-y-4 p-2 max-w-md mx-auto animate-in fade-in duration-300">
         {/* Title Tile */}
@@ -942,10 +941,10 @@ export const DataUpload = () => {
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Data Ingestion</h2>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-0.5">
-            {isIOSMode ? "Import tracking data via Argos CLS API." : "Import tracking data via File Upload or Argos CLS API."}
+            {isMobileScreen ? "Import tracking data via Argos CLS API." : "Import tracking data via File Upload or Argos CLS API."}
           </p>
         </div>
-        {!isIOSMode && (
+        {!isMobileScreen && (
           <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
               <button 
                   onClick={() => setActiveTab('manual')}

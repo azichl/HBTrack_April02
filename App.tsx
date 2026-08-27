@@ -357,16 +357,7 @@ const App = () => {
              const userData = userDoc.data();
              const appAccess = userData.appAccess || ['web', 'ios'];
              
-             const searchParams = new URLSearchParams(window.location.search);
-             const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
-
-             if (isIOSMode && !appAccess.includes('ios')) {
-                setAccessError("account not activated");
-                await signOut(auth);
-                setAuthLoading(false);
-                return;
-             }
-             if (!isIOSMode && !appAccess.includes('web')) {
+             if (!appAccess.includes('web')) {
                 setAccessError("account not activated");
                 await signOut(auth);
                 setAuthLoading(false);
@@ -457,7 +448,7 @@ const App = () => {
 
   const searchParams = new URLSearchParams(window.location.search);
   const isStandalone = searchParams.get('standalone') === 'true';
-  const isIOSMode = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || (typeof window !== 'undefined' && ((window as any).isIOSApp || (window as any).isNativeIOS));
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
   const urlTab = searchParams.get('tab');
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
@@ -610,7 +601,7 @@ const App = () => {
           />
         )}
 
-        {!isIOSMode && (
+        {!isMobileScreen && (
           <div className={`
               fixed inset-y-0 left-0 z-[1000] w-64 bg-white dark:bg-slate-900 transition-transform duration-300 shadow-2xl lg:shadow-none lg:static lg:transform-none lg:transition-[width] lg:overflow-hidden
               ${sidebarOpen ? 'translate-x-0 lg:w-64' : '-translate-x-full lg:w-0'}
@@ -621,7 +612,7 @@ const App = () => {
 
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
           {/* Top Header (Web Mode Only) */}
-          {!isIOSMode && (
+          {!isMobileScreen && (
             <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">
               <div className="flex items-center gap-4 flex-1">
                 <button
@@ -673,7 +664,7 @@ const App = () => {
           )}
 
           {/* Standalone Integrated Exit / Logout Button (iOS Mode Only - Top Right) */}
-          {isIOSMode && (
+          {isMobileScreen && (
             <button
               onClick={handleLogout}
               onTouchEnd={(e) => {
@@ -691,14 +682,14 @@ const App = () => {
           )}
 
           {/* Main Content Area */}
-          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isIOSMode ? 'pb-16' : ''}`}>
+          <main className={`flex-1 overflow-hidden relative bg-gray-50/50 dark:bg-slate-900/50 flex flex-col ${isMobileScreen ? 'pb-16' : ''}`}>
             <div className="flex-1 overflow-y-auto p-4 md:p-6 w-full mx-auto flex flex-col h-full">
                {renderContent()}
             </div>
           </main>
 
           {/* Render iOS Bottom Tab Bar when in iOS mode or mobile device */}
-          {isIOSMode && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
+          {isMobileScreen && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
         </div>
       </div>
     </div>

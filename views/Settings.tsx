@@ -17,17 +17,12 @@ export const Settings = () => {
     simpleMode, toggleSimpleMode
   } = useAppStore();
 
-  const isIOSMode = React.useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    const searchParams = new URLSearchParams(window.location.search);
-    return searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
-  }, []);
+  const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search);
-      const isIOS = searchParams.get('mode') === 'ios' || searchParams.get('app') === 'ios' || !!(window as any).isIOSApp || !!(window as any).isNativeIOS;
-      if (isIOS) return 'preferences';
+      const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+      if (isMobile) return 'preferences';
     }
     return 'profile';
   });
@@ -123,12 +118,12 @@ export const Settings = () => {
     { id: 'security', label: 'Security', icon: Shield },
   ];
 
-  const tabs = isIOSMode ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') : allTabs;
+  const tabs = isMobileScreen ? allTabs.filter(t => t.id === 'preferences' || t.id === 'security') : allTabs;
 
   return (
-    <div className={`w-full max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isIOSMode ? 'pt-1 px-1' : ''}`}>
+    <div className={`w-full max-w-5xl mx-auto space-y-4 animate-fade-in pb-16 ${isMobileScreen ? 'pt-1 px-1' : ''}`}>
       {/* Header (Web Mode Only) */}
-      {!isIOSMode && (
+      {!isMobileScreen && (
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Settings</h2>
@@ -156,14 +151,14 @@ export const Settings = () => {
       )}
 
       {/* Save Message Alert for iOS Mode */}
-      {isIOSMode && saveMessage && (
+      {isMobileScreen && saveMessage && (
         <div className={`text-sm font-medium px-4 py-2 rounded-xl border ${saveMessage.startsWith('Error') ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800' : 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'}`}>
           {saveMessage}
         </div>
       )}
 
       {/* Tabs */}
-      <div className={`flex overflow-x-auto pb-1 md:pb-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-1 ${isIOSMode ? 'pr-14' : ''}`}>
+      <div className={`flex overflow-x-auto pb-1 md:pb-0 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-sm p-1 ${isMobileScreen ? 'pr-14' : ''}`}>
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;

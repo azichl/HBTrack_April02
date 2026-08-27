@@ -1,17 +1,12 @@
 import SwiftUI
 
 struct ContentView: View {
-    // Default target URL (includes ?mode=ios parameter for automatic Dashboard, Live Map & Data Upload filtering)
-    @State private var appURLString: String = "https://trackapp-v2.web.app/?mode=ios"
+    // Production target URL (direct clean URL, no cloaking parameters)
+    private let appURL: URL = URL(string: "https://trackapp-v2.web.app")!
     @State private var isLoading: Bool = true
     @State private var canGoBack: Bool = false
     @State private var hasError: Bool = false
     @State private var reloadTrigger: Bool = false
-    @State private var showSettings: Bool = false
-
-    var currentURL: URL {
-        URL(string: appURLString) ?? URL(string: "https://trackapp-v2.web.app/?mode=ios")!
-    }
 
     var body: some View {
         ZStack {
@@ -30,13 +25,6 @@ struct ContentView: View {
                     }
 
                     Spacer()
-
-                    // Quick URL / Environment switcher
-                    Button(action: { showSettings.toggle() }) {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.gray)
-                    }
 
                     Button(action: { reloadTrigger.toggle() }) {
                         Image(systemName: "arrow.clockwise")
@@ -60,7 +48,7 @@ struct ContentView: View {
                             .font(.title2)
                             .bold()
 
-                        Text("Please check your internet connection or server settings and try again.")
+                        Text("Please check your internet connection and try again.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -85,7 +73,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     WebView(
-                        url: currentURL,
+                        url: appURL,
                         isLoading: $isLoading,
                         canGoBack: $canGoBack,
                         hasError: $hasError,
@@ -106,48 +94,6 @@ struct ContentView: View {
                         .shadow(radius: 10)
                 }
             }
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsSheet(appURLString: $appURLString, onSave: {
-                showSettings = false
-                reloadTrigger.toggle()
-            })
-        }
-    }
-}
-
-struct SettingsSheet: View {
-    @Binding var appURLString: String
-    var onSave: () -> Void
-    @Environment(\.dismiss) var dismiss
-
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("App Web Server URL")) {
-                    TextField("Enter web URL", text: $appURLString)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-                        .keyboardType(.URL)
-
-                    Button("Reset to Production") {
-                        appURLString = "https://trackapp-v2.web.app/?mode=ios"
-                    }
-
-                    Button("Use Local Dev Server (localhost:5173)") {
-                        appURLString = "http://localhost:5173/?mode=ios"
-                    }
-                }
-
-                Section(footer: Text("Adding ?mode=ios filters navigation to Dashboard, Live Map & Data Ingestion.")) {
-                    EmptyView()
-                }
-            }
-            .navigationTitle("Server Config")
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() },
-                trailing: Button("Save") { onSave(); dismiss() }
-            )
         }
     }
 }
