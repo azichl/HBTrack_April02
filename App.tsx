@@ -621,7 +621,7 @@ const App = () => {
 
       <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-900 font-sans text-slate-900 dark:text-gray-100 transition-colors duration-300 pt-[env(safe-area-inset-top,0px)]">
 
-        {!isIOSMode && sidebarOpen && (
+        {!isMobileScreen && sidebarOpen && (
           <div
             className="fixed inset-0 z-[990] bg-black/50 backdrop-blur-sm lg:hidden"
             onClick={toggleSidebar}

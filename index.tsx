@@ -1,4 +1,4 @@
-import React, { Component, ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
@@ -11,7 +11,7 @@ interface ErrorBoundaryState {
   error?: Error | null;
 }
 
-class GlobalErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class GlobalErrorBoundary extends (React.Component as any) {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
