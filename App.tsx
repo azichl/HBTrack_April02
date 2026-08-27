@@ -469,8 +469,35 @@ const App = () => {
     );
   }
 
-  if (!currentUser && !showAppIntro) {
-    return <Login externalError={accessError} />;
+  if (!currentUser) {
+    return (
+      <>
+        {showAppIntro && (
+          <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950 text-white pointer-events-none transition-all duration-700">
+            <style>{`
+              @keyframes logoIntroZoom {
+                0% { transform: scale(2.2); opacity: 0; filter: blur(8px); }
+                20% { transform: scale(1.1); opacity: 1; filter: blur(0px); }
+                75% { transform: scale(1.0); opacity: 1; filter: blur(0px); }
+                100% { transform: scale(0.3); opacity: 0; filter: blur(10px); }
+              }
+            `}</style>
+            <div className="animate-[logoIntroZoom_3.6s_cubic-bezier(0.16,1,0.3,1)_forwards] flex flex-col items-center justify-center p-6 text-center">
+              <img 
+                src="/ministry-logo-pure-white.png" 
+                alt="Ministry Logo" 
+                className="w-80 max-w-[88vw] h-auto object-contain drop-shadow-[0_12px_35px_rgba(0,0,0,0.9)] mb-6" 
+              />
+              <div className="mt-3 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-brand-500 animate-ping" />
+                <span className="text-xs text-brand-400 font-semibold tracking-wider uppercase">Loading Application...</span>
+              </div>
+            </div>
+          </div>
+        )}
+        <Login externalError={accessError} />
+      </>
+    );
   }
 
   const renderContent = () => {
