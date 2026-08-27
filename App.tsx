@@ -357,7 +357,7 @@ const App = () => {
              const userData = userDoc.data();
              const appAccess = userData.appAccess || ['web', 'ios'];
              
-             if (!appAccess.includes('web')) {
+             if (Array.isArray(appAccess) && appAccess.length > 0 && !appAccess.includes('web') && !appAccess.includes('ios')) {
                 setAccessError("account not activated");
                 await signOut(auth);
                 setAuthLoading(false);
