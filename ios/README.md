@@ -19,22 +19,18 @@ The app uses a lightweight SwiftUI `WKWebView` wrapper to load the React web app
 
 ---
 
-## 📱 Features & Module Filtering
+## 📱 Application Modules
 
-When launched, the iOS app automatically loads with `?mode=ios` parameter. This instructs the React web app to display **ONLY**:
+When launched, the iOS app loads directly from the secure production endpoint:
+```
+https://trackapp-v2.web.app
+```
+
+The application provides a streamlined, responsive mobile experience with 4 primary navigation tabs:
 1. **Dashboard** — System KPIs, transmitter counts, status overviews
-2. **Live Tracking Map** — Real-time Houbara bird positions, terrain layers, Layers/Weather/History tools
-3. **Data Upload / API Ingestion** — Argos API ingestion, CLS CSV import
-
-**iOS-specific map behavior:**
-- ✅ Map Layers panel (switch basemap tiles)
-- ✅ Weather overlay popup
-- ✅ History panel (track position history)
-- ✅ GPS auto-fly to current location
-- ✅ Distance measurement tool
-- ❌ AI Forecast (hidden on iOS)
-- ❌ GEE satellite analysis layers (hidden on iOS)
-- ❌ Mark as Dead button (hidden on iOS)
+2. **Live Map** — Real-time Houbara bird positions, terrain layers, interactive popups, weather overlays, and distance measurement HUD
+3. **Data Upload** — Argos CLS API ingestion and data synchronization
+4. **Settings** — Theme preferences (Dark / Light mode), account security, and Sign Out action
 
 ---
 
@@ -45,16 +41,16 @@ When launched, the iOS app automatically loads with `?mode=ios` parameter. This 
    ```
    HBTrack.xcodeproj
    ```
-3. Choose your target simulator (e.g., **iPhone 15 Pro**) or connected physical iOS device.
+3. Choose your target simulator (e.g., **iPhone 16 Pro**) or connected physical iOS device.
 4. Press `Cmd + R` or click the **Run ▶** button in Xcode.
 
 ---
 
-## ⚙️ Configurable Web App URL
+## ⚙️ Production Web App URL
 
-By default, the app loads:
+The app connects directly to:
 ```
-https://trackapp-v2.web.app/?mode=ios
+https://trackapp-v2.web.app
 ```
 
 ### Changing URL for Local Testing:
