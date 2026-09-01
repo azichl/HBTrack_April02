@@ -16,6 +16,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
     var manufacturer: String?
     var program_region: String?
     var site_location: String?
+    var bird_id: String?
+    var assigned_bird_ring: String?
     
     var effectiveStatus: String {
         return derived_status ?? status

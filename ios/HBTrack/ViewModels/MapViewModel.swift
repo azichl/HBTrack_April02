@@ -44,7 +44,12 @@ class MapViewModel: ObservableObject {
     
     @Published var isMeasuring: Bool = false
     @Published var measurePoints: [CLLocationCoordinate2D] = []
-    @Published var totalDistanceMeters: Double = 0.0
+    @Published var totalMeasureDistance: Double = 0.0
+    
+    var totalDistanceMeters: Double {
+        get { totalMeasureDistance }
+        set { totalMeasureDistance = newValue }
+    }
     
     @Published var mapStyle: MapStyleOption = .standard
     @Published var region: MKCoordinateRegion = MKCoordinateRegion(
@@ -52,7 +57,14 @@ class MapViewModel: ObservableObject {
         span: MKCoordinateSpan(latitudeDelta: 6.0, longitudeDelta: 6.0)
     )
     
-    @Published var searchText: String = ""
+    @Published var searchQuery: String = ""
+    @Published var searchResults: [Transmitter] = []
+    
+    var searchText: String {
+        get { searchQuery }
+        set { searchQuery = newValue }
+    }
+    
     @Published var isLoading: Bool = false
     
     private var positionsListener: ListenerRegistration?
@@ -151,6 +163,10 @@ class MapViewModel: ObservableObject {
         }
     }
     
+    func selectTransmitter(_ annotation: TransmitterMapAnnotation) {
+        selectTransmitter(annotation.transmitter)
+    }
+    
     func loadHistory() async {
         guard let transmitter = selectedTransmitter else { return }
         isLoading = true
@@ -189,12 +205,12 @@ class MapViewModel: ObservableObject {
     
     func clearMeasurement() {
         measurePoints.removeAll()
-        totalDistanceMeters = 0.0
+        totalMeasureDistance = 0.0
     }
     
     private func calculateTotalDistance() {
         guard measurePoints.count > 1 else {
-            totalDistanceMeters = 0.0
+            totalMeasureDistance = 0.0
             return
         }
         
@@ -202,7 +218,7 @@ class MapViewModel: ObservableObject {
         for i in 0..<(measurePoints.count - 1) {
             total += HaversineDistance.distance(from: measurePoints[i], to: measurePoints[i + 1])
         }
-        totalDistanceMeters = total
+        totalMeasureDistance = total
     }
     
     func flyTo(_ coordinate: CLLocationCoordinate2D) {
@@ -213,9 +229,19 @@ class MapViewModel: ObservableObject {
     }
     
     func search() {
-        guard !searchText.isEmpty else { return }
-        if let match = annotations.first(where: { $0.transmitter.platform_id.localizedCaseInsensitiveContains(searchText) }) {
-            selectTransmitter(match.transmitter)
+        let clean = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else {
+            searchResults = []
+            return
+        }
+        
+        searchResults = transmitters.filter {
+            $0.platform_id.localizedCaseInsensitiveContains(clean) ||
+            ($0.assigned_bird_ring ?? "").localizedCaseInsensitiveContains(clean)
+        }
+        
+        if let match = annotations.first(where: { $0.transmitter.platform_id.localizedCaseInsensitiveContains(clean) }) {
+            flyTo(match.coordinate)
         }
     }
 }
