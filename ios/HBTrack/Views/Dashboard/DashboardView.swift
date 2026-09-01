@@ -71,16 +71,16 @@ struct DashboardView: View {
                         .padding(.vertical)
                     }
                     .refreshable {
-                        await viewModel.loadData()
+                        await viewModel.loadData(forceRefresh: true)
                     }
                 }
             }
             .navigationTitle("Dashboard")
             .task {
-                await viewModel.loadData()
-            }
-            .onAppear {
-                viewModel.subscribeToUpdates()
+                if viewModel.transmitters.isEmpty {
+                    await viewModel.loadData()
+                    viewModel.subscribeToUpdates()
+                }
             }
         }
     }

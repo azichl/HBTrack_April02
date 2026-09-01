@@ -19,6 +19,18 @@ struct StatusColor {
         }
     }
     
+    static func uiColor(for status: String?) -> UIColor {
+        guard let status = status else { return .systemGray }
+        switch status.lowercased() {
+        case "active": return UIColor(red: 34/255, green: 197/255, blue: 94/255, alpha: 1.0)
+        case "static test": return UIColor(red: 234/255, green: 179/255, blue: 8/255, alpha: 1.0)
+        case "potential mortality": return UIColor(red: 249/255, green: 115/255, blue: 22/255, alpha: 1.0)
+        case "inactive": return UIColor(red: 15/255, green: 23/255, blue: 42/255, alpha: 1.0)
+        case "dead": return UIColor(red: 220/255, green: 38/255, blue: 38/255, alpha: 1.0)
+        default: return .systemGray
+        }
+    }
+    
     static let alertCritical = Color.red
     static let alertWarning = Color.orange
     static let alertInfo = Color.blue

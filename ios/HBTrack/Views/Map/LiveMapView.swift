@@ -36,11 +36,10 @@ struct LiveMapView: View {
             }
         }
         .task {
-            await viewModel.loadData()
-        }
-        .onAppear {
-            viewModel.subscribeToPositions()
-            viewModel.buildAnnotations(visibilityFilter: authVM.isTransmitterVisible)
+            if viewModel.transmitters.isEmpty {
+                await viewModel.loadData(visibilityFilter: authVM.isTransmitterVisible)
+                viewModel.subscribeToPositions(visibilityFilter: authVM.isTransmitterVisible)
+            }
         }
         .sheet(isPresented: $viewModel.showDetail) {
             TransmitterDetailSheet(viewModel: viewModel, authRole: authVM.currentUserRole)

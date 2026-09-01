@@ -24,4 +24,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
     var statusColor: Color {
         return StatusColor.color(for: effectiveStatus)
     }
+    
+    var statusUIColor: UIColor {
+        return StatusColor.uiColor(for: effectiveStatus)
+    }
 }

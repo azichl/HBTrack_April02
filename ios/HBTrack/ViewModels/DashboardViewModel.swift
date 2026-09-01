@@ -76,15 +76,17 @@ class DashboardViewModel: ObservableObject {
             .map { $0 }
     }
     
-    func loadData() async {
-        isLoading = true
+    func loadData(forceRefresh: Bool = false) async {
+        if transmitters.isEmpty {
+            isLoading = true
+        }
         defer { isLoading = false }
         
         do {
-            async let fetchedTransmitters = TransmitterService.shared.fetchAllTransmitters()
-            async let fetchedBirds = TransmitterService.shared.fetchAllBirds()
-            async let fetchedPositions = TransmitterService.shared.fetchLatestPositions()
-            async let fetchedAlerts = TransmitterService.shared.fetchAlerts()
+            async let fetchedTransmitters = TransmitterService.shared.fetchAllTransmitters(forceRefresh: forceRefresh)
+            async let fetchedBirds = TransmitterService.shared.fetchAllBirds(forceRefresh: forceRefresh)
+            async let fetchedPositions = TransmitterService.shared.fetchLatestPositions(forceRefresh: forceRefresh)
+            async let fetchedAlerts = TransmitterService.shared.fetchAlerts(forceRefresh: forceRefresh)
             
             self.transmitters = try await fetchedTransmitters
             self.birds = try await fetchedBirds

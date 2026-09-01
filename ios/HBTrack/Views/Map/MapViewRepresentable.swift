@@ -9,7 +9,7 @@ struct MapViewRepresentable: UIViewRepresentable {
         mapView.delegate = context.coordinator
         mapView.setRegion(viewModel.region, animated: false)
         mapView.showsUserLocation = true
-        mapView.register(MKAnnotationView.self, forAnnotationViewWithReuseIdentifier: "TransmitterAnnotation")
+        mapView.register(MKMarkerAnnotationView.self, forAnnotationViewWithReuseIdentifier: "TransmitterAnnotation")
         
         let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(context.coordinator.handleTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
@@ -25,28 +25,25 @@ struct MapViewRepresentable: UIViewRepresentable {
         case .hybrid: uiView.mapType = .hybrid
         }
         
-        // Sync Region (avoid feedback loops if user is panning)
-        // In a full implementation, you'd want to separate programmatic flying vs user panning.
-        // uiView.setRegion(viewModel.region, animated: true)
-        
-        // Update Annotations
+        // Update Annotations efficiently
         let currentAnnotations = uiView.annotations.compactMap { $0 as? CustomPointAnnotation }
+        let currentIds = Set(currentAnnotations.map { $0.annotationModel.id })
         let newIds = Set(viewModel.annotations.map { $0.id })
         
-        // Remove old
-        let toRemove = currentAnnotations.filter { !newIds.contains($0.annotationModel.id) }
-        uiView.removeAnnotations(toRemove)
-        
-        // Add new
-        let currentIds = Set(currentAnnotations.map { $0.annotationModel.id })
-        let toAdd = viewModel.annotations.filter { !currentIds.contains($0.id) }
-        
-        let newPointAnnotations = toAdd.map { model -> CustomPointAnnotation in
-            let ann = CustomPointAnnotation(annotationModel: model)
-            ann.coordinate = model.coordinate
-            return ann
+        if currentIds != newIds {
+            let toRemove = currentAnnotations.filter { !newIds.contains($0.annotationModel.id) }
+            uiView.removeAnnotations(toRemove)
+            
+            let toAdd = viewModel.annotations.filter { !currentIds.contains($0.id) }
+            let newPointAnnotations = toAdd.map { model -> CustomPointAnnotation in
+                let ann = CustomPointAnnotation(annotationModel: model)
+                ann.coordinate = model.coordinate
+                ann.title = "PTT \(model.transmitter.platform_id)"
+                ann.subtitle = model.transmitter.effectiveStatus
+                return ann
+            }
+            uiView.addAnnotations(newPointAnnotations)
         }
-        uiView.addAnnotations(newPointAnnotations)
         
         // Update Overlays (History Polyline & Measurement)
         uiView.removeOverlays(uiView.overlays)
@@ -97,51 +94,48 @@ struct MapViewRepresentable: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if let customAnnotation = annotation as? CustomPointAnnotation {
                 let identifier = "TransmitterAnnotation"
-                var view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                let markerView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier, for: annotation) as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
                 
-                if view == nil {
-                    view = MKAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
-                    view?.canShowCallout = false
-                } else {
-                    view?.annotation = customAnnotation
-                }
+                let tx = customAnnotation.annotationModel.transmitter
+                markerView.annotation = customAnnotation
+                markerView.markerTintColor = tx.statusUIColor
+                markerView.glyphImage = UIImage(systemName: "antenna.radiowaves.left.and.right")
+                markerView.glyphTintColor = .white
+                markerView.canShowCallout = true
+                markerView.displayPriority = .required
                 
-                // Use SwiftUI view inside MKAnnotationView
-                let swiftUIView = TransmitterAnnotation(
-                    annotation: customAnnotation.annotationModel,
-                    isSelected: parent.viewModel.selectedTransmitter?.id == customAnnotation.annotationModel.transmitter.id
-                )
+                let btn = UIButton(type: .detailDisclosure)
+                markerView.rightCalloutAccessoryView = btn
                 
-                let hostingController = UIHostingController(rootView: swiftUIView)
-                hostingController.view.backgroundColor = .clear
-                hostingController.view.frame = CGRect(x: 0, y: 0, width: 30, height: 30)
-                
-                view?.subviews.forEach { $0.removeFromSuperview() }
-                view?.addSubview(hostingController.view)
-                view?.frame = hostingController.view.frame
-                
-                return view
+                return markerView
             }
             
             if annotation.title == "measure_point" {
                 let identifier = "MeasurePoint"
-                var view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
-                if view == nil {
-                    view = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
-                }
-                let circleView = UIView(frame: CGRect(x: 0, y: 0, width: 10, height: 10))
-                circleView.backgroundColor = .systemBlue
-                circleView.layer.cornerRadius = 5
-                circleView.layer.borderColor = UIColor.white.cgColor
-                circleView.layer.borderWidth = 2
-                
-                view?.subviews.forEach { $0.removeFromSuperview() }
-                view?.addSubview(circleView)
-                view?.frame = circleView.frame
-                return view
+                let markerView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                markerView.markerTintColor = .systemBlue
+                markerView.glyphImage = UIImage(systemName: "circle.fill")
+                markerView.canShowCallout = false
+                return markerView
             }
             
             return nil
+        }
+        
+        func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
+            if let customAnnotation = view.annotation as? CustomPointAnnotation {
+                DispatchQueue.main.async {
+                    self.parent.viewModel.selectTransmitter(customAnnotation.annotationModel.transmitter)
+                }
+            }
+        }
+        
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            if let customAnnotation = view.annotation as? CustomPointAnnotation {
+                DispatchQueue.main.async {
+                    self.parent.viewModel.selectTransmitter(customAnnotation.annotationModel.transmitter)
+                }
+            }
         }
         
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -158,20 +152,6 @@ struct MapViewRepresentable: UIViewRepresentable {
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
-        }
-        
-        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
-            if let customAnnotation = view.annotation as? CustomPointAnnotation {
-                DispatchQueue.main.async {
-                    self.parent.viewModel.selectTransmitter(customAnnotation.annotationModel)
-                }
-            }
-        }
-        
-        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-            DispatchQueue.main.async {
-                self.parent.viewModel.region = mapView.region
-            }
         }
     }
 }
