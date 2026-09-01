@@ -1,4 +1,6 @@
 import SwiftUI
+import CoreLocation
+import MapKit
 
 struct MapControlsView: View {
     @ObservedObject var viewModel: MapViewModel
