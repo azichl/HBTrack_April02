@@ -42,7 +42,7 @@ struct IngestionChart: View {
                     AxisMarks(values: .stride(by: .day)) { value in
                         if let date = value.as(Date.self) {
                             AxisValueLabel {
-                                Text(dateFormatter.string(from: date))
+                                Text(Self.dayFormatter.string(from: date))
                             }
                         }
                     }
@@ -57,9 +57,9 @@ struct IngestionChart: View {
         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
     
-    private var dateFormatter: DateFormatter {
+    private static let dayFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEE" // Abbreviated day name (e.g., Mon, Tue)
+        formatter.dateFormat = "EEE"
         return formatter
-    }
+    }()
 }
