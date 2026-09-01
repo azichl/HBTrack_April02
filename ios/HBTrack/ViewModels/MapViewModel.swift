@@ -136,7 +136,7 @@ class MapViewModel: ObservableObject {
         // Fast O(M) index of latest position per transmitter
         var latestPositionsByTx: [String: Position] = [:]
         for pos in positions {
-            let txId = pos.effectiveTransmitterId
+            guard let txId = pos.effectiveTransmitterId, !txId.isEmpty else { continue }
             if let existing = latestPositionsByTx[txId] {
                 if pos.timestamp > existing.timestamp {
                     latestPositionsByTx[txId] = pos
