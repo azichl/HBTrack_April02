@@ -70,8 +70,16 @@ class AuthViewModel: ObservableObject {
         }
     }
     
+    private var authListenerHandle: AuthStateDidChangeListenerHandle?
+    
+    deinit {
+        if let handle = authListenerHandle {
+            Auth.auth().removeStateDidChangeListener(handle)
+        }
+    }
+    
     func listenForAuthChanges() {
-        Auth.auth().addStateDidChangeListener { [weak self] _, user in
+        authListenerHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             guard let self = self else { return }
             Task { @MainActor in
                 self.currentUser = user

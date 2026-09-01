@@ -1,24 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-    ⚠️ PLACEHOLDER — REPLACE WITH REAL GoogleService-Info.plist
-    
-    Download from Firebase Console:
-    1. Go to https://console.firebase.google.com/project/trackapp-v2/settings/general
-    2. Under "Your apps", find the iOS app (com.houbara.hbtrack)
-    3. Click "GoogleService-Info.plist" download button
-    4. Replace this file with the downloaded one
-    
-    If no iOS app is registered yet:
-    1. Click "Add app" → iOS
-    2. Bundle ID: com.houbara.hbtrack
-    3. App nickname: RAF Tracking
-    4. Download the generated GoogleService-Info.plist
--->
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyD9MzJr1x2DZdBy8vu5-TvB-uX2UwbheUg</string>
+	<string>AIzaSyC45kLGhyb1I3px4jrOu5MjNjyyB9zy7jU</string>
 	<key>GCM_SENDER_ID</key>
 	<string>509636113713</string>
 	<key>PLIST_VERSION</key>
@@ -29,19 +14,19 @@
 	<string>trackapp-v2</string>
 	<key>STORAGE_BUCKET</key>
 	<string>trackapp-v2.firebasestorage.app</string>
-	<key>GOOGLE_APP_ID</key>
-	<string>1:509636113713:ios:REPLACE_WITH_REAL_APP_ID</string>
-	<key>DATABASE_URL</key>
-	<string></string>
 	<key>IS_ADS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_APPINVITE_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_GCM_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_SIGNIN_ENABLED</key>
-	<true/>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:509636113713:ios:93b9c6d3a2f32fad0b2c10</string>
+	<key>DATABASE_URL</key>
+	<string>https://trackapp-v2-default-rtdb.asia-southeast1.firebasedatabase.app</string>
 </dict>
 </plist>
