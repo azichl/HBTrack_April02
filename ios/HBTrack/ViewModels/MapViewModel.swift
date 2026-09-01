@@ -3,6 +3,36 @@ import MapKit
 import SwiftUI
 import FirebaseFirestore
 
+enum DatePreset: String, CaseIterable, Identifiable {
+    case twentyFourHours = "24 Hours"
+    case sevenDays = "7 Days"
+    case thirtyDays = "30 Days"
+    case oneYear = "1 Year"
+    case twoYears = "2 Years"
+    case custom = "Custom"
+    
+    var id: String { self.rawValue }
+    
+    func dateRange(customStart: Date, customEnd: Date) -> (Date, Date) {
+        let calendar = Calendar.current
+        let now = Date()
+        switch self {
+        case .twentyFourHours:
+            return (calendar.date(byAdding: .hour, value: -24, to: now) ?? now, now)
+        case .sevenDays:
+            return (calendar.date(byAdding: .day, value: -7, to: now) ?? now, now)
+        case .thirtyDays:
+            return (calendar.date(byAdding: .day, value: -30, to: now) ?? now, now)
+        case .oneYear:
+            return (calendar.date(byAdding: .year, value: -1, to: now) ?? now, now)
+        case .twoYears:
+            return (calendar.date(byAdding: .year, value: -2, to: now) ?? now, now)
+        case .custom:
+            return (customStart, customEnd)
+        }
+    }
+}
+
 enum MapStyleOption: String, CaseIterable, Identifiable {
     case standard = "Standard"
     case satellite = "Satellite"
@@ -42,6 +72,16 @@ class MapViewModel: ObservableObject {
     @Published var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @Published var customEndDate: Date = Date()
     
+    var historyDatePreset: DatePreset {
+        get { selectedDatePreset }
+        set { selectedDatePreset = newValue }
+    }
+    
+    var historyLocationType: String {
+        get { selectedLocationType }
+        set { selectedLocationType = newValue }
+    }
+    
     @Published var isMeasuring: Bool = false
     @Published var measurePoints: [CLLocationCoordinate2D] = []
     @Published var totalMeasureDistance: Double = 0.0
@@ -53,7 +93,7 @@ class MapViewModel: ObservableObject {
     
     @Published var mapStyle: MapStyleOption = .standard
     @Published var region: MKCoordinateRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 25.276987, longitude: 51.520008), // Centered on Gulf / Qatar region
+        center: CLLocationCoordinate2D(latitude: 25.276987, longitude: 51.520008),
         span: MKCoordinateSpan(latitudeDelta: 6.0, longitudeDelta: 6.0)
     )
     
@@ -123,8 +163,12 @@ class MapViewModel: ObservableObject {
         for transmitter in transmitters {
             guard visibilityFilter(transmitter.platform_id) else { continue }
             
-            if let latestPos = latestPositionsByTx[transmitter.platform_id] ?? latestPositionsByTx[transmitter.id ?? ""] {
-                let linkedBird = birdsByRing[transmitter.platform_id] ?? birdsByRing[transmitter.id ?? ""]
+            let txKey = transmitter.platform_id
+            let docId = transmitter.id ?? ""
+            
+            let posCandidate = latestPositionsByTx[txKey] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId])
+            if let latestPos = posCandidate {
+                let linkedBird = birdsByRing[txKey] ?? (docId.isEmpty ? nil : birdsByRing[docId])
                 
                 let annotation = TransmitterMapAnnotation(
                     id: transmitter.id ?? transmitter.platform_id,
@@ -188,6 +232,39 @@ class MapViewModel: ObservableObject {
             }
         } catch {
             print("Error loading history: \(error)")
+        }
+    }
+    
+    func markDead(userId: String, email: String, role: String) async {
+        guard let transmitter = selectedTransmitter else { return }
+        let docId = transmitter.id ?? transmitter.platform_id
+        do {
+            try await TransmitterService.shared.markTransmitterDead(
+                transmitterId: docId,
+                userId: userId,
+                userEmail: email,
+                userRole: role
+            )
+            if let index = transmitters.firstIndex(where: { $0.platform_id == transmitter.platform_id }) {
+                transmitters[index].derived_status = "Dead"
+                selectedTransmitter = transmitters[index]
+            }
+        } catch {
+            print("Error marking dead: \(error)")
+        }
+    }
+    
+    func unmarkDead() async {
+        guard let transmitter = selectedTransmitter else { return }
+        let docId = transmitter.id ?? transmitter.platform_id
+        do {
+            try await TransmitterService.shared.unmarkTransmitterDead(transmitterId: docId)
+            if let index = transmitters.firstIndex(where: { $0.platform_id == transmitter.platform_id }) {
+                transmitters[index].derived_status = "Active"
+                selectedTransmitter = transmitters[index]
+            }
+        } catch {
+            print("Error unmarking dead: \(error)")
         }
     }
     
