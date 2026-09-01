@@ -4,31 +4,59 @@ struct MainTabView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @AppStorage("isDarkMode") private var isDarkMode = false
     
+    init() {
+        // Configure UITabBar appearance
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.secondarySystemGroupedBackground
+        
+        // Active item color (Warm Gold)
+        appearance.stackedLayoutAppearance.selected.iconColor = AppTheme.brandGoldUI
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+            .foregroundColor: AppTheme.brandGoldUI,
+            .font: UIFont.systemFont(ofSize: 10, weight: .semibold)
+        ]
+        
+        // Inactive item color (Muted Slate)
+        appearance.stackedLayoutAppearance.normal.iconColor = UIColor(red: 148/255, green: 163/255, blue: 184/255, alpha: 1.0)
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+            .foregroundColor: UIColor(red: 148/255, green: 163/255, blue: 184/255, alpha: 1.0),
+            .font: UIFont.systemFont(ofSize: 10, weight: .regular)
+        ]
+        
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+    
     var body: some View {
         TabView {
             DashboardView()
                 .tabItem {
-                    Label("Dashboard", systemImage: "chart.bar.fill")
+                    Image(systemName: "square.grid.2x2")
+                    Text("Dashboard")
                 }
             
             LiveMapView()
                 .tabItem {
-                    Label("Live Map", systemImage: "map.fill")
+                    Image(systemName: "map")
+                    Text("Live Map")
                 }
             
             if authVM.canUploadData {
                 DataUploadView()
                     .tabItem {
-                        Label("Data Upload", systemImage: "arrow.up.doc.fill")
+                        Image(systemName: "cloud.fill")
+                        Text("Data Upload")
                     }
-                    .badge("!") // Optional badge
             }
             
             SettingsView()
                 .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
+                    Image(systemName: "gearshape")
+                    Text("Settings")
                 }
         }
+        .tint(AppTheme.brandGold)
         .preferredColorScheme(isDarkMode ? .dark : .light)
     }
 }

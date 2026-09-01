@@ -9,7 +9,7 @@ struct MapViewRepresentable: UIViewRepresentable {
         mapView.delegate = context.coordinator
         mapView.setRegion(viewModel.region, animated: false)
         mapView.showsUserLocation = true
-        mapView.register(MKMarkerAnnotationView.self, forAnnotationViewWithReuseIdentifier: "TransmitterAnnotation")
+        mapView.register(PTTBadgeAnnotationView.self, forAnnotationViewWithReuseIdentifier: "PTTBadgeAnnotationView")
         
         let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(context.coordinator.handleTap(_:)))
         mapView.addGestureRecognizer(tapGesture)
@@ -18,7 +18,7 @@ struct MapViewRepresentable: UIViewRepresentable {
     }
     
     func updateUIView(_ uiView: MKMapView, context: Context) {
-        // Update Map Style
+        // Update Map Style (Default to Hybrid/Satellite matching Screenshots)
         switch viewModel.mapStyle {
         case .standard: uiView.mapType = .standard
         case .satellite: uiView.mapType = .satellite
@@ -38,7 +38,7 @@ struct MapViewRepresentable: UIViewRepresentable {
             let newPointAnnotations = toAdd.map { model -> CustomPointAnnotation in
                 let ann = CustomPointAnnotation(annotationModel: model)
                 ann.coordinate = model.coordinate
-                ann.title = "PTT \(model.transmitter.platform_id)"
+                ann.title = model.transmitter.platform_id
                 ann.subtitle = model.transmitter.effectiveStatus
                 return ann
             }
@@ -93,21 +93,10 @@ struct MapViewRepresentable: UIViewRepresentable {
         
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if let customAnnotation = annotation as? CustomPointAnnotation {
-                let identifier = "TransmitterAnnotation"
-                let markerView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier, for: annotation) as? MKMarkerAnnotationView ?? MKMarkerAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
-                
-                let tx = customAnnotation.annotationModel.transmitter
-                markerView.annotation = customAnnotation
-                markerView.markerTintColor = tx.statusUIColor
-                markerView.glyphImage = UIImage(systemName: "antenna.radiowaves.left.and.right")
-                markerView.glyphTintColor = .white
-                markerView.canShowCallout = true
-                markerView.displayPriority = .required
-                
-                let btn = UIButton(type: .detailDisclosure)
-                markerView.rightCalloutAccessoryView = btn
-                
-                return markerView
+                let identifier = "PTTBadgeAnnotationView"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: identifier, for: annotation) as? PTTBadgeAnnotationView ?? PTTBadgeAnnotationView(annotation: customAnnotation, reuseIdentifier: identifier)
+                view.configure(with: customAnnotation.annotationModel)
+                return view
             }
             
             if annotation.title == "measure_point" {
@@ -120,14 +109,6 @@ struct MapViewRepresentable: UIViewRepresentable {
             }
             
             return nil
-        }
-        
-        func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
-            if let customAnnotation = view.annotation as? CustomPointAnnotation {
-                DispatchQueue.main.async {
-                    self.parent.viewModel.selectTransmitter(customAnnotation.annotationModel.transmitter)
-                }
-            }
         }
         
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
@@ -162,5 +143,71 @@ class CustomPointAnnotation: MKPointAnnotation {
     init(annotationModel: TransmitterMapAnnotation) {
         self.annotationModel = annotationModel
         super.init()
+    }
+}
+
+// Custom PTT Badge Pin matching Screenshots 4 & 5
+class PTTBadgeAnnotationView: MKAnnotationView {
+    private let badgeContainer = UIView()
+    private let titleLabel = UILabel()
+    private let pinDot = UIView()
+    
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        setupView()
+    }
+    
+    required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        setupView()
+    }
+    
+    private func setupView() {
+        canShowCallout = false
+        backgroundColor = .clear
+        
+        // Badge Container
+        badgeContainer.backgroundColor = .white
+        badgeContainer.layer.cornerRadius = 10
+        badgeContainer.layer.borderWidth = 2.0
+        badgeContainer.layer.shadowColor = UIColor.black.cgColor
+        badgeContainer.layer.shadowOpacity = 0.25
+        badgeContainer.layer.shadowOffset = CGSize(width: 0, height: 2)
+        badgeContainer.layer.shadowRadius = 3
+        
+        // Title Label
+        titleLabel.font = UIFont.systemFont(ofSize: 11, weight: .bold)
+        titleLabel.textColor = .black
+        titleLabel.textAlignment = .center
+        
+        // Pin Dot
+        pinDot.layer.cornerRadius = 4
+        pinDot.layer.borderColor = UIColor.white.cgColor
+        pinDot.layer.borderWidth = 1.5
+        
+        badgeContainer.addSubview(titleLabel)
+        addSubview(badgeContainer)
+        addSubview(pinDot)
+    }
+    
+    func configure(with model: TransmitterMapAnnotation) {
+        self.annotation = model.coordinate as? MKAnnotation
+        let statusColor = model.statusUIColor
+        
+        titleLabel.text = model.transmitter.platform_id
+        titleLabel.sizeToFit()
+        
+        let labelWidth = max(titleLabel.frame.width + 12, 54)
+        let labelHeight: CGFloat = 20
+        
+        badgeContainer.frame = CGRect(x: -labelWidth / 2, y: -26, width: labelWidth, height: labelHeight)
+        badgeContainer.layer.borderColor = statusColor.cgColor
+        titleLabel.frame = CGRect(x: 0, y: 0, width: labelWidth, height: labelHeight)
+        
+        pinDot.frame = CGRect(x: -4, y: -4, width: 8, height: 8)
+        pinDot.backgroundColor = statusColor
+        
+        self.frame = CGRect(x: 0, y: 0, width: labelWidth, height: 30)
+        self.centerOffset = CGPoint(x: 0, y: 0)
     }
 }

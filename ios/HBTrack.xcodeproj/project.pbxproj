@@ -12,6 +12,7 @@
 		E2EC04DCB24A5619A460615C /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = E2D2891BDC60F11DF4533EE1 /* FirebaseFunctions */; };
 		028A08C6196B1E735FAB0BEC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E9C2B90A5DCA5D29F2BEC039 /* Assets.xcassets */; };
 		2F708D209067B4F2E4A05BF4 /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F43373B0B2DEC07A1F996A8 /* EmptyStateView.swift */; };
+		08E907202BF645FC43883045 /* HBTrackHeaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A612B7FE4F62A00430D5C26C /* HBTrackHeaderView.swift */; };
 		D5389BE1B7286FB6D00A19FF /* LoadingOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D39ED3C67CAE6A9C548EF3 /* LoadingOverlay.swift */; };
 		C719B9A6AEA6B4E6DD12B612 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99ABBC0BFFB63F503BAA3F09 /* StatusBadge.swift */; };
 		A5768AA98EB99E960DC0CFB5 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A89D5981E38E7AFDF236874A /* GoogleService-Info.plist */; };
@@ -59,6 +60,7 @@
 		111111112800000000000001 /* HBTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HBTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9C2B90A5DCA5D29F2BEC039 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets.xcassets"; sourceTree = "<group>"; };
 		6F43373B0B2DEC07A1F996A8 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EmptyStateView.swift"; sourceTree = "<group>"; };
+		A612B7FE4F62A00430D5C26C /* HBTrackHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HBTrackHeaderView.swift"; sourceTree = "<group>"; };
 		33D39ED3C67CAE6A9C548EF3 /* LoadingOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoadingOverlay.swift"; sourceTree = "<group>"; };
 		99ABBC0BFFB63F503BAA3F09 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StatusBadge.swift"; sourceTree = "<group>"; };
 		A89D5981E38E7AFDF236874A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
@@ -256,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				6F43373B0B2DEC07A1F996A8 /* EmptyStateView.swift */,
+				A612B7FE4F62A00430D5C26C /* HBTrackHeaderView.swift */,
 				33D39ED3C67CAE6A9C548EF3 /* LoadingOverlay.swift */,
 				99ABBC0BFFB63F503BAA3F09 /* StatusBadge.swift */,
 			);
@@ -351,6 +354,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2F708D209067B4F2E4A05BF4 /* EmptyStateView.swift in Sources */,
+				08E907202BF645FC43883045 /* HBTrackHeaderView.swift in Sources */,
 				D5389BE1B7286FB6D00A19FF /* LoadingOverlay.swift in Sources */,
 				C719B9A6AEA6B4E6DD12B612 /* StatusBadge.swift in Sources */,
 				00B53A769271AC548F8A1A51 /* HBTrackApp.swift in Sources */,

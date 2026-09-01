@@ -1,5 +1,22 @@
 import SwiftUI
 
+struct AppTheme {
+    static let brandGold = Color(hex: "B58E58")
+    static let brandGoldDark = Color(hex: "8F6B38")
+    static let brandGoldLight = Color(hex: "FDFBF7")
+    static let brandGoldBorder = Color(hex: "D8C2A0")
+    
+    static let brandGoldUI = UIColor(red: 181/255, green: 142/255, blue: 88/255, alpha: 1.0)
+    
+    static let screenBackground = Color(hex: "F8FAFC")
+    static let cardBackground = Color(UIColor.secondarySystemGroupedBackground)
+    static let inputBackground = Color(UIColor.systemGroupedBackground)
+    static let cardBorder = Color(hex: "E2E8F0")
+    static let textPrimary = Color.primary
+    static let textSecondary = Color.secondary
+    static let textMuted = Color(hex: "94A3B8")
+}
+
 struct StatusColor {
     static let active = Color(hex: "22c55e")
     static let staticTest = Color(hex: "eab308")

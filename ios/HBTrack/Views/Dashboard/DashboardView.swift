@@ -3,85 +3,126 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var viewModel = DashboardViewModel()
+    @State private var showLogoutAlert = false
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                Color(UIColor.systemGroupedBackground)
-                    .ignoresSafeArea()
-                
-                if viewModel.isLoading && viewModel.transmitters.isEmpty {
-                    ProgressView("Loading Dashboard...")
-                } else {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            // KPIs
-                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                                KPICardView(
-                                    title: "Deployed PTTs",
-                                    value: "\(viewModel.totalDeployed)",
-                                    subtitle: "Total registered",
-                                    icon: "antenna.radiowaves.left.and.right",
-                                    iconColor: .blue,
-                                    trend: nil
-                                )
-                                
-                                KPICardView(
-                                    title: "Birds Tracked",
-                                    value: "\(viewModel.activeBirdsCount)",
-                                    subtitle: "Active links",
-                                    icon: "bird",
-                                    iconColor: .green,
-                                    trend: nil
-                                )
-                                
-                                KPICardView(
-                                    title: "Active Alerts",
-                                    value: "\(viewModel.activeAlertsCount)",
-                                    subtitle: "\(viewModel.criticalAlertsCount) critical",
-                                    icon: "exclamationmark.triangle",
-                                    iconColor: viewModel.criticalAlertsCount > 0 ? .red : .orange,
-                                    trend: nil
-                                )
-                                
-                                KPICardView(
-                                    title: "Last Update",
-                                    value: lastUpdateString,
-                                    subtitle: "System sync",
-                                    icon: "clock.arrow.2.circlepath",
-                                    iconColor: .purple,
-                                    trend: nil
-                                )
-                            }
-                            .padding(.horizontal)
-                            
-                            // Charts
-                            StatusPieChart(data: viewModel.statusBreakdown)
-                                .padding(.horizontal)
-                            
-                            IngestionChart(data: viewModel.ingestionChartData)
-                                .padding(.horizontal)
-                            
-                            // Alerts Feed
-                            AlertFeedView(alerts: viewModel.recentAlerts)
-                                .padding(.horizontal)
-                            
-                            Spacer().frame(height: 20)
+        VStack(spacing: 0) {
+            // Main Top Bar
+            HBTrackHeaderView(
+                onRefresh: {
+                    Task { await viewModel.loadData(forceRefresh: true) }
+                },
+                onSettings: nil
+            )
+            
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Top Sub Header / Quick Action Bar
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundColor(AppTheme.brandGold)
+                            Text("System Overview")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.primary)
                         }
-                        .padding(.vertical)
+                        
+                        Spacer()
+                        
+                        // Floating Logout Button
+                        Button {
+                            showLogoutAlert = true
+                        } label: {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.red)
+                                .frame(width: 40, height: 40)
+                                .background(Color(UIColor.secondarySystemGroupedBackground))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+                        }
                     }
-                    .refreshable {
-                        await viewModel.loadData(forceRefresh: true)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    
+                    // KPIs Grid
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                        KPICardView(
+                            title: "Deployed PTTs",
+                            value: "\(viewModel.totalDeployed)",
+                            subtitle: "Total registered",
+                            icon: "antenna.radiowaves.left.and.right",
+                            iconColor: AppTheme.brandGold,
+                            trend: nil
+                        )
+                        
+                        KPICardView(
+                            title: "Birds Tracked",
+                            value: "\(viewModel.activeBirdsCount)",
+                            subtitle: "Active links",
+                            icon: "bird",
+                            iconColor: Color(hex: "22c55e"),
+                            trend: nil
+                        )
+                        
+                        KPICardView(
+                            title: "Active Alerts",
+                            value: "\(viewModel.activeAlertsCount)",
+                            subtitle: "\(viewModel.criticalAlertsCount) critical",
+                            icon: "exclamationmark.triangle",
+                            iconColor: viewModel.criticalAlertsCount > 0 ? Color(hex: "dc2626") : Color(hex: "f97316"),
+                            trend: nil
+                        )
+                        
+                        KPICardView(
+                            title: "Last Update",
+                            value: lastUpdateString,
+                            subtitle: "System sync",
+                            icon: "clock.arrow.2.circlepath",
+                            iconColor: Color.blue,
+                            trend: nil
+                        )
                     }
+                    .padding(.horizontal, 16)
+                    
+                    // Transmitter Status Donut Chart
+                    StatusPieChart(data: viewModel.statusBreakdown)
+                        .padding(.horizontal, 16)
+                    
+                    // Data Ingestion Flow (7 Days)
+                    IngestionChart(data: viewModel.ingestionChartData)
+                        .padding(.horizontal, 16)
+                    
+                    // Alerts Feed
+                    AlertFeedView(alerts: viewModel.recentAlerts)
+                        .padding(.horizontal, 16)
+                    
+                    Spacer().frame(height: 20)
                 }
+                .padding(.vertical, 8)
             }
-            .navigationTitle("Dashboard")
-            .task {
-                if viewModel.transmitters.isEmpty {
-                    await viewModel.loadData()
-                    viewModel.subscribeToUpdates()
-                }
+            .background(Color(UIColor.systemGroupedBackground))
+            .refreshable {
+                await viewModel.loadData(forceRefresh: true)
             }
+        }
+        .task {
+            if viewModel.transmitters.isEmpty {
+                await viewModel.loadData()
+                viewModel.subscribeToUpdates()
+            }
+        }
+        .alert("Sign Out", isPresented: $showLogoutAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Sign Out", role: .destructive) {
+                authVM.logout()
+            }
+        } message: {
+            Text("Are you sure you want to sign out of RAF Tracking?")
         }
     }
     
