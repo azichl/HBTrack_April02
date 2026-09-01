@@ -1,12 +1,36 @@
 import SwiftUI
 import FirebaseCore
 
+class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        if FirebaseApp.app() == nil {
+            if let filePath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+               let options = FirebaseOptions(contentsOfFile: filePath) {
+                FirebaseApp.configure(options: options)
+            } else {
+                FirebaseApp.configure()
+            }
+        }
+        return true
+    }
+}
+
 @main
 struct HBTrackApp: App {
-    @StateObject private var authVM = AuthViewModel()
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var authVM: AuthViewModel
     
     init() {
-        FirebaseApp.configure()
+        if FirebaseApp.app() == nil {
+            if let filePath = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+               let options = FirebaseOptions(contentsOfFile: filePath) {
+                FirebaseApp.configure(options: options)
+            } else {
+                FirebaseApp.configure()
+            }
+        }
+        _authVM = StateObject(wrappedValue: AuthViewModel())
     }
     
     var body: some Scene {
