@@ -35,7 +35,10 @@ struct LeafletMapView: UIViewRepresentable {
     
     func updateUIView(_ webView: WKWebView, context: Context) {
         guard context.coordinator.isLoaded else { return }
-        
+        updateMapState(in: webView)
+    }
+    
+    func updateMapState(in webView: WKWebView) {
         // 1. Update Base Layer
         let layerJs = "setBaseLayer('\(activeBaseLayer)');"
         webView.evaluateJavaScript(layerJs, completionHandler: nil)
@@ -54,7 +57,7 @@ struct LeafletMapView: UIViewRepresentable {
                 "lon": ann.coordinate.longitude,
                 "status": status,
                 "birdRing": tx.assigned_bird_ring ?? ann.bird?.ring_id ?? "",
-                "birdName": ann.bird?.name ?? ""
+                "species": ann.bird?.species ?? ""
             ]
         }
         
@@ -70,8 +73,8 @@ struct LeafletMapView: UIViewRepresentable {
                 return [
                     "lat": pos.coordinate.latitude,
                     "lon": pos.coordinate.longitude,
-                    "date": pos.formattedDate,
-                    "altitude": pos.altitude ?? 0
+                    "date": pos.timestamp,
+                    "speed": pos.speed_kmh ?? 0
                 ]
             }
             if let histJson = try? JSONSerialization.data(withJSONObject: historyData),
@@ -106,7 +109,7 @@ struct LeafletMapView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isLoaded = true
-            parent.updateUIView(webView, context: Context(self))
+            parent.updateMapState(in: webView)
         }
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
