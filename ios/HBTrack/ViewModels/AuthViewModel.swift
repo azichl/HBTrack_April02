@@ -84,6 +84,8 @@ class AuthViewModel: ObservableObject {
                err.code == AuthErrorCode.invalidCredential.rawValue ||
                err.code == AuthErrorCode.invalidEmail.rawValue {
                 self.authError = "Invalid username or password. Please try again."
+            } else if err.code == AuthErrorCode.keychainError.rawValue || err.localizedDescription.lowercased().contains("keychain") {
+                self.authError = "Keychain access error. Please restart the app or ensure Keychain Sharing is active."
             } else {
                 self.authError = err.localizedDescription
             }

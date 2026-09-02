@@ -64,6 +64,7 @@
 		33D39ED3C67CAE6A9C548EF3 /* LoadingOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoadingOverlay.swift"; sourceTree = "<group>"; };
 		99ABBC0BFFB63F503BAA3F09 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StatusBadge.swift"; sourceTree = "<group>"; };
 		A89D5981E38E7AFDF236874A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		B11111112800000000000001 /* HBTrack.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "HBTrack.entitlements"; sourceTree = "<group>"; };
 		E3CE7C6800428343FE1B5CC4 /* HBTrackApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HBTrackApp.swift"; sourceTree = "<group>"; };
 		51570F093954B65F706F7C19 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		3E759202990D3F78B3F57CC0 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Alert.swift"; sourceTree = "<group>"; };
@@ -146,6 +147,7 @@
 				B0D194E680229EC86D74432D /* Components */,
 				FD300FCC63CD372F91EB5F83 /* Utilities */,
 				A89D5981E38E7AFDF236874A /* GoogleService-Info.plist */,
+				B11111112800000000000001 /* HBTrack.entitlements */,
 				51570F093954B65F706F7C19 /* Info.plist */,
 				E9C2B90A5DCA5D29F2BEC039 /* Assets.xcassets */,
 			);
@@ -548,6 +550,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HBTrack/HBTrack.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -574,6 +577,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = HBTrack/HBTrack.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
