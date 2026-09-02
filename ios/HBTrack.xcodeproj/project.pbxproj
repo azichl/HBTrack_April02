@@ -51,9 +51,9 @@
 		EDE1C4661AE5CAB1A345E554 /* SearchBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CA06E26E99707BA34C87D6 /* SearchBarView.swift */; };
 		33C92DF69F65E0A523E522B2 /* TransmitterAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5BD63B62F2AB79088BB901 /* TransmitterAnnotation.swift */; };
 		27B841FC7319DA91C83387FD /* TransmitterDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3324E92D4ADB06CBD17817BA /* TransmitterDetailSheet.swift */; };
-		D11111112800000000000001 /* LeafletMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11111112800000000000002 /* LeafletMapView.swift */; };
-		D11111112800000000000002 /* WindyMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11111112800000000000003 /* WindyMapView.swift */; };
-		D11111112800000000000003 /* MeteoblueMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11111112800000000000004 /* MeteoblueMapView.swift */; };
+		4A82B9F12C8E4E9A00000001 /* LeafletMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A00000002 /* LeafletMapView.swift */; };
+		4A82B9F12C8E4E9A00000003 /* WindyMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A00000004 /* WindyMapView.swift */; };
+		4A82B9F12C8E4E9A00000005 /* MeteoblueMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A00000006 /* MeteoblueMapView.swift */; };
 		FB68DB8AB3A473117F7EA69B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39CDD1C89C767E30B72F6EAE /* SettingsView.swift */; };
 		C451BB0C9C982548A2124CA1 /* DataUploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77152F38E8BD756736B48132 /* DataUploadView.swift */; };
 		A052F0B18DED7B2D7B2AFA95 /* SyncLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A757BAE08FFF61AF85C9EAD5 /* SyncLogView.swift */; };
@@ -67,7 +67,7 @@
 		33D39ED3C67CAE6A9C548EF3 /* LoadingOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoadingOverlay.swift"; sourceTree = "<group>"; };
 		99ABBC0BFFB63F503BAA3F09 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StatusBadge.swift"; sourceTree = "<group>"; };
 		A89D5981E38E7AFDF236874A /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
-		B11111112800000000000001 /* HBTrack.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "HBTrack.entitlements"; sourceTree = "<group>"; };
+		4A82B9F12C8E4E9A00000007 /* HBTrack.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "HBTrack.entitlements"; sourceTree = "<group>"; };
 		E3CE7C6800428343FE1B5CC4 /* HBTrackApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HBTrackApp.swift"; sourceTree = "<group>"; };
 		51570F093954B65F706F7C19 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
 		3E759202990D3F78B3F57CC0 /* Alert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Alert.swift"; sourceTree = "<group>"; };
@@ -104,9 +104,9 @@
 		A6CA06E26E99707BA34C87D6 /* SearchBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SearchBarView.swift"; sourceTree = "<group>"; };
 		2F5BD63B62F2AB79088BB901 /* TransmitterAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TransmitterAnnotation.swift"; sourceTree = "<group>"; };
 		3324E92D4ADB06CBD17817BA /* TransmitterDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TransmitterDetailSheet.swift"; sourceTree = "<group>"; };
-		E11111112800000000000002 /* LeafletMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LeafletMapView.swift"; sourceTree = "<group>"; };
-		E11111112800000000000003 /* WindyMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WindyMapView.swift"; sourceTree = "<group>"; };
-		E11111112800000000000004 /* MeteoblueMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeteoblueMapView.swift"; sourceTree = "<group>"; };
+		4A82B9F12C8E4E9A00000002 /* LeafletMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LeafletMapView.swift"; sourceTree = "<group>"; };
+		4A82B9F12C8E4E9A00000004 /* WindyMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WindyMapView.swift"; sourceTree = "<group>"; };
+		4A82B9F12C8E4E9A00000006 /* MeteoblueMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeteoblueMapView.swift"; sourceTree = "<group>"; };
 		39CDD1C89C767E30B72F6EAE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
 		77152F38E8BD756736B48132 /* DataUploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataUploadView.swift"; sourceTree = "<group>"; };
 		A757BAE08FFF61AF85C9EAD5 /* SyncLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SyncLogView.swift"; sourceTree = "<group>"; };
@@ -153,7 +153,7 @@
 				B0D194E680229EC86D74432D /* Components */,
 				FD300FCC63CD372F91EB5F83 /* Utilities */,
 				A89D5981E38E7AFDF236874A /* GoogleService-Info.plist */,
-				B11111112800000000000001 /* HBTrack.entitlements */,
+				4A82B9F12C8E4E9A00000007 /* HBTrack.entitlements */,
 				51570F093954B65F706F7C19 /* Info.plist */,
 				E9C2B90A5DCA5D29F2BEC039 /* Assets.xcassets */,
 			);
@@ -227,9 +227,9 @@
 			children = (
 				5CC25E88CB42EF67592B67B0 /* HistoryOverlay.swift */,
 				B54F6C54CB2040EA9A656EEA /* LiveMapView.swift */,
-				E11111112800000000000002 /* LeafletMapView.swift */,
-				E11111112800000000000003 /* WindyMapView.swift */,
-				E11111112800000000000004 /* MeteoblueMapView.swift */,
+				4A82B9F12C8E4E9A00000002 /* LeafletMapView.swift */,
+				4A82B9F12C8E4E9A00000004 /* WindyMapView.swift */,
+				4A82B9F12C8E4E9A00000006 /* MeteoblueMapView.swift */,
 				D335E38BD2C015668E55EA49 /* MapControlsView.swift */,
 				94653FBC4D78B27D0DA670E7 /* MapViewRepresentable.swift */,
 				0416900623DE2C4E5C2A57D3 /* MeasurementOverlay.swift */,
@@ -397,9 +397,9 @@
 				BC22CE5963CEC07FE528D598 /* MainTabView.swift in Sources */,
 				82E0793EA006DFBE64C2B3B5 /* HistoryOverlay.swift in Sources */,
 				0831A3A8B1B2C493CE9456B3 /* LiveMapView.swift in Sources */,
-				D11111112800000000000001 /* LeafletMapView.swift in Sources */,
-				D11111112800000000000002 /* WindyMapView.swift in Sources */,
-				D11111112800000000000003 /* MeteoblueMapView.swift in Sources */,
+				4A82B9F12C8E4E9A00000001 /* LeafletMapView.swift in Sources */,
+				4A82B9F12C8E4E9A00000003 /* WindyMapView.swift in Sources */,
+				4A82B9F12C8E4E9A00000005 /* MeteoblueMapView.swift in Sources */,
 				BEE2A7E9B1B629B4AE922657 /* MapControlsView.swift in Sources */,
 				24782565E1D227ADC5A3CC43 /* MapViewRepresentable.swift in Sources */,
 				4F9D94DDD80CE1F5C82A530B /* MeasurementOverlay.swift in Sources */,
