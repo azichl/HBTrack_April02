@@ -276,8 +276,14 @@ struct LiveMapView: View {
                                         }
                                     }
                                     
-                                    ToolGridButton(icon: "location.circle", label: "GPS") {
-                                        viewModel.flyTo(CLLocationCoordinate2D(latitude: 25.276987, longitude: 51.520008))
+                                    ToolGridButton(
+                                        icon: "location.circle",
+                                        label: "GPS",
+                                        isActive: viewModel.isTrackingUser
+                                    ) {
+                                        withAnimation {
+                                            viewModel.toggleUserTracking()
+                                        }
                                     }
                                     
                                     ToolGridButton(icon: "chart.pie", label: "Stats") {

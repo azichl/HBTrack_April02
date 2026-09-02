@@ -2,6 +2,7 @@ import Foundation
 import MapKit
 import SwiftUI
 import FirebaseFirestore
+import CoreLocation
 
 enum DatePreset: String, CaseIterable, Identifiable {
     case twentyFourHours = "24 Hours"
@@ -53,6 +54,44 @@ struct TransmitterMapAnnotation: Identifiable {
     }
 }
 
+struct FlyToRequest: Equatable {
+    let coordinate: CLLocationCoordinate2D
+    let zoom: Int
+    
+    static func == (lhs: FlyToRequest, rhs: FlyToRequest) -> Bool {
+        return lhs.coordinate.latitude == rhs.coordinate.latitude &&
+               lhs.coordinate.longitude == rhs.coordinate.longitude &&
+               lhs.zoom == rhs.zoom
+    }
+}
+
+class MapLocationDelegate: NSObject, CLLocationManagerDelegate {
+    private let onLocationUpdate: (CLLocationCoordinate2D, Double?) -> Void
+    
+    init(onLocationUpdate: @escaping (CLLocationCoordinate2D, Double?) -> Void) {
+        self.onLocationUpdate = onLocationUpdate
+        super.init()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let loc = locations.last else { return }
+        let headingVal = loc.course >= 0 ? loc.course : nil
+        onLocationUpdate(loc.coordinate, headingVal)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        let headingVal = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        if let loc = manager.location {
+            onLocationUpdate(loc.coordinate, headingVal)
+        }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Location manager error: \(error)")
+    }
+}
+
 @MainActor
 class MapViewModel: ObservableObject {
     @Published var transmitters: [Transmitter] = []
@@ -91,6 +130,15 @@ class MapViewModel: ObservableObject {
         set { totalMeasureDistance = newValue }
     }
     
+    // GPS Navigation & User Location
+    @Published var isTrackingUser: Bool = false
+    @Published var userLocation: CLLocationCoordinate2D? = nil
+    @Published var userHeading: Double? = nil
+    @Published var flyToTarget: FlyToRequest? = nil
+    
+    private var locationManager: CLLocationManager?
+    private var locationDelegate: MapLocationDelegate?
+    
     @Published var mapStyle: MapStyleOption = .standard
     @Published var region: MKCoordinateRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 25.276987, longitude: 51.520008),
@@ -111,6 +159,8 @@ class MapViewModel: ObservableObject {
     
     deinit {
         positionsListener?.remove()
+        locationManager?.stopUpdatingLocation()
+        locationManager?.stopUpdatingHeading()
     }
     
     func loadData(forceRefresh: Bool = false, visibilityFilter: @escaping (String) -> Bool = { _ in true }) async {
@@ -238,6 +288,44 @@ class MapViewModel: ObservableObject {
         }
     }
     
+    func toggleUserTracking() {
+        if isTrackingUser {
+            locationManager?.stopUpdatingLocation()
+            locationManager?.stopUpdatingHeading()
+            isTrackingUser = false
+            userLocation = nil
+            userHeading = nil
+        } else {
+            if locationManager == nil {
+                let manager = CLLocationManager()
+                let delegate = MapLocationDelegate { [weak self] coord, heading in
+                    Task { @MainActor in
+                        guard let self = self else { return }
+                        let isFirst = self.userLocation == nil
+                        self.userLocation = coord
+                        if let h = heading {
+                            self.userHeading = h
+                        }
+                        if isFirst {
+                            self.flyTo(coord, zoom: 14)
+                        }
+                    }
+                }
+                manager.delegate = delegate
+                manager.desiredAccuracy = kCLLocationAccuracyBest
+                self.locationManager = manager
+                self.locationDelegate = delegate
+            }
+            
+            locationManager?.requestWhenInUseAuthorization()
+            locationManager?.startUpdatingLocation()
+            if CLLocationManager.headingAvailable() {
+                locationManager?.startUpdatingHeading()
+            }
+            isTrackingUser = true
+        }
+    }
+    
     func selectTransmitter(_ transmitter: Transmitter) {
         self.selectedTransmitter = transmitter
         self.selectedBird = birds.first { $0.ring_id == transmitter.platform_id || $0.id == transmitter.id }
@@ -245,7 +333,7 @@ class MapViewModel: ObservableObject {
         self.showDetail = true
         
         if let pos = selectedPosition {
-            flyTo(pos.coordinate)
+            flyTo(pos.coordinate, zoom: 12)
         }
     }
     
@@ -270,7 +358,7 @@ class MapViewModel: ObservableObject {
             )
             
             if let firstCoord = historyPositions.first?.coordinate {
-                flyTo(firstCoord)
+                flyTo(firstCoord, zoom: 11)
             }
         } catch {
             print("Error loading history: \(error)")
@@ -340,7 +428,8 @@ class MapViewModel: ObservableObject {
         totalMeasureDistance = total
     }
     
-    func flyTo(_ coordinate: CLLocationCoordinate2D) {
+    func flyTo(_ coordinate: CLLocationCoordinate2D, zoom: Int = 11) {
+        self.flyToTarget = FlyToRequest(coordinate: coordinate, zoom: zoom)
         self.region = MKCoordinateRegion(
             center: coordinate,
             span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
@@ -360,7 +449,7 @@ class MapViewModel: ObservableObject {
         }
         
         if let match = annotations.first(where: { $0.transmitter.platform_id.localizedCaseInsensitiveContains(clean) }) {
-            flyTo(match.coordinate)
+            flyTo(match.coordinate, zoom: 12)
         }
     }
 }

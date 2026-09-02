@@ -92,6 +92,24 @@ struct LeafletMapView: UIViewRepresentable {
         if !viewModel.isMeasuring {
             webView.evaluateJavaScript("clearMeasurement();", completionHandler: nil)
         }
+        
+        // 6. Update User GPS Location
+        if viewModel.isTrackingUser, let userLoc = viewModel.userLocation {
+            let headingParam = viewModel.userHeading != nil ? "\(viewModel.userHeading!)" : "null"
+            let gpsJs = "updateUserLocation(\(userLoc.latitude), \(userLoc.longitude), 25, \(headingParam));"
+            webView.evaluateJavaScript(gpsJs, completionHandler: nil)
+        } else {
+            webView.evaluateJavaScript("clearUserLocation();", completionHandler: nil)
+        }
+        
+        // 7. Handle flyTo target
+        if let target = viewModel.flyToTarget {
+            let flyJs = "flyToCoord(\(target.coordinate.latitude), \(target.coordinate.longitude), \(target.zoom));"
+            webView.evaluateJavaScript(flyJs, completionHandler: nil)
+            DispatchQueue.main.async {
+                viewModel.flyToTarget = nil
+            }
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -190,22 +208,42 @@ struct LeafletMapView: UIViewRepresentable {
                     box-shadow: none !important;
                     padding: 0 !important;
                 }
+                
+                /* Compass Rose positioned cleanly above the zoom controls */
                 .compass-rose {
                     position: absolute;
-                    bottom: 24px;
+                    bottom: 96px;
                     right: 14px;
                     width: 48px;
                     height: 48px;
                     z-index: 999;
                     pointer-events: none;
-                    filter: drop-shadow(0 2px 5px rgba(0,0,0,0.5));
+                    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+                }
+                
+                /* User GPS Pulse Animation */
+                @keyframes gps-pulse {
+                    0% { transform: scale(0.6); opacity: 1; }
+                    100% { transform: scale(2.2); opacity: 0; }
+                }
+                
+                .weather-temp-popup .leaflet-popup-content-wrapper {
+                    background: #0f172a !important;
+                    color: #ffffff !important;
+                    border-radius: 14px !important;
+                    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                    box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
+                    padding: 4px 8px !important;
+                }
+                .weather-temp-popup .leaflet-popup-tip {
+                    background: #0f172a !important;
                 }
             </style>
         </head>
         <body>
             <div id="map"></div>
             <svg class="compass-rose" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="46" fill="rgba(15, 23, 42, 0.75)" stroke="#eab308" stroke-width="2"/>
+                <circle cx="50" cy="50" r="46" fill="rgba(15, 23, 42, 0.85)" stroke="#eab308" stroke-width="2"/>
                 <polygon points="50,12 43,48 50,44 57,48" fill="#ef4444"/>
                 <polygon points="50,88 43,52 50,56 57,52" fill="#ffffff"/>
                 <polygon points="12,50 48,43 44,50 48,57" fill="#cbd5e1"/>
@@ -219,6 +257,7 @@ struct LeafletMapView: UIViewRepresentable {
 
             <script>
                 const WEATHER_API_KEY = 'c748a0edae0f262b7a5405b65c42eac9';
+                let currentActiveWeather = 'none';
                 
                 // Initialize Map centered on Middle East / Central Asia (matches web default)
                 const map = L.map('map', {
@@ -266,6 +305,7 @@ struct LeafletMapView: UIViewRepresentable {
                 // Weather Overlays (OpenWeatherMap)
                 let currentWeatherLayer = null;
                 function setWeatherOverlay(overlayKey) {
+                    currentActiveWeather = overlayKey;
                     if (currentWeatherLayer) {
                         map.removeLayer(currentWeatherLayer);
                         currentWeatherLayer = null;
@@ -431,8 +471,60 @@ struct LeafletMapView: UIViewRepresentable {
                     measureMarkers.clearLayers();
                 }
 
-                // Map Click Events
-                map.on('click', (e) => {
+                // User GPS Marker & Location Tracking
+                let userLocationMarker = null;
+                let userAccuracyCircle = null;
+
+                function updateUserLocation(lat, lon, accuracy, heading) {
+                    if (isNaN(lat) || isNaN(lon)) return;
+                    
+                    const userIcon = L.divIcon({
+                        className: 'user-gps-marker',
+                        html: `
+                            <div style="position: relative; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;">
+                                <div style="position: absolute; width: 26px; height: 26px; border-radius: 50%; background: rgba(59, 130, 246, 0.4); animation: gps-pulse 2s infinite ease-out;"></div>
+                                <div style="width: 14px; height: 14px; border-radius: 50%; background: #2563eb; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.35); margin: auto;"></div>
+                            </div>
+                        `,
+                        iconSize: [26, 26],
+                        iconAnchor: [13, 13]
+                    });
+
+                    if (userLocationMarker) {
+                        userLocationMarker.setLatLng([lat, lon]);
+                    } else {
+                        userLocationMarker = L.marker([lat, lon], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+                    }
+
+                    if (accuracy && accuracy > 0) {
+                        if (userAccuracyCircle) {
+                            userAccuracyCircle.setLatLng([lat, lon]).setRadius(accuracy);
+                        } else {
+                            userAccuracyCircle = L.circle([lat, lon], {
+                                radius: accuracy,
+                                color: '#3b82f6',
+                                fillColor: '#60a5fa',
+                                fillOpacity: 0.12,
+                                weight: 1.5,
+                                dashArray: '4, 4'
+                            }).addTo(map);
+                        }
+                    }
+                }
+
+                function clearUserLocation() {
+                    if (userLocationMarker) {
+                        map.removeLayer(userLocationMarker);
+                        userLocationMarker = null;
+                    }
+                    if (userAccuracyCircle) {
+                        map.removeLayer(userAccuracyCircle);
+                        userAccuracyCircle = null;
+                    }
+                }
+
+                // Map Click Events (Measurement, Temperature Weather Fetch, Native Callback)
+                map.on('click', async (e) => {
                     const lat = e.latlng.lat;
                     const lon = e.latlng.lng;
 
@@ -461,6 +553,32 @@ struct LeafletMapView: UIViewRepresentable {
                         if (window.webkit && window.webkit.messageHandlers.onMeasurePoint) {
                             window.webkit.messageHandlers.onMeasurePoint.postMessage({ lat: lat, lon: lon });
                         }
+                    } else if (currentActiveWeather === 'temp_new') {
+                        // Fetch temperature at this coordinate from OpenWeatherMap API
+                        try {
+                            const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${WEATHER_API_KEY}`;
+                            const res = await fetch(url);
+                            const data = await res.json();
+                            if (data && data.main) {
+                                const temp = Math.round(data.main.temp);
+                                const desc = (data.weather && data.weather[0] ? data.weather[0].description : 'Weather').toUpperCase();
+                                const tempColor = temp > 30 ? '#ef4444' : (temp > 20 ? '#f97316' : (temp > 10 ? '#eab308' : '#3b82f6'));
+                                
+                                const popupContent = `
+                                    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 2px 4px; text-align: center; min-width: 100px;">
+                                        <div style="font-size: 9px; color: #94a3b8; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px;">${desc}</div>
+                                        <div style="font-size: 22px; font-weight: 800; color: ${tempColor}; line-height: 1.1;">${temp}°C</div>
+                                        <div style="font-size: 9px; color: #64748b; margin-top: 4px;">${lat.toFixed(3)}°, ${lon.toFixed(3)}°</div>
+                                    </div>
+                                `;
+                                L.popup({ className: 'weather-temp-popup', closeButton: true, offset: [0, -6] })
+                                    .setLatLng([lat, lon])
+                                    .setContent(popupContent)
+                                    .openOn(map);
+                            }
+                        } catch(err) {
+                            console.error("Temperature fetch error:", err);
+                        }
                     } else {
                         if (window.webkit && window.webkit.messageHandlers.onMapClick) {
                             window.webkit.messageHandlers.onMapClick.postMessage({ lat: lat, lon: lon });
@@ -468,7 +586,7 @@ struct LeafletMapView: UIViewRepresentable {
                     }
                 });
 
-                function flyToCoord(lat, lon, zoom = 9) {
+                function flyToCoord(lat, lon, zoom = 11) {
                     map.flyTo([lat, lon], zoom, { animate: true, duration: 1.2 });
                 }
             </script>
