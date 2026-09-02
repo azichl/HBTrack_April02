@@ -419,29 +419,54 @@ struct LeafletMapView: UIViewRepresentable {
                     clearHistory();
                     if (!positions || positions.length === 0) return;
 
-                    const latlngs = positions.map(p => [Number(p.lat), Number(p.lon)]).filter(pt => !isNaN(pt[0]) && !isNaN(pt[1]));
-                    if (latlngs.length === 0) return;
+                    const validPositions = positions.filter(p => {
+                        const lat = Number(p.lat);
+                        const lon = Number(p.lon);
+                        return !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+                    });
+                    if (validPositions.length === 0) return;
+
+                    const latlngs = validPositions.map(p => [Number(p.lat), Number(p.lon)]);
 
                     historyPolyline = L.polyline(latlngs, {
-                        color: '#ef4444',
-                        weight: 3.5,
-                        opacity: 0.85,
-                        dashArray: '6, 6'
+                        color: '#6366f1',
+                        weight: 4,
+                        opacity: 0.9,
+                        dashArray: '8, 6'
                     }).addTo(map);
 
-                    latlngs.forEach((pt, index) => {
+                    const total = validPositions.length;
+                    validPositions.forEach((p, index) => {
+                        const isStart = index === 0;
+                        const isEnd = index === total - 1;
+                        const pt = [Number(p.lat), Number(p.lon)];
+                        
                         const circle = L.circleMarker(pt, {
-                            radius: index === 0 ? 6 : 4,
-                            fillColor: index === 0 ? '#22c55e' : '#f59e0b',
+                            radius: isEnd ? 7 : (isStart ? 6 : 4),
+                            fillColor: isEnd ? '#22c55e' : (isStart ? '#3b82f6' : '#f59e0b'),
                             color: '#ffffff',
                             weight: 2,
                             opacity: 1,
-                            fillOpacity: 0.9
+                            fillOpacity: 0.95
                         });
+
+                        const dateStr = p.date || '';
+                        const speedStr = p.speed ? `${Math.round(p.speed)} km/h` : '';
+                        circle.bindTooltip(
+                            `<div style="font-family:-apple-system, sans-serif; font-size:11px; font-weight:600; padding:2px 4px;">
+                                ${isStart ? '<b>Start:</b> ' : (isEnd ? '<b>Latest:</b> ' : '')}${dateStr} ${speedStr ? '· ' + speedStr : ''}
+                            </div>`,
+                            { direction: 'top', offset: [0, -6] }
+                        );
+
                         historyPointsGroup.addLayer(circle);
                     });
 
-                    map.fitBounds(historyPolyline.getBounds(), { padding: [40, 40] });
+                    if (latlngs.length > 1) {
+                        map.fitBounds(historyPolyline.getBounds(), { padding: [50, 50], maxZoom: 13 });
+                    } else if (latlngs.length === 1) {
+                        map.flyTo(latlngs[0], 11, { animate: true });
+                    }
                 }
 
                 function clearHistory() {
@@ -528,6 +553,11 @@ struct LeafletMapView: UIViewRepresentable {
                     const lat = e.latlng.lat;
                     const lon = e.latlng.lng;
 
+                    // Always notify native host to dismiss floating drawers/popups
+                    if (window.webkit && window.webkit.messageHandlers.onMapClick) {
+                        window.webkit.messageHandlers.onMapClick.postMessage({ lat: lat, lon: lon });
+                    }
+
                     if (isMeasuring) {
                         measurePoints.push([lat, lon]);
                         
@@ -578,10 +608,6 @@ struct LeafletMapView: UIViewRepresentable {
                             }
                         } catch(err) {
                             console.error("Temperature fetch error:", err);
-                        }
-                    } else {
-                        if (window.webkit && window.webkit.messageHandlers.onMapClick) {
-                            window.webkit.messageHandlers.onMapClick.postMessage({ lat: lat, lon: lon });
                         }
                     }
                 });

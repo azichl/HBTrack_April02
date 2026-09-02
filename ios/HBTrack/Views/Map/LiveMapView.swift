@@ -163,8 +163,16 @@ struct LiveMapView: View {
                         activeWeatherOverlay: selectedWeatherOverlay.overlayKey,
                         activeBaseLayer: selectedTileLayer.layerKey,
                         onMarkerTapped: { txId in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showToolsDrawer = false
+                            }
                             if let tx = viewModel.transmitters.first(where: { $0.platform_id == txId }) {
                                 viewModel.selectTransmitter(tx)
+                            }
+                        },
+                        onMapTapped: { _ in
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showToolsDrawer = false
                             }
                         }
                     )
