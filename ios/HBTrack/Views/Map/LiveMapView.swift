@@ -29,17 +29,7 @@ struct LiveMapView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Main Top Bar
-            HBTrackHeaderView(
-                onRefresh: {
-                    Task {
-                        await viewModel.loadData(forceRefresh: true, visibilityFilter: authVM.isTransmitterVisible)
-                    }
-                },
-                onSettings: nil
-            )
-            
-            // Sub-tabs Pill Bar + Logout Button
+            // Sub-tabs Pill Bar + Action Buttons
             HStack(spacing: 12) {
                 // Sub Tabs (Tracking, Windy, Meteoblue)
                 HStack(spacing: 4) {
@@ -76,21 +66,42 @@ struct LiveMapView: View {
                 
                 Spacer()
                 
-                // Floating Logout Button
-                Button {
-                    showLogoutAlert = true
-                } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.red)
-                        .frame(width: 40, height: 40)
-                        .background(Color(UIColor.secondarySystemGroupedBackground))
-                        .cornerRadius(12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+                HStack(spacing: 8) {
+                    // Refresh Button
+                    Button {
+                        Task {
+                            await viewModel.loadData(forceRefresh: true, visibilityFilter: authVM.isTransmitterVisible)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(AppTheme.brandGold)
+                            .frame(width: 40, height: 40)
+                            .background(Color(UIColor.secondarySystemGroupedBackground))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+                    }
+                    
+                    // Floating Logout Button
+                    Button {
+                        showLogoutAlert = true
+                    } label: {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.red)
+                            .frame(width: 40, height: 40)
+                            .background(Color(UIColor.secondarySystemGroupedBackground))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                            )
+                            .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+                    }
                 }
             }
             .padding(.horizontal, 16)

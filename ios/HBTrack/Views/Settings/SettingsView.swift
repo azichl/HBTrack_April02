@@ -30,12 +30,6 @@ struct SettingsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Main Top Bar
-            HBTrackHeaderView(
-                onRefresh: nil,
-                onSettings: nil
-            )
-            
             ScrollView {
                 VStack(spacing: 16) {
                     // Sub-tabs Segmented Pill + Logout Button

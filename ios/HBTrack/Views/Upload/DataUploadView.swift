@@ -9,14 +9,6 @@ struct DataUploadView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Main Top Bar
-            HBTrackHeaderView(
-                onRefresh: {
-                    Task { await viewModel.sync() }
-                },
-                onSettings: nil
-            )
-            
             ScrollView {
                 VStack(spacing: 16) {
                     // Top Status Card + Logout Button
