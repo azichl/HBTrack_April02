@@ -68,87 +68,91 @@ struct LiveMapView: View {
     @State private var showWeatherPicker = false
     @State private var showStatsSheet = false
     @State private var showLogoutAlert = false
+    @State private var isFullscreen = false
     
     var body: some View {
         VStack(spacing: 0) {
-            // Sub-tabs Pill Bar + Action Buttons
-            HStack(spacing: 12) {
-                // Sub Tabs (Tracking, Windy, Meteoblue)
-                HStack(spacing: 4) {
-                    ForEach(MapSubTab.allCases) { tab in
+            if !isFullscreen {
+                // Sub-tabs Pill Bar + Action Buttons
+                HStack(spacing: 12) {
+                    // Sub Tabs (Tracking, Windy, Meteoblue)
+                    HStack(spacing: 4) {
+                        ForEach(MapSubTab.allCases) { tab in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedSubTab = tab
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 13))
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 13, weight: .medium))
+                                }
+                                .foregroundColor(selectedSubTab == tab ? AppTheme.brandGold : AppTheme.textSecondary)
+                                .padding(.vertical, 8)
+                                .padding(.horizontal, 10)
+                                .background(
+                                    selectedSubTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
+                                )
+                                .cornerRadius(10)
+                                .shadow(color: selectedSubTab == tab ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
+                            }
+                        }
+                    }
+                    .padding(4)
+                    .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.8))
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                    )
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 8) {
+                        // Refresh Button
                         Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedSubTab = tab
+                            Task {
+                                await viewModel.loadData(forceRefresh: true, visibilityFilter: authVM.isTransmitterVisible)
                             }
                         } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: tab.icon)
-                                    .font(.system(size: 13))
-                                Text(tab.rawValue)
-                                    .font(.system(size: 13, weight: .medium))
-                            }
-                            .foregroundColor(selectedSubTab == tab ? AppTheme.brandGold : AppTheme.textSecondary)
-                            .padding(.vertical, 8)
-                            .padding(.horizontal, 10)
-                            .background(
-                                selectedSubTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
-                            )
-                            .cornerRadius(10)
-                            .shadow(color: selectedSubTab == tab ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(AppTheme.brandGold)
+                                .frame(width: 40, height: 40)
+                                .background(Color(UIColor.secondarySystemGroupedBackground))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
+                        }
+                        
+                        // Floating Logout Button
+                        Button {
+                            showLogoutAlert = true
+                        } label: {
+                            Image(systemName: "rectangle.portrait.and.arrow.right")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.red)
+                                .frame(width: 40, height: 40)
+                                .background(Color(UIColor.secondarySystemGroupedBackground))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                                )
+                                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
                         }
                     }
                 }
-                .padding(4)
-                .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.8))
-                .cornerRadius(14)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                )
-                
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    // Refresh Button
-                    Button {
-                        Task {
-                            await viewModel.loadData(forceRefresh: true, visibilityFilter: authVM.isTransmitterVisible)
-                        }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(AppTheme.brandGold)
-                            .frame(width: 40, height: 40)
-                            .background(Color(UIColor.secondarySystemGroupedBackground))
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-                    }
-                    
-                    // Floating Logout Button
-                    Button {
-                        showLogoutAlert = true
-                    } label: {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.red)
-                            .frame(width: 40, height: 40)
-                            .background(Color(UIColor.secondarySystemGroupedBackground))
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                            )
-                            .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+                .background(Color(UIColor.systemBackground))
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
-            .background(Color(UIColor.systemBackground))
             
             // Map Container depending on sub tab
             ZStack(alignment: .topLeading) {
@@ -184,13 +188,15 @@ struct LiveMapView: View {
                             }
                             
                             if !showToolsDrawer {
-                                // Quick GPS fly to center button
+                                // Fullscreen Toggle Button
                                 Button {
-                                    viewModel.flyTo(CLLocationCoordinate2D(latitude: 25.276987, longitude: 51.520008))
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        isFullscreen.toggle()
+                                    }
                                 } label: {
-                                    Image(systemName: "circle.circle")
+                                    Image(systemName: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "viewfinder")
                                         .font(.system(size: 17, weight: .semibold))
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(isFullscreen ? AppTheme.brandGold : .primary)
                                         .frame(width: 44, height: 44)
                                         .background(Color(UIColor.systemBackground).opacity(0.95))
                                         .cornerRadius(12)
@@ -288,7 +294,7 @@ struct LiveMapView: View {
                         }
                     }
                     .padding(.leading, 16)
-                    .padding(.top, 14)
+                    .padding(.top, isFullscreen ? 54 : 14)
                     
                     // History Overlay
                     if viewModel.showHistory {
@@ -317,7 +323,9 @@ struct LiveMapView: View {
                         .edgesIgnoringSafeArea(.bottom)
                 }
             }
+            .ignoresSafeArea(.all, edges: isFullscreen ? .all : .bottom)
         }
+        .toolbar(isFullscreen ? .hidden : .visible, for: .tabBar)
         .task {
             if viewModel.transmitters.isEmpty {
                 await viewModel.loadData(visibilityFilter: authVM.isTransmitterVisible)
