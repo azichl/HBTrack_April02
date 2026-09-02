@@ -118,13 +118,15 @@ class MapViewModel: ObservableObject {
         defer { isLoading = false }
         
         do {
-            async let fetchedTransmitters = TransmitterService.shared.fetchAllTransmitters(forceRefresh: forceRefresh)
-            async let fetchedBirds = TransmitterService.shared.fetchAllBirds(forceRefresh: forceRefresh)
-            async let fetchedPositions = TransmitterService.shared.fetchLatestPositions(forceRefresh: forceRefresh)
+            let fetchedTransmitters = try await TransmitterService.shared.fetchAllTransmitters(forceRefresh: forceRefresh)
+            let fetchedBirds = try await TransmitterService.shared.fetchAllBirds(forceRefresh: forceRefresh)
             
-            self.transmitters = try await fetchedTransmitters
-            self.birds = try await fetchedBirds
-            self.positions = try await fetchedPositions
+            self.transmitters = fetchedTransmitters
+            self.birds = fetchedBirds
+            
+            // Fetch latest position for ALL transmitters from Firebase (positions + argos_positions + transmitter document coordinates)
+            let fetchedPositions = try await TransmitterService.shared.fetchLatestPositionsPerTransmitter(for: fetchedTransmitters, forceRefresh: forceRefresh)
+            self.positions = fetchedPositions
             
             buildAnnotations(visibilityFilter: visibilityFilter)
         } catch {
@@ -133,27 +135,29 @@ class MapViewModel: ObservableObject {
     }
     
     func buildAnnotations(visibilityFilter: (String) -> Bool) {
-        // Fast O(M) index of latest position per transmitter
+        // Fast index of latest position per transmitter
         var latestPositionsByTx: [String: Position] = [:]
         for pos in positions {
-            guard let txId = pos.effectiveTransmitterId, !txId.isEmpty else { continue }
-            if let existing = latestPositionsByTx[txId] {
-                if pos.timestamp > existing.timestamp {
-                    latestPositionsByTx[txId] = pos
+            let pids = [pos.transmitter_id, pos.platformId].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            for pid in pids {
+                if let existing = latestPositionsByTx[pid] {
+                    if pos.timestamp > existing.timestamp {
+                        latestPositionsByTx[pid] = pos
+                    }
+                } else {
+                    latestPositionsByTx[pid] = pos
                 }
-            } else {
-                latestPositionsByTx[txId] = pos
             }
         }
         
-        // Fast O(B) index of birds by ring_id and id
+        // Fast index of birds by ring_id and id
         var birdsByRing: [String: Bird] = [:]
         for bird in birds {
             if let ring = bird.ring_id {
-                birdsByRing[ring] = bird
+                birdsByRing[ring.trimmingCharacters(in: .whitespacesAndNewlines)] = bird
             }
             if let id = bird.id {
-                birdsByRing[id] = bird
+                birdsByRing[id.trimmingCharacters(in: .whitespacesAndNewlines)] = bird
             }
         }
         
@@ -161,14 +165,34 @@ class MapViewModel: ObservableObject {
         newAnnotations.reserveCapacity(transmitters.count)
         
         for transmitter in transmitters {
-            guard visibilityFilter(transmitter.platform_id) else { continue }
+            let txKey = transmitter.platform_id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !txKey.isEmpty, visibilityFilter(txKey) else { continue }
             
-            let txKey = transmitter.platform_id
-            let docId = transmitter.id ?? ""
+            let docId = (transmitter.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             
-            let posCandidate = latestPositionsByTx[txKey] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId])
+            var posCandidate = latestPositionsByTx[txKey] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId])
+            
+            // If position not found in positions table, check direct coordinates on the transmitter model
+            if posCandidate == nil, let directCoord = transmitter.directCoordinate {
+                posCandidate = Position(
+                    id: "tx-direct-\(docId.isEmpty ? txKey : docId)",
+                    transmitter_id: txKey,
+                    platformId: txKey,
+                    timestamp: transmitter.last_fix ?? ISO8601DateFormatter().string(from: Date()),
+                    lat: directCoord.latitude,
+                    lon: directCoord.longitude,
+                    lc: "3",
+                    is_kalman: false,
+                    speed_kmh: 0,
+                    course: 0,
+                    satellite: "GPS",
+                    locationType: "GPS"
+                )
+            }
+            
             if let latestPos = posCandidate {
-                let linkedBird = birdsByRing[txKey] ?? (docId.isEmpty ? nil : birdsByRing[docId])
+                let ringKey = transmitter.assigned_bird_ring?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let linkedBird = (!ringKey.isEmpty ? birdsByRing[ringKey] : nil) ?? birdsByRing[txKey] ?? (docId.isEmpty ? nil : birdsByRing[docId])
                 
                 let annotation = TransmitterMapAnnotation(
                     id: transmitter.id ?? transmitter.platform_id,
@@ -190,7 +214,25 @@ class MapViewModel: ObservableObject {
         positionsListener = TransmitterService.shared.subscribeToPositions { [weak self] updatedPositions in
             guard let self = self else { return }
             Task { @MainActor in
-                self.positions = updatedPositions
+                // Merge new incoming live positions
+                var currentMap: [String: Position] = [:]
+                for p in self.positions {
+                    if let key = p.effectiveTransmitterId {
+                        currentMap[key] = p
+                    }
+                }
+                for p in updatedPositions {
+                    if let key = p.effectiveTransmitterId {
+                        if let existing = currentMap[key] {
+                            if p.timestamp >= existing.timestamp {
+                                currentMap[key] = p
+                            }
+                        } else {
+                            currentMap[key] = p
+                        }
+                    }
+                }
+                self.positions = Array(currentMap.values)
                 self.buildAnnotations(visibilityFilter: visibilityFilter)
             }
         }

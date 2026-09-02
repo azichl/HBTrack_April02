@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseFirestore
 import SwiftUI
+import CoreLocation
 
 struct Transmitter: Identifiable, Codable, Hashable {
     @DocumentID var id: String?
@@ -18,6 +19,23 @@ struct Transmitter: Identifiable, Codable, Hashable {
     var site_location: String?
     var bird_id: String?
     var assigned_bird_ring: String?
+    
+    // Direct coordinate fields that might exist on transmitter documents in Firestore
+    var last_latitude: Double?
+    var last_longitude: Double?
+    var latitude: Double?
+    var longitude: Double?
+    var lat: Double?
+    var lon: Double?
+    
+    var directCoordinate: CLLocationCoordinate2D? {
+        let latitudeVal = last_latitude ?? latitude ?? lat
+        let longitudeVal = last_longitude ?? longitude ?? lon
+        guard let lat = latitudeVal, let lon = longitudeVal, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else {
+            return nil
+        }
+        return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+    }
     
     var effectiveStatus: String {
         return derived_status ?? status
