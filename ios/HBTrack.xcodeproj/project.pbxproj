@@ -51,6 +51,9 @@
 		EDE1C4661AE5CAB1A345E554 /* SearchBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CA06E26E99707BA34C87D6 /* SearchBarView.swift */; };
 		33C92DF69F65E0A523E522B2 /* TransmitterAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5BD63B62F2AB79088BB901 /* TransmitterAnnotation.swift */; };
 		27B841FC7319DA91C83387FD /* TransmitterDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3324E92D4ADB06CBD17817BA /* TransmitterDetailSheet.swift */; };
+		D11111112800000000000001 /* LeafletMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11111112800000000000002 /* LeafletMapView.swift */; };
+		D11111112800000000000002 /* WindyMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11111112800000000000003 /* WindyMapView.swift */; };
+		D11111112800000000000003 /* MeteoblueMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E11111112800000000000004 /* MeteoblueMapView.swift */; };
 		FB68DB8AB3A473117F7EA69B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39CDD1C89C767E30B72F6EAE /* SettingsView.swift */; };
 		C451BB0C9C982548A2124CA1 /* DataUploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77152F38E8BD756736B48132 /* DataUploadView.swift */; };
 		A052F0B18DED7B2D7B2AFA95 /* SyncLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A757BAE08FFF61AF85C9EAD5 /* SyncLogView.swift */; };
@@ -101,6 +104,9 @@
 		A6CA06E26E99707BA34C87D6 /* SearchBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SearchBarView.swift"; sourceTree = "<group>"; };
 		2F5BD63B62F2AB79088BB901 /* TransmitterAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TransmitterAnnotation.swift"; sourceTree = "<group>"; };
 		3324E92D4ADB06CBD17817BA /* TransmitterDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TransmitterDetailSheet.swift"; sourceTree = "<group>"; };
+		E11111112800000000000002 /* LeafletMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LeafletMapView.swift"; sourceTree = "<group>"; };
+		E11111112800000000000003 /* WindyMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WindyMapView.swift"; sourceTree = "<group>"; };
+		E11111112800000000000004 /* MeteoblueMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeteoblueMapView.swift"; sourceTree = "<group>"; };
 		39CDD1C89C767E30B72F6EAE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
 		77152F38E8BD756736B48132 /* DataUploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataUploadView.swift"; sourceTree = "<group>"; };
 		A757BAE08FFF61AF85C9EAD5 /* SyncLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SyncLogView.swift"; sourceTree = "<group>"; };
@@ -221,6 +227,9 @@
 			children = (
 				5CC25E88CB42EF67592B67B0 /* HistoryOverlay.swift */,
 				B54F6C54CB2040EA9A656EEA /* LiveMapView.swift */,
+				E11111112800000000000002 /* LeafletMapView.swift */,
+				E11111112800000000000003 /* WindyMapView.swift */,
+				E11111112800000000000004 /* MeteoblueMapView.swift */,
 				D335E38BD2C015668E55EA49 /* MapControlsView.swift */,
 				94653FBC4D78B27D0DA670E7 /* MapViewRepresentable.swift */,
 				0416900623DE2C4E5C2A57D3 /* MeasurementOverlay.swift */,
@@ -388,6 +397,9 @@
 				BC22CE5963CEC07FE528D598 /* MainTabView.swift in Sources */,
 				82E0793EA006DFBE64C2B3B5 /* HistoryOverlay.swift in Sources */,
 				0831A3A8B1B2C493CE9456B3 /* LiveMapView.swift in Sources */,
+				D11111112800000000000001 /* LeafletMapView.swift in Sources */,
+				D11111112800000000000002 /* WindyMapView.swift in Sources */,
+				D11111112800000000000003 /* MeteoblueMapView.swift in Sources */,
 				BEE2A7E9B1B629B4AE922657 /* MapControlsView.swift in Sources */,
 				24782565E1D227ADC5A3CC43 /* MapViewRepresentable.swift in Sources */,
 				4F9D94DDD80CE1F5C82A530B /* MeasurementOverlay.swift in Sources */,
