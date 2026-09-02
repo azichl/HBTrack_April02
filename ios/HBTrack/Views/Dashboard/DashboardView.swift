@@ -3,7 +3,6 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var viewModel = DashboardViewModel()
-    @State private var showLogoutAlert = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -20,42 +19,6 @@ struct DashboardView: View {
                         }
                         
                         Spacer()
-                        
-                        HStack(spacing: 8) {
-                            // Refresh Button
-                            Button {
-                                Task { await viewModel.loadData(forceRefresh: true) }
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(AppTheme.brandGold)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(UIColor.secondarySystemGroupedBackground))
-                                    .cornerRadius(12)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                                    )
-                                    .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-                            }
-                            
-                            // Floating Logout Button
-                            Button {
-                                showLogoutAlert = true
-                            } label: {
-                                Image(systemName: "rectangle.portrait.and.arrow.right")
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundColor(.red)
-                                    .frame(width: 40, height: 40)
-                                    .background(Color(UIColor.secondarySystemGroupedBackground))
-                                    .cornerRadius(12)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                                    )
-                                    .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-                            }
-                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
@@ -126,14 +89,6 @@ struct DashboardView: View {
                 await viewModel.loadData()
                 viewModel.subscribeToUpdates()
             }
-        }
-        .alert("Sign Out", isPresented: $showLogoutAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Sign Out", role: .destructive) {
-                authVM.logout()
-            }
-        } message: {
-            Text("Are you sure you want to sign out of RAF Tracking?")
         }
     }
     

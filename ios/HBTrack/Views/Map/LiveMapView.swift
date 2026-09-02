@@ -67,15 +67,13 @@ struct LiveMapView: View {
     @State private var showLayerPicker = false
     @State private var showWeatherPicker = false
     @State private var showStatsSheet = false
-    @State private var showLogoutAlert = false
     @State private var isFullscreen = false
     
     var body: some View {
         VStack(spacing: 0) {
             if !isFullscreen {
-                // Sub-tabs Pill Bar + Action Buttons
-                HStack(spacing: 12) {
-                    // Sub Tabs (Tracking, Windy, Meteoblue)
+                // Sub-tabs Pill Bar (Tracking, Windy, Meteoblue)
+                HStack {
                     HStack(spacing: 4) {
                         ForEach(MapSubTab.allCases) { tab in
                             Button {
@@ -91,7 +89,7 @@ struct LiveMapView: View {
                                 }
                                 .foregroundColor(selectedSubTab == tab ? AppTheme.brandGold : AppTheme.textSecondary)
                                 .padding(.vertical, 8)
-                                .padding(.horizontal, 10)
+                                .frame(maxWidth: .infinity)
                                 .background(
                                     selectedSubTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
                                 )
@@ -107,46 +105,6 @@ struct LiveMapView: View {
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
                     )
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 8) {
-                        // Refresh Button
-                        Button {
-                            Task {
-                                await viewModel.loadData(forceRefresh: true, visibilityFilter: authVM.isTransmitterVisible)
-                            }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(AppTheme.brandGold)
-                                .frame(width: 40, height: 40)
-                                .background(Color(UIColor.secondarySystemGroupedBackground))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-                        }
-                        
-                        // Floating Logout Button
-                        Button {
-                            showLogoutAlert = true
-                        } label: {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundColor(.red)
-                                .frame(width: 40, height: 40)
-                                .background(Color(UIColor.secondarySystemGroupedBackground))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.04), radius: 3, x: 0, y: 1)
-                        }
-                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
@@ -367,14 +325,6 @@ struct LiveMapView: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
-        }
-        .alert("Sign Out", isPresented: $showLogoutAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Sign Out", role: .destructive) {
-                authVM.logout()
-            }
-        } message: {
-            Text("Are you sure you want to sign out of RAF Tracking?")
         }
     }
 }

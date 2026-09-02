@@ -32,58 +32,38 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Sub-tabs Segmented Pill + Logout Button
-                    HStack(spacing: 12) {
-                        // Pill Tabs
-                        HStack(spacing: 4) {
-                            ForEach(SettingsTab.allCases) { tab in
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        selectedTab = tab
-                                    }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: tab.icon)
-                                            .font(.system(size: 14))
-                                        Text(tab.rawValue)
-                                            .font(.system(size: 14, weight: .medium))
-                                    }
-                                    .foregroundColor(selectedTab == tab ? AppTheme.brandGold : AppTheme.textSecondary)
-                                    .padding(.vertical, 10)
-                                    .frame(maxWidth: .infinity)
-                                    .background(
-                                        selectedTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
-                                    )
-                                    .cornerRadius(12)
-                                    .shadow(color: selectedTab == tab ? Color.black.opacity(0.04) : Color.clear, radius: 4, x: 0, y: 2)
+                    // Sub-tabs Segmented Pill
+                    HStack(spacing: 4) {
+                        ForEach(SettingsTab.allCases) { tab in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedTab = tab
                                 }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: tab.icon)
+                                        .font(.system(size: 14))
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                                .foregroundColor(selectedTab == tab ? AppTheme.brandGold : AppTheme.textSecondary)
+                                .padding(.vertical, 10)
+                                .frame(maxWidth: .infinity)
+                                .background(
+                                    selectedTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
+                                )
+                                .cornerRadius(12)
+                                .shadow(color: selectedTab == tab ? Color.black.opacity(0.04) : Color.clear, radius: 4, x: 0, y: 2)
                             }
                         }
-                        .padding(4)
-                        .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.8))
-                        .cornerRadius(16)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                        )
-                        
-                        // Floating Logout Button
-                        Button {
-                            showLogoutAlert = true
-                        } label: {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.red)
-                                .frame(width: 44, height: 44)
-                                .background(Color(UIColor.secondarySystemGroupedBackground))
-                                .cornerRadius(14)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
-                        }
                     }
+                    .padding(4)
+                    .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.8))
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                    )
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     
@@ -215,6 +195,28 @@ struct SettingsView: View {
                             .stroke(!isDarkMode ? AppTheme.brandGold : Color(UIColor.separator).opacity(0.4), lineWidth: !isDarkMode ? 1.5 : 1)
                     )
                 }
+                
+                // Sign Out Button (down to dark/light mode)
+                Button {
+                    showLogoutAlert = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 16, weight: .bold))
+                        Text("Sign Out")
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                    .foregroundColor(.red)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(Color.red.opacity(0.08))
+                    .cornerRadius(14)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                    )
+                }
+                .padding(.top, 6)
             }
         }
     }

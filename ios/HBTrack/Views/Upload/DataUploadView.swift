@@ -4,76 +4,56 @@ struct DataUploadView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var viewModel = DataUploadViewModel()
     @State private var timeHorizon: String = "24h"
-    @State private var showLogoutAlert = false
     @State private var showSyncLog = false
     
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Top Status Card + Logout Button
+                    // Top Status
+                    // Sub-header Card
                     HStack(spacing: 12) {
-                        // CLS Data Upload Header Card
-                        HStack(spacing: 14) {
-                            Image(systemName: "cloud.fill")
-                                .font(.system(size: 20))
-                                .foregroundColor(AppTheme.brandGold)
-                                .frame(width: 44, height: 44)
-                                .background(AppTheme.brandGoldLight)
-                                .cornerRadius(12)
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("CLS Data Upload")
-                                    .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.primary)
-                                Text("Field API Ingestion")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(AppTheme.textSecondary)
-                            }
-                            
-                            Spacer()
-                            
-                            // Ready Badge
-                            HStack(spacing: 5) {
-                                Circle()
-                                    .fill(Color(hex: "22c55e"))
-                                    .frame(width: 6, height: 6)
-                                Text("Ready")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundColor(Color(hex: "15803d"))
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color(hex: "dcfce7"))
-                            .clipShape(Capsule())
-                        }
-                        .padding(14)
-                        .frame(maxWidth: .infinity)
-                        .background(Color(UIColor.secondarySystemGroupedBackground))
-                        .cornerRadius(18)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18)
-                                .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                        )
-                        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+                        Image(systemName: "antenna.radiowaves.left.and.right")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppTheme.brandGold)
+                            .frame(width: 42, height: 42)
+                            .background(AppTheme.brandGoldLight)
+                            .cornerRadius(12)
                         
-                        // Floating Logout Button
-                        Button {
-                            showLogoutAlert = true
-                        } label: {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.red)
-                                .frame(width: 44, height: 44)
-                                .background(Color(UIColor.secondarySystemGroupedBackground))
-                                .cornerRadius(14)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
-                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                                )
-                                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("CLS Data Upload")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.primary)
+                            Text("Field API Ingestion")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.textSecondary)
                         }
+                        
+                        Spacer()
+                        
+                        // Ready Badge
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Color(hex: "22c55e"))
+                                .frame(width: 6, height: 6)
+                            Text("Ready")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Color(hex: "15803d"))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color(hex: "dcfce7"))
+                        .clipShape(Capsule())
                     }
+                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .cornerRadius(18)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     
@@ -223,14 +203,6 @@ struct DataUploadView: View {
             if let result = viewModel.syncResult {
                 SyncLogView(result: result)
             }
-        }
-        .alert("Sign Out", isPresented: $showLogoutAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Sign Out", role: .destructive) {
-                authVM.logout()
-            }
-        } message: {
-            Text("Are you sure you want to sign out of RAF Tracking?")
         }
     }
 }
