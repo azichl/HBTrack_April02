@@ -72,21 +72,25 @@ struct Position: Identifiable, Codable {
         self.id = try? container.decodeIfPresent(String.self, forKey: .id)
         
         // transmitter_id / platformId can be string or numeric
+        var txId: String? = nil
+        var pfId: String? = nil
         if let s = try? container.decodeIfPresent(String.self, forKey: .transmitter_id) {
-            self.transmitter_id = s
+            txId = s
         } else if let num = try? container.decodeIfPresent(Int.self, forKey: .transmitter_id) {
-            self.transmitter_id = String(num)
+            txId = String(num)
         }
         
         if let s = try? container.decodeIfPresent(String.self, forKey: .platformId) {
-            self.platformId = s
+            pfId = s
         } else if let num = try? container.decodeIfPresent(Int.self, forKey: .platformId) {
-            self.platformId = String(num)
+            pfId = String(num)
         }
         
         // Cross-fill
-        if self.transmitter_id == nil { self.transmitter_id = self.platformId }
-        if self.platformId == nil { self.platformId = self.transmitter_id }
+        if txId == nil { txId = pfId }
+        if pfId == nil { pfId = txId }
+        self.transmitter_id = txId
+        self.platformId = pfId
         
         // Timestamp
         self.timestamp = (try? container.decodeIfPresent(String.self, forKey: .timestamp)) ?? ISO8601DateFormatter().string(from: Date())
@@ -117,7 +121,7 @@ struct Position: Identifiable, Codable {
         }
         
         // Specific fix for transmitter 242086: auto-correct negative longitude
-        let tid = self.transmitter_id ?? self.platformId ?? ""
+        let tid = txId ?? pfId ?? ""
         if tid == "242086" && longitudeVal < 0 {
             longitudeVal = abs(longitudeVal)
         }

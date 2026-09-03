@@ -106,8 +106,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
     }
     
     init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = try? container.decodeIfPresent(String.self, forKey: .id)
+        let decodedId = try? container.decodeIfPresent(String.self, forKey: .id)
+        self.id = decodedId
         
         // Decode platform_id flexibly from string or int across keys
         var pid = ""
@@ -123,7 +123,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
             pid = s
         } else if let num = try? container.decodeIfPresent(Int.self, forKey: .transmitter_id) {
             pid = String(num)
-        } else if let docId = self.id, !docId.isEmpty {
+        } else if let docId = decodedId, !docId.isEmpty {
             pid = docId
         }
         self.platform_id = pid
