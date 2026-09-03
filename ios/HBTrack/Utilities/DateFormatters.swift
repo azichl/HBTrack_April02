@@ -75,6 +75,26 @@ struct DateFormatters {
         return formatter.string(from: date)
     }
     
+    static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    
+    static func displayDate(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .medium
+        df.timeStyle = .none
+        return df.string(from: date)
+    }
+    
+    static func displayTime(_ date: Date) -> String {
+        let df = DateFormatter()
+        df.dateStyle = .none
+        df.timeStyle = .medium
+        return df.string(from: date)
+    }
+    
     static let supportedTimeZones: [String: TimeZone] = [
         "System": TimeZone.current,
         "UTC": TimeZone(identifier: "UTC")!,
