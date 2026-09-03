@@ -137,4 +137,20 @@ struct Position: Identifiable, Codable {
         self.satellite = try? container.decodeIfPresent(String.self, forKey: .satellite)
         self.locationType = try? container.decodeIfPresent(String.self, forKey: .locationType)
     }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encodeIfPresent(transmitter_id, forKey: .transmitter_id)
+        try container.encodeIfPresent(platformId, forKey: .platformId)
+        try container.encode(timestamp, forKey: .timestamp)
+        try container.encode(lat, forKey: .lat)
+        try container.encode(lon, forKey: .lon)
+        try container.encodeIfPresent(lc, forKey: .lc)
+        try container.encodeIfPresent(is_kalman, forKey: .is_kalman)
+        try container.encodeIfPresent(speed_kmh, forKey: .speed_kmh)
+        try container.encodeIfPresent(course, forKey: .course)
+        try container.encodeIfPresent(satellite, forKey: .satellite)
+        try container.encodeIfPresent(locationType, forKey: .locationType)
+    }
 }

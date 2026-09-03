@@ -189,4 +189,29 @@ struct Transmitter: Identifiable, Codable, Hashable {
         self.lon = (try? container.decodeIfPresent(Double.self, forKey: .lon))
             ?? (try? container.decodeIfPresent(String.self, forKey: .lon)).flatMap { Double($0) }
     }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encode(platform_id, forKey: .platform_id)
+        try container.encodeIfPresent(model, forKey: .model)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(derived_status, forKey: .derived_status)
+        try container.encodeIfPresent(battery_voltage, forKey: .battery_voltage)
+        try container.encodeIfPresent(last_fix, forKey: .last_fix)
+        try container.encodeIfPresent(duty_cycle, forKey: .duty_cycle)
+        try container.encodeIfPresent(frequency, forKey: .frequency)
+        try container.encodeIfPresent(hex_id, forKey: .hex_id)
+        try container.encodeIfPresent(manufacturer, forKey: .manufacturer)
+        try container.encodeIfPresent(program_region, forKey: .program_region)
+        try container.encodeIfPresent(site_location, forKey: .site_location)
+        try container.encodeIfPresent(bird_id, forKey: .bird_id)
+        try container.encodeIfPresent(assigned_bird_ring, forKey: .assigned_bird_ring)
+        try container.encodeIfPresent(last_latitude, forKey: .last_latitude)
+        try container.encodeIfPresent(last_longitude, forKey: .last_longitude)
+        try container.encodeIfPresent(latitude, forKey: .latitude)
+        try container.encodeIfPresent(longitude, forKey: .longitude)
+        try container.encodeIfPresent(lat, forKey: .lat)
+        try container.encodeIfPresent(lon, forKey: .lon)
+    }
 }
