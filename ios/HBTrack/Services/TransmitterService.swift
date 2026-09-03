@@ -45,8 +45,8 @@ class TransmitterService {
     }
     
     /**
-     * Fetches the latest positions for ALL transmitters in the database.
-     * Searches both `positions` and `argos_positions` collections across string & numeric IDs,
+     * Efficiently fetches the latest positions for all transmitters using batch queries.
+     * Prevents Firestore thread exhaustion / internal assertion failures,
      * and seamlessly falls back to direct transmitter coordinates when available.
      */
     func fetchLatestPositionsPerTransmitter(for transmitters: [Transmitter], forceRefresh: Bool = false) async throws -> [Position] {
@@ -55,125 +55,87 @@ class TransmitterService {
         }
         
         let db = FirestoreService.shared.db
+        let decoder = Firestore.Decoder()
+        var latestPositionsByTx: [String: Position] = [:]
         
-        // Execute parallel lookups for all transmitters with concurrency
-        let positions = await withTaskGroup(of: Position?.self, returning: [Position].self) { group in
-            for transmitter in transmitters {
-                let pid = transmitter.platform_id.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !pid.isEmpty else { continue }
-                let docId = transmitter.id ?? pid
-                
-                group.addTask {
-                    let decoder = Firestore.Decoder()
-                    
-                    // 1. Check `positions` collection by transmitter_id (string)
-                    if let snap = try? await db.collection("positions")
-                        .whereField("transmitter_id", isEqualTo: pid)
-                        .order(by: "timestamp", descending: true)
-                        .limit(to: 1)
-                        .getDocuments(),
-                       let doc = snap.documents.first,
-                       let pos = try? doc.data(as: Position.self, decoder: decoder),
-                       pos.lat != 0, pos.lon != 0 {
-                        return pos
+        // Helper to ingest a position and keep only the latest fix per transmitter
+        let ingestPosition: (Position) -> Void = { pos in
+            guard pos.lat != 0, pos.lon != 0, !pos.lat.isNaN, !pos.lon.isNaN, abs(pos.lat) <= 90, abs(pos.lon) <= 180 else { return }
+            let keys = [pos.transmitter_id, pos.platformId].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            for key in keys {
+                if let existing = latestPositionsByTx[key] {
+                    if pos.timestamp > existing.timestamp {
+                        latestPositionsByTx[key] = pos
                     }
-                    
-                    // 2. Check `positions` collection by transmitter_id (numeric)
-                    if let numId = Int(pid),
-                       let snap = try? await db.collection("positions")
-                        .whereField("transmitter_id", isEqualTo: numId)
-                        .order(by: "timestamp", descending: true)
-                        .limit(to: 1)
-                        .getDocuments(),
-                       let doc = snap.documents.first,
-                       let pos = try? doc.data(as: Position.self, decoder: decoder),
-                       pos.lat != 0, pos.lon != 0 {
-                        return pos
-                    }
-                    
-                    // 3. Check `positions` collection by platformId
-                    if let snap = try? await db.collection("positions")
-                        .whereField("platformId", isEqualTo: pid)
-                        .order(by: "timestamp", descending: true)
-                        .limit(to: 1)
-                        .getDocuments(),
-                       let doc = snap.documents.first,
-                       let pos = try? doc.data(as: Position.self, decoder: decoder),
-                       pos.lat != 0, pos.lon != 0 {
-                        return pos
-                    }
-                    
-                    // 4. Check `argos_positions` collection by platformId (string)
-                    if let snap = try? await db.collection("argos_positions")
-                        .whereField("platformId", isEqualTo: pid)
-                        .order(by: "timestamp", descending: true)
-                        .limit(to: 1)
-                        .getDocuments(),
-                       let doc = snap.documents.first,
-                       let pos = try? doc.data(as: Position.self, decoder: decoder),
-                       pos.lat != 0, pos.lon != 0 {
-                        return pos
-                    }
-
-                    // 5. Check `argos_positions` collection by platformId (numeric)
-                    if let numId = Int(pid),
-                       let snap = try? await db.collection("argos_positions")
-                        .whereField("platformId", isEqualTo: numId)
-                        .order(by: "timestamp", descending: true)
-                        .limit(to: 1)
-                        .getDocuments(),
-                       let doc = snap.documents.first,
-                       let pos = try? doc.data(as: Position.self, decoder: decoder),
-                       pos.lat != 0, pos.lon != 0 {
-                        return pos
-                    }
-
-                    // 6. Check `argos_positions` collection by transmitter_id
-                    if let snap = try? await db.collection("argos_positions")
-                        .whereField("transmitter_id", isEqualTo: pid)
-                        .order(by: "timestamp", descending: true)
-                        .limit(to: 1)
-                        .getDocuments(),
-                       let doc = snap.documents.first,
-                       let pos = try? doc.data(as: Position.self, decoder: decoder),
-                       pos.lat != 0, pos.lon != 0 {
-                        return pos
-                    }
-                    
-                    // 7. Fallback to direct coordinate on the transmitter document itself
-                    if let directCoord = transmitter.directCoordinate {
-                        return Position(
-                            id: "tx-direct-\(docId)",
-                            transmitter_id: pid,
-                            platformId: pid,
-                            timestamp: transmitter.last_fix ?? ISO8601DateFormatter().string(from: Date()),
-                            lat: directCoord.latitude,
-                            lon: directCoord.longitude,
-                            lc: "3",
-                            is_kalman: false,
-                            speed_kmh: 0,
-                            course: 0,
-                            satellite: "GPS",
-                            locationType: "GPS"
-                        )
-                    }
-                    
-                    return nil
+                } else {
+                    latestPositionsByTx[key] = pos
                 }
             }
-            
-            var collected: [Position] = []
-            for await pos in group {
-                if let valid = pos {
-                    collected.append(valid)
-                }
-            }
-            return collected
         }
         
-        self.cachedPositions = positions
+        // 1. Fetch recent `positions` (single batch query, fast & stable, no thread exhaustion)
+        do {
+            let snap = try await db.collection("positions")
+                .order(by: "timestamp", descending: true)
+                .limit(to: 500)
+                .getDocuments()
+            
+            for doc in snap.documents {
+                if let pos = try? doc.data(as: Position.self, decoder: decoder) {
+                    ingestPosition(pos)
+                }
+            }
+        } catch {
+            print("Warning: Could not fetch from positions collection: \(error)")
+        }
+        
+        // 2. Fetch recent `argos_positions` (single batch query)
+        do {
+            let snap = try await db.collection("argos_positions")
+                .order(by: "timestamp", descending: true)
+                .limit(to: 500)
+                .getDocuments()
+            
+            for doc in snap.documents {
+                if let pos = try? doc.data(as: Position.self, decoder: decoder) {
+                    ingestPosition(pos)
+                }
+            }
+        } catch {
+            print("Warning: Could not fetch from argos_positions collection: \(error)")
+        }
+        
+        // 3. Match transmitters and fallback to direct coordinates when not in recent batches
+        var resultPositions: [Position] = []
+        for transmitter in transmitters {
+            let pid = transmitter.platform_id.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !pid.isEmpty else { continue }
+            let docId = (transmitter.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            if let pos = latestPositionsByTx[pid] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId]) {
+                resultPositions.append(pos)
+            } else if let directCoord = transmitter.directCoordinate {
+                let fallbackPos = Position(
+                    id: "tx-direct-\(docId.isEmpty ? pid : docId)",
+                    transmitter_id: pid,
+                    platformId: pid,
+                    timestamp: transmitter.last_fix ?? ISO8601DateFormatter().string(from: Date()),
+                    lat: directCoord.latitude,
+                    lon: directCoord.longitude,
+                    lc: "3",
+                    is_kalman: false,
+                    speed_kmh: 0,
+                    course: 0,
+                    satellite: "GPS",
+                    locationType: "GPS"
+                )
+                resultPositions.append(fallbackPos)
+            }
+        }
+        
+        self.cachedPositions = resultPositions
         self.lastCacheTime = Date()
-        return positions
+        return resultPositions
     }
     
     func fetchHistoricalPositions(transmitterId: String, startDate: Date, endDate: Date, locationType: String?) async throws -> [Position] {
