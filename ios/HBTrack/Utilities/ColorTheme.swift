@@ -18,7 +18,7 @@ struct AppTheme {
 }
 
 struct StatusColor {
-    static let active = Color(hex: "22c55e")
+    static let active = Color(hex: "10b981")
     static let staticTest = Color(hex: "eab308")
     static let potentialMortality = Color(hex: "f97316")
     static let inactive = Color(hex: "0f172a")

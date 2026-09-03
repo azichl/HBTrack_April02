@@ -65,6 +65,17 @@ class DashboardViewModel: ObservableObject {
         return nil
     }
     
+    func normalizeStatus(_ raw: String?) -> String {
+        guard let raw = raw, !raw.isEmpty else { return "Inactive" }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed == "active" { return "Active" }
+        if trimmed == "dead" { return "Dead" }
+        if trimmed.contains("potential") || trimmed.contains("mortality") { return "Potential Mortality" }
+        if trimmed.contains("static") { return "Static test" }
+        if trimmed == "inactive" { return "Inactive" }
+        return raw.capitalized
+    }
+    
     private func computeStats(transmitters: [Transmitter], alerts: [Alert]) {
         self.totalDeployed = transmitters.count
         self.activeBirdsCount = transmitters.filter { $0.effectiveStatus.lowercased() == "active" }.count
@@ -73,14 +84,25 @@ class DashboardViewModel: ObservableObject {
         self.activeAlertsCount = activeAlts.count
         self.criticalAlertsCount = activeAlts.filter { $0.severity.lowercased() == "critical" }.count
         
-        // Status breakdown
+        // Status breakdown normalized
         var counts: [String: Int] = [:]
         for t in transmitters {
-            counts[t.effectiveStatus, default: 0] += 1
+            let s = normalizeStatus(t.derived_status ?? t.status)
+            counts[s, default: 0] += 1
         }
-        self.statusBreakdown = counts.map { (status, count) in
-            (status: status, count: count, color: StatusColor.color(for: status))
-        }.sorted { $0.count > $1.count }
+        
+        // Preferred ordering matching web/screenshot: Dead, Active, Potential Mortality, Static test, Inactive
+        let preferredOrder = ["Dead", "Active", "Potential Mortality", "Static test", "Inactive"]
+        var breakdown: [(status: String, count: Int, color: Color)] = []
+        for s in preferredOrder {
+            if let c = counts[s], c > 0 {
+                breakdown.append((status: s, count: c, color: StatusColor.color(for: s)))
+            }
+        }
+        for (s, c) in counts where c > 0 && !preferredOrder.contains(s) {
+            breakdown.append((status: s, count: c, color: StatusColor.color(for: s)))
+        }
+        self.statusBreakdown = breakdown
         
         // Recent alerts
         self.recentAlerts = Array(alerts.filter { $0.isActive }.sorted { $0.timestamp > $1.timestamp }.prefix(6))
@@ -105,6 +127,30 @@ class DashboardViewModel: ObservableObject {
             }
         }
         self.ingestionChartData = chartData
+    }
+    
+    var formattedLastUpdate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yyyy HH:mm:ss"
+        
+        if let date = lastIngestTime {
+            return formatter.string(from: date)
+        }
+        
+        var latestDate: Date? = nil
+        for t in transmitters {
+            if let fix = t.last_fix, let d = DateFormatters.parseDate(fix) {
+                if latestDate == nil || d > latestDate! {
+                    latestDate = d
+                }
+            }
+        }
+        
+        if let d = latestDate {
+            return formatter.string(from: d)
+        }
+        
+        return "No Data"
     }
     
     func subscribeToUpdates() {
