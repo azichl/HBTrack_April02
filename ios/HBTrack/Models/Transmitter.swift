@@ -106,6 +106,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
     }
     
     init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
         let decodedId = try? container.decodeIfPresent(String.self, forKey: .id)
         self.id = decodedId
         
