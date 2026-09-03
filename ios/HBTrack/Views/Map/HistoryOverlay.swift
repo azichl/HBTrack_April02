@@ -4,6 +4,8 @@ struct HistoryOverlay: View {
     @ObservedObject var viewModel: MapViewModel
     @State private var dragOffset: CGSize = .zero
     @State private var accumulatedOffset: CGSize = .zero
+    @State private var showSearchInput: Bool = false
+    @State private var pttSearchText: String = ""
     
     var body: some View {
         VStack(spacing: 12) {
@@ -32,6 +34,8 @@ struct HistoryOverlay: View {
                         viewModel.rawHistoryPositionsByTx.removeAll()
                         viewModel.historyPaths.removeAll()
                         viewModel.historyPositions.removeAll()
+                        showSearchInput = false
+                        pttSearchText = ""
                     }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -98,26 +102,19 @@ struct HistoryOverlay: View {
                                 .cornerRadius(8)
                             }
                             
-                            // "+ Add PTT" Dropdown Menu
-                            Menu {
-                                ForEach(viewModel.transmitters) { tx in
-                                    let isSelected = viewModel.selectedTransmitterIds.contains(tx.platform_id)
-                                    Button {
-                                        viewModel.toggleHistoryTransmitter(tx.platform_id)
-                                    } label: {
-                                        HStack {
-                                            Text("\(tx.platform_id) (\(tx.effectiveStatus))")
-                                            if isSelected {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
+                            // "+ Add PTT" Search Toggle Button
+                            Button {
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                    showSearchInput.toggle()
+                                    if !showSearchInput {
+                                        pttSearchText = ""
                                     }
                                 }
                             } label: {
                                 HStack(spacing: 4) {
-                                    Image(systemName: "plus.circle.fill")
+                                    Image(systemName: showSearchInput ? "chevron.up" : "magnifyingglass")
                                         .font(.system(size: 11, weight: .semibold))
-                                    Text("Add PTT")
+                                    Text(showSearchInput ? "Close" : "Add PTT")
                                         .font(.system(size: 11, weight: .bold))
                                 }
                                 .foregroundColor(AppTheme.brandGold)
@@ -128,6 +125,102 @@ struct HistoryOverlay: View {
                             }
                         }
                         .padding(.vertical, 2)
+                    }
+                    
+                    // Search & Direct Entry Case for Scalable 1k - 10k+ PTTs
+                    if showSearchInput {
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(spacing: 6) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(AppTheme.textMuted)
+                                    
+                                    TextField("Type PTT ID (e.g. 244289)...", text: $pttSearchText)
+                                        .font(.system(size: 12))
+                                        .keyboardType(.numbersAndPunctuation)
+                                        .autocapitalization(.none)
+                                        .disableAutocorrection(true)
+                                        .onSubmit {
+                                            submitTypedPTT()
+                                        }
+                                    
+                                    if !pttSearchText.isEmpty {
+                                        Button {
+                                            pttSearchText = ""
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(Color(UIColor.secondaryLabel))
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color(UIColor.systemBackground))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(AppTheme.brandGold.opacity(0.5), lineWidth: 1)
+                                )
+                                
+                                Button {
+                                    submitTypedPTT()
+                                } label: {
+                                    Text("Add")
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 7)
+                                        .background(pttSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.gray.opacity(0.4) : AppTheme.brandGold)
+                                        .cornerRadius(8)
+                                }
+                                .disabled(pttSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                            
+                            // Instant Suggestions Matching Typed Query
+                            let cleanQuery = pttSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let matches = cleanQuery.isEmpty ? [] : viewModel.transmitters.filter {
+                                $0.platform_id.localizedCaseInsensitiveContains(cleanQuery) &&
+                                !viewModel.selectedTransmitterIds.contains($0.platform_id)
+                            }.prefix(4)
+                            
+                            if !matches.isEmpty {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(Array(matches), id: \.platform_id) { tx in
+                                            Button {
+                                                viewModel.toggleHistoryTransmitter(tx.platform_id)
+                                                pttSearchText = ""
+                                                withAnimation {
+                                                    showSearchInput = false
+                                                }
+                                            } label: {
+                                                HStack(spacing: 3) {
+                                                    Image(systemName: "plus")
+                                                        .font(.system(size: 9, weight: .bold))
+                                                    Text(tx.platform_id)
+                                                        .fontWeight(.bold)
+                                                    Text("(\(tx.effectiveStatus))")
+                                                        .foregroundColor(.secondary)
+                                                }
+                                                .font(.system(size: 10.5))
+                                                .padding(.horizontal, 7)
+                                                .padding(.vertical, 3.5)
+                                                .background(Color(UIColor.systemBackground))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
+                                                )
+                                                .cornerRadius(6)
+                                            }
+                                        }
+                                    }
+                                    .padding(.vertical, 2)
+                                }
+                            }
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
             }
@@ -242,6 +335,25 @@ struct HistoryOverlay: View {
             if viewModel.historyPaths.isEmpty {
                 await viewModel.loadHistory()
             }
+        }
+    }
+    
+    private func submitTypedPTT() {
+        let clean = pttSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        
+        if let match = viewModel.transmitters.first(where: { $0.platform_id.lowercased() == clean.lowercased() }) {
+            if !viewModel.selectedTransmitterIds.contains(match.platform_id) {
+                viewModel.toggleHistoryTransmitter(match.platform_id)
+            }
+        } else {
+            if !viewModel.selectedTransmitterIds.contains(clean) {
+                viewModel.toggleHistoryTransmitter(clean)
+            }
+        }
+        pttSearchText = ""
+        withAnimation {
+            showSearchInput = false
         }
     }
 }
