@@ -3,14 +3,13 @@ import SwiftUI
 struct DataUploadView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var viewModel = DataUploadViewModel()
-    @State private var timeHorizon: String = "24h"
+    @State private var showPassword = false
     @State private var showSyncLog = false
     
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Top Status
                     // Sub-header Card
                     HStack(spacing: 12) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
@@ -31,18 +30,18 @@ struct DataUploadView: View {
                         
                         Spacer()
                         
-                        // Ready Badge
+                        // Status Badge
                         HStack(spacing: 5) {
                             Circle()
-                                .fill(Color(hex: "22c55e"))
+                                .fill(statusColor)
                                 .frame(width: 6, height: 6)
-                            Text("Ready")
+                            Text(statusText)
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(Color(hex: "15803d"))
+                                .foregroundColor(statusTextColor)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color(hex: "dcfce7"))
+                        .background(statusBgColor)
                         .clipShape(Capsule())
                     }
                     .padding(14)
@@ -91,7 +90,21 @@ struct DataUploadView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: "lock")
                                     .foregroundColor(AppTheme.textMuted)
-                                SecureField("••••••••", text: $viewModel.password)
+                                
+                                if showPassword {
+                                    TextField("••••••••", text: $viewModel.password)
+                                        .autocapitalization(.none)
+                                        .disableAutocorrection(true)
+                                } else {
+                                    SecureField("••••••••", text: $viewModel.password)
+                                }
+                                
+                                Button {
+                                    showPassword.toggle()
+                                } label: {
+                                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                                        .foregroundColor(AppTheme.textMuted)
+                                }
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
@@ -111,33 +124,37 @@ struct DataUploadView: View {
                             
                             HStack(spacing: 4) {
                                 Button {
-                                    timeHorizon = "24h"
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.timeHorizon = "24h"
+                                    }
                                 } label: {
                                     Text("Last 24 Hours")
                                         .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(timeHorizon == "24h" ? AppTheme.brandGold : AppTheme.textSecondary)
+                                        .foregroundColor(viewModel.timeHorizon == "24h" ? AppTheme.brandGold : AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 10)
                                         .background(
-                                            timeHorizon == "24h" ? Color(UIColor.systemBackground) : Color.clear
+                                            viewModel.timeHorizon == "24h" ? Color(UIColor.systemBackground) : Color.clear
                                         )
                                         .cornerRadius(10)
-                                        .shadow(color: timeHorizon == "24h" ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
+                                        .shadow(color: viewModel.timeHorizon == "24h" ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
                                 }
                                 
                                 Button {
-                                    timeHorizon = "custom"
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.timeHorizon = "custom"
+                                    }
                                 } label: {
                                     Text("Custom Date")
                                         .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(timeHorizon == "custom" ? AppTheme.brandGold : AppTheme.textSecondary)
+                                        .foregroundColor(viewModel.timeHorizon == "custom" ? AppTheme.brandGold : AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 10)
                                         .background(
-                                            timeHorizon == "custom" ? Color(UIColor.systemBackground) : Color.clear
+                                            viewModel.timeHorizon == "custom" ? Color(UIColor.systemBackground) : Color.clear
                                         )
                                         .cornerRadius(10)
-                                        .shadow(color: timeHorizon == "custom" ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
+                                        .shadow(color: viewModel.timeHorizon == "custom" ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
                                 }
                             }
                             .padding(4)
@@ -149,25 +166,76 @@ struct DataUploadView: View {
                             )
                         }
                         
+                        // Custom Date Range Pickers (if Custom Date is active)
+                        if viewModel.timeHorizon == "custom" {
+                            VStack(spacing: 8) {
+                                DatePicker("From:", selection: $viewModel.customStartDate, displayedComponents: [.date, .hourAndMinute])
+                                    .font(.system(size: 13))
+                                DatePicker("To:", selection: $viewModel.customEndDate, displayedComponents: [.date, .hourAndMinute])
+                                    .font(.system(size: 13))
+                            }
+                            .padding(12)
+                            .background(Color(UIColor.systemBackground))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color(UIColor.separator).opacity(0.3), lineWidth: 1)
+                            )
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                        
+                        // Error Banner
                         if let error = viewModel.syncError {
-                            Text(error)
-                                .font(.caption)
-                                .foregroundColor(.red)
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.red)
+                                    .font(.system(size: 14))
+                                Text(error)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.red)
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.08))
+                            .cornerRadius(8)
+                        }
+                        
+                        // Success Toast
+                        if viewModel.syncStatus == "success", let result = viewModel.syncResult {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(Color(hex: "15803d"))
+                                    Text("CLS Data Upload Completed Successfully ✓")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundColor(Color(hex: "15803d"))
+                                }
+                                Text("\(result.recordsImported) fixes imported across \(result.transmittersUpdated) transmitters. Synced to Firebase.")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color(hex: "166534"))
+                            }
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(hex: "dcfce7"))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(hex: "86efac"), lineWidth: 1)
+                            )
                         }
                         
                         // Execute Request Button
                         Button {
                             Task {
                                 await viewModel.sync()
-                                if viewModel.syncResult != nil {
-                                    showSyncLog = true
-                                }
                             }
                         } label: {
                             HStack(spacing: 8) {
                                 if viewModel.isSyncing {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    Text("Connecting to CLS API...")
+                                        .fontWeight(.semibold)
                                 } else {
                                     Image(systemName: "play.fill")
                                         .font(.system(size: 13))
@@ -184,6 +252,59 @@ struct DataUploadView: View {
                         .disabled(viewModel.isSyncing || viewModel.username.isEmpty || viewModel.password.isEmpty)
                         .opacity((viewModel.username.isEmpty || viewModel.password.isEmpty) ? 0.6 : 1.0)
                         .padding(.top, 4)
+                        
+                        // Live Execution Console (matching Web App logs)
+                        if !viewModel.logs.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("Execution Logs")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.primary)
+                                    
+                                    Spacer()
+                                    
+                                    Button {
+                                        if let res = viewModel.syncResult {
+                                            showSyncLog = true
+                                        }
+                                    } label: {
+                                        Text("Full Details")
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundColor(AppTheme.brandGold)
+                                    }
+                                }
+                                
+                                ScrollViewReader { scrollProxy in
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            ForEach(Array(viewModel.logs.enumerated()), id: \.offset) { idx, log in
+                                                Text(log)
+                                                    .font(.system(size: 10.5, design: .monospaced))
+                                                    .foregroundColor(log.contains("[ERROR]") ? .red : (log.contains("✓") ? Color(hex: "22c55e") : Color(UIColor.secondaryLabel)))
+                                                    .id(idx)
+                                            }
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(10)
+                                    }
+                                    .frame(maxHeight: 140)
+                                    .background(Color(UIColor.systemBackground))
+                                    .cornerRadius(10)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color(UIColor.separator).opacity(0.3), lineWidth: 1)
+                                    )
+                                    .onChange(of: viewModel.logs.count) { count in
+                                        if count > 0 {
+                                            withAnimation {
+                                                scrollProxy.scrollTo(count - 1, anchor: .bottom)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.top, 4)
+                        }
                     }
                     .padding(20)
                     .background(Color(UIColor.secondarySystemGroupedBackground))
@@ -204,5 +325,34 @@ struct DataUploadView: View {
                 SyncLogView(result: result)
             }
         }
+    }
+    
+    // Status Badge Helpers
+    private var statusText: String {
+        if viewModel.isSyncing { return "Ingesting..." }
+        if viewModel.syncStatus == "success" { return "Complete" }
+        if viewModel.syncStatus == "error" { return "Error" }
+        return "Ready"
+    }
+    
+    private var statusColor: Color {
+        if viewModel.isSyncing { return AppTheme.brandGold }
+        if viewModel.syncStatus == "success" { return Color(hex: "22c55e") }
+        if viewModel.syncStatus == "error" { return .red }
+        return Color(hex: "22c55e")
+    }
+    
+    private var statusTextColor: Color {
+        if viewModel.isSyncing { return AppTheme.brandGold }
+        if viewModel.syncStatus == "success" { return Color(hex: "15803d") }
+        if viewModel.syncStatus == "error" { return .red }
+        return Color(hex: "15803d")
+    }
+    
+    private var statusBgColor: Color {
+        if viewModel.isSyncing { return AppTheme.brandGoldLight }
+        if viewModel.syncStatus == "success" { return Color(hex: "dcfce7") }
+        if viewModel.syncStatus == "error" { return Color.red.opacity(0.12) }
+        return Color(hex: "dcfce7")
     }
 }

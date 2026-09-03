@@ -12,13 +12,22 @@ struct SyncLogView: View {
                         Text("Records Imported")
                         Spacer()
                         Text("\(result.recordsImported)")
+                            .fontWeight(.bold)
+                            .foregroundColor(AppTheme.brandGold)
+                    }
+                    
+                    HStack {
+                        Text("Transmitters Updated")
+                        Spacer()
+                        Text("\(result.transmittersUpdated)")
+                            .fontWeight(.semibold)
                             .foregroundColor(.secondary)
                     }
                     
                     HStack {
                         Text("Timestamp")
                         Spacer()
-                        Text(result.timestamp, style: .date)
+                        Text(DateFormatters.displayDate(result.timestamp) + " " + DateFormatters.displayTime(result.timestamp))
                             .foregroundColor(.secondary)
                     }
                 }
@@ -32,14 +41,25 @@ struct SyncLogView: View {
                         }
                     }
                 }
+                
+                if !result.logs.isEmpty {
+                    Section("Execution Logs") {
+                        ForEach(result.logs, id: \.self) { log in
+                            Text(log)
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(Color(UIColor.label))
+                        }
+                    }
+                }
             }
-            .navigationTitle("Sync Log")
+            .navigationTitle("CLS Upload Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
+                    .fontWeight(.semibold)
                 }
             }
         }
