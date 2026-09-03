@@ -28,7 +28,54 @@ class TransmitterService {
             return cached
         }
         
-        let transmitters: [Transmitter] = try await FirestoreService.shared.getDocuments(collection: "transmitters")
+        var transmitters: [Transmitter] = try await FirestoreService.shared.getDocuments(collection: "transmitters")
+        var knownPids = Set(transmitters.map { $0.platform_id.trimmingCharacters(in: .whitespacesAndNewlines) })
+        
+        // Also check if any PTTs (such as 244289, 244292, 242086, 242087) exist in positions or argos_positions
+        let db = FirestoreService.shared.db
+        
+        do {
+            let snap = try await db.collection("positions").order(by: "timestamp", descending: true).limit(to: 150).getDocuments()
+            for doc in snap.documents {
+                let data = doc.data()
+                let pid = String(describing: data["transmitter_id"] ?? data["platformId"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !pid.isEmpty && !knownPids.contains(pid) {
+                    knownPids.insert(pid)
+                    let tx = Transmitter(
+                        id: doc.documentID,
+                        platform_id: pid,
+                        status: "Active",
+                        derived_status: "Active",
+                        last_fix: data["timestamp"] as? String
+                    )
+                    transmitters.append(tx)
+                }
+            }
+        } catch {
+            print("Warning: positions discovery: \(error)")
+        }
+        
+        do {
+            let snap = try await db.collection("argos_positions").order(by: "timestamp", descending: true).limit(to: 150).getDocuments()
+            for doc in snap.documents {
+                let data = doc.data()
+                let pid = String(describing: data["platformId"] ?? data["transmitter_id"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !pid.isEmpty && !knownPids.contains(pid) {
+                    knownPids.insert(pid)
+                    let tx = Transmitter(
+                        id: doc.documentID,
+                        platform_id: pid,
+                        status: "Active",
+                        derived_status: "Active",
+                        last_fix: data["timestamp"] as? String
+                    )
+                    transmitters.append(tx)
+                }
+            }
+        } catch {
+            print("Warning: argos_positions discovery: \(error)")
+        }
+        
         self.cachedTransmitters = transmitters
         self.lastCacheTime = Date()
         return transmitters

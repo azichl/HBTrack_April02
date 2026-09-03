@@ -14,15 +14,17 @@ struct StatusPieChart: View {
             let cx = w / 2
             let cy = h / 2
             
-            // Proportional radii
-            let outerRadius: CGFloat = min(w, h) * 0.35
-            let innerRadius: CGFloat = outerRadius * 0.60
+            // Slightly larger donut radius
+            let outerRadius: CGFloat = min(w, h) * 0.38
+            let innerRadius: CGFloat = outerRadius * 0.62
             let midRadius: CGFloat = (innerRadius + outerRadius) / 2
             
             ZStack {
                 if totalCount > 0 {
-                    // Donut Arcs & Slices
-                    ForEach(sliceLayouts(total: totalCount), id: \.index) { item in
+                    let layouts = sliceLayouts(total: totalCount)
+                    
+                    // 1. Donut Arcs & Slices
+                    ForEach(layouts, id: \.index) { item in
                         DonutSliceShape(
                             startAngle: Angle(degrees: item.startAngle),
                             endAngle: Angle(degrees: item.endAngle),
@@ -41,56 +43,86 @@ struct StatusPieChart: View {
                         )
                     }
                     
-                    // Callout leader lines
-                    ForEach(sliceLayouts(total: totalCount), id: \.index) { item in
+                    // 2. Values inside slice
+                    ForEach(layouts, id: \.index) { item in
+                        let rad = item.midAngle * .pi / 180.0
+                        let xVal = cx + midRadius * cos(rad)
+                        let yVal = cy + midRadius * sin(rad)
+                        
+                        Text("\(item.count)")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.35), radius: 1, x: 0, y: 1)
+                            .position(x: xVal, y: yVal)
+                    }
+                    
+                    // 3. Callout leader lines
+                    ForEach(layouts, id: \.index) { item in
                         let rad = item.midAngle * .pi / 180.0
                         let cosVal = cos(rad)
                         let sinVal = sin(rad)
                         
                         let p0 = CGPoint(x: cx + outerRadius * cosVal, y: cy + outerRadius * sinVal)
-                        let p1: CGPoint = {
-                            if abs(cosVal) < 0.2 && sinVal < 0 {
-                                return CGPoint(x: p0.x, y: p0.y - 20)
+                        let isTop = abs(cosVal) < 0.30 && sinVal < 0
+                        let isBottom = abs(cosVal) < 0.30 && sinVal > 0
+                        
+                        let pElbow: CGPoint = {
+                            if isTop {
+                                return CGPoint(x: p0.x, y: p0.y - 18)
+                            } else if isBottom {
+                                return CGPoint(x: p0.x, y: p0.y + 18)
                             } else {
-                                return CGPoint(x: cx + (outerRadius + 18) * cosVal, y: cy + (outerRadius + 18) * sinVal)
+                                return CGPoint(x: cx + (outerRadius + 15) * cosVal, y: cy + (outerRadius + 15) * sinVal)
                             }
                         }()
-                        let p2: CGPoint = {
-                            if abs(cosVal) < 0.2 {
-                                return p1
-                            } else if cosVal >= 0.2 {
-                                return CGPoint(x: p1.x + 14, y: p1.y)
+                        
+                        let pTail: CGPoint = {
+                            if isTop || isBottom {
+                                return pElbow
+                            } else if cosVal >= 0 {
+                                return CGPoint(x: pElbow.x + 12, y: pElbow.y)
                             } else {
-                                return CGPoint(x: p1.x - 14, y: p1.y)
+                                return CGPoint(x: pElbow.x - 12, y: pElbow.y)
                             }
                         }()
                         
                         Path { path in
                             path.move(to: p0)
-                            path.addLine(to: p1)
-                            if p1 != p2 {
-                                path.addLine(to: p2)
+                            path.addLine(to: pElbow)
+                            if pElbow != pTail {
+                                path.addLine(to: pTail)
                             }
                         }
                         .stroke(Color(hex: "94A3B8"), lineWidth: 1.2)
                     }
                     
-                    // Callout Labels outside
-                    ForEach(sliceLayouts(total: totalCount), id: \.index) { item in
+                    // 4. Callout Labels outside with precise non-overlapping placement
+                    ForEach(layouts, id: \.index) { item in
                         let rad = item.midAngle * .pi / 180.0
                         let cosVal = cos(rad)
                         let sinVal = sin(rad)
                         
+                        let isTop = abs(cosVal) < 0.30 && sinVal < 0
+                        let isBottom = abs(cosVal) < 0.30 && sinVal > 0
+                        
+                        let textEstWidth = CGFloat(item.status.count) * 6.6
+                        
                         let labelPos: CGPoint = {
-                            if abs(cosVal) < 0.2 && sinVal < 0 {
-                                return CGPoint(x: cx, y: cy - outerRadius - 30)
+                            if isTop {
+                                return CGPoint(x: cx + outerRadius * cosVal, y: cy - outerRadius - 28)
+                            } else if isBottom {
+                                return CGPoint(x: cx + outerRadius * cosVal, y: cy + outerRadius + 28)
                             } else {
-                                let xElbow = cx + (outerRadius + 18) * cosVal
-                                let yElbow = cy + (outerRadius + 18) * sinVal
-                                if cosVal >= 0.2 {
-                                    return CGPoint(x: xElbow + 18, y: yElbow)
+                                let xElbow = cx + (outerRadius + 15) * cosVal
+                                let yElbow = cy + (outerRadius + 15) * sinVal
+                                if cosVal >= 0 {
+                                    // Right side: tail ends at xElbow + 12, text placed after tail
+                                    let xStart = xElbow + 16
+                                    return CGPoint(x: xStart + textEstWidth / 2, y: yElbow)
                                 } else {
-                                    return CGPoint(x: xElbow - 18, y: yElbow)
+                                    // Left side: tail ends at xElbow - 12, text placed before tail
+                                    let xEnd = xElbow - 16
+                                    return CGPoint(x: xEnd - textEstWidth / 2, y: yElbow)
                                 }
                             }
                         }()
@@ -102,35 +134,22 @@ struct StatusPieChart: View {
                             .fixedSize()
                             .position(labelPos)
                     }
-                    
-                    // Values inside slice
-                    ForEach(sliceLayouts(total: totalCount), id: \.index) { item in
-                        let rad = item.midAngle * .pi / 180.0
-                        let xVal = cx + midRadius * cos(rad)
-                        let yVal = cy + midRadius * sin(rad)
-                        
-                        Text("\(item.count)")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .shadow(color: Color.black.opacity(0.3), radius: 1, x: 0, y: 1)
-                            .position(x: xVal, y: yVal)
-                    }
                 }
                 
-                // Center Donut Hole & Total Units Label
-                VStack(spacing: 2) {
+                // Center Donut Hole & Total Units Label (Reduced font size as requested)
+                VStack(spacing: 3) {
                     Text("\(totalCount)")
-                        .font(.system(size: 34, weight: .black))
+                        .font(.system(size: 26, weight: .bold))
                         .foregroundColor(Color(hex: "0F172A"))
                     Text("UNITS")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: "94A3B8"))
-                        .tracking(1.2)
+                        .tracking(1.4)
                 }
                 .position(x: cx, y: cy)
             }
         }
-        .frame(height: 270)
+        .frame(height: 300)
     }
     
     private struct SliceLayout {

@@ -76,9 +76,39 @@ class DashboardViewModel: ObservableObject {
         return raw.capitalized
     }
     
+    private func isTestedInCurrentMonth(transmitter: Transmitter) -> Bool {
+        let cal = Calendar.current
+        let currentYear = cal.component(.year, from: Date())
+        let currentMonth = cal.component(.month, from: Date())
+        let currentMonthKey = String(format: "%04d-%02d", currentYear, currentMonth)
+        
+        if let fix = transmitter.last_fix {
+            if fix.hasPrefix(currentMonthKey) { return true }
+            if let date = DateFormatters.parseDate(fix) {
+                let y = cal.component(.year, from: date)
+                let m = cal.component(.month, from: date)
+                if String(format: "%04d-%02d", y, m) == currentMonthKey {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
     private func computeStats(transmitters: [Transmitter], alerts: [Alert]) {
-        self.totalDeployed = transmitters.count
-        self.activeBirdsCount = transmitters.filter { $0.effectiveStatus.lowercased() == "active" }.count
+        // Static Test Rule (mirrors web app):
+        // Static test PTTs appear on donut chart & live stats ONLY if tested during the current calendar month.
+        // Expired static test PTTs are excluded from live active counts.
+        let activeLiveTransmitters = transmitters.filter { t in
+            let s = normalizeStatus(t.derived_status ?? t.status)
+            if s.lowercased().contains("static") {
+                return isTestedInCurrentMonth(transmitter: t)
+            }
+            return true
+        }
+        
+        self.totalDeployed = activeLiveTransmitters.count
+        self.activeBirdsCount = activeLiveTransmitters.filter { $0.effectiveStatus.lowercased() == "active" }.count
         
         let activeAlts = alerts.filter { $0.isActive && $0.type.lowercased() != "ticket_created" }
         self.activeAlertsCount = activeAlts.count
@@ -86,7 +116,7 @@ class DashboardViewModel: ObservableObject {
         
         // Status breakdown normalized
         var counts: [String: Int] = [:]
-        for t in transmitters {
+        for t in activeLiveTransmitters {
             let s = normalizeStatus(t.derived_status ?? t.status)
             counts[s, default: 0] += 1
         }

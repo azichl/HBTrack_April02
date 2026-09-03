@@ -214,9 +214,34 @@ class MapViewModel: ObservableObject {
         var newAnnotations: [TransmitterMapAnnotation] = []
         newAnnotations.reserveCapacity(transmitters.count)
         
+        let cal = Calendar.current
+        let currentYear = cal.component(.year, from: Date())
+        let currentMonth = cal.component(.month, from: Date())
+        let currentMonthKey = String(format: "%04d-%02d", currentYear, currentMonth)
+        
         for transmitter in transmitters {
             let txKey = transmitter.platform_id.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !txKey.isEmpty, visibilityFilter(txKey) else { continue }
+            
+            // Static Test Rule: display on live map ONLY if tested during the current calendar month
+            let st = transmitter.effectiveStatus.lowercased()
+            if st.contains("static") {
+                var isTestedThisMonth = false
+                if let fix = transmitter.last_fix {
+                    if fix.hasPrefix(currentMonthKey) {
+                        isTestedThisMonth = true
+                    } else if let date = DateFormatters.parseDate(fix) {
+                        let y = cal.component(.year, from: date)
+                        let m = cal.component(.month, from: date)
+                        if String(format: "%04d-%02d", y, m) == currentMonthKey {
+                            isTestedThisMonth = true
+                        }
+                    }
+                }
+                if !isTestedThisMonth {
+                    continue
+                }
+            }
             
             let docId = (transmitter.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             
