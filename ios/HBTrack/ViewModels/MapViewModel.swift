@@ -5,11 +5,13 @@ import FirebaseFirestore
 import CoreLocation
 
 enum DatePreset: String, CaseIterable, Identifiable {
-    case twentyFourHours = "24 Hours"
-    case sevenDays = "7 Days"
-    case thirtyDays = "30 Days"
-    case oneYear = "1 Year"
-    case twoYears = "2 Years"
+    case twentyFourHours = "24h"
+    case fortyEightHours = "48h"
+    case sevenDays = "7d"
+    case thirtyDays = "30d"
+    case sixMonths = "6m"
+    case oneYear = "1y"
+    case twoYears = "2y"
     case custom = "Custom"
     
     var id: String { self.rawValue }
@@ -20,10 +22,14 @@ enum DatePreset: String, CaseIterable, Identifiable {
         switch self {
         case .twentyFourHours:
             return (calendar.date(byAdding: .hour, value: -24, to: now) ?? now, now)
+        case .fortyEightHours:
+            return (calendar.date(byAdding: .hour, value: -48, to: now) ?? now, now)
         case .sevenDays:
             return (calendar.date(byAdding: .day, value: -7, to: now) ?? now, now)
         case .thirtyDays:
             return (calendar.date(byAdding: .day, value: -30, to: now) ?? now, now)
+        case .sixMonths:
+            return (calendar.date(byAdding: .month, value: -6, to: now) ?? now, now)
         case .oneYear:
             return (calendar.date(byAdding: .year, value: -1, to: now) ?? now, now)
         case .twoYears:
@@ -105,6 +111,7 @@ class MapViewModel: ObservableObject {
     @Published var showDetail: Bool = false
     
     @Published var showHistory: Bool = false
+    @Published var rawHistoryPositions: [Position] = []
     @Published var historyPositions: [Position] = []
     @Published var selectedDatePreset: DatePreset = .thirtyDays
     @Published var selectedLocationType: String = "All"
@@ -372,22 +379,63 @@ class MapViewModel: ObservableObject {
         defer { isLoading = false }
         
         let (startDate, endDate) = selectedDatePreset.dateRange(customStart: customStartDate, customEnd: customEndDate)
-        let locationType = selectedLocationType == "All" ? nil : selectedLocationType
         
         do {
-            self.historyPositions = try await TransmitterService.shared.fetchHistoricalPositions(
+            let raw = try await TransmitterService.shared.fetchHistoricalPositions(
                 transmitterId: transmitter.platform_id,
                 startDate: startDate,
                 endDate: endDate,
-                locationType: locationType
+                locationType: nil
             )
+            self.rawHistoryPositions = raw
+            applyHistoryFilter()
             
-            if let firstCoord = historyPositions.first?.coordinate {
+            if let lastCoord = historyPositions.last?.coordinate {
+                flyTo(lastCoord, zoom: 11)
+            } else if let firstCoord = historyPositions.first?.coordinate {
                 flyTo(firstCoord, zoom: 11)
             }
         } catch {
             print("Error loading history: \(error)")
         }
+    }
+    
+    func applyHistoryFilter() {
+        guard let transmitter = selectedTransmitter else {
+            self.historyPositions = []
+            return
+        }
+        
+        var filtered = rawHistoryPositions
+        
+        // Static Test Rule (mirrors web app):
+        // If transmitter is Static test, only positions from current calendar month are shown
+        let st = transmitter.effectiveStatus.lowercased()
+        if st.contains("static") {
+            let cal = Calendar.current
+            let currentYear = cal.component(.year, from: Date())
+            let currentMonth = cal.component(.month, from: Date())
+            let currentMonthKey = String(format: "%04d-%02d", currentYear, currentMonth)
+            
+            filtered = filtered.filter { p in
+                if p.timestamp.hasPrefix(currentMonthKey) { return true }
+                if let d = DateFormatters.parseDate(p.timestamp) {
+                    let y = cal.component(.year, from: d)
+                    let m = cal.component(.month, from: d)
+                    return String(format: "%04d-%02d", y, m) == currentMonthKey
+                }
+                return false
+            }
+        }
+        
+        // Filter by location type (All, GPS, Doppler)
+        if selectedLocationType == "GPS" {
+            filtered = filtered.filter { ($0.locationType ?? "").uppercased() == "GPS" }
+        } else if selectedLocationType == "Doppler" {
+            filtered = filtered.filter { ($0.locationType ?? "").uppercased() == "DOPPLER" }
+        }
+        
+        self.historyPositions = filtered
     }
     
     func markDead(userId: String, email: String, role: String) async {

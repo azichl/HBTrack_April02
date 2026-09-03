@@ -2,21 +2,54 @@ import Foundation
 
 struct DateFormatters {
     static func parseDate(_ dateString: String) -> Date? {
+        let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        
+        // 1. Numeric timestamp (epoch ms or seconds)
+        if let num = Double(trimmed) {
+            if num > 10_000_000_000 {
+                return Date(timeIntervalSince1970: num / 1000.0)
+            } else if num > 0 {
+                return Date(timeIntervalSince1970: num)
+            }
+        }
+        
+        // 2. ISO8601 with fractional seconds
         let isoFormatter = ISO8601DateFormatter()
         isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = isoFormatter.date(from: dateString) {
+        if let date = isoFormatter.date(from: trimmed) {
             return date
         }
         
+        // 3. ISO8601 standard
         isoFormatter.formatOptions = [.withInternetDateTime]
-        if let date = isoFormatter.date(from: dateString) {
+        if let date = isoFormatter.date(from: trimmed) {
             return date
         }
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        formatter.timeZone = TimeZone(abbreviation: "UTC")
-        return formatter.date(from: dateString)
+        // 4. Fallback across all standard formats
+        let formats = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+            "yyyy-MM-dd'T'HH:mm:ss.SSS",
+            "yyyy-MM-dd'T'HH:mm:ssZ",
+            "yyyy-MM-dd'T'HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss.SSS",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yyyy"
+        ]
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = TimeZone(abbreviation: "UTC")
+        
+        for fmt in formats {
+            df.dateFormat = fmt
+            if let date = df.date(from: trimmed) {
+                return date
+            }
+        }
+        return nil
     }
     
     static func relativeTime(from date: Date) -> String {

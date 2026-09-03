@@ -67,14 +67,19 @@ struct LeafletMapView: UIViewRepresentable {
             webView.evaluateJavaScript(js, completionHandler: nil)
         }
         
-        // 4. Update History Polyline
+        // 4. Update History Polyline & Points
         if viewModel.showHistory && !viewModel.historyPositions.isEmpty {
+            let pttId = viewModel.selectedTransmitter?.platform_id ?? ""
             let historyData = viewModel.historyPositions.map { pos -> [String: Any] in
                 return [
+                    "pttId": pttId,
                     "lat": pos.coordinate.latitude,
                     "lon": pos.coordinate.longitude,
                     "date": pos.timestamp,
-                    "speed": pos.speed_kmh ?? 0
+                    "speed": pos.speed_kmh ?? 0,
+                    "course": pos.course ?? 0,
+                    "type": pos.locationType ?? "GPS",
+                    "lc": pos.lc ?? ""
                 ]
             }
             if let histJson = try? JSONSerialization.data(withJSONObject: historyData),
@@ -411,9 +416,81 @@ struct LeafletMapView: UIViewRepresentable {
                     });
                 }
 
-                // History Track Polyline
+                // History Track Polyline & Points
                 let historyPolyline = null;
                 let historyPointsGroup = L.featureGroup().addTo(map);
+
+                async function fetchMeteoArchive(lat, lon, isoTimestamp, elementId) {
+                    const el = document.getElementById(elementId);
+                    if (!el) return;
+
+                    try {
+                        const date = new Date(isoTimestamp);
+                        if (isNaN(date.getTime())) {
+                            el.innerHTML = '<div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 4px;">Time unavailable</div>';
+                            return;
+                        }
+
+                        const dateStr = date.toISOString().split('T')[0];
+                        const utcHour = date.getUTCHours();
+                        const diffDays = (Date.now() - date.getTime()) / (1000 * 3600 * 24);
+                        const isArchive = diffDays > 5;
+
+                        const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m,soil_temperature_0cm,soil_temperature_0_to_7cm&timezone=UTC`;
+                        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m,soil_temperature_0cm,soil_temperature_0_to_7cm&timezone=UTC`;
+
+                        const primaryUrl = isArchive ? archiveUrl : forecastUrl;
+                        const fallbackUrl = isArchive ? forecastUrl : archiveUrl;
+
+                        let res = null;
+                        let apiUsed = isArchive ? 'Open-Meteo ERA5 (Archive)' : 'Open-Meteo (Forecast)';
+
+                        try {
+                            res = await fetch(primaryUrl);
+                            if (!res.ok) throw new Error('Primary failed');
+                        } catch (e) {
+                            res = await fetch(fallbackUrl);
+                            apiUsed = isArchive ? 'Open-Meteo (Forecast)' : 'Open-Meteo ERA5 (Archive)';
+                        }
+
+                        if (!res.ok) {
+                            throw new Error('All weather endpoints failed');
+                        }
+
+                        const data = await res.json();
+                        if (data && data.hourly && data.hourly.temperature_2m) {
+                            const h = data.hourly;
+                            const idx = (utcHour >= 0 && utcHour < 24) ? utcHour : 0;
+                            const air = h.temperature_2m[idx];
+                            const s0 = (h.soil_temperature_0cm && h.soil_temperature_0cm[idx] !== null) ? h.soil_temperature_0cm[idx] : null;
+                            const s7 = (h.soil_temperature_0_to_7cm && h.soil_temperature_0_to_7cm[idx] !== null) ? h.soil_temperature_0_to_7cm[idx] : null;
+                            const soil = (s0 !== null && s0 !== undefined) ? s0 : s7;
+
+                            let html = '<div style="display: flex; justify-content: space-around; align-items: center; margin: 4px 0;">';
+                            if (air !== null && air !== undefined) {
+                                html += `
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">Air Temp (2m)</div>
+                                        <div style="font-size: 18px; font-weight: 900; color: #ea580c;">${Number(air).toFixed(1)}°C</div>
+                                    </div>`;
+                            }
+                            if (soil !== null && soil !== undefined) {
+                                html += `
+                                    <div style="text-align: center;">
+                                        <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">Surface / Soil</div>
+                                        <div style="font-size: 16px; font-weight: 800; color: #b45309;">${Number(soil).toFixed(1)}°C</div>
+                                    </div>`;
+                            }
+                            html += '</div>';
+                            html += `<div style="font-size: 8px; color: #c2410c; opacity: 0.8; text-align: center; margin-top: 2px;">Source: ${apiUsed}</div>`;
+                            el.innerHTML = html;
+                        } else {
+                            el.innerHTML = '<div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 4px;">Weather Data Unavailable</div>';
+                        }
+                    } catch (err) {
+                        el.innerHTML = '<div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 4px;">Weather Data Unavailable</div>';
+                    }
+                }
 
                 function drawHistory(positions) {
                     clearHistory();
@@ -440,24 +517,63 @@ struct LeafletMapView: UIViewRepresentable {
                         const isStart = index === 0;
                         const isEnd = index === total - 1;
                         const pt = [Number(p.lat), Number(p.lon)];
+                        const isGps = (p.type || '').toUpperCase() === 'GPS';
                         
                         const circle = L.circleMarker(pt, {
-                            radius: isEnd ? 7 : (isStart ? 6 : 4),
-                            fillColor: isEnd ? '#22c55e' : (isStart ? '#3b82f6' : '#f59e0b'),
+                            radius: isEnd ? 7 : (isStart ? 6 : 4.5),
+                            fillColor: isEnd ? '#22c55e' : (isStart ? '#3b82f6' : (isGps ? '#0ea5e9' : '#a855f7')),
                             color: '#ffffff',
                             weight: 2,
                             opacity: 1,
                             fillOpacity: 0.95
                         });
 
-                        const dateStr = p.date || '';
-                        const speedStr = p.speed ? `${Math.round(p.speed)} km/h` : '';
-                        circle.bindTooltip(
-                            `<div style="font-family:-apple-system, sans-serif; font-size:11px; font-weight:600; padding:2px 4px;">
-                                ${isStart ? '<b>Start:</b> ' : (isEnd ? '<b>Latest:</b> ' : '')}${dateStr} ${speedStr ? '· ' + speedStr : ''}
-                            </div>`,
-                            { direction: 'top', offset: [0, -6] }
-                        );
+                        const popupUid = 'meteo-pop-' + Math.floor(Math.random() * 1000000);
+                        const fixBadgeStyle = isGps 
+                            ? 'background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;' 
+                            : 'background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff;';
+                        const fixLabel = isGps ? 'GPS' : `Doppler ${p.lc ? '(LC ' + p.lc + ')' : ''}`;
+
+                        const popupHtml = `
+                            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 210px; max-width: 250px; padding: 2px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">
+                                    <span style="font-size: 14px; font-weight: 800; color: #b58e58;">PTT ${p.pttId || ''}</span>
+                                    <span style="font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; ${fixBadgeStyle}">
+                                        ${fixLabel}
+                                    </span>
+                                </div>
+                                <div style="font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                    📅 ${p.date || ''}
+                                </div>
+                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 10.5px; color: #475569; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                                    <span>Lat: ${Number(p.lat).toFixed(4)}</span>
+                                    <span>Lon: ${Number(p.lon).toFixed(4)}</span>
+                                </div>
+                                ${(p.speed > 0 || p.course > 0) ? `
+                                <div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">
+                                    Speed: <b>${Math.round(p.speed)} km/h</b> ${p.course > 0 ? '· Course: <b>' + Math.round(p.course) + '°</b>' : ''}
+                                </div>` : ''}
+                                <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1px solid #fed7aa; border-radius: 8px; padding: 7px; margin-bottom: 6px;">
+                                    <div style="font-size: 9.5px; font-weight: 800; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
+                                        ☀️ Weather Context
+                                    </div>
+                                    <div id="${popupUid}">
+                                        <div style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 0; color: #ea580c; font-size: 10.5px; font-weight: 600;">
+                                            <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid #fdba74; border-top-color: #ea580c; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                                            Loading Weather Archive...
+                                        </div>
+                                    </div>
+                                </div>
+                                <a href="https://earth.google.com/web/search/${p.lat},${p.lon}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 0; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none; font-size: 10px; font-weight: 700; text-transform: uppercase;">
+                                    🌐 View on Google Earth
+                                </a>
+                            </div>
+                        `;
+
+                        circle.bindPopup(popupHtml, { maxWidth: 280, className: 'custom-history-popup' });
+                        circle.on('popupopen', () => {
+                            fetchMeteoArchive(Number(p.lat), Number(p.lon), p.date, popupUid);
+                        });
 
                         historyPointsGroup.addLayer(circle);
                     });

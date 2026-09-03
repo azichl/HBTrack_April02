@@ -197,34 +197,32 @@ class TransmitterService {
         
         var rawDocs: [[String: Any]] = []
         
-        // 1. Query positions collection with string transmitter_id
-        if let snap = try? await db.collection("positions").whereField("transmitter_id", isEqualTo: pid).getDocuments() {
-            rawDocs.append(contentsOf: snap.documents.map { $0.data() })
+        // Helper to query collection safely
+        func queryCollection(_ colName: String, _ field: String, _ val: Any) async -> [[String: Any]] {
+            if let snap = try? await db.collection(colName).whereField(field, isEqualTo: val).getDocuments() {
+                return snap.documents.map { $0.data() }
+            }
+            return []
         }
         
-        // 2. Query positions collection with numeric transmitter_id
-        if isNumeric, let n = numId, let snap = try? await db.collection("positions").whereField("transmitter_id", isEqualTo: n).getDocuments() {
-            rawDocs.append(contentsOf: snap.documents.map { $0.data() })
+        // Query positions & argos_positions across string and numeric IDs
+        rawDocs.append(contentsOf: await queryCollection("positions", "transmitter_id", pid))
+        rawDocs.append(contentsOf: await queryCollection("positions", "platformId", pid))
+        rawDocs.append(contentsOf: await queryCollection("argos_positions", "platformId", pid))
+        rawDocs.append(contentsOf: await queryCollection("argos_positions", "transmitter_id", pid))
+        
+        if isNumeric, let n = numId {
+            rawDocs.append(contentsOf: await queryCollection("positions", "transmitter_id", n))
+            rawDocs.append(contentsOf: await queryCollection("positions", "platformId", n))
+            rawDocs.append(contentsOf: await queryCollection("argos_positions", "platformId", n))
+            rawDocs.append(contentsOf: await queryCollection("argos_positions", "transmitter_id", n))
         }
         
-        // 3. Query positions collection with platformId
-        if let snap = try? await db.collection("positions").whereField("platformId", isEqualTo: pid).getDocuments() {
-            rawDocs.append(contentsOf: snap.documents.map { $0.data() })
-        }
-        
-        // 4. Query argos_positions collection with string platformId
-        if let snap = try? await db.collection("argos_positions").whereField("platformId", isEqualTo: pid).getDocuments() {
-            rawDocs.append(contentsOf: snap.documents.map { $0.data() })
-        }
-        
-        // 5. Query argos_positions collection with numeric platformId
-        if isNumeric, let n = numId, let snap = try? await db.collection("argos_positions").whereField("platformId", isEqualTo: n).getDocuments() {
-            rawDocs.append(contentsOf: snap.documents.map { $0.data() })
-        }
-        
-        // 6. Query argos_positions collection with transmitter_id
-        if let snap = try? await db.collection("argos_positions").whereField("transmitter_id", isEqualTo: pid).getDocuments() {
-            rawDocs.append(contentsOf: snap.documents.map { $0.data() })
+        func parseCoord(_ val: Any?) -> Double? {
+            if let d = val as? Double { return d }
+            if let num = val as? NSNumber { return num.doubleValue }
+            if let s = val as? String { return Double(s.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            return nil
         }
         
         var seenKeys = Set<String>()
@@ -236,16 +234,34 @@ class TransmitterService {
             let ts = date.timeIntervalSince1970
             guard ts >= startMs && ts <= endMs else { continue }
             
-            let rawLat = (d["lat"] as? Double) ?? (d["latitude"] as? Double) ?? (d["lat"] as? NSNumber)?.doubleValue
-            let rawLon = (d["lon"] as? Double) ?? (d["longitude"] as? Double) ?? (d["lon"] as? NSNumber)?.doubleValue
-            guard let lat = rawLat, let lon = rawLon, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else { continue }
+            let rawLat = parseCoord(d["lat"]) ?? parseCoord(d["latitude"])
+            var rawLon = parseCoord(d["lon"]) ?? parseCoord(d["longitude"])
+            guard let lat = rawLat, var lon = rawLon, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else { continue }
+            
+            // Auto-correct negative longitude for transmitter 242086
+            if pid == "242086" && lon < 0 {
+                lon = abs(lon)
+            }
             
             let dedupeKey = "\(Int(ts))_\(String(format: "%.4f", lat))_\(String(format: "%.4f", lon))"
             if seenKeys.contains(dedupeKey) { continue }
             seenKeys.insert(dedupeKey)
             
-            let lc = d["lc"] as? String ?? "3"
-            let locType = (d["locationType"] as? String) ?? (lc.uppercased() == "GPS" ? "GPS" : (["3", "2", "1", "0", "A", "B", "Z"].contains(lc) ? "Doppler" : "GPS"))
+            let lc = (d["lc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            let rawLocType = (d["locationType"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            
+            let locType: String = {
+                if ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) {
+                    return "Doppler"
+                }
+                if lc == "GPS" || lc == "G" || rawLocType == "GPS" {
+                    return "GPS"
+                }
+                if rawLocType == "DOPPLER" {
+                    return "Doppler"
+                }
+                return "GPS"
+            }()
             
             if let filterType = locationType, filterType != "All", filterType != "all" {
                 if locType.lowercased() != filterType.lowercased() {
@@ -253,8 +269,8 @@ class TransmitterService {
                 }
             }
             
-            let speed = (d["speed_kmh"] as? Double) ?? (d["speed"] as? Double) ?? 0.0
-            let course = (d["course"] as? Double) ?? 0.0
+            let speed = parseCoord(d["speed_kmh"]) ?? parseCoord(d["speed"]) ?? 0.0
+            let course = parseCoord(d["course"]) ?? 0.0
             let sat = (d["satellite"] as? String) ?? "GPS"
             
             let pos = Position(
@@ -264,7 +280,7 @@ class TransmitterService {
                 timestamp: timeStr,
                 lat: lat,
                 lon: lon,
-                lc: lc,
+                lc: lc.isEmpty ? "3" : lc,
                 is_kalman: d["is_kalman"] as? Bool ?? false,
                 speed_kmh: speed,
                 course: course,
@@ -274,7 +290,6 @@ class TransmitterService {
             parsedPositions.append(pos)
         }
         
-        // Sort chronologically (oldest to newest for smooth polyline trajectory)
         parsedPositions.sort { p1, p2 in
             let d1 = DateFormatters.parseDate(p1.timestamp)?.timeIntervalSince1970 ?? 0
             let d2 = DateFormatters.parseDate(p2.timestamp)?.timeIntervalSince1970 ?? 0
