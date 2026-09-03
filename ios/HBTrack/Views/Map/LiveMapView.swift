@@ -378,10 +378,10 @@ private struct MapStatsSummarySheet: View {
                 }
                 
                 Section(header: Text("Status Breakdown")) {
-                    let activeCount = viewModel.transmitters.filter { ($0.derived_status ?? $0.status ?? "").lowercased() == "active" }.count
-                    let potentialCount = viewModel.transmitters.filter { ($0.derived_status ?? $0.status ?? "").lowercased().contains("potential") }.count
-                    let deadCount = viewModel.transmitters.filter { ($0.derived_status ?? $0.status ?? "").lowercased() == "dead" }.count
-                    let staticCount = viewModel.transmitters.filter { ($0.derived_status ?? $0.status ?? "").lowercased().contains("static") }.count
+                    let activeCount = viewModel.transmitters.filter { $0.effectiveStatus.lowercased() == "active" }.count
+                    let potentialCount = viewModel.transmitters.filter { $0.effectiveStatus.lowercased().contains("potential") }.count
+                    let deadCount = viewModel.transmitters.filter { $0.effectiveStatus.lowercased() == "dead" }.count
+                    let staticCount = viewModel.transmitters.filter { $0.effectiveStatus.lowercased().contains("static") }.count
                     
                     HStack {
                         Circle().fill(Color(hex: "22c55e")).frame(width: 8, height: 8)

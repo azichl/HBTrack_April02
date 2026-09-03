@@ -50,7 +50,7 @@ struct LeafletMapView: UIViewRepresentable {
         // 3. Update Transmitters JSON
         let markersData = viewModel.annotations.map { ann -> [String: Any] in
             let tx = ann.transmitter
-            let status = tx.derived_status ?? tx.status ?? "Inactive"
+            let status = tx.effectiveStatus
             return [
                 "id": tx.platform_id,
                 "lat": ann.coordinate.latitude,
