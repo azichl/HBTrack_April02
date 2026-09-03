@@ -205,17 +205,23 @@ class TransmitterService {
             return []
         }
         
-        // Query positions & argos_positions across string and numeric IDs
-        rawDocs.append(contentsOf: await queryCollection("positions", "transmitter_id", pid))
-        rawDocs.append(contentsOf: await queryCollection("positions", "platformId", pid))
-        rawDocs.append(contentsOf: await queryCollection("argos_positions", "platformId", pid))
-        rawDocs.append(contentsOf: await queryCollection("argos_positions", "transmitter_id", pid))
-        
-        if isNumeric, let n = numId {
-            rawDocs.append(contentsOf: await queryCollection("positions", "transmitter_id", n))
-            rawDocs.append(contentsOf: await queryCollection("positions", "platformId", n))
-            rawDocs.append(contentsOf: await queryCollection("argos_positions", "platformId", n))
-            rawDocs.append(contentsOf: await queryCollection("argos_positions", "transmitter_id", n))
+        // Query positions & argos_positions across string and numeric IDs concurrently in parallel
+        await withTaskGroup(of: [[String: Any]].self) { group in
+            group.addTask { await queryCollection("positions", "transmitter_id", pid) }
+            group.addTask { await queryCollection("positions", "platformId", pid) }
+            group.addTask { await queryCollection("argos_positions", "platformId", pid) }
+            group.addTask { await queryCollection("argos_positions", "transmitter_id", pid) }
+            
+            if isNumeric, let n = numId {
+                group.addTask { await queryCollection("positions", "transmitter_id", n) }
+                group.addTask { await queryCollection("positions", "platformId", n) }
+                group.addTask { await queryCollection("argos_positions", "platformId", n) }
+                group.addTask { await queryCollection("argos_positions", "transmitter_id", n) }
+            }
+            
+            for await docs in group {
+                rawDocs.append(contentsOf: docs)
+            }
         }
         
         func parseCoord(_ val: Any?) -> Double? {
@@ -297,6 +303,22 @@ class TransmitterService {
         }
         
         return parsedPositions
+    }
+    
+    func fetchHistoricalPositions(transmitterIds: [String], startDate: Date, endDate: Date, locationType: String?) async throws -> [String: [Position]] {
+        var results: [String: [Position]] = [:]
+        await withTaskGroup(of: (String, [Position]).self) { group in
+            for pid in transmitterIds {
+                group.addTask {
+                    let pos = (try? await self.fetchHistoricalPositions(transmitterId: pid, startDate: startDate, endDate: endDate, locationType: locationType)) ?? []
+                    return (pid, pos)
+                }
+            }
+            for await (pid, pos) in group {
+                results[pid] = pos
+            }
+        }
+        return results
     }
     
     func subscribeToPositions(onChange: @escaping ([Position]) -> Void) -> ListenerRegistration {

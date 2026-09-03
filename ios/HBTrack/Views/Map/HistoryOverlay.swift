@@ -28,7 +28,9 @@ struct HistoryOverlay: View {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         viewModel.showHistory = false
-                        viewModel.rawHistoryPositions.removeAll()
+                        viewModel.selectedTransmitterIds.removeAll()
+                        viewModel.rawHistoryPositionsByTx.removeAll()
+                        viewModel.historyPaths.removeAll()
                         viewModel.historyPositions.removeAll()
                     }
                 } label: {
@@ -38,64 +40,94 @@ struct HistoryOverlay: View {
                 }
             }
             
-            // Transmitter Selector
+            // Multi-Transmitter Selector with Distinct Color Badges
             if !viewModel.transmitters.isEmpty {
-                HStack {
-                    Text("PTT ID:")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppTheme.textSecondary)
-                    
-                    Menu {
-                        ForEach(viewModel.transmitters) { tx in
-                            Button {
-                                viewModel.selectedTransmitter = tx
-                                Task {
-                                    await viewModel.loadHistory()
-                                }
-                            } label: {
-                                HStack {
-                                    Text("\(tx.platform_id) (\(tx.effectiveStatus))")
-                                    if viewModel.selectedTransmitter?.platform_id == tx.platform_id {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Active Trajectory:")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(AppTheme.textSecondary)
+                        
+                        Spacer()
+                        
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        } else {
+                            let totalFixes = viewModel.historyPositions.count
+                            let gpsCount = viewModel.historyPositions.filter { ($0.locationType ?? "").uppercased() == "GPS" }.count
+                            let dopplerCount = viewModel.historyPositions.filter { ($0.locationType ?? "").uppercased() == "DOPPLER" }.count
+                            
+                            Text("\(totalFixes) fixes (GPS: \(gpsCount) · Doppler: \(dopplerCount))")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(totalFixes == 0 ? .secondary : AppTheme.brandGold)
                         }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(viewModel.selectedTransmitter?.platform_id ?? viewModel.transmitters.first?.platform_id ?? "Select PTT")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(AppTheme.brandGold)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(AppTheme.brandGold)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(AppTheme.brandGoldLight)
-                        .cornerRadius(8)
                     }
                     
-                    Spacer()
-                    
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .scaleEffect(0.8)
-                    } else {
-                        let gpsCount = viewModel.historyPositions.filter { ($0.locationType ?? "").uppercased() == "GPS" }.count
-                        let dopplerCount = viewModel.historyPositions.filter { ($0.locationType ?? "").uppercased() == "DOPPLER" }.count
-                        
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("\(viewModel.historyPositions.count) fixes")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(viewModel.historyPositions.isEmpty ? .secondary : .primary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(viewModel.selectedTransmitterIds, id: \.self) { pttId in
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(viewModel.colorForHistoryTransmitter(pttId))
+                                        .frame(width: 8, height: 8)
+                                    
+                                    Text(pttId)
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(Color(UIColor.label))
+                                    
+                                    if viewModel.selectedTransmitterIds.count > 1 {
+                                        Button {
+                                            withAnimation {
+                                                viewModel.toggleHistoryTransmitter(pttId)
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 9, weight: .bold))
+                                                .foregroundColor(Color(UIColor.secondaryLabel))
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(viewModel.colorForHistoryTransmitter(pttId).opacity(0.12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(viewModel.colorForHistoryTransmitter(pttId).opacity(0.4), lineWidth: 1)
+                                )
+                                .cornerRadius(8)
+                            }
                             
-                            if !viewModel.historyPositions.isEmpty {
-                                Text("GPS: \(gpsCount) · Doppler: \(dopplerCount)")
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.secondary)
+                            // "+ Add PTT" Dropdown Menu
+                            Menu {
+                                ForEach(viewModel.transmitters) { tx in
+                                    let isSelected = viewModel.selectedTransmitterIds.contains(tx.platform_id)
+                                    Button {
+                                        viewModel.toggleHistoryTransmitter(tx.platform_id)
+                                    } label: {
+                                        HStack {
+                                            Text("\(tx.platform_id) (\(tx.effectiveStatus))")
+                                            if isSelected {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Text("Add PTT")
+                                        .font(.system(size: 11, weight: .bold))
+                                }
+                                .foregroundColor(AppTheme.brandGold)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(AppTheme.brandGoldLight)
+                                .cornerRadius(8)
                             }
                         }
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -199,10 +231,15 @@ struct HistoryOverlay: View {
                 }
         )
         .task {
-            if viewModel.selectedTransmitter == nil, let first = viewModel.transmitters.first {
-                viewModel.selectedTransmitter = first
+            if viewModel.selectedTransmitterIds.isEmpty {
+                if let sel = viewModel.selectedTransmitter {
+                    viewModel.selectedTransmitterIds = [sel.platform_id]
+                } else if let first = viewModel.transmitters.first {
+                    viewModel.selectedTransmitter = first
+                    viewModel.selectedTransmitterIds = [first.platform_id]
+                }
             }
-            if viewModel.rawHistoryPositions.isEmpty {
+            if viewModel.historyPaths.isEmpty {
                 await viewModel.loadHistory()
             }
         }

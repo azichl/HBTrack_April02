@@ -56,7 +56,11 @@ struct TransmitterDetailSheet: View {
                         
                         HStack(spacing: 16) {
                             Button {
-                                viewModel.showHistory.toggle()
+                                if let tx = viewModel.selectedTransmitter {
+                                    viewModel.selectTransmitterForHistory(tx)
+                                } else {
+                                    viewModel.showHistory.toggle()
+                                }
                             } label: {
                                 Label("History", systemImage: "clock.arrow.circlepath")
                                     .frame(maxWidth: .infinity)

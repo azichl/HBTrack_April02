@@ -40,6 +40,16 @@ enum DatePreset: String, CaseIterable, Identifiable {
     }
 }
 
+struct HistoryPath: Identifiable, Equatable {
+    let id: String
+    let color: String
+    var positions: [Position]
+    
+    static func == (lhs: HistoryPath, rhs: HistoryPath) -> Bool {
+        return lhs.id == rhs.id && lhs.color == rhs.color && lhs.positions.count == rhs.positions.count
+    }
+}
+
 enum MapStyleOption: String, CaseIterable, Identifiable {
     case standard = "Standard"
     case satellite = "Satellite"
@@ -110,13 +120,33 @@ class MapViewModel: ObservableObject {
     @Published var selectedPosition: Position?
     @Published var showDetail: Bool = false
     
+    static let historyColors: [String] = [
+        "#6366f1", // Indigo
+        "#ec4899", // Pink
+        "#14b8a6", // Teal
+        "#f59e0b", // Amber
+        "#8b5cf6", // Purple
+        "#ef4444", // Red
+        "#10b981", // Emerald
+        "#3b82f6"  // Blue
+    ]
+    
     @Published var showHistory: Bool = false
-    @Published var rawHistoryPositions: [Position] = []
+    @Published var selectedTransmitterIds: [String] = []
+    @Published var rawHistoryPositionsByTx: [String: [Position]] = [:]
+    @Published var historyPaths: [HistoryPath] = []
     @Published var historyPositions: [Position] = []
     @Published var selectedDatePreset: DatePreset = .thirtyDays
     @Published var selectedLocationType: String = "All"
     @Published var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @Published var customEndDate: Date = Date()
+    
+    var visibleAnnotations: [TransmitterMapAnnotation] {
+        if showHistory && !selectedTransmitterIds.isEmpty {
+            return annotations.filter { selectedTransmitterIds.contains($0.transmitter.platform_id) }
+        }
+        return annotations
+    }
     
     var historyDatePreset: DatePreset {
         get { selectedDatePreset }
@@ -373,27 +403,70 @@ class MapViewModel: ObservableObject {
         selectTransmitter(annotation.transmitter)
     }
     
+    func selectTransmitterForHistory(_ tx: Transmitter) {
+        selectedTransmitter = tx
+        selectedTransmitterIds = [tx.platform_id]
+        showHistory = true
+        Task {
+            await loadHistory()
+        }
+    }
+    
+    func toggleHistoryTransmitter(_ pttId: String) {
+        if let idx = selectedTransmitterIds.firstIndex(of: pttId) {
+            if selectedTransmitterIds.count > 1 {
+                selectedTransmitterIds.remove(at: idx)
+                applyHistoryFilter()
+            }
+        } else {
+            selectedTransmitterIds.append(pttId)
+            Task {
+                await loadHistory()
+            }
+        }
+    }
+    
+    func hexColorForHistoryTransmitter(_ pttId: String) -> String {
+        if let idx = selectedTransmitterIds.firstIndex(of: pttId) {
+            return MapViewModel.historyColors[idx % MapViewModel.historyColors.count]
+        }
+        return "#6366f1"
+    }
+    
+    func colorForHistoryTransmitter(_ pttId: String) -> Color {
+        return Color(hex: hexColorForHistoryTransmitter(pttId))
+    }
+    
     func loadHistory() async {
-        guard let transmitter = selectedTransmitter else { return }
+        if selectedTransmitterIds.isEmpty {
+            if let tx = selectedTransmitter {
+                selectedTransmitterIds = [tx.platform_id]
+            } else if let first = transmitters.first {
+                selectedTransmitter = first
+                selectedTransmitterIds = [first.platform_id]
+            }
+        }
+        guard !selectedTransmitterIds.isEmpty else { return }
+        
         isLoading = true
         defer { isLoading = false }
         
         let (startDate, endDate) = selectedDatePreset.dateRange(customStart: customStartDate, customEnd: customEndDate)
         
         do {
-            let raw = try await TransmitterService.shared.fetchHistoricalPositions(
-                transmitterId: transmitter.platform_id,
+            let rawDict = try await TransmitterService.shared.fetchHistoricalPositions(
+                transmitterIds: selectedTransmitterIds,
                 startDate: startDate,
                 endDate: endDate,
                 locationType: nil
             )
-            self.rawHistoryPositions = raw
+            self.rawHistoryPositionsByTx = rawDict
             applyHistoryFilter()
             
-            if let lastCoord = historyPositions.last?.coordinate {
+            if let firstId = selectedTransmitterIds.first,
+               let path = historyPaths.first(where: { $0.id == firstId }),
+               let lastCoord = path.positions.last?.coordinate {
                 flyTo(lastCoord, zoom: 11)
-            } else if let firstCoord = historyPositions.first?.coordinate {
-                flyTo(firstCoord, zoom: 11)
             }
         } catch {
             print("Error loading history: \(error)")
@@ -401,41 +474,47 @@ class MapViewModel: ObservableObject {
     }
     
     func applyHistoryFilter() {
-        guard let transmitter = selectedTransmitter else {
-            self.historyPositions = []
-            return
-        }
+        var newPaths: [HistoryPath] = []
+        var allPositions: [Position] = []
         
-        var filtered = rawHistoryPositions
+        let cal = Calendar.current
+        let currentYear = cal.component(.year, from: Date())
+        let currentMonth = cal.component(.month, from: Date())
+        let currentMonthKey = String(format: "%04d-%02d", currentYear, currentMonth)
         
-        // Static Test Rule (mirrors web app):
-        // If transmitter is Static test, only positions from current calendar month are shown
-        let st = transmitter.effectiveStatus.lowercased()
-        if st.contains("static") {
-            let cal = Calendar.current
-            let currentYear = cal.component(.year, from: Date())
-            let currentMonth = cal.component(.month, from: Date())
-            let currentMonthKey = String(format: "%04d-%02d", currentYear, currentMonth)
+        for (index, pttId) in selectedTransmitterIds.enumerated() {
+            var fixes = rawHistoryPositionsByTx[pttId] ?? []
+            let tx = transmitters.first(where: { $0.platform_id == pttId })
+            let st = tx?.effectiveStatus.lowercased() ?? ""
             
-            filtered = filtered.filter { p in
-                if p.timestamp.hasPrefix(currentMonthKey) { return true }
-                if let d = DateFormatters.parseDate(p.timestamp) {
-                    let y = cal.component(.year, from: d)
-                    let m = cal.component(.month, from: d)
-                    return String(format: "%04d-%02d", y, m) == currentMonthKey
+            // Static Test Rule (mirrors web app):
+            // If transmitter is Static test, only positions from current calendar month are shown
+            if st.contains("static") {
+                fixes = fixes.filter { p in
+                    if p.timestamp.hasPrefix(currentMonthKey) { return true }
+                    if let d = DateFormatters.parseDate(p.timestamp) {
+                        let y = cal.component(.year, from: d)
+                        let m = cal.component(.month, from: d)
+                        return String(format: "%04d-%02d", y, m) == currentMonthKey
+                    }
+                    return false
                 }
-                return false
             }
+            
+            // Filter by location type (All, GPS, Doppler)
+            if selectedLocationType == "GPS" {
+                fixes = fixes.filter { ($0.locationType ?? "").uppercased() == "GPS" }
+            } else if selectedLocationType == "Doppler" {
+                fixes = fixes.filter { ($0.locationType ?? "").uppercased() == "DOPPLER" }
+            }
+            
+            let hexColor = MapViewModel.historyColors[index % MapViewModel.historyColors.count]
+            newPaths.append(HistoryPath(id: pttId, color: hexColor, positions: fixes))
+            allPositions.append(contentsOf: fixes)
         }
         
-        // Filter by location type (All, GPS, Doppler)
-        if selectedLocationType == "GPS" {
-            filtered = filtered.filter { ($0.locationType ?? "").uppercased() == "GPS" }
-        } else if selectedLocationType == "Doppler" {
-            filtered = filtered.filter { ($0.locationType ?? "").uppercased() == "DOPPLER" }
-        }
-        
-        self.historyPositions = filtered
+        self.historyPaths = newPaths
+        self.historyPositions = allPositions
     }
     
     func markDead(userId: String, email: String, role: String) async {

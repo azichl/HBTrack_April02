@@ -47,8 +47,12 @@ struct LeafletMapView: UIViewRepresentable {
         let weatherJs = "setWeatherOverlay('\(activeWeatherOverlay)');"
         webView.evaluateJavaScript(weatherJs, completionHandler: nil)
         
-        // 3. Update Transmitters JSON
-        let markersData = viewModel.annotations.map { ann -> [String: Any] in
+        // 3. Update Transmitters JSON (hide unselected transmitters when history mode is active)
+        let activeAnnotations = (viewModel.showHistory && !viewModel.selectedTransmitterIds.isEmpty)
+            ? viewModel.annotations.filter { viewModel.selectedTransmitterIds.contains($0.transmitter.platform_id) }
+            : viewModel.annotations
+            
+        let markersData = activeAnnotations.map { ann -> [String: Any] in
             let tx = ann.transmitter
             let status = tx.effectiveStatus
             return [
@@ -67,24 +71,28 @@ struct LeafletMapView: UIViewRepresentable {
             webView.evaluateJavaScript(js, completionHandler: nil)
         }
         
-        // 4. Update History Polyline & Points
-        if viewModel.showHistory && !viewModel.historyPositions.isEmpty {
-            let pttId = viewModel.selectedTransmitter?.platform_id ?? ""
-            let historyData = viewModel.historyPositions.map { pos -> [String: Any] in
+        // 4. Update History Polyline & Points (Multi-PTT colored paths)
+        if viewModel.showHistory && !viewModel.historyPaths.isEmpty {
+            let pathsData = viewModel.historyPaths.map { hp -> [String: Any] in
                 return [
-                    "pttId": pttId,
-                    "lat": pos.coordinate.latitude,
-                    "lon": pos.coordinate.longitude,
-                    "date": pos.timestamp,
-                    "speed": pos.speed_kmh ?? 0,
-                    "course": pos.course ?? 0,
-                    "type": pos.locationType ?? "GPS",
-                    "lc": pos.lc ?? ""
+                    "id": hp.id,
+                    "color": hp.color,
+                    "path": hp.positions.map { pos -> [String: Any] in
+                        return [
+                            "lat": pos.coordinate.latitude,
+                            "lon": pos.coordinate.longitude,
+                            "date": pos.timestamp,
+                            "speed": pos.speed_kmh ?? 0,
+                            "course": pos.course ?? 0,
+                            "type": pos.locationType ?? "GPS",
+                            "lc": pos.lc ?? ""
+                        ]
+                    }
                 ]
             }
-            if let histJson = try? JSONSerialization.data(withJSONObject: historyData),
+            if let histJson = try? JSONSerialization.data(withJSONObject: pathsData),
                let histStr = String(data: histJson, encoding: .utf8) {
-                let js = "drawHistory(\(histStr));"
+                let js = "drawHistoryPaths(\(histStr));"
                 webView.evaluateJavaScript(js, completionHandler: nil)
             }
         } else {
@@ -492,105 +500,122 @@ struct LeafletMapView: UIViewRepresentable {
                     }
                 }
 
-                function drawHistory(positions) {
+                let historyLayersGroup = L.featureGroup().addTo(map);
+
+                function drawHistoryPaths(pathsList) {
                     clearHistory();
-                    if (!positions || positions.length === 0) return;
+                    if (!pathsList || pathsList.length === 0) return;
 
-                    const validPositions = positions.filter(p => {
-                        const lat = Number(p.lat);
-                        const lon = Number(p.lon);
-                        return !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
-                    });
-                    if (validPositions.length === 0) return;
+                    let allLatLngs = [];
 
-                    const latlngs = validPositions.map(p => [Number(p.lat), Number(p.lon)]);
+                    pathsList.forEach((hp) => {
+                        const pttId = hp.id || '';
+                        const color = hp.color || '#6366f1';
+                        const positions = hp.path || [];
 
-                    historyPolyline = L.polyline(latlngs, {
-                        color: '#6366f1',
-                        weight: 4,
-                        opacity: 0.9,
-                        dashArray: '8, 6'
-                    }).addTo(map);
-
-                    const total = validPositions.length;
-                    validPositions.forEach((p, index) => {
-                        const isStart = index === 0;
-                        const isEnd = index === total - 1;
-                        const pt = [Number(p.lat), Number(p.lon)];
-                        const isGps = (p.type || '').toUpperCase() === 'GPS';
-                        
-                        const circle = L.circleMarker(pt, {
-                            radius: isEnd ? 7 : (isStart ? 6 : 4.5),
-                            fillColor: isEnd ? '#22c55e' : (isStart ? '#3b82f6' : (isGps ? '#0ea5e9' : '#a855f7')),
-                            color: '#ffffff',
-                            weight: 2,
-                            opacity: 1,
-                            fillOpacity: 0.95
+                        const validPositions = positions.filter(p => {
+                            const lat = Number(p.lat);
+                            const lon = Number(p.lon);
+                            return !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
                         });
+                        if (validPositions.length === 0) return;
 
-                        const popupUid = 'meteo-pop-' + Math.floor(Math.random() * 1000000);
-                        const fixBadgeStyle = isGps 
-                            ? 'background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;' 
-                            : 'background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff;';
-                        const fixLabel = isGps ? 'GPS' : `Doppler ${p.lc ? '(LC ' + p.lc + ')' : ''}`;
+                        const latlngs = validPositions.map(p => [Number(p.lat), Number(p.lon)]);
+                        allLatLngs.push(...latlngs);
 
-                        const popupHtml = `
-                            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 210px; max-width: 250px; padding: 2px;">
-                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">
-                                    <span style="font-size: 14px; font-weight: 800; color: #b58e58;">PTT ${p.pttId || ''}</span>
-                                    <span style="font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; ${fixBadgeStyle}">
-                                        ${fixLabel}
-                                    </span>
-                                </div>
-                                <div style="font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 6px;">
-                                    📅 ${p.date || ''}
-                                </div>
-                                <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 10.5px; color: #475569; margin-bottom: 6px; display: flex; justify-content: space-between;">
-                                    <span>Lat: ${Number(p.lat).toFixed(4)}</span>
-                                    <span>Lon: ${Number(p.lon).toFixed(4)}</span>
-                                </div>
-                                ${(p.speed > 0 || p.course > 0) ? `
-                                <div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">
-                                    Speed: <b>${Math.round(p.speed)} km/h</b> ${p.course > 0 ? '· Course: <b>' + Math.round(p.course) + '°</b>' : ''}
-                                </div>` : ''}
-                                <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1px solid #fed7aa; border-radius: 8px; padding: 7px; margin-bottom: 6px;">
-                                    <div style="font-size: 9.5px; font-weight: 800; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
-                                        ☀️ Weather Context
+                        // 1. Draw distinct colored polyline for this PTT
+                        const polyline = L.polyline(latlngs, {
+                            color: color,
+                            weight: 3.5,
+                            opacity: 0.85,
+                            dashArray: '7, 5'
+                        }).addTo(historyLayersGroup);
+
+                        // 2. High-performance rendering: stride markers if fixes > 500 to keep UI 60fps
+                        const total = validPositions.length;
+                        const stride = total > 500 ? Math.ceil(total / 350) : 1;
+
+                        validPositions.forEach((p, index) => {
+                            const isStart = index === 0;
+                            const isEnd = index === total - 1;
+                            if (!isStart && !isEnd && (index % stride !== 0)) return;
+
+                            const pt = [Number(p.lat), Number(p.lon)];
+                            const isGps = (p.type || '').toUpperCase() === 'GPS';
+
+                            const circle = L.circleMarker(pt, {
+                                radius: isEnd ? 7 : (isStart ? 6 : 4.5),
+                                fillColor: isEnd ? '#22c55e' : (isStart ? '#3b82f6' : color),
+                                color: '#ffffff',
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.95
+                            });
+
+                            const popupUid = 'meteo-pop-' + Math.floor(Math.random() * 1000000);
+                            const fixBadgeStyle = isGps 
+                                ? 'background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;' 
+                                : 'background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff;';
+                            const fixLabel = isGps ? 'GPS' : `Doppler ${p.lc ? '(LC ' + p.lc + ')' : ''}`;
+
+                            const popupHtml = `
+                                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 210px; max-width: 250px; padding: 2px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">
+                                        <span style="font-size: 14px; font-weight: 800; color: ${color};">PTT ${p.pttId || pttId}</span>
+                                        <span style="font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; ${fixBadgeStyle}">
+                                            ${fixLabel}
+                                        </span>
                                     </div>
-                                    <div id="${popupUid}">
-                                        <div style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 0; color: #ea580c; font-size: 10.5px; font-weight: 600;">
-                                            <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid #fdba74; border-top-color: #ea580c; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
-                                            Loading Weather Archive...
+                                    <div style="font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 6px;">
+                                        📅 ${p.date || ''}
+                                    </div>
+                                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 10.5px; color: #475569; margin-bottom: 6px; display: flex; justify-content: space-between;">
+                                        <span>Lat: ${Number(p.lat).toFixed(4)}</span>
+                                        <span>Lon: ${Number(p.lon).toFixed(4)}</span>
+                                    </div>
+                                    ${(p.speed > 0 || p.course > 0) ? `
+                                    <div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">
+                                        Speed: <b>${Math.round(p.speed)} km/h</b> ${p.course > 0 ? '· Course: <b>' + Math.round(p.course) + '°</b>' : ''}
+                                    </div>` : ''}
+                                    <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1px solid #fed7aa; border-radius: 8px; padding: 7px; margin-bottom: 6px;">
+                                        <div style="font-size: 9.5px; font-weight: 800; color: #9a3412; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 4px;">
+                                            ☀️ Weather Context
+                                        </div>
+                                        <div id="${popupUid}">
+                                            <div style="display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 0; color: #ea580c; font-size: 10.5px; font-weight: 600;">
+                                                <span style="display: inline-block; width: 10px; height: 10px; border: 2px solid #fdba74; border-top-color: #ea580c; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                                                Loading Weather Archive...
+                                            </div>
                                         </div>
                                     </div>
+                                    <a href="https://earth.google.com/web/search/${p.lat},${p.lon}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 0; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none; font-size: 10px; font-weight: 700; text-transform: uppercase;">
+                                        🌐 View on Google Earth
+                                    </a>
                                 </div>
-                                <a href="https://earth.google.com/web/search/${p.lat},${p.lon}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 0; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none; font-size: 10px; font-weight: 700; text-transform: uppercase;">
-                                    🌐 View on Google Earth
-                                </a>
-                            </div>
-                        `;
+                            `;
 
-                        circle.bindPopup(popupHtml, { maxWidth: 280, className: 'custom-history-popup' });
-                        circle.on('popupopen', () => {
-                            fetchMeteoArchive(Number(p.lat), Number(p.lon), p.date, popupUid);
+                            circle.bindPopup(popupHtml, { maxWidth: 280, className: 'custom-history-popup' });
+                            circle.on('popupopen', () => {
+                                fetchMeteoArchive(Number(p.lat), Number(p.lon), p.date, popupUid);
+                            });
+
+                            historyLayersGroup.addLayer(circle);
                         });
-
-                        historyPointsGroup.addLayer(circle);
                     });
 
-                    if (latlngs.length > 1) {
-                        map.fitBounds(historyPolyline.getBounds(), { padding: [50, 50], maxZoom: 13 });
-                    } else if (latlngs.length === 1) {
-                        map.flyTo(latlngs[0], 11, { animate: true });
+                    if (allLatLngs.length > 1) {
+                        map.fitBounds(L.latLngBounds(allLatLngs), { padding: [50, 50], maxZoom: 13 });
+                    } else if (allLatLngs.length === 1) {
+                        map.flyTo(allLatLngs[0], 11, { animate: true });
                     }
                 }
 
+                function drawHistory(positions) {
+                    drawHistoryPaths([{ id: '', color: '#6366f1', path: positions }]);
+                }
+
                 function clearHistory() {
-                    if (historyPolyline) {
-                        map.removeLayer(historyPolyline);
-                        historyPolyline = null;
-                    }
-                    historyPointsGroup.clearLayers();
+                    historyLayersGroup.clearLayers();
                 }
 
                 // Measurement Mode
