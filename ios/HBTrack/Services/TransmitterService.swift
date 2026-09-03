@@ -235,7 +235,7 @@ class TransmitterService {
             guard ts >= startMs && ts <= endMs else { continue }
             
             let rawLat = parseCoord(d["lat"]) ?? parseCoord(d["latitude"])
-            var rawLon = parseCoord(d["lon"]) ?? parseCoord(d["longitude"])
+            let rawLon = parseCoord(d["lon"]) ?? parseCoord(d["longitude"])
             guard let lat = rawLat, var lon = rawLon, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else { continue }
             
             // Auto-correct negative longitude for transmitter 242086
