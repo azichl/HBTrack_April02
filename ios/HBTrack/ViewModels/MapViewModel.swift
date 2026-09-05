@@ -563,11 +563,21 @@ class MapViewModel: ObservableObject {
                 }
             }
             
-            // Filter by location type (All, GPS, Doppler)
+            // Filter by location type (All, GPS, Doppler) matching Web App rules
             if selectedLocationType == "GPS" {
-                fixes = fixes.filter { ($0.locationType ?? "").uppercased() == "GPS" }
+                fixes = fixes.filter { p in
+                    let lt = (p.locationType ?? "").uppercased()
+                    let lc = (p.lc ?? "").uppercased()
+                    if lt == "GPS" || lc == "GPS" || lc == "G" { return true }
+                    if ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) || lt == "DOPPLER" { return false }
+                    return lt != "DOPPLER"
+                }
             } else if selectedLocationType == "Doppler" {
-                fixes = fixes.filter { ($0.locationType ?? "").uppercased() == "DOPPLER" }
+                fixes = fixes.filter { p in
+                    let lt = (p.locationType ?? "").uppercased()
+                    let lc = (p.lc ?? "").uppercased()
+                    return lt == "DOPPLER" || ["3", "2", "1", "0", "A", "B", "Z"].contains(lc)
+                }
             }
             
             let hexColor = MapViewModel.historyColors[index % MapViewModel.historyColors.count]

@@ -47,22 +47,53 @@ struct LeafletMapView: UIViewRepresentable {
         let weatherJs = "setWeatherOverlay('\(activeWeatherOverlay)');"
         webView.evaluateJavaScript(weatherJs, completionHandler: nil)
         
-        // 3. Update Transmitters JSON (hide unselected transmitters when history mode is active)
-        let activeAnnotations = (viewModel.showHistory && !viewModel.selectedTransmitterIds.isEmpty)
-            ? viewModel.annotations.filter { viewModel.selectedTransmitterIds.contains($0.transmitter.platform_id) }
-            : viewModel.annotations
-            
-        let markersData = activeAnnotations.map { ann -> [String: Any] in
-            let tx = ann.transmitter
-            let status = tx.effectiveStatus
-            return [
-                "id": tx.platform_id,
-                "lat": ann.coordinate.latitude,
-                "lon": ann.coordinate.longitude,
-                "status": status,
-                "birdRing": tx.assigned_bird_ring ?? ann.bird?.ring_id ?? "",
-                "species": ann.bird?.species ?? ""
-            ]
+        // 3. Update Transmitters JSON (hide unselected transmitters when history mode is active, and align pin with last collected position)
+        var markersData: [[String: Any]] = []
+        if viewModel.showHistory && !viewModel.selectedTransmitterIds.isEmpty {
+            for pttId in viewModel.selectedTransmitterIds {
+                let ann = viewModel.annotations.first(where: { $0.transmitter.platform_id == pttId })
+                let tx = ann?.transmitter ?? viewModel.transmitters.first(where: { $0.platform_id == pttId })
+                let status = tx?.effectiveStatus ?? "Active"
+                let birdRing = tx?.assigned_bird_ring ?? ann?.bird?.ring_id ?? ""
+                let species = ann?.bird?.species ?? ""
+                
+                var lat = ann?.coordinate.latitude ?? 0.0
+                var lon = ann?.coordinate.longitude ?? 0.0
+                
+                // Rule matching Web App:
+                // When path history is active, the green marker represents the LAST position of the filtered history path:
+                // - When "ALL" fixes is chosen: last position collected (GPS or Doppler)
+                // - When "GPS" filter is chosen: last position collected of quality GPS
+                // - When "Doppler" filter is chosen: last position collected of quality Doppler
+                if let hp = viewModel.historyPaths.first(where: { $0.id == pttId }),
+                   let lastFix = hp.positions.last {
+                    lat = lastFix.coordinate.latitude
+                    lon = lastFix.coordinate.longitude
+                }
+                
+                if lat != 0.0 && lon != 0.0 {
+                    markersData.append([
+                        "id": pttId,
+                        "lat": lat,
+                        "lon": lon,
+                        "status": status,
+                        "birdRing": birdRing,
+                        "species": species
+                    ])
+                }
+            }
+        } else {
+            markersData = viewModel.annotations.map { ann in
+                let tx = ann.transmitter
+                return [
+                    "id": tx.platform_id,
+                    "lat": ann.coordinate.latitude,
+                    "lon": ann.coordinate.longitude,
+                    "status": tx.effectiveStatus,
+                    "birdRing": tx.assigned_bird_ring ?? ann.bird?.ring_id ?? "",
+                    "species": ann.bird?.species ?? ""
+                ]
+            }
         }
         
         if let jsonData = try? JSONSerialization.data(withJSONObject: markersData),
@@ -363,6 +394,18 @@ struct LeafletMapView: UIViewRepresentable {
                     return 'inactive';
                 }
 
+                // Dedicated high-priority panes to ensure transmitter pins and badges are strictly ON TOP of all history lines and points!
+                if (!map.getPane('transmitterMarkerPane')) {
+                    const tmPane = map.createPane('transmitterMarkerPane');
+                    tmPane.style.zIndex = '750';
+                    tmPane.style.pointerEvents = 'auto';
+                }
+                if (!map.getPane('transmitterTooltipPane')) {
+                    const ttPane = map.createPane('transmitterTooltipPane');
+                    ttPane.style.zIndex = '800';
+                    ttPane.style.pointerEvents = 'auto';
+                }
+
                 // Markers Management
                 const markerMap = {};
                 const markerGroup = L.featureGroup().addTo(map);
@@ -398,8 +441,13 @@ struct LeafletMapView: UIViewRepresentable {
                         if (markerMap[idStr]) {
                             markerMap[idStr].setLatLng([lat, lon]);
                             markerMap[idStr].setIcon(icon);
+                            markerMap[idStr].setZIndexOffset(10000);
                         } else {
-                            const marker = L.marker([lat, lon], { icon: icon });
+                            const marker = L.marker([lat, lon], {
+                                icon: icon,
+                                pane: 'transmitterMarkerPane',
+                                zIndexOffset: 10000
+                            });
                             
                             // Permanent Top PTT ID Badge
                             marker.bindTooltip(
@@ -408,6 +456,7 @@ struct LeafletMapView: UIViewRepresentable {
                                     permanent: true,
                                     direction: 'top',
                                     offset: [0, -32],
+                                    pane: 'transmitterTooltipPane',
                                     className: 'custom-leaflet-tooltip'
                                 }
                             );
@@ -500,10 +549,10 @@ struct LeafletMapView: UIViewRepresentable {
                     }
                 }
 
-                // Dedicated pane for history points to guarantee they are strictly ON TOP of the polyline
+                // Dedicated pane for history points (zIndex 550: above polyline 400, but strictly under transmitter pins 750)
                 if (!map.getPane('historyPointsPane')) {
                     const hpPane = map.createPane('historyPointsPane');
-                    hpPane.style.zIndex = '620';
+                    hpPane.style.zIndex = '550';
                     hpPane.style.pointerEvents = 'auto';
                 }
                 const historyCanvasRenderer = L.canvas({ padding: 0.5, tolerance: 15, pane: 'historyPointsPane' });
