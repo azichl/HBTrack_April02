@@ -141,6 +141,10 @@ class MapViewModel: ObservableObject {
     @Published var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
     @Published var customEndDate: Date = Date()
     
+    // In-memory cache matching Web App LiveTracking.tsx rawHistoryCache
+    private var rawHistoryCache: [String: [Position]] = [:]
+    private var rawHistoryCacheKey: String = ""
+    
     var visibleAnnotations: [TransmitterMapAnnotation] {
         if showHistory && !selectedTransmitterIds.isEmpty {
             return annotations.filter { selectedTransmitterIds.contains($0.transmitter.platform_id) }
@@ -487,6 +491,13 @@ class MapViewModel: ObservableObject {
         defer { isLoading = false }
         
         let (startDate, endDate) = selectedDatePreset.dateRange(customStart: customStartDate, customEnd: customEndDate)
+        let cacheKey = "\(selectedTransmitterIds.sorted().joined(separator: ","))_\(Int(startDate.timeIntervalSince1970))_\(Int(endDate.timeIntervalSince1970))"
+        
+        if cacheKey == rawHistoryCacheKey && !rawHistoryCache.isEmpty {
+            self.rawHistoryPositionsByTx = rawHistoryCache
+            applyHistoryFilter()
+            return
+        }
         
         do {
             let rawDict = try await TransmitterService.shared.fetchHistoricalPositions(
@@ -495,6 +506,8 @@ class MapViewModel: ObservableObject {
                 endDate: endDate,
                 locationType: nil
             )
+            self.rawHistoryCache = rawDict
+            self.rawHistoryCacheKey = cacheKey
             self.rawHistoryPositionsByTx = rawDict
             applyHistoryFilter()
             
@@ -527,7 +540,8 @@ class MapViewModel: ObservableObject {
             if st.contains("static") {
                 fixes = fixes.filter { p in
                     if p.timestamp.hasPrefix(currentMonthKey) { return true }
-                    if let d = DateFormatters.parseDate(p.timestamp) {
+                    if p.timestampMs > 0 {
+                        let d = Date(timeIntervalSince1970: p.timestampMs / 1000.0)
                         let y = cal.component(.year, from: d)
                         let m = cal.component(.month, from: d)
                         return String(format: "%04d-%02d", y, m) == currentMonthKey

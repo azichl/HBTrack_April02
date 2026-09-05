@@ -1,33 +1,19 @@
 import Foundation
 
 struct DateFormatters {
-    static func parseDate(_ dateString: String) -> Date? {
-        let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return nil }
-        
-        // 1. Numeric timestamp (epoch ms or seconds)
-        if let num = Double(trimmed) {
-            if num > 10_000_000_000 {
-                return Date(timeIntervalSince1970: num / 1000.0)
-            } else if num > 0 {
-                return Date(timeIntervalSince1970: num)
-            }
-        }
-        
-        // 2. ISO8601 with fractional seconds
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = isoFormatter.date(from: trimmed) {
-            return date
-        }
-        
-        // 3. ISO8601 standard
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        if let date = isoFormatter.date(from: trimmed) {
-            return date
-        }
-        
-        // 4. Fallback across all standard formats
+    private static let isoFractionalFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    
+    private static let isoStandardFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+    
+    private static let fallbackFormatters: [DateFormatter] = {
         let formats = [
             "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
             "yyyy-MM-dd'T'HH:mm:ss.SSS",
@@ -39,17 +25,59 @@ struct DateFormatters {
             "dd/MM/yyyy HH:mm:ss",
             "dd/MM/yyyy"
         ]
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.timeZone = TimeZone(abbreviation: "UTC")
-        
-        for fmt in formats {
+        return formats.map { fmt in
+            let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
+            df.timeZone = TimeZone(abbreviation: "UTC")
             df.dateFormat = fmt
-            if let date = df.date(from: trimmed) {
-                return date
+            return df
+        }
+    }()
+
+    static func fastParseTimestampMs(_ dateString: String) -> Double {
+        let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return .nan }
+        
+        // 1. Numeric timestamp (epoch ms or seconds)
+        if let num = Double(trimmed) {
+            if num > 10_000_000_000 {
+                return num
+            } else if num > 0 {
+                return num * 1000.0
             }
         }
-        return nil
+        
+        // 2. ISO8601 with fractional seconds
+        if let date = isoFractionalFormatter.date(from: trimmed) {
+            return date.timeIntervalSince1970 * 1000.0
+        }
+        
+        // 3. ISO8601 standard
+        if let date = isoStandardFormatter.date(from: trimmed) {
+            return date.timeIntervalSince1970 * 1000.0
+        }
+        
+        // Space to T replacement for web parity
+        if trimmed.contains(" ") && !trimmed.contains("T") {
+            let replaced = trimmed.replacingOccurrences(of: " ", with: "T")
+            if let date = isoFractionalFormatter.date(from: replaced) ?? isoStandardFormatter.date(from: replaced) {
+                return date.timeIntervalSince1970 * 1000.0
+            }
+        }
+        
+        // 4. Preallocated fallback formatters
+        for df in fallbackFormatters {
+            if let date = df.date(from: trimmed) {
+                return date.timeIntervalSince1970 * 1000.0
+            }
+        }
+        return .nan
+    }
+    
+    static func parseDate(_ dateString: String) -> Date? {
+        let ms = fastParseTimestampMs(dateString)
+        if ms.isNaN { return nil }
+        return Date(timeIntervalSince1970: ms / 1000.0)
     }
     
     static func relativeTime(from date: Date) -> String {

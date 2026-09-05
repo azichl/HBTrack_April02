@@ -28,8 +28,13 @@ struct Position: Identifiable, Codable {
         transmitter_id ?? platformId
     }
     
+    var timestampMs: Double = 0
+    
     var parsedDate: Date? {
-        DateFormatters.parseDate(timestamp)
+        if !timestampMs.isNaN && timestampMs > 0 {
+            return Date(timeIntervalSince1970: timestampMs / 1000.0)
+        }
+        return DateFormatters.parseDate(timestamp)
     }
     
     enum CodingKeys: String, CodingKey {
@@ -50,7 +55,7 @@ struct Position: Identifiable, Codable {
         case locationType
     }
     
-    init(id: String? = nil, transmitter_id: String?, platformId: String?, timestamp: String, lat: Double, lon: Double, lc: String? = nil, is_kalman: Bool? = nil, speed_kmh: Double? = nil, course: Double? = nil, satellite: String? = nil, locationType: String? = nil) {
+    init(id: String? = nil, transmitter_id: String?, platformId: String?, timestamp: String, lat: Double, lon: Double, lc: String? = nil, is_kalman: Bool? = nil, speed_kmh: Double? = nil, course: Double? = nil, satellite: String? = nil, locationType: String? = nil, timestampMs: Double? = nil) {
         self.id = id
         self.transmitter_id = transmitter_id
         self.platformId = platformId
@@ -63,6 +68,7 @@ struct Position: Identifiable, Codable {
         self.course = course
         self.satellite = satellite
         self.locationType = locationType
+        self.timestampMs = timestampMs ?? DateFormatters.fastParseTimestampMs(timestamp)
     }
     
     init(from decoder: Decoder) throws {
@@ -140,6 +146,7 @@ struct Position: Identifiable, Codable {
         self.course = try? container.decodeIfPresent(Double.self, forKey: .course)
         self.satellite = try? container.decodeIfPresent(String.self, forKey: .satellite)
         self.locationType = try? container.decodeIfPresent(String.self, forKey: .locationType)
+        self.timestampMs = DateFormatters.fastParseTimestampMs(self.timestamp)
     }
     
     func encode(to encoder: Encoder) throws {

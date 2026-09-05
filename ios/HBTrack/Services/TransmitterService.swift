@@ -185,44 +185,15 @@ class TransmitterService {
         return resultPositions
     }
     
-    func fetchHistoricalPositions(transmitterId: String, startDate: Date, endDate: Date, locationType: String?) async throws -> [Position] {
+    /**
+     * Cloned directly from Web App `getHistoricalPositions` in `firestoreService.ts`.
+     * High-speed, indexed queries with instant in-memory timestamp & coordinate deduplication.
+     */
+    func fetchHistoricalPositions(transmitterIds: [String], startDate: Date, endDate: Date, locationType: String? = nil) async throws -> [String: [Position]] {
         let db = FirestoreService.shared.db
-        let pid = transmitterId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !pid.isEmpty else { return [] }
-        
-        let startMs = startDate.timeIntervalSince1970
-        let endMs = endDate.timeIntervalSince1970
-        let isNumeric = Int(pid) != nil
-        let numId = Int(pid)
-        
-        var rawDocs: [[String: Any]] = []
-        
-        // Helper to query collection safely
-        func queryCollection(_ colName: String, _ field: String, _ val: Any) async -> [[String: Any]] {
-            if let snap = try? await db.collection(colName).whereField(field, isEqualTo: val).getDocuments() {
-                return snap.documents.map { $0.data() }
-            }
-            return []
-        }
-        
-        // Query positions & argos_positions across string and numeric IDs concurrently in parallel
-        await withTaskGroup(of: [[String: Any]].self) { group in
-            group.addTask { await queryCollection("positions", "transmitter_id", pid) }
-            group.addTask { await queryCollection("positions", "platformId", pid) }
-            group.addTask { await queryCollection("argos_positions", "platformId", pid) }
-            group.addTask { await queryCollection("argos_positions", "transmitter_id", pid) }
-            
-            if isNumeric, let n = numId {
-                group.addTask { await queryCollection("positions", "transmitter_id", n) }
-                group.addTask { await queryCollection("positions", "platformId", n) }
-                group.addTask { await queryCollection("argos_positions", "platformId", n) }
-                group.addTask { await queryCollection("argos_positions", "transmitter_id", n) }
-            }
-            
-            for await docs in group {
-                rawDocs.append(contentsOf: docs)
-            }
-        }
+        let startMs = startDate.timeIntervalSince1970 * 1000.0
+        let endMs = endDate.timeIntervalSince1970 * 1000.0
+        var results: [String: [Position]] = [:]
         
         func parseCoord(_ val: Any?) -> Double? {
             if let d = val as? Double { return d }
@@ -231,94 +202,102 @@ class TransmitterService {
             return nil
         }
         
-        var seenKeys = Set<String>()
-        var parsedPositions: [Position] = []
-        
-        for d in rawDocs {
-            guard let timeStr = (d["timestamp"] as? String) ?? (d["locationDate"] as? String) else { continue }
-            guard let date = DateFormatters.parseDate(timeStr) else { continue }
-            let ts = date.timeIntervalSince1970
-            guard ts >= startMs && ts <= endMs else { continue }
+        for pttId in transmitterIds {
+            let pidStr = pttId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !pidStr.isEmpty else { continue }
+            let idNum = Int(pidStr)
+            var seenKeys = Set<String>()
+            var pttDocs: [Position] = []
             
-            let rawLat = parseCoord(d["lat"]) ?? parseCoord(d["latitude"])
-            let rawLon = parseCoord(d["lon"]) ?? parseCoord(d["longitude"])
-            guard let lat = rawLat, var lon = rawLon, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else { continue }
-            
-            // Auto-correct negative longitude for transmitter 242086
-            if pid == "242086" && lon < 0 {
-                lon = abs(lon)
-            }
-            
-            let dedupeKey = "\(Int(ts))_\(String(format: "%.4f", lat))_\(String(format: "%.4f", lon))"
-            if seenKeys.contains(dedupeKey) { continue }
-            seenKeys.insert(dedupeKey)
-            
-            let lc = (d["lc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            let rawLocType = (d["locationType"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            
-            let locType: String = {
-                if ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) {
-                    return "Doppler"
+            // Helper matching processDoc in firestoreService.ts
+            let processDoc: ([String: Any], String) -> Void = { d, docId in
+                guard let rawTs = (d["timestamp"] as? String) ?? (d["locationDate"] as? String) else { return }
+                let docTs = DateFormatters.fastParseTimestampMs(rawTs)
+                if docTs.isNaN || docTs < startMs || docTs > endMs { return }
+                
+                let rawLat = parseCoord(d["lat"]) ?? parseCoord(d["latitude"])
+                let rawLon = parseCoord(d["lon"]) ?? parseCoord(d["longitude"])
+                guard let lat = rawLat, var lon = rawLon, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else {
+                    return
                 }
-                if lc == "GPS" || lc == "G" || rawLocType == "GPS" {
+                
+                // Auto-correct negative longitude for transmitter 242086
+                if pidStr == "242086" && lon < 0 {
+                    lon = abs(lon)
+                }
+                
+                let dedupeKey = "\(Int64(docTs / 1000))_\(String(format: "%.4f", lat))_\(String(format: "%.4f", lon))"
+                if seenKeys.contains(dedupeKey) { return }
+                seenKeys.insert(dedupeKey)
+                
+                let rawLc = (d["lc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                let rawType = (d["locationType"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                
+                let locType: String = {
+                    if ["3", "2", "1", "0", "A", "B", "Z"].contains(rawLc) { return "Doppler" }
+                    if rawLc == "GPS" || rawLc == "G" || rawType == "GPS" { return "GPS" }
+                    if rawType == "DOPPLER" { return "Doppler" }
                     return "GPS"
-                }
-                if rawLocType == "DOPPLER" {
-                    return "Doppler"
-                }
-                return "GPS"
-            }()
+                }()
+                
+                let speed = parseCoord(d["speed_kmh"]) ?? parseCoord(d["speed"]) ?? 0.0
+                let course = parseCoord(d["course"]) ?? 0.0
+                let sat = (d["satellite"] as? String) ?? "GPS"
+                
+                let pos = Position(
+                    id: (d["id"] as? String) ?? docId,
+                    transmitter_id: pidStr,
+                    platformId: pidStr,
+                    timestamp: rawTs,
+                    lat: lat,
+                    lon: lon,
+                    lc: rawLc.isEmpty ? "3" : rawLc,
+                    is_kalman: d["is_kalman"] as? Bool ?? false,
+                    speed_kmh: speed,
+                    course: course,
+                    satellite: sat,
+                    locationType: locType,
+                    timestampMs: docTs
+                )
+                pttDocs.append(pos)
+            }
             
-            if let filterType = locationType, filterType != "All", filterType != "all" {
-                if locType.lowercased() != filterType.lowercased() {
-                    continue
+            // Helper to execute targeted query
+            func fetchAndProcess(_ query: Query) async {
+                do {
+                    let snap = try await query.getDocuments()
+                    for doc in snap.documents {
+                        processDoc(doc.data(), doc.documentID)
+                    }
+                } catch {
+                    // Ignore query error, match web app
                 }
             }
             
-            let speed = parseCoord(d["speed_kmh"]) ?? parseCoord(d["speed"]) ?? 0.0
-            let course = parseCoord(d["course"]) ?? 0.0
-            let sat = (d["satellite"] as? String) ?? "GPS"
+            // ── Query argos_positions (string & number) ──
+            await fetchAndProcess(db.collection("argos_positions").whereField("platformId", isEqualTo: pidStr))
+            if let num = idNum {
+                await fetchAndProcess(db.collection("argos_positions").whereField("platformId", isEqualTo: num))
+            }
             
-            let pos = Position(
-                id: (d["id"] as? String) ?? "\(pid)_\(Int(ts))",
-                transmitter_id: pid,
-                platformId: pid,
-                timestamp: timeStr,
-                lat: lat,
-                lon: lon,
-                lc: lc.isEmpty ? "3" : lc,
-                is_kalman: d["is_kalman"] as? Bool ?? false,
-                speed_kmh: speed,
-                course: course,
-                satellite: sat,
-                locationType: locType
-            )
-            parsedPositions.append(pos)
+            // ── Query positions (string & number) ──
+            await fetchAndProcess(db.collection("positions").whereField("transmitter_id", isEqualTo: pidStr))
+            if let num = idNum {
+                await fetchAndProcess(db.collection("positions").whereField("transmitter_id", isEqualTo: num))
+            }
+            await fetchAndProcess(db.collection("positions").whereField("platformId", isEqualTo: pidStr))
+            
+            // Sort chronologically using pre-parsed timestampMs (nanosecond speed)
+            pttDocs.sort { $0.timestampMs < $1.timestampMs }
+            results[pidStr] = pttDocs
         }
         
-        parsedPositions.sort { p1, p2 in
-            let d1 = DateFormatters.parseDate(p1.timestamp)?.timeIntervalSince1970 ?? 0
-            let d2 = DateFormatters.parseDate(p2.timestamp)?.timeIntervalSince1970 ?? 0
-            return d1 < d2
-        }
-        
-        return parsedPositions
+        return results
     }
     
-    func fetchHistoricalPositions(transmitterIds: [String], startDate: Date, endDate: Date, locationType: String?) async throws -> [String: [Position]] {
-        var results: [String: [Position]] = [:]
-        await withTaskGroup(of: (String, [Position]).self) { group in
-            for pid in transmitterIds {
-                group.addTask {
-                    let pos = (try? await self.fetchHistoricalPositions(transmitterId: pid, startDate: startDate, endDate: endDate, locationType: locationType)) ?? []
-                    return (pid, pos)
-                }
-            }
-            for await (pid, pos) in group {
-                results[pid] = pos
-            }
-        }
-        return results
+    func fetchHistoricalPositions(transmitterId: String, startDate: Date, endDate: Date, locationType: String? = nil) async throws -> [Position] {
+        let dict = try await fetchHistoricalPositions(transmitterIds: [transmitterId], startDate: startDate, endDate: endDate, locationType: locationType)
+        return dict[transmitterId] ?? []
     }
     
     func subscribeToPositions(onChange: @escaping ([Position]) -> Void) -> ListenerRegistration {
