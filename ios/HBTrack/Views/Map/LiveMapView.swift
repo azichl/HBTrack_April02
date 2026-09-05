@@ -153,40 +153,6 @@ struct LiveMapView: View {
                                     .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
                             }
                             
-                            // History Icon Button related to the options button
-                            Button {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    if !viewModel.showHistory {
-                                        viewModel.showHistory = true
-                                        viewModel.showHistoryOverlay = true
-                                        Task {
-                                            await viewModel.loadHistory()
-                                        }
-                                    } else {
-                                        viewModel.showHistoryOverlay.toggle()
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 16, weight: .bold))
-                                    if viewModel.showHistory && !viewModel.showHistoryOverlay {
-                                        Text("Filters")
-                                            .font(.system(size: 12, weight: .bold))
-                                    }
-                                }
-                                .foregroundColor(viewModel.showHistoryOverlay ? .white : (viewModel.showHistory ? AppTheme.brandGold : .primary))
-                                .padding(.horizontal, (viewModel.showHistory && !viewModel.showHistoryOverlay) ? 12 : 0)
-                                .frame(width: (viewModel.showHistory && !viewModel.showHistoryOverlay) ? nil : 44, height: 44)
-                                .background(viewModel.showHistoryOverlay ? AppTheme.brandGold : Color(UIColor.systemBackground).opacity(0.95))
-                                .cornerRadius(12)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(viewModel.showHistory ? AppTheme.brandGold.opacity(0.6) : Color.clear, lineWidth: 1.5)
-                                )
-                                .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
-                            }
-                            
                             if !showToolsDrawer {
                                 // Fullscreen Toggle Button
                                 Button {
@@ -258,7 +224,7 @@ struct LiveMapView: View {
                                         label: "History",
                                         isActive: viewModel.showHistory
                                     ) {
-                                        withAnimation {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                             if !viewModel.showHistory {
                                                 viewModel.showHistory = true
                                                 viewModel.showHistoryOverlay = true
@@ -268,6 +234,7 @@ struct LiveMapView: View {
                                             } else {
                                                 viewModel.showHistoryOverlay.toggle()
                                             }
+                                            showToolsDrawer = false
                                         }
                                     }
                                     

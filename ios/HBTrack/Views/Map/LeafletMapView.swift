@@ -500,8 +500,14 @@ struct LeafletMapView: UIViewRepresentable {
                     }
                 }
 
+                // Dedicated pane for history points to guarantee they are strictly ON TOP of the polyline
+                if (!map.getPane('historyPointsPane')) {
+                    const hpPane = map.createPane('historyPointsPane');
+                    hpPane.style.zIndex = '620';
+                    hpPane.style.pointerEvents = 'auto';
+                }
+                const historyCanvasRenderer = L.canvas({ padding: 0.5, tolerance: 15, pane: 'historyPointsPane' });
                 let historyLayersGroup = L.featureGroup().addTo(map);
-                const historyCanvasRenderer = L.canvas({ padding: 0.5 });
 
                 function drawHistoryPaths(pathsList) {
                     clearHistory();
@@ -524,15 +530,16 @@ struct LeafletMapView: UIViewRepresentable {
                         const latlngs = validPositions.map(p => [Number(p.lat), Number(p.lon)]);
                         allLatLngs.push(...latlngs);
 
-                        // 1. Draw distinct colored polyline for this PTT
+                        // 1. Draw distinct colored polyline for this PTT (interactive: false so it never steals clicks from points!)
                         const polyline = L.polyline(latlngs, {
                             color: color,
                             weight: 3.5,
                             opacity: 0.85,
-                            dashArray: '7, 5'
+                            dashArray: '7, 5',
+                            interactive: false
                         }).addTo(historyLayersGroup);
 
-                        // 2. High-performance canvas rendering for EVERY single fix (no skipped points!)
+                        // 2. High-performance canvas rendering for EVERY single fix (strictly on top of line!)
                         const total = validPositions.length;
 
                         validPositions.forEach((p, index) => {
@@ -548,12 +555,14 @@ struct LeafletMapView: UIViewRepresentable {
                             const dotColor = pathsList.length > 1 ? color : (isGps ? '#2563eb' : '#9333ea');
                             const circle = L.circleMarker(pt, {
                                 renderer: historyCanvasRenderer,
-                                radius: isEnd ? 7 : (isStart ? 6.5 : 4.5),
+                                pane: 'historyPointsPane',
+                                radius: isEnd ? 8 : (isStart ? 7.5 : 5.5),
                                 fillColor: isEnd ? '#22c55e' : (isStart ? '#1e40af' : dotColor),
                                 color: '#ffffff',
-                                weight: 1.5,
+                                weight: 2,
                                 opacity: 1,
-                                fillOpacity: 0.95
+                                fillOpacity: 1,
+                                interactive: true
                             });
 
                             const popupUid = 'meteo-pop-' + Math.floor(Math.random() * 1000000);
