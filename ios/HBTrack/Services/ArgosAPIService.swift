@@ -1,6 +1,17 @@
 import Foundation
 import FirebaseFirestore
 
+extension Notification.Name {
+    static let telemetryDataDidUpdate = Notification.Name("telemetryDataDidUpdate")
+}
+
+struct TransmitterSyncInfo {
+    var lastFix: String
+    var battery: Double?
+    var lat: Double
+    var lon: Double
+}
+
 struct SyncResult: Identifiable {
     var id = UUID()
     var recordsImported: Int
@@ -153,10 +164,10 @@ class ArgosAPIService {
     }
     
     /// Parse raw telemetry items into standard Position and Argos models (matching Web App logic)
-    func mapRawTelemetry(_ rawItems: [[String: Any]]) -> (positions: [[String: Any]], argosPositions: [[String: Any]], txLastFixes: [String: (lastFix: String, battery: Double?)]) {
+    func mapRawTelemetry(_ rawItems: [[String: Any]]) -> (positions: [[String: Any]], argosPositions: [[String: Any]], txLastFixes: [String: TransmitterSyncInfo]) {
         var parsedPositions: [[String: Any]] = []
         var parsedArgos: [[String: Any]] = []
-        var txLastFixes: [String: (lastFix: String, battery: Double?)] = [:]
+        var txLastFixes: [String: TransmitterSyncInfo] = [:]
         
         func parseCoord(_ val: Any?) -> Double? {
             if let d = val as? Double { return d }
@@ -251,10 +262,10 @@ class ArgosAPIService {
                 let existingDate = DateFormatters.parseDate(existing.lastFix)?.timeIntervalSince1970 ?? 0
                 let newDate = DateFormatters.parseDate(ts)?.timeIntervalSince1970 ?? 0
                 if newDate >= existingDate {
-                    txLastFixes[platformId] = (lastFix: ts, battery: decodedBattery ?? existing.battery, lat: lat, lon: lon)
+                    txLastFixes[platformId] = TransmitterSyncInfo(lastFix: ts, battery: decodedBattery ?? existing.battery, lat: lat, lon: lon)
                 }
             } else {
-                txLastFixes[platformId] = (lastFix: ts, battery: decodedBattery, lat: lat, lon: lon)
+                txLastFixes[platformId] = TransmitterSyncInfo(lastFix: ts, battery: decodedBattery, lat: lat, lon: lon)
             }
         }
         
