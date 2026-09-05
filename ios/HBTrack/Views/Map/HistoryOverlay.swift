@@ -15,7 +15,7 @@ struct HistoryOverlay: View {
                 .frame(width: 38, height: 5)
                 .padding(.top, 2)
             
-            // Header: Title & Close Button
+            // Header: Title & Action Buttons
             HStack {
                 HStack(spacing: 6) {
                     Image(systemName: "clock.arrow.circlepath")
@@ -27,13 +27,29 @@ struct HistoryOverlay: View {
                 
                 Spacer()
                 
+                // Hide popup to view full map point-by-point
+                Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        viewModel.showHistoryOverlay = false
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "eye.fill")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("View Map")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(AppTheme.brandGold)
+                    .cornerRadius(8)
+                }
+                
+                // Completely clear track and exit
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        viewModel.showHistory = false
-                        viewModel.selectedTransmitterIds.removeAll()
-                        viewModel.rawHistoryPositionsByTx.removeAll()
-                        viewModel.historyPaths.removeAll()
-                        viewModel.historyPositions.removeAll()
+                        viewModel.clearHistoryTrack()
                         showSearchInput = false
                         pttSearchText = ""
                     }
@@ -238,6 +254,9 @@ struct HistoryOverlay: View {
                                 viewModel.selectedDatePreset = preset
                                 Task {
                                     await viewModel.loadHistory()
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                        viewModel.showHistoryOverlay = false
+                                    }
                                 }
                             } label: {
                                 Text(preset.rawValue)
@@ -263,6 +282,9 @@ struct HistoryOverlay: View {
                         Button {
                             Task {
                                 await viewModel.loadHistory()
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                    viewModel.showHistoryOverlay = false
+                                }
                             }
                         } label: {
                             Text("Apply Date Filter")
@@ -294,7 +316,29 @@ struct HistoryOverlay: View {
                 .pickerStyle(.segmented)
                 .onChange(of: viewModel.selectedLocationType) { _ in
                     viewModel.applyHistoryFilter()
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        viewModel.showHistoryOverlay = false
+                    }
                 }
+            }
+            
+            // Quick Button to Hide Filters & View Whole Map
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    viewModel.showHistoryOverlay = false
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                    Text("Hide Popup to View Full Map")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundColor(AppTheme.brandGold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(AppTheme.brandGoldLight)
+                .cornerRadius(10)
             }
         }
         .padding(16)

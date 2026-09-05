@@ -501,6 +501,7 @@ struct LeafletMapView: UIViewRepresentable {
                 }
 
                 let historyLayersGroup = L.featureGroup().addTo(map);
+                const historyCanvasRenderer = L.canvas({ padding: 0.5 });
 
                 function drawHistoryPaths(pathsList) {
                     clearHistory();
@@ -531,23 +532,26 @@ struct LeafletMapView: UIViewRepresentable {
                             dashArray: '7, 5'
                         }).addTo(historyLayersGroup);
 
-                        // 2. High-performance rendering: stride markers if fixes > 500 to keep UI 60fps
+                        // 2. High-performance canvas rendering for EVERY single fix (no skipped points!)
                         const total = validPositions.length;
-                        const stride = total > 500 ? Math.ceil(total / 350) : 1;
 
                         validPositions.forEach((p, index) => {
                             const isStart = index === 0;
                             const isEnd = index === total - 1;
-                            if (!isStart && !isEnd && (index % stride !== 0)) return;
 
-                            const pt = [Number(p.lat), Number(p.lon)];
+                            const latNum = Number(p.lat);
+                            const lonNum = Number(p.lon);
+                            const pt = [latNum, lonNum];
                             const isGps = (p.type || '').toUpperCase() === 'GPS';
 
+                            // Circle marker on canvas: start = deep blue, end = emerald green, intermediate = blue dot for GPS / purple for Doppler (or PTT color)
+                            const dotColor = pathsList.length > 1 ? color : (isGps ? '#2563eb' : '#9333ea');
                             const circle = L.circleMarker(pt, {
-                                radius: isEnd ? 7 : (isStart ? 6 : 4.5),
-                                fillColor: isEnd ? '#22c55e' : (isStart ? '#3b82f6' : color),
+                                renderer: historyCanvasRenderer,
+                                radius: isEnd ? 7 : (isStart ? 6.5 : 4.5),
+                                fillColor: isEnd ? '#22c55e' : (isStart ? '#1e40af' : dotColor),
                                 color: '#ffffff',
-                                weight: 2,
+                                weight: 1.5,
                                 opacity: 1,
                                 fillOpacity: 0.95
                             });
@@ -558,8 +562,29 @@ struct LeafletMapView: UIViewRepresentable {
                                 : 'background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff;';
                             const fixLabel = isGps ? 'GPS' : `Doppler ${p.lc ? '(LC ' + p.lc + ')' : ''}`;
 
+                            // Coordinate formatting (HDD, HDMM, HDMS matching web app)
+                            function formatDM(val, isLat) {
+                                const abs = Math.abs(val || 0);
+                                const deg = Math.floor(abs);
+                                const min = (abs - deg) * 60;
+                                const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
+                                return deg + "° " + min.toFixed(3) + "' " + dir;
+                            }
+                            function formatDMS(val, isLat) {
+                                const abs = Math.abs(val || 0);
+                                const deg = Math.floor(abs);
+                                const min = Math.floor((abs - deg) * 60);
+                                const sec = ((abs - deg) * 60 - min) * 60;
+                                const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
+                                return deg + "° " + min + "' " + sec.toFixed(1) + '" ' + dir;
+                            }
+
+                            const hddStr = latNum.toFixed(5) + ", " + lonNum.toFixed(5);
+                            const hdmmStr = formatDM(latNum, true) + "  " + formatDM(lonNum, false);
+                            const hdmsStr = formatDMS(latNum, true) + "  " + formatDMS(lonNum, false);
+
                             const popupHtml = `
-                                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 210px; max-width: 250px; padding: 2px;">
+                                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 220px; max-width: 260px; padding: 2px;">
                                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">
                                         <span style="font-size: 14px; font-weight: 800; color: ${color};">PTT ${p.pttId || pttId}</span>
                                         <span style="font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; ${fixBadgeStyle}">
@@ -569,9 +594,10 @@ struct LeafletMapView: UIViewRepresentable {
                                     <div style="font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 6px;">
                                         📅 ${p.date || ''}
                                     </div>
-                                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 10.5px; color: #475569; margin-bottom: 6px; display: flex; justify-content: space-between;">
-                                        <span>Lat: ${Number(p.lat).toFixed(4)}</span>
-                                        <span>Lon: ${Number(p.lon).toFixed(4)}</span>
+                                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 8px; border-radius: 6px; font-family: monospace; font-size: 10px; color: #475569; margin-bottom: 6px; line-height: 1.4;">
+                                        <div><b>HDD:</b> ${hddStr}</div>
+                                        <div><b>HDMM:</b> ${hdmmStr}</div>
+                                        <div><b>HDMS:</b> ${hdmsStr}</div>
                                     </div>
                                     ${(p.speed > 0 || p.course > 0) ? `
                                     <div style="font-size: 10px; color: #64748b; margin-bottom: 6px;">
@@ -588,7 +614,7 @@ struct LeafletMapView: UIViewRepresentable {
                                             </div>
                                         </div>
                                     </div>
-                                    <a href="https://earth.google.com/web/search/${p.lat},${p.lon}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 0; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none; font-size: 10px; font-weight: 700; text-transform: uppercase;">
+                                    <a href="https://earth.google.com/web/search/${latNum},${lonNum}" target="_blank" style="display: flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 0; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; border-radius: 6px; text-decoration: none; font-size: 10px; font-weight: 700; text-transform: uppercase;">
                                         🌐 View on Google Earth
                                     </a>
                                 </div>
@@ -596,7 +622,7 @@ struct LeafletMapView: UIViewRepresentable {
 
                             circle.bindPopup(popupHtml, { maxWidth: 280, className: 'custom-history-popup' });
                             circle.on('popupopen', () => {
-                                fetchMeteoArchive(Number(p.lat), Number(p.lon), p.date, popupUid);
+                                fetchMeteoArchive(latNum, lonNum, p.date, popupUid);
                             });
 
                             historyLayersGroup.addLayer(circle);

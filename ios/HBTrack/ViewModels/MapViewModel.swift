@@ -132,6 +132,7 @@ class MapViewModel: ObservableObject {
     ]
     
     @Published var showHistory: Bool = false
+    @Published var showHistoryOverlay: Bool = false
     @Published var selectedTransmitterIds: [String] = []
     @Published var rawHistoryPositionsByTx: [String: [Position]] = [:]
     @Published var historyPaths: [HistoryPath] = []
@@ -446,9 +447,21 @@ class MapViewModel: ObservableObject {
         selectedTransmitter = tx
         selectedTransmitterIds = [tx.platform_id]
         showHistory = true
+        showHistoryOverlay = true
         Task {
             await loadHistory()
         }
+    }
+    
+    func clearHistoryTrack() {
+        showHistory = false
+        showHistoryOverlay = false
+        selectedTransmitterIds.removeAll()
+        rawHistoryPositionsByTx.removeAll()
+        historyPaths.removeAll()
+        historyPositions.removeAll()
+        rawHistoryCache.removeAll()
+        rawHistoryCacheKey = ""
     }
     
     func toggleHistoryTransmitter(_ pttId: String) {
