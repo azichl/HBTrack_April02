@@ -193,9 +193,15 @@ class MapViewModel: ObservableObject {
     @Published var isLoading: Bool = false
     
     private var positionsListener: ListenerRegistration?
+    private var ingestListener: ListenerRegistration?
+    private var dataUpdateObserver: Any?
     
     deinit {
         positionsListener?.remove()
+        ingestListener?.remove()
+        if let obs = dataUpdateObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
         locationManager?.stopUpdatingLocation()
         locationManager?.stopUpdatingHeading()
     }
@@ -346,6 +352,35 @@ class MapViewModel: ObservableObject {
                 }
                 self.positions = Array(currentMap.values)
                 self.buildAnnotations(visibilityFilter: visibilityFilter)
+            }
+        }
+    }
+    
+    func subscribeToUpdates(visibilityFilter: @escaping (String) -> Bool = { _ in true }) {
+        // 1. Live positions listener
+        subscribeToPositions(visibilityFilter: visibilityFilter)
+        
+        // 2. Firestore system_status/ingestion listener (auto-refresh across all devices & web app)
+        ingestListener?.remove()
+        ingestListener = FirestoreService.shared.db.collection("system_status").document("ingestion").addSnapshotListener { [weak self] snapshot, _ in
+            guard let self = self, let snapshot = snapshot, snapshot.exists else { return }
+            Task { @MainActor in
+                print("[MapViewModel] Firestore ingest update detected, reloading live map...")
+                await self.loadData(forceRefresh: true, visibilityFilter: visibilityFilter)
+            }
+        }
+        
+        // 3. Local dataUploadCompleted observer
+        if dataUpdateObserver == nil {
+            dataUpdateObserver = NotificationCenter.default.addObserver(
+                forName: .telemetryDataDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    print("[MapViewModel] Local telemetryDataDidUpdate received, reloading live map...")
+                    await self?.loadData(forceRefresh: true, visibilityFilter: visibilityFilter)
+                }
             }
         }
     }

@@ -20,9 +20,13 @@ class DashboardViewModel: ObservableObject {
     @Published var recentAlerts: [Alert] = []
     
     private var ingestListener: ListenerRegistration?
+    private var dataUpdateObserver: Any?
     
     deinit {
         ingestListener?.remove()
+        if let obs = dataUpdateObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
     }
     
     func loadData(forceRefresh: Bool = false) async {
@@ -184,13 +188,30 @@ class DashboardViewModel: ObservableObject {
     }
     
     func subscribeToUpdates() {
+        // 1. Listen to Firestore system_status/ingestion changes (across all devices & web app)
         ingestListener?.remove()
         ingestListener = FirestoreService.shared.db.collection("system_status").document("ingestion").addSnapshotListener { [weak self] snapshot, _ in
             guard let self = self, let snapshot = snapshot, snapshot.exists,
                   let data = snapshot.data(), let timeStr = data["last_ingest_time"] as? String,
                   let date = DateFormatters.parseDate(timeStr) else { return }
             Task { @MainActor in
+                print("[DashboardViewModel] Firestore ingest update detected: \(timeStr), reloading dashboard...")
                 self.lastIngestTime = date
+                await self.loadData(forceRefresh: true)
+            }
+        }
+        
+        // 2. Listen to local telemetryDataDidUpdate event
+        if dataUpdateObserver == nil {
+            dataUpdateObserver = NotificationCenter.default.addObserver(
+                forName: .telemetryDataDidUpdate,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    print("[DashboardViewModel] Local telemetryDataDidUpdate notification received, reloading...")
+                    await self?.loadData(forceRefresh: true)
+                }
             }
         }
     }

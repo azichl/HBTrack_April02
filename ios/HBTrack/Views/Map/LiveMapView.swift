@@ -299,10 +299,11 @@ struct LiveMapView: View {
         }
         .toolbar(isFullscreen ? .hidden : .visible, for: .tabBar)
         .task {
-            if viewModel.transmitters.isEmpty {
-                await viewModel.loadData(visibilityFilter: authVM.isTransmitterVisible)
-                viewModel.subscribeToPositions(visibilityFilter: authVM.isTransmitterVisible)
-            }
+            await viewModel.loadData(visibilityFilter: authVM.isTransmitterVisible)
+            viewModel.subscribeToUpdates(visibilityFilter: authVM.isTransmitterVisible)
+        }
+        .onAppear {
+            viewModel.subscribeToUpdates(visibilityFilter: authVM.isTransmitterVisible)
         }
         .sheet(isPresented: $viewModel.showDetail) {
             TransmitterDetailSheet(viewModel: viewModel, authRole: authVM.currentUserRole)

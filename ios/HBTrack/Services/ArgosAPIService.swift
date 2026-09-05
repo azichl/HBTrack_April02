@@ -246,15 +246,15 @@ class ArgosAPIService {
             ]
             parsedArgos.append(argosDict)
             
-            // Track transmitter latest fix & battery
+            // Track transmitter latest fix, coordinates & battery
             if let existing = txLastFixes[platformId] {
                 let existingDate = DateFormatters.parseDate(existing.lastFix)?.timeIntervalSince1970 ?? 0
                 let newDate = DateFormatters.parseDate(ts)?.timeIntervalSince1970 ?? 0
                 if newDate >= existingDate {
-                    txLastFixes[platformId] = (lastFix: ts, battery: decodedBattery ?? existing.battery)
+                    txLastFixes[platformId] = (lastFix: ts, battery: decodedBattery ?? existing.battery, lat: lat, lon: lon)
                 }
             } else {
-                txLastFixes[platformId] = (lastFix: ts, battery: decodedBattery)
+                txLastFixes[platformId] = (lastFix: ts, battery: decodedBattery, lat: lat, lon: lon)
             }
         }
         
@@ -345,16 +345,35 @@ class ArgosAPIService {
             try await batch.commit()
         }
         
-        // 5. Update transmitters latest fix & battery in Firestore
+        // 5. Update transmitters latest fix, coordinates & battery in Firestore
         logHandler("Updating metadata for \(txLastFixes.count) active transmitters...")
+        
+        let existingTxsSnap = try? await db.collection("transmitters").getDocuments()
+        var pidToDocId: [String: String] = [:]
+        if let docs = existingTxsSnap?.documents {
+            for d in docs {
+                let p = String(describing: d.data()["platform_id"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !p.isEmpty {
+                    pidToDocId[p] = d.documentID
+                }
+            }
+        }
+        
         var txUpdatedCount = 0
         let txBatch = db.batch()
         
         for (pid, info) in txLastFixes {
-            let docRef = db.collection("transmitters").document("trans-\(pid)")
+            let targetDocId = pidToDocId[pid] ?? "trans-\(pid)"
+            let docRef = db.collection("transmitters").document(targetDocId)
             var updateData: [String: Any] = [
                 "platform_id": pid,
                 "last_fix": info.lastFix,
+                "last_latitude": info.lat,
+                "last_longitude": info.lon,
+                "latitude": info.lat,
+                "longitude": info.lon,
+                "lat": info.lat,
+                "lon": info.lon,
                 "status": "active",
                 "deployed": true
             ]
@@ -367,6 +386,22 @@ class ArgosAPIService {
         
         if txUpdatedCount > 0 {
             try await txBatch.commit()
+        }
+        
+        // 6. Update system_status/ingestion timestamp (triggers real-time listeners across all devices & web app)
+        let nowIso = DateFormatters.isoFormatter.string(from: Date())
+        try? await db.collection("system_status").document("ingestion").setData([
+            "id": "ingestion",
+            "last_ingest_time": nowIso,
+            "updated_at": nowIso
+        ], merge: true)
+        
+        // 7. Invalidate local in-memory caches so subsequent queries read freshly updated Firestore data
+        TransmitterService.shared.invalidateCache()
+        
+        // 8. Broadcast local notification to immediately update Dashboard, Live Map, and all UI views
+        await MainActor.run {
+            NotificationCenter.default.post(name: .telemetryDataDidUpdate, object: nil)
         }
         
         logHandler("CLS Data Upload Completed Successfully ✓ (\(importedCount) fixes, \(txUpdatedCount) transmitters updated).")

@@ -166,10 +166,11 @@ struct DashboardView: View {
             }
         }
         .task {
-            if viewModel.transmitters.isEmpty {
-                await viewModel.loadData()
-                viewModel.subscribeToUpdates()
-            }
+            await viewModel.loadData()
+            viewModel.subscribeToUpdates()
+        }
+        .onAppear {
+            viewModel.subscribeToUpdates()
         }
     }
 }
