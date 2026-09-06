@@ -14,7 +14,6 @@ struct LeafletMapView: UIViewRepresentable {
         contentController.add(context.coordinator, name: "onMarkerClick")
         contentController.add(context.coordinator, name: "onMapClick")
         contentController.add(context.coordinator, name: "onMeasurePoint")
-        contentController.add(context.coordinator, name: "onNavTarget")
         
         let config = WKWebViewConfiguration()
         config.userContentController = contentController
@@ -172,6 +171,7 @@ struct LeafletMapView: UIViewRepresentable {
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isLoaded = true
+            webView.evaluateJavaScript("if (typeof map !== 'undefined') { map.invalidateSize(); }", completionHandler: nil)
             parent.updateMapState(in: webView)
         }
         
@@ -199,20 +199,6 @@ struct LeafletMapView: UIViewRepresentable {
                     let coord = CLLocationCoordinate2D(latitude: lat, longitude: lon)
                     DispatchQueue.main.async {
                         self.parent.viewModel.addMeasurePoint(coord)
-                    }
-                }
-            } else if message.name == "onNavTarget" {
-                if let jsonStr = message.body as? String {
-                    DispatchQueue.main.async {
-                        if jsonStr == "null" {
-                            self.parent.viewModel.navTarget = nil
-                        } else if let data = jsonStr.data(using: .utf8),
-                                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                                  let id = dict["id"] as? String,
-                                  let lat = dict["lat"] as? Double,
-                                  let lon = dict["lon"] as? Double {
-                            self.parent.viewModel.navTarget = (id: id, lat: lat, lon: lon)
-                        }
                     }
                 }
             }
@@ -335,6 +321,11 @@ struct LeafletMapView: UIViewRepresentable {
                 L.control.zoom({ position: 'bottomright' }).addTo(map);
                 L.control.scale({ imperial: true, metric: true, position: 'bottomleft' }).addTo(map);
 
+                // Auto-invalidate map size on resize and load to guarantee tile rendering
+                window.addEventListener('resize', () => map.invalidateSize());
+                setTimeout(() => map.invalidateSize(), 150);
+                setTimeout(() => map.invalidateSize(), 500);
+
                 // Base Tile Layers (identical to web app)
                 const baseLayers = {
                     'google_hybrid': L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
@@ -369,6 +360,7 @@ struct LeafletMapView: UIViewRepresentable {
                 // Weather Overlays (OpenWeatherMap)
                 let currentWeatherLayer = null;
                 function setWeatherOverlay(overlayKey) {
+                    if (overlayKey === currentActiveWeather && (overlayKey === 'none' || currentWeatherLayer)) return;
                     currentActiveWeather = overlayKey;
                     if (currentWeatherLayer) {
                         map.removeLayer(currentWeatherLayer);
@@ -752,6 +744,7 @@ struct LeafletMapView: UIViewRepresentable {
                 }
 
                 function clearMeasurement() {
+                    if (measurePoints.length === 0 && !measurePolyline) return;
                     measurePoints = [];
                     if (measurePolyline) {
                         map.removeLayer(measurePolyline);
@@ -819,7 +812,9 @@ struct LeafletMapView: UIViewRepresentable {
                         map.removeLayer(userAccuracyCircle);
                         userAccuracyCircle = null;
                     }
-                    clearNavTarget();
+                    if (navTargetData) {
+                        clearNavTarget();
+                    }
                 }
                 
                 // Navigation Target & Distance Line (cloned from Web App)
@@ -830,22 +825,14 @@ struct LeafletMapView: UIViewRepresentable {
                         const userLL = userLocationMarker.getLatLng();
                         updateNavLine(userLL.lat, userLL.lng);
                     }
-                    
-                    // Notify Swift of navTarget change
-                    if (window.webkit && window.webkit.messageHandlers.onNavTarget) {
-                        window.webkit.messageHandlers.onNavTarget.postMessage(JSON.stringify({ id: id, lat: lat, lon: lon }));
-                    }
                 }
                 
                 function clearNavTarget() {
+                    if (!navTargetData && !navPolylineGlow && !navPolylineCore && !navHudControl) return;
                     navTargetData = null;
                     if (navPolylineGlow) { map.removeLayer(navPolylineGlow); navPolylineGlow = null; }
                     if (navPolylineCore) { map.removeLayer(navPolylineCore); navPolylineCore = null; }
                     removeNavHud();
-                    
-                    if (window.webkit && window.webkit.messageHandlers.onNavTarget) {
-                        window.webkit.messageHandlers.onNavTarget.postMessage('null');
-                    }
                 }
                 
                 function updateNavLine(userLat, userLon) {

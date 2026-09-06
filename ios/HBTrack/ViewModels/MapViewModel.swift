@@ -177,7 +177,6 @@ class MapViewModel: ObservableObject {
     @Published var userLocation: CLLocationCoordinate2D? = nil
     @Published var userHeading: Double? = nil
     @Published var flyToTarget: FlyToRequest? = nil
-    @Published var navTarget: (id: String, lat: Double, lon: Double)? = nil
     
     private var locationManager: CLLocationManager?
     private var locationDelegate: MapLocationDelegate?
