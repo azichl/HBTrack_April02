@@ -104,6 +104,10 @@ class DashboardViewModel: ObservableObject {
         // Static test PTTs appear on donut chart & live stats ONLY if tested during the current calendar month.
         // Expired static test PTTs are excluded from live active counts.
         let activeLiveTransmitters = transmitters.filter { t in
+            let pid = t.platform_id.trimmingCharacters(in: .whitespacesAndNewlines)
+            if pid == "36130" {
+                return false
+            }
             let s = normalizeStatus(t.derived_status ?? t.status)
             if s.lowercased().contains("static") {
                 return isTestedInCurrentMonth(transmitter: t)

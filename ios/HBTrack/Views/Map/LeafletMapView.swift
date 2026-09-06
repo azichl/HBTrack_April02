@@ -906,7 +906,7 @@ struct LeafletMapView: UIViewRepresentable {
                                     </div>
                                     <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
                                         <span style="color:rgba(255,255,255,0.5);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Bearing</span>
-                                        <span style="color:white;font-size:18px;font-weight:900;line-height:1;font-family:'Arial Black',sans-serif;">${Math.round(bearing)}\u00B0</span>
+                                        <span style="color:white;font-size:18px;font-weight:900;line-height:1;font-family:'Arial Black',sans-serif;">${Math.round(bearing)}°</span>
                                     </div>
                                     <div style="width:1px;height:28px;background:rgba(255,255,255,0.15);flex-shrink:0;"></div>
                                     <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;">

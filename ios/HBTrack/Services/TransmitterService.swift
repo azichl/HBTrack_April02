@@ -159,7 +159,27 @@ class TransmitterService {
             guard !pid.isEmpty else { continue }
             let docId = (transmitter.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             
-            if let pos = latestPositionsByTx[pid] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId]) {
+            var candidatePos = latestPositionsByTx[pid] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId])
+            
+            // If missing from batch, attempt direct query for this specific transmitter ID
+            if candidatePos == nil {
+                let pidInt = Int(pid)
+                if let snap = try? await db.collection("positions").whereField("transmitter_id", isEqualTo: pid).order(by: "timestamp", descending: true).limit(to: 1).getDocuments(),
+                   let doc = snap.documents.first, let p = try? doc.data(as: Position.self, decoder: decoder), p.lat != 0 && p.lon != 0 {
+                    candidatePos = p
+                } else if let pidInt = pidInt, let snap = try? await db.collection("positions").whereField("transmitter_id", isEqualTo: pidInt).order(by: "timestamp", descending: true).limit(to: 1).getDocuments(),
+                          let doc = snap.documents.first, let p = try? doc.data(as: Position.self, decoder: decoder), p.lat != 0 && p.lon != 0 {
+                    candidatePos = p
+                } else if let snap = try? await db.collection("argos_positions").whereField("platformId", isEqualTo: pid).order(by: "timestamp", descending: true).limit(to: 1).getDocuments(),
+                          let doc = snap.documents.first, let p = try? doc.data(as: Position.self, decoder: decoder), p.lat != 0 && p.lon != 0 {
+                    candidatePos = p
+                } else if let pidInt = pidInt, let snap = try? await db.collection("argos_positions").whereField("platformId", isEqualTo: pidInt).order(by: "timestamp", descending: true).limit(to: 1).getDocuments(),
+                          let doc = snap.documents.first, let p = try? doc.data(as: Position.self, decoder: decoder), p.lat != 0 && p.lon != 0 {
+                    candidatePos = p
+                }
+            }
+            
+            if let pos = candidatePos {
                 resultPositions.append(pos)
             } else if let directCoord = transmitter.directCoordinate {
                 let fallbackPos = Position(

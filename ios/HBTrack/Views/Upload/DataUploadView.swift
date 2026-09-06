@@ -264,7 +264,7 @@ struct DataUploadView: View {
                                     Spacer()
                                     
                                     Button {
-                                        if let res = viewModel.syncResult {
+                                        if viewModel.syncResult != nil {
                                             showSyncLog = true
                                         }
                                     } label: {

@@ -298,6 +298,8 @@ export const Dashboard = () => {
 
   const activeLiveTransmitters = useMemo(() => {
     return transmitters.filter(t => {
+      const pid = String(t.platform_id || '').trim();
+      if (pid === '36130') return false;
       const status = normalizeStatus(t.derived_status || t.status);
       if (status === 'Static test') {
         return hasCurrentMonthFixesMap.get(String(t.platform_id));

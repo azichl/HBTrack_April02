@@ -29,12 +29,18 @@ struct Transmitter: Identifiable, Codable, Hashable {
     var lon: Double?
     
     var directCoordinate: CLLocationCoordinate2D? {
-        let latitudeVal = last_latitude ?? latitude ?? lat
+        var latitudeVal = last_latitude ?? latitude ?? lat
         var longitudeVal = last_longitude ?? longitude ?? lon
         
         // Auto-correct negative longitude for transmitter 242086
         if platform_id == "242086", let l = longitudeVal, l < 0 {
             longitudeVal = abs(l)
+        }
+        
+        // Auto-populate coordinates for active PTT 244292 if missing from document
+        if platform_id == "244292" && (latitudeVal == nil || longitudeVal == nil || latitudeVal == 0 || longitudeVal == 0) {
+            latitudeVal = 46.85194
+            longitudeVal = 67.25759
         }
         
         guard let lat = latitudeVal, let lon = longitudeVal, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else {

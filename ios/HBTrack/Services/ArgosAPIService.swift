@@ -294,7 +294,7 @@ class ArgosAPIService {
         onLog: ((String) -> Void)? = nil
     ) async throws -> SyncResult {
         var logs: [String] = []
-        var errors: [String] = []
+        let errors: [String] = []
         let logHandler: (String) -> Void = { msg in
             let timestamp = DateFormatters.displayTime(Date())
             let line = "[\(timestamp)] \(msg)"
