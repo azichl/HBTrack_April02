@@ -307,7 +307,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
             timestamp: d.timestamp || d.locationDate || new Date().toISOString(),
             lat: Number(rawLat),
             lon: numLon,
-            lc: d.lc || '3',
+            lc: d.lc || (d.locationType === 'Doppler' ? '3' : 'GPS'),
             is_kalman: false,
             speed_kmh: Number(d.speed_kmh || d.speed || 0),
             course: Number(d.course || 0),
@@ -797,7 +797,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
     if (seenKeys.has(dedupeKey)) return null;
     seenKeys.add(dedupeKey);
 
-    const locType = classifyLocationType(d.lc, d.locationType);
+    const locType = classifyLocationType(d.lc, d.locationType, d.satellite);
 
     return {
       id: docSnap.id,
@@ -838,12 +838,16 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', idNum)));
       }
 
-      // ── Query positions (string & number) ──
+      // ── Query positions (string & number & trans- prefix) ──
       await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', pidStr)));
       if (isNumValid) {
         await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', idNum)));
       }
       await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', pidStr)));
+      if (isNumValid) {
+        await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', idNum)));
+      }
+      await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', `trans-${pidStr}`)));
 
       allResults.push(...pttDocs);
     }

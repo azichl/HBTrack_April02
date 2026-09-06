@@ -540,6 +540,11 @@ class MapViewModel: ObservableObject {
         for (index, pttId) in selectedTransmitterIds.enumerated() {
             var fixes = rawHistoryPositionsByTx[pttId] ?? []
             let tx = transmitters.first(where: { $0.platform_id == pttId })
+            let isGpsTag: Bool = {
+                let m = (tx?.model ?? "").lowercased()
+                let man = (tx?.manufacturer ?? "").lowercased()
+                return m.contains("microsensory") || m.contains("gps") || man.contains("microsensory")
+            }()
             let st = tx?.effectiveStatus.lowercased() ?? ""
             
             // Static Test Rule (mirrors web app):
@@ -560,17 +565,23 @@ class MapViewModel: ObservableObject {
             // Filter by location type (All, GPS, Doppler) matching Web App rules
             if selectedLocationType == "GPS" {
                 fixes = fixes.filter { p in
+                    if isGpsTag { return true }
                     let lt = (p.locationType ?? "").uppercased()
                     let lc = (p.lc ?? "").uppercased()
-                    if lt == "GPS" || lc == "GPS" || lc == "G" { return true }
-                    if ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) || lt == "DOPPLER" { return false }
-                    return lt != "DOPPLER"
+                    let sat = (p.satellite ?? "").uppercased()
+                    if lt == "GPS" || lt.contains("GPS") || lc == "GPS" || lc == "G" || sat == "GPS" { return true }
+                    if lt == "DOPPLER" || lt.contains("DOPPLER") { return false }
+                    if ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) { return false }
+                    return true
                 }
             } else if selectedLocationType == "Doppler" {
                 fixes = fixes.filter { p in
+                    if isGpsTag { return false }
                     let lt = (p.locationType ?? "").uppercased()
                     let lc = (p.lc ?? "").uppercased()
-                    return lt == "DOPPLER" || ["3", "2", "1", "0", "A", "B", "Z"].contains(lc)
+                    let sat = (p.satellite ?? "").uppercased()
+                    if lt == "GPS" || lt.contains("GPS") || lc == "GPS" || lc == "G" || sat == "GPS" { return false }
+                    return lt == "DOPPLER" || lt.contains("DOPPLER") || ["3", "2", "1", "0", "A", "B", "Z"].contains(lc)
                 }
             }
             

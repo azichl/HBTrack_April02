@@ -19,7 +19,7 @@ import {
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage } from '../services/argosService';
-import { findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
+import { findBirdForTransmitter, isBirdLinkedToTransmitter, classifyLocationType } from '../utils/formatting';
 import type { Role } from '../types';
 
 const safeParseDate = (ts: any): number => {
@@ -1216,7 +1216,7 @@ export const useAppStore = create<AppState>()(
                           speed_kmh: 0, 
                           course: 0,
                           satellite: msg.satellite,
-                          locationType: msg.locationType as 'GPS' | 'Doppler' || 'Doppler'
+                          locationType: classifyLocationType(msg.lc, msg.locationType, msg.satellite)
                       };
                       newPositionDocs.push(newPos);
                       pCreated++;

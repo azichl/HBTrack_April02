@@ -1424,7 +1424,11 @@ const LiveTrackingInner = () => {
         }
 
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
-        const locType = classifyLocationType(p.lc, p.locationType);
+        const isGpsTag = tr?.model?.toLowerCase().includes('microsensory') || 
+                         tr?.model?.toLowerCase().includes('gps') || 
+                         (tr as any)?.tag_type?.toLowerCase?.().includes('gps') ||
+                         (tr as any)?.manufacturer?.toLowerCase?.().includes('microsensory');
+        const locType = isGpsTag ? 'GPS' : classifyLocationType(p.lc, p.locationType, (p as any).satellite);
         if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && locType !== historyFixType) return;
 
         const currentTs = safeParseTimestamp(p.timestamp);
@@ -1513,8 +1517,6 @@ const LiveTrackingInner = () => {
                 };
                 
                 latestMap.set(hp.id, overridePos as any);
-            } else {
-                latestMap.delete(hp.id);
             }
         });
     }
@@ -1585,6 +1587,10 @@ const LiveTrackingInner = () => {
 
         // For Static Test tags, only display positions from the current calendar month on live map history track
         const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
+        const isGpsTag = tr?.model?.toLowerCase().includes('microsensory') || 
+                         tr?.model?.toLowerCase().includes('gps') || 
+                         (tr as any)?.tag_type?.toLowerCase?.().includes('gps') ||
+                         (tr as any)?.manufacturer?.toLowerCase?.().includes('microsensory');
         const st = tr?.derived_status || tr?.status;
         if (st === 'Static test' || st === 'Static Test' || st === 'static') {
           track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
@@ -1597,7 +1603,7 @@ const LiveTrackingInner = () => {
             const validCoords = isValidCoordinate(numLat, numLon);
             if (!validCoords) return false;
 
-            const fixType = classifyLocationType(p.lc, p.locationType);
+            const fixType = isGpsTag ? 'GPS' : classifyLocationType(p.lc, p.locationType, (p as any).satellite);
             p.locationType = fixType;
 
             // GPS / Doppler / All filter

@@ -42,8 +42,11 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         let locationType = item.gpsLocLat !== undefined ? 'GPS' : 'Doppler';
         let lc = rawLc;
 
-        // Rule: When the "Class Type" provided by CLS = 1, 2, 3, 0, A, B, Z the "Location Type" is Doppler
-        if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) {
+        if (item.gpsLocLat !== undefined) {
+            locationType = 'GPS';
+            if (!lc || lc.trim() === '') lc = 'GPS';
+        } else if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) {
+            // Rule: When the "Class Type" provided by CLS = 1, 2, 3, 0, A, B, Z and NO GPS coordinate is provided, the "Location Type" is Doppler
             locationType = 'Doppler';
         }
 

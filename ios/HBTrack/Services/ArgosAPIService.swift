@@ -198,7 +198,12 @@ class ArgosAPIService {
             var rawLc = (item["dopplerLocClass"] as? String) ?? ((item["location"] as? [String: Any])?["locationClass"] as? String) ?? ""
             var locationType = item["gpsLocLat"] != nil ? "GPS" : "Doppler"
             
-            if ["0", "1", "2", "3", "A", "B", "Z"].contains(rawLc) {
+            if item["gpsLocLat"] != nil {
+                locationType = "GPS"
+                if rawLc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    rawLc = "GPS"
+                }
+            } else if ["0", "1", "2", "3", "A", "B", "Z"].contains(rawLc) {
                 locationType = "Doppler"
             }
             if (rawDopplerError == "0" || rawDopplerError.isEmpty) && rawLc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

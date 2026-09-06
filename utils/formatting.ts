@@ -109,28 +109,31 @@ export function getCurrentYearMonthKey(): string {
 }
 
 /**
- * Accurately determines whether an Argos telemetry fix is GPS or Doppler.
- * Rule: Location Classes '3', '2', '1', '0', 'A', 'B', 'Z' are EXCLUSIVELY Doppler.
- * GPS fixes have LC 'GPS', 'G', or empty string with GPS locationType.
+ * Accurately determines whether a telemetry fix is GPS or Doppler.
+ * GPS fixes have explicit GPS locationType, LC 'GPS'/'G', or satellite 'GPS'.
+ * Doppler fixes have locationType 'DOPPLER' or LC in '3', '2', '1', '0', 'A', 'B', 'Z' (when not explicitly GPS).
  */
-export const classifyLocationType = (lc?: string, rawLocType?: string): 'GPS' | 'Doppler' => {
+export const classifyLocationType = (lc?: string, rawLocType?: string, satellite?: string): 'GPS' | 'Doppler' => {
   const lcUp = String(lc || '').trim().toUpperCase();
   const rtUp = String(rawLocType || '').trim().toUpperCase();
+  const satUp = String(satellite || '').trim().toUpperCase();
 
-  // If LC is one of the standard Argos Doppler classes, it is ALWAYS Doppler
+  // 1. Explicit GPS indicators take highest precedence
+  if (rtUp === 'GPS' || rtUp.includes('GPS') || lcUp === 'GPS' || lcUp === 'G' || satUp === 'GPS') {
+    return 'GPS';
+  }
+
+  // 2. Explicit Doppler indicators
+  if (rtUp === 'DOPPLER' || rtUp.includes('DOPPLER')) {
+    return 'Doppler';
+  }
+
+  // 3. Argos Doppler Location Classes (when not explicitly GPS)
   if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcUp)) {
     return 'Doppler';
   }
 
-  // If LC is GPS or G, or rawLocType is GPS (and not a Doppler class), it is GPS
-  if (lcUp === 'GPS' || lcUp === 'G' || rtUp === 'GPS') {
-    return 'GPS';
-  }
-
-  if (rtUp === 'DOPPLER') {
-    return 'Doppler';
-  }
-
+  // Default fallback
   return 'GPS';
 };
 
@@ -138,9 +141,9 @@ export const classifyLocationType = (lc?: string, rawLocType?: string): 'GPS' | 
  * Validates whether a fix is high quality (GPS or Doppler LC 3, 2, 1).
  * Poor Doppler classes (0, A, B, Z) with error radii > 1.5km are excluded.
  */
-export const isHighQualityFix = (lc?: string, locType?: string): boolean => {
+export const isHighQualityFix = (lc?: string, locType?: string, satellite?: string): boolean => {
   const lcUp = String(lc || '').trim().toUpperCase();
-  const type = classifyLocationType(lc, locType);
+  const type = classifyLocationType(lc, locType, satellite);
 
   if (type === 'GPS') {
     return true;
@@ -157,6 +160,7 @@ export const isHighQualityFix = (lc?: string, locType?: string): boolean => {
 
   return false;
 };
+
 
 /**
  * Validates whether latitude and longitude are valid non-zero geographic coordinates.
