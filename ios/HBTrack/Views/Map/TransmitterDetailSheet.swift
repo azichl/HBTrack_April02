@@ -3,7 +3,6 @@ import CoreLocation
 
 struct TransmitterDetailSheet: View {
     @ObservedObject var viewModel: MapViewModel
-    let authRole: String
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -79,23 +78,6 @@ struct TransmitterDetailSheet: View {
                         }
                         .padding(.top, 8)
                     }
-                }
-                
-                if ["Administrator", "Manager", "Researcher", "Field Coordinator"].contains(authRole) {
-                    Divider()
-                    Button(role: transmitter.derived_status == "Dead" ? .cancel : .destructive) {
-                        Task {
-                            if transmitter.derived_status == "Dead" {
-                                await viewModel.unmarkDead()
-                            } else {
-                                await viewModel.markDead(userId: "user", email: "", role: authRole)
-                            }
-                        }
-                    } label: {
-                        Text(transmitter.derived_status == "Dead" ? "Unmark as Dead" : "Mark as Dead")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
                 }
             } else {
                 Text("No transmitter selected")

@@ -315,7 +315,7 @@ struct LiveMapView: View {
             viewModel.subscribeToUpdates(visibilityFilter: authVM.isTransmitterVisible)
         }
         .sheet(isPresented: $viewModel.showDetail) {
-            TransmitterDetailSheet(viewModel: viewModel, authRole: authVM.currentUserRole)
+            TransmitterDetailSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $showStatsSheet) {
             MapStatsSummarySheet(viewModel: viewModel)

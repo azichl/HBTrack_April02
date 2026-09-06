@@ -14,6 +14,7 @@ struct LeafletMapView: UIViewRepresentable {
         contentController.add(context.coordinator, name: "onMarkerClick")
         contentController.add(context.coordinator, name: "onMapClick")
         contentController.add(context.coordinator, name: "onMeasurePoint")
+        contentController.add(context.coordinator, name: "onNavTarget")
         
         let config = WKWebViewConfiguration()
         config.userContentController = contentController
@@ -200,6 +201,20 @@ struct LeafletMapView: UIViewRepresentable {
                         self.parent.viewModel.addMeasurePoint(coord)
                     }
                 }
+            } else if message.name == "onNavTarget" {
+                if let jsonStr = message.body as? String {
+                    DispatchQueue.main.async {
+                        if jsonStr == "null" {
+                            self.parent.viewModel.navTarget = nil
+                        } else if let data = jsonStr.data(using: .utf8),
+                                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                  let id = dict["id"] as? String,
+                                  let lat = dict["lat"] as? Double,
+                                  let lon = dict["lon"] as? Double {
+                            self.parent.viewModel.navTarget = (id: id, lat: lat, lon: lon)
+                        }
+                    }
+                }
             }
         }
     }
@@ -282,6 +297,11 @@ struct LeafletMapView: UIViewRepresentable {
                 .weather-temp-popup .leaflet-popup-tip {
                     background: #0f172a !important;
                 }
+                
+                /* Enhanced weather tile colors: 10% above web contrast/saturate/brightness */
+                .weather-enhanced {
+                    filter: contrast(1.60) saturate(3.3) brightness(1.20) !important;
+                }
             </style>
         </head>
         <body>
@@ -357,8 +377,9 @@ struct LeafletMapView: UIViewRepresentable {
                     if (overlayKey && overlayKey !== 'none') {
                         currentWeatherLayer = L.tileLayer('https://tile.openweathermap.org/map/' + overlayKey + '/{z}/{x}/{y}.png?appid=' + WEATHER_API_KEY, {
                             maxZoom: 18,
-                            opacity: 0.65,
-                            zIndex: 400
+                            opacity: 0.70,
+                            zIndex: 400,
+                            className: 'weather-enhanced'
                         });
                         currentWeatherLayer.addTo(map);
                     }
@@ -462,6 +483,10 @@ struct LeafletMapView: UIViewRepresentable {
                             );
 
                             marker.on('click', () => {
+                                // When GPS is active, set this marker as navigation target
+                                if (userLocationMarker) {
+                                    setNavTarget(idStr, lat, lon);
+                                }
                                 if (window.webkit && window.webkit.messageHandlers.onMarkerClick) {
                                     window.webkit.messageHandlers.onMarkerClick.postMessage(idStr);
                                 }
@@ -557,10 +582,23 @@ struct LeafletMapView: UIViewRepresentable {
                 }
                 const historyCanvasRenderer = L.canvas({ padding: 0.5, tolerance: 15, pane: 'historyPointsPane' });
                 let historyLayersGroup = L.featureGroup().addTo(map);
+                let lastHistoryHash = '';
 
                 function drawHistoryPaths(pathsList) {
-                    clearHistory();
-                    if (!pathsList || pathsList.length === 0) return;
+                    if (!pathsList || pathsList.length === 0) {
+                        clearHistory();
+                        return;
+                    }
+                    
+                    // Compute a fingerprint of the incoming data to detect actual changes
+                    const dataHash = pathsList.map(p => p.id + ':' + (p.path ? p.path.length : 0)).join('|');
+                    
+                    // If data hasn't changed, skip redraw entirely (preserves user zoom/pan)
+                    if (dataHash === lastHistoryHash) return;
+                    lastHistoryHash = dataHash;
+                    
+                    // Data changed — full redraw
+                    historyLayersGroup.clearLayers();
 
                     let allLatLngs = [];
 
@@ -700,6 +738,7 @@ struct LeafletMapView: UIViewRepresentable {
 
                 function clearHistory() {
                     historyLayersGroup.clearLayers();
+                    lastHistoryHash = '';
                 }
 
                 // Measurement Mode
@@ -721,45 +760,54 @@ struct LeafletMapView: UIViewRepresentable {
                     measureMarkers.clearLayers();
                 }
 
-                // User GPS Marker & Location Tracking
+                // User GPS Marker & Location Tracking (Blue Directional Arrow — cloned from Web App)
                 let userLocationMarker = null;
                 let userAccuracyCircle = null;
+                let navTargetData = null;
+                let navPolylineGlow = null;
+                let navPolylineCore = null;
+                let navHudControl = null;
 
                 function updateUserLocation(lat, lon, accuracy, heading) {
                     if (isNaN(lat) || isNaN(lon)) return;
                     
+                    const rotation = (heading !== null && heading !== undefined && !isNaN(heading)) ? heading : 0;
+                    
                     const userIcon = L.divIcon({
                         className: 'user-gps-marker',
                         html: `
-                            <div style="position: relative; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;">
-                                <div style="position: absolute; width: 26px; height: 26px; border-radius: 50%; background: rgba(59, 130, 246, 0.4); animation: gps-pulse 2s infinite ease-out;"></div>
-                                <div style="width: 14px; height: 14px; border-radius: 50%; background: #2563eb; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.35); margin: auto;"></div>
-                            </div>
+                            <svg width="40" height="40" viewBox="0 0 40 40" style="transform: rotate(${rotation}deg); transform-origin: center center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); overflow: visible;">
+                                <path d="M 20 4 L 34 34 L 20 28 L 6 34 Z" fill="#0ea5e9" stroke="#0284c7" stroke-width="2" stroke-linejoin="round" />
+                            </svg>
                         `,
-                        iconSize: [26, 26],
-                        iconAnchor: [13, 13]
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 20]
                     });
 
                     if (userLocationMarker) {
                         userLocationMarker.setLatLng([lat, lon]);
+                        userLocationMarker.setIcon(userIcon);
                     } else {
-                        userLocationMarker = L.marker([lat, lon], { icon: userIcon, zIndexOffset: 1000 }).addTo(map);
+                        userLocationMarker = L.marker([lat, lon], { icon: userIcon, zIndexOffset: 2000 }).addTo(map);
+                        userLocationMarker.bindPopup('Your Location');
                     }
 
                     if (accuracy && accuracy > 0) {
                         if (userAccuracyCircle) {
-                            userAccuracyCircle.setLatLng([lat, lon]).setRadius(accuracy);
+                            userAccuracyCircle.setLatLng([lat, lon]).setRadius(Math.min(accuracy, 500));
                         } else {
                             userAccuracyCircle = L.circle([lat, lon], {
-                                radius: accuracy,
-                                color: '#3b82f6',
-                                fillColor: '#60a5fa',
-                                fillOpacity: 0.12,
-                                weight: 1.5,
-                                dashArray: '4, 4'
+                                radius: Math.min(accuracy, 500),
+                                color: '#0ea5e9',
+                                fillColor: '#0ea5e9',
+                                fillOpacity: 0.10,
+                                weight: 1
                             }).addTo(map);
                         }
                     }
+                    
+                    // Update navigation line if navTarget is set
+                    updateNavLine(lat, lon);
                 }
 
                 function clearUserLocation() {
@@ -770,6 +818,123 @@ struct LeafletMapView: UIViewRepresentable {
                     if (userAccuracyCircle) {
                         map.removeLayer(userAccuracyCircle);
                         userAccuracyCircle = null;
+                    }
+                    clearNavTarget();
+                }
+                
+                // Navigation Target & Distance Line (cloned from Web App)
+                function setNavTarget(id, lat, lon) {
+                    navTargetData = { id: id, lat: lat, lon: lon };
+                    
+                    if (userLocationMarker) {
+                        const userLL = userLocationMarker.getLatLng();
+                        updateNavLine(userLL.lat, userLL.lng);
+                    }
+                    
+                    // Notify Swift of navTarget change
+                    if (window.webkit && window.webkit.messageHandlers.onNavTarget) {
+                        window.webkit.messageHandlers.onNavTarget.postMessage(JSON.stringify({ id: id, lat: lat, lon: lon }));
+                    }
+                }
+                
+                function clearNavTarget() {
+                    navTargetData = null;
+                    if (navPolylineGlow) { map.removeLayer(navPolylineGlow); navPolylineGlow = null; }
+                    if (navPolylineCore) { map.removeLayer(navPolylineCore); navPolylineCore = null; }
+                    removeNavHud();
+                    
+                    if (window.webkit && window.webkit.messageHandlers.onNavTarget) {
+                        window.webkit.messageHandlers.onNavTarget.postMessage('null');
+                    }
+                }
+                
+                function updateNavLine(userLat, userLon) {
+                    // Remove old lines
+                    if (navPolylineGlow) { map.removeLayer(navPolylineGlow); navPolylineGlow = null; }
+                    if (navPolylineCore) { map.removeLayer(navPolylineCore); navPolylineCore = null; }
+                    removeNavHud();
+                    
+                    if (!navTargetData) return;
+                    
+                    const coords = [[userLat, userLon], [navTargetData.lat, navTargetData.lon]];
+                    
+                    // Glow line (outer)
+                    navPolylineGlow = L.polyline(coords, {
+                        color: '#065f46', weight: 14, opacity: 0.3, interactive: false
+                    }).addTo(map);
+                    
+                    // Core navigation line (inner)
+                    navPolylineCore = L.polyline(coords, {
+                        color: '#10b981', weight: 7, opacity: 0.95, interactive: false
+                    }).addTo(map);
+                    
+                    // Calculate bearing and distance
+                    const dLon = (navTargetData.lon - userLon) * Math.PI / 180;
+                    const lat1r = userLat * Math.PI / 180;
+                    const lat2r = navTargetData.lat * Math.PI / 180;
+                    const yB = Math.sin(dLon) * Math.cos(lat2r);
+                    const xB = Math.cos(lat1r) * Math.sin(lat2r) - Math.sin(lat1r) * Math.cos(lat2r) * Math.cos(dLon);
+                    const bearing = (Math.atan2(yB, xB) * 180 / Math.PI + 360) % 360;
+                    
+                    const distM = map.distance([userLat, userLon], [navTargetData.lat, navTargetData.lon]);
+                    const distText = distM < 1000 ? Math.round(distM) + ' m' : (distM / 1000).toFixed(1) + ' km';
+                    
+                    const cardinalDirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+                    const cardinal = cardinalDirs[Math.round(bearing / 22.5) % 16];
+                    
+                    showNavHud(cardinal, bearing, distText, navTargetData.id);
+                }
+                
+                function showNavHud(cardinal, bearing, distText, targetId) {
+                    removeNavHud();
+                    
+                    const NavHudControl = L.Control.extend({
+                        options: { position: 'bottomleft' },
+                        onAdd: function() {
+                            const container = L.DomUtil.create('div');
+                            container.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:1000;width:calc(100% - 32px);max-width:400px;pointer-events:auto;';
+                            container.innerHTML = `
+                                <div style="background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:14px;padding:8px 12px;display:flex;align-items:center;gap:12px;border:1px solid rgba(16,185,129,0.4);box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+                                    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+                                        <div style="width:36px;height:36px;border-radius:50%;border:2px solid #10b981;display:flex;align-items:center;justify-content:center;background:rgba(16,185,129,0.1);">
+                                            <svg width="14" height="22" viewBox="0 0 18 28" style="transform:rotate(${Math.round(bearing)}deg);transition:transform 0.3s ease;">
+                                                <polygon points="9,0 5,14 9,11 13,14" fill="#10b981" />
+                                                <polygon points="9,28 5,14 9,17 13,14" fill="rgba(255,255,255,0.3)" />
+                                            </svg>
+                                        </div>
+                                        <span style="color:#10b981;font-size:9px;font-weight:800;margin-top:1px;">${cardinal}</span>
+                                    </div>
+                                    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+                                        <span style="color:rgba(255,255,255,0.5);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Bearing</span>
+                                        <span style="color:white;font-size:18px;font-weight:900;line-height:1;font-family:'Arial Black',sans-serif;">${Math.round(bearing)}\u00B0</span>
+                                    </div>
+                                    <div style="width:1px;height:28px;background:rgba(255,255,255,0.15);flex-shrink:0;"></div>
+                                    <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;">
+                                        <span style="color:rgba(255,255,255,0.5);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Distance</span>
+                                        <span style="color:#10b981;font-size:18px;font-weight:900;line-height:1;font-family:'Arial Black',sans-serif;">${distText}</span>
+                                    </div>
+                                    <div style="width:1px;height:28px;background:rgba(255,255,255,0.15);flex-shrink:0;"></div>
+                                    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;">
+                                        <span style="color:rgba(255,255,255,0.5);font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Target</span>
+                                        <span style="color:white;font-size:14px;font-weight:800;line-height:1;">${targetId}</span>
+                                    </div>
+                                    <div onclick="clearNavTarget();" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.4);display:flex;align-items:center;justify-content:center;cursor:pointer;color:#ef4444;font-size:14px;font-weight:900;">✕</div>
+                                </div>
+                            `;
+                            L.DomEvent.disableClickPropagation(container);
+                            L.DomEvent.disableScrollPropagation(container);
+                            return container;
+                        }
+                    });
+                    
+                    navHudControl = new NavHudControl();
+                    map.addControl(navHudControl);
+                }
+                
+                function removeNavHud() {
+                    if (navHudControl) {
+                        map.removeControl(navHudControl);
+                        navHudControl = null;
                     }
                 }
 

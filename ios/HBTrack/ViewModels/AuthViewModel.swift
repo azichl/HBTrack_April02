@@ -176,10 +176,6 @@ class AuthViewModel: ObservableObject {
         return isManager || hasIosDataUpload || hasAccess
     }
     
-    var canMarkDead: Bool {
-        guard let role = userProfile?.role else { return false }
-        return role == "Administrator" || role == "Researcher" || role == "Field Coordinator"
-    }
     
     func isTransmitterVisible(_ platformId: String) -> Bool {
         guard let profile = userProfile else { return false }

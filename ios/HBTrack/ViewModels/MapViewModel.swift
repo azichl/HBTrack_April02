@@ -177,6 +177,7 @@ class MapViewModel: ObservableObject {
     @Published var userLocation: CLLocationCoordinate2D? = nil
     @Published var userHeading: Double? = nil
     @Published var flyToTarget: FlyToRequest? = nil
+    @Published var navTarget: (id: String, lat: Double, lon: Double)? = nil
     
     private var locationManager: CLLocationManager?
     private var locationDelegate: MapLocationDelegate?
@@ -523,12 +524,6 @@ class MapViewModel: ObservableObject {
             self.rawHistoryCacheKey = cacheKey
             self.rawHistoryPositionsByTx = rawDict
             applyHistoryFilter()
-            
-            if let firstId = selectedTransmitterIds.first,
-               let path = historyPaths.first(where: { $0.id == firstId }),
-               let lastCoord = path.positions.last?.coordinate {
-                flyTo(lastCoord, zoom: 11)
-            }
         } catch {
             print("Error loading history: \(error)")
         }
@@ -589,38 +584,6 @@ class MapViewModel: ObservableObject {
         self.historyPositions = allPositions
     }
     
-    func markDead(userId: String, email: String, role: String) async {
-        guard let transmitter = selectedTransmitter else { return }
-        let docId = transmitter.id ?? transmitter.platform_id
-        do {
-            try await TransmitterService.shared.markTransmitterDead(
-                transmitterId: docId,
-                userId: userId,
-                userEmail: email,
-                userRole: role
-            )
-            if let index = transmitters.firstIndex(where: { $0.platform_id == transmitter.platform_id }) {
-                transmitters[index].derived_status = "Dead"
-                selectedTransmitter = transmitters[index]
-            }
-        } catch {
-            print("Error marking dead: \(error)")
-        }
-    }
-    
-    func unmarkDead() async {
-        guard let transmitter = selectedTransmitter else { return }
-        let docId = transmitter.id ?? transmitter.platform_id
-        do {
-            try await TransmitterService.shared.unmarkTransmitterDead(transmitterId: docId)
-            if let index = transmitters.firstIndex(where: { $0.platform_id == transmitter.platform_id }) {
-                transmitters[index].derived_status = "Active"
-                selectedTransmitter = transmitters[index]
-            }
-        } catch {
-            print("Error unmarking dead: \(error)")
-        }
-    }
     
     func addMeasurePoint(_ coord: CLLocationCoordinate2D) {
         measurePoints.append(coord)

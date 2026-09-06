@@ -124,7 +124,7 @@ class TransmitterService {
         do {
             let snap = try await db.collection("positions")
                 .order(by: "timestamp", descending: true)
-                .limit(to: 500)
+                .limit(to: 1000)
                 .getDocuments()
             
             for doc in snap.documents {
@@ -140,7 +140,7 @@ class TransmitterService {
         do {
             let snap = try await db.collection("argos_positions")
                 .order(by: "timestamp", descending: true)
-                .limit(to: 500)
+                .limit(to: 1000)
                 .getDocuments()
             
             for doc in snap.documents {
@@ -326,35 +326,5 @@ class TransmitterService {
         let alerts = snapshot.documents.compactMap { try? $0.data(as: Alert.self, decoder: Firestore.Decoder()) }
         self.cachedAlerts = alerts
         return alerts
-    }
-    
-    func markTransmitterDead(transmitterId: String, userId: String, userEmail: String, userRole: String) async throws {
-        let db = FirestoreService.shared.db
-        let docRef = db.collection("transmitters").document(transmitterId)
-        
-        let historyEntry: [String: Any] = [
-            "status": "Dead",
-            "changed_by": userId,
-            "changed_by_email": userEmail,
-            "changed_by_role": userRole,
-            "timestamp": Timestamp(date: Date()),
-            "reason": "Marked dead via iOS App"
-        ]
-        
-        try await docRef.updateData([
-            "derived_status": "Dead",
-            "status_history": FieldValue.arrayUnion([historyEntry])
-        ])
-        
-        invalidateCache()
-    }
-    
-    func unmarkTransmitterDead(transmitterId: String) async throws {
-        let db = FirestoreService.shared.db
-        let docRef = db.collection("transmitters").document(transmitterId)
-        try await docRef.updateData([
-            "derived_status": "Active"
-        ])
-        invalidateCache()
     }
 }
