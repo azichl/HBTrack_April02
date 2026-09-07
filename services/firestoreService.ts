@@ -784,11 +784,14 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   // Helper: process a Firestore doc snapshot into a position record
   const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
     const d = docSnap.data();
-    const docTs = safeParseTimestamp(d.timestamp);
+    const rawTs = d.timestamp || d.locationDate || d.date || d.msgDatetime || d.bestDate;
+    const docTs = safeParseTimestamp(rawTs);
     if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
 
-    const lat = Number(d.lat);
-    let lon = Number(d.lon);
+    const rawLat = d.lat !== undefined ? d.lat : d.latitude;
+    const rawLon = d.lon !== undefined ? d.lon : d.longitude;
+    const lat = Number(rawLat);
+    let lon = Number(rawLon);
     if (!isValidCoordinate(lat, lon)) return null;
 
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
@@ -804,7 +807,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       transmitter_id: pidStr,
       platformId: pidStr,
       lat, lon,
-      timestamp: d.timestamp,
+      timestamp: rawTs,
       lc: d.lc || '',
       satellite: d.satellite || '',
       locationType: locType,
@@ -832,20 +835,24 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         }
       };
 
-      // ── Query argos_positions (string & number) ──
+      // ── Query argos_positions (string, number, platform_id underscore) ──
       await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', pidStr)));
+      await fetchAndProcess(query(collection(db, 'argos_positions'), where('platform_id', '==', pidStr)));
       if (isNumValid) {
         await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', idNum)));
+        await fetchAndProcess(query(collection(db, 'argos_positions'), where('platform_id', '==', idNum)));
       }
 
-      // ── Query positions (string & number & trans- prefix) ──
+      // ── Query positions (string, number, trans- prefix, platform_id) ──
       await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', pidStr)));
       if (isNumValid) {
         await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', idNum)));
       }
       await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', pidStr)));
+      await fetchAndProcess(query(collection(db, 'positions'), where('platform_id', '==', pidStr)));
       if (isNumValid) {
         await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', idNum)));
+        await fetchAndProcess(query(collection(db, 'positions'), where('platform_id', '==', idNum)));
       }
       await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', `trans-${pidStr}`)));
 
@@ -879,7 +886,7 @@ export const savePositions = async (positions: Array<{ id: string; [key: string]
       speed_kmh: pos.speed_kmh,
       course: pos.course,
       satellite: pos.satellite,
-      locationType: pos.locationType || 'Doppler'
+      locationType: classifyLocationType(pos.lc, pos.locationType, pos.satellite)
     }
   }));
 

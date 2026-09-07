@@ -291,6 +291,7 @@ struct LiveMapView: View {
                         VStack {
                             Spacer()
                             MeasurementOverlay(viewModel: viewModel)
+                                .padding(.bottom, isFullscreen ? 16 : 84)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }

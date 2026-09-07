@@ -540,12 +540,42 @@ class MapViewModel: ObservableObject {
         for (index, pttId) in selectedTransmitterIds.enumerated() {
             var fixes = rawHistoryPositionsByTx[pttId] ?? []
             let tx = transmitters.first(where: { $0.platform_id == pttId })
-            let isGpsTag: Bool = {
-                let m = (tx?.model ?? "").lowercased()
-                let man = (tx?.manufacturer ?? "").lowercased()
-                return m.contains("microsensory") || m.contains("gps") || man.contains("microsensory")
-            }()
             let st = tx?.effectiveStatus.lowercased() ?? ""
+            
+            // Connect to latest fix / green marker coordinate:
+            let latestPos = positions.first(where: { $0.effectiveTransmitterId == pttId })
+            let latestCoord: CLLocationCoordinate2D? = latestPos?.coordinate ?? tx?.directCoordinate
+            let latestTimestamp = latestPos?.timestamp ?? tx?.last_fix
+            
+            if let coord = latestCoord, let ts = latestTimestamp, coord.latitude != 0, coord.longitude != 0 {
+                let tsMs = DateFormatters.fastParseTimestampMs(ts)
+                let alreadyInFixes = fixes.contains { f in
+                    let fMs = f.timestampMs > 0 ? f.timestampMs : DateFormatters.fastParseTimestampMs(f.timestamp)
+                    return abs(fMs - tsMs) < 60000 && abs(f.lat - coord.latitude) < 0.0005 && abs(f.lon - coord.longitude) < 0.0005
+                }
+                if !alreadyInFixes {
+                    let locType = latestPos?.locationType ?? "GPS"
+                    let newFix = Position(
+                        id: "latest-\(pttId)",
+                        transmitter_id: pttId,
+                        platformId: pttId,
+                        timestamp: ts,
+                        lat: coord.latitude,
+                        lon: coord.longitude,
+                        lc: latestPos?.lc ?? (locType == "GPS" ? "GPS" : "3"),
+                        is_kalman: false,
+                        speed_kmh: latestPos?.speed_kmh ?? 0,
+                        course: latestPos?.course ?? 0,
+                        satellite: latestPos?.satellite ?? (locType == "GPS" ? "GPS" : ""),
+                        locationType: locType,
+                        timestampMs: tsMs
+                    )
+                    fixes.append(newFix)
+                }
+            }
+            
+            // Sort chronologically
+            fixes.sort { $0.timestampMs < $1.timestampMs }
             
             // Static Test Rule (mirrors web app):
             // If transmitter is Static test, only positions from current calendar month are shown
@@ -565,18 +595,15 @@ class MapViewModel: ObservableObject {
             // Filter by location type (All, GPS, Doppler) matching Web App rules
             if selectedLocationType == "GPS" {
                 fixes = fixes.filter { p in
-                    if isGpsTag { return true }
                     let lt = (p.locationType ?? "").uppercased()
                     let lc = (p.lc ?? "").uppercased()
                     let sat = (p.satellite ?? "").uppercased()
                     if lt == "GPS" || lt.contains("GPS") || lc == "GPS" || lc == "G" || sat == "GPS" { return true }
-                    if lt == "DOPPLER" || lt.contains("DOPPLER") { return false }
-                    if ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) { return false }
+                    if lt == "DOPPLER" || lt.contains("DOPPLER") || ["3", "2", "1", "0", "A", "B", "Z"].contains(lc) { return false }
                     return true
                 }
             } else if selectedLocationType == "Doppler" {
                 fixes = fixes.filter { p in
-                    if isGpsTag { return false }
                     let lt = (p.locationType ?? "").uppercased()
                     let lc = (p.lc ?? "").uppercased()
                     let sat = (p.satellite ?? "").uppercased()

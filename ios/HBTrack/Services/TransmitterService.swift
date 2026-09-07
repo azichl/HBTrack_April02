@@ -211,7 +211,21 @@ class TransmitterService {
             
             // Helper matching processDoc in firestoreService.ts
             let processDoc: ([String: Any], String) -> Void = { d, docId in
-                guard let rawTs = (d["timestamp"] as? String) ?? (d["locationDate"] as? String) else { return }
+                let rawTs: String? = {
+                    if let s = d["timestamp"] as? String { return s }
+                    if let s = d["locationDate"] as? String { return s }
+                    if let s = d["date"] as? String { return s }
+                    if let s = d["msgDatetime"] as? String { return s }
+                    if let s = d["bestDate"] as? String { return s }
+                    if let ts = d["timestamp"] as? Timestamp {
+                        return ISO8601DateFormatter().string(from: ts.dateValue())
+                    }
+                    if let ts = d["date"] as? Timestamp {
+                        return ISO8601DateFormatter().string(from: ts.dateValue())
+                    }
+                    return nil
+                }()
+                guard let rawTs = rawTs else { return }
                 let docTs = DateFormatters.fastParseTimestampMs(rawTs)
                 if docTs.isNaN || docTs < startMs || docTs > endMs { return }
                 
@@ -232,7 +246,7 @@ class TransmitterService {
                 
                 let rawLc = (d["lc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
                 let rawType = (d["locationType"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-                let sat = ((d["satellite"] as? String) ?? "GPS").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+                let sat = ((d["satellite"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
                 
                 let locType: String = {
                     if rawType == "GPS" || rawType.contains("GPS") || rawLc == "GPS" || rawLc == "G" || sat == "GPS" { return "GPS" }
@@ -255,7 +269,7 @@ class TransmitterService {
                     is_kalman: d["is_kalman"] as? Bool ?? false,
                     speed_kmh: speed,
                     course: course,
-                    satellite: sat,
+                    satellite: sat.isEmpty ? (locType == "GPS" ? "GPS" : "") : sat,
                     locationType: locType,
                     timestampMs: docTs
                 )
@@ -274,20 +288,24 @@ class TransmitterService {
                 }
             }
             
-            // ── Query argos_positions (string & number) ──
+            // ── Query argos_positions (string & number, platformId & platform_id) ──
             await fetchAndProcess(db.collection("argos_positions").whereField("platformId", isEqualTo: pidStr))
+            await fetchAndProcess(db.collection("argos_positions").whereField("platform_id", isEqualTo: pidStr))
             if let num = idNum {
                 await fetchAndProcess(db.collection("argos_positions").whereField("platformId", isEqualTo: num))
+                await fetchAndProcess(db.collection("argos_positions").whereField("platform_id", isEqualTo: num))
             }
             
-            // ── Query positions (string & number & trans- prefix) ──
+            // ── Query positions (string & number & trans- prefix, transmitter_id & platformId & platform_id) ──
             await fetchAndProcess(db.collection("positions").whereField("transmitter_id", isEqualTo: pidStr))
             if let num = idNum {
                 await fetchAndProcess(db.collection("positions").whereField("transmitter_id", isEqualTo: num))
             }
             await fetchAndProcess(db.collection("positions").whereField("platformId", isEqualTo: pidStr))
+            await fetchAndProcess(db.collection("positions").whereField("platform_id", isEqualTo: pidStr))
             if let num = idNum {
                 await fetchAndProcess(db.collection("positions").whereField("platformId", isEqualTo: num))
+                await fetchAndProcess(db.collection("positions").whereField("platform_id", isEqualTo: num))
             }
             await fetchAndProcess(db.collection("positions").whereField("transmitter_id", isEqualTo: "trans-\(pidStr)"))
             

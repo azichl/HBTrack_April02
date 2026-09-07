@@ -14,6 +14,8 @@ struct LeafletMapView: UIViewRepresentable {
         contentController.add(context.coordinator, name: "onMarkerClick")
         contentController.add(context.coordinator, name: "onMapClick")
         contentController.add(context.coordinator, name: "onMeasurePoint")
+        contentController.add(context.coordinator, name: "onFocusHistory")
+        contentController.add(context.coordinator, name: "onOpenUrl")
         
         let config = WKWebViewConfiguration()
         config.userContentController = contentController
@@ -48,17 +50,48 @@ struct LeafletMapView: UIViewRepresentable {
         webView.evaluateJavaScript(weatherJs, completionHandler: nil)
         
         // 3. Update Transmitters JSON (hide unselected transmitters when history mode is active, and align pin with last collected position)
+        let createMarkerPayload: (String, Double, Double, Transmitter?, TransmitterMapAnnotation?, Position?) -> [String: Any]? = { pttId, lat, lon, tx, ann, pos in
+            guard lat != 0.0 && lon != 0.0 else { return nil }
+            let status = tx?.effectiveStatus ?? "Active"
+            let birdRing = tx?.assigned_bird_ring ?? ann?.bird?.ring_id ?? ""
+            let species = ann?.bird?.species ?? ""
+            let batteryStr: String = {
+                if let v = tx?.battery_voltage, v > 0 {
+                    return String(format: "%.2f V", v)
+                }
+                return "-- V"
+            }()
+            let rawTs = pos?.timestamp ?? tx?.last_fix ?? ""
+            let displayFix: String = {
+                if let d = DateFormatters.parseDate(rawTs) {
+                    return DateFormatters.displayFormat(d)
+                }
+                return rawTs.isEmpty ? "--" : rawTs
+            }()
+            let locType = pos?.locationType ?? "GPS"
+            
+            return [
+                "id": pttId,
+                "lat": lat,
+                "lon": lon,
+                "status": status,
+                "birdRing": birdRing,
+                "species": species,
+                "battery": batteryStr,
+                "lastFix": displayFix,
+                "rawTimestamp": rawTs,
+                "type": locType
+            ]
+        }
+        
         var markersData: [[String: Any]] = []
         if viewModel.showHistory && !viewModel.selectedTransmitterIds.isEmpty {
             for pttId in viewModel.selectedTransmitterIds {
                 let ann = viewModel.annotations.first(where: { $0.transmitter.platform_id == pttId })
                 let tx = ann?.transmitter ?? viewModel.transmitters.first(where: { $0.platform_id == pttId })
-                let status = tx?.effectiveStatus ?? "Active"
-                let birdRing = tx?.assigned_bird_ring ?? ann?.bird?.ring_id ?? ""
-                let species = ann?.bird?.species ?? ""
-                
                 var lat = ann?.coordinate.latitude ?? 0.0
                 var lon = ann?.coordinate.longitude ?? 0.0
+                var pos = viewModel.positions.first(where: { $0.effectiveTransmitterId == pttId })
                 
                 // Rule matching Web App:
                 // When path history is active, the green marker represents the LAST position of the filtered history path:
@@ -69,30 +102,21 @@ struct LeafletMapView: UIViewRepresentable {
                    let lastFix = hp.positions.last {
                     lat = lastFix.coordinate.latitude
                     lon = lastFix.coordinate.longitude
+                    pos = lastFix
                 }
                 
-                if lat != 0.0 && lon != 0.0 {
-                    markersData.append([
-                        "id": pttId,
-                        "lat": lat,
-                        "lon": lon,
-                        "status": status,
-                        "birdRing": birdRing,
-                        "species": species
-                    ])
+                if let payload = createMarkerPayload(pttId, lat, lon, tx, ann, pos) {
+                    markersData.append(payload)
                 }
             }
         } else {
-            markersData = viewModel.annotations.map { ann in
+            for ann in viewModel.annotations {
                 let tx = ann.transmitter
-                return [
-                    "id": tx.platform_id,
-                    "lat": ann.coordinate.latitude,
-                    "lon": ann.coordinate.longitude,
-                    "status": tx.effectiveStatus,
-                    "birdRing": tx.assigned_bird_ring ?? ann.bird?.ring_id ?? "",
-                    "species": ann.bird?.species ?? ""
-                ]
+                let pttId = tx.platform_id
+                let pos = viewModel.positions.first(where: { $0.effectiveTransmitterId == pttId })
+                if let payload = createMarkerPayload(pttId, ann.coordinate.latitude, ann.coordinate.longitude, tx, ann, pos) {
+                    markersData.append(payload)
+                }
             }
         }
         
@@ -180,9 +204,25 @@ struct LeafletMapView: UIViewRepresentable {
                 if let txId = message.body as? String {
                     DispatchQueue.main.async {
                         if let transmitter = self.parent.viewModel.transmitters.first(where: { $0.platform_id == txId }) {
-                            self.parent.viewModel.selectTransmitter(transmitter)
+                            self.parent.viewModel.selectedTransmitter = transmitter
+                            self.parent.viewModel.selectedBird = self.parent.viewModel.birds.first { $0.ring_id == transmitter.platform_id || $0.id == transmitter.id }
+                            self.parent.viewModel.selectedPosition = self.parent.viewModel.positions.first { $0.effectiveTransmitterId == transmitter.platform_id }
                         }
                         self.parent.onMarkerTapped?(txId)
+                    }
+                }
+            } else if message.name == "onFocusHistory" {
+                if let txId = message.body as? String {
+                    DispatchQueue.main.async {
+                        if let transmitter = self.parent.viewModel.transmitters.first(where: { $0.platform_id == txId }) {
+                            self.parent.viewModel.selectTransmitterForHistory(transmitter)
+                        }
+                    }
+                }
+            } else if message.name == "onOpenUrl" {
+                if let urlStr = message.body as? String, let url = URL(string: urlStr) {
+                    DispatchQueue.main.async {
+                        UIApplication.shared.open(url)
                     }
                 }
             } else if message.name == "onMapClick" {
@@ -282,6 +322,22 @@ struct LeafletMapView: UIViewRepresentable {
                 }
                 .weather-temp-popup .leaflet-popup-tip {
                     background: #0f172a !important;
+                }
+                
+                .transmitter-leaflet-popup .leaflet-popup-content-wrapper {
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    border-radius: 16px !important;
+                    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+                    padding: 2px !important;
+                }
+                .transmitter-leaflet-popup .leaflet-popup-content {
+                    margin: 10px 12px !important;
+                    line-height: 1.4 !important;
+                }
+                .transmitter-leaflet-popup .leaflet-popup-tip {
+                    background: #ffffff !important;
                 }
                 
                 /* Enhanced weather tile colors: 10% above web contrast/saturate/brightness */
@@ -419,6 +475,149 @@ struct LeafletMapView: UIViewRepresentable {
                     ttPane.style.pointerEvents = 'auto';
                 }
 
+                // Action Handlers for Transmitter Popups
+                window.handleFocusHistory = function(id) {
+                    if (window.webkit && window.webkit.messageHandlers.onFocusHistory) {
+                        window.webkit.messageHandlers.onFocusHistory.postMessage(id);
+                    }
+                };
+                window.handleGoogleEarth = function(lat, lon) {
+                    const url = 'https://earth.google.com/web/search/' + lat + ',' + lon;
+                    if (window.webkit && window.webkit.messageHandlers.onOpenUrl) {
+                        window.webkit.messageHandlers.onOpenUrl.postMessage(url);
+                    } else {
+                        window.open(url, '_blank');
+                    }
+                };
+                window.handleAIForecast = function(id) {
+                    alert("AI Forecast for PTT " + id + " is active.");
+                };
+
+                // Quick Air Temp (2m) fetch for Green Marker / Last Position
+                async function fetchAirTemp2m(lat, lon, isoTimestamp, elementId) {
+                    const el = document.getElementById(elementId);
+                    if (!el) return;
+                    try {
+                        let date = new Date(isoTimestamp);
+                        if (isNaN(date.getTime())) date = new Date();
+                        const dateStr = date.toISOString().split('T')[0];
+                        const utcHour = date.getUTCHours();
+                        const diffDays = (Date.now() - date.getTime()) / (1000 * 3600 * 24);
+                        const isArchive = diffDays > 5;
+
+                        const archiveUrl = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + lat + '&longitude=' + lon + '&start_date=' + dateStr + '&end_date=' + dateStr + '&hourly=temperature_2m&timezone=UTC';
+                        const forecastUrl = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&start_date=' + dateStr + '&end_date=' + dateStr + '&hourly=temperature_2m&timezone=UTC';
+
+                        const primaryUrl = isArchive ? archiveUrl : forecastUrl;
+                        const fallbackUrl = isArchive ? forecastUrl : archiveUrl;
+                        let res = null;
+                        try {
+                            res = await fetch(primaryUrl);
+                            if (!res.ok) throw new Error('Primary failed');
+                        } catch (e) {
+                            res = await fetch(fallbackUrl);
+                        }
+                        if (!res.ok) throw new Error('Weather failed');
+                        const data = await res.json();
+                        if (data && data.hourly && data.hourly.temperature_2m) {
+                            const idx = (utcHour >= 0 && utcHour < 24) ? utcHour : 0;
+                            const air = data.hourly.temperature_2m[idx];
+                            if (air !== null && air !== undefined) {
+                                el.innerHTML = Number(air).toFixed(1) + '°C';
+                                return;
+                            }
+                        }
+                        el.innerHTML = '--';
+                    } catch(err) {
+                        el.innerHTML = '--';
+                    }
+                }
+
+                function buildTransmitterPopupHtml(m, tempUid) {
+                    const idStr = String(m.id);
+                    const lat = Number(m.lat);
+                    const lon = Number(m.lon);
+                    const rawStatus = (m.status || 'Active').trim();
+                    let statusBadgeStyle = 'background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;';
+                    if (rawStatus.toLowerCase().includes('potential')) {
+                        statusBadgeStyle = 'background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa;';
+                    } else if (rawStatus.toLowerCase().includes('static')) {
+                        statusBadgeStyle = 'background: #fef9c3; color: #a16207; border: 1px solid #fef08a;';
+                    } else if (rawStatus.toLowerCase().includes('dead')) {
+                        statusBadgeStyle = 'background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;';
+                    } else if (rawStatus.toLowerCase().includes('inactive')) {
+                        statusBadgeStyle = 'background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;';
+                    }
+
+                    const batteryVal = m.battery || '-- V';
+                    const batteryColor = (batteryVal !== '-- V' && parseFloat(batteryVal) < 3.5 && parseFloat(batteryVal) > 0) ? '#dc2626' : '#16a34a';
+
+                    return `
+                        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 230px; max-width: 270px; padding: 2px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f1f5f9;">
+                                <span style="font-size: 16px; font-weight: 800; color: #0f172a;">${idStr}</span>
+                                <span style="font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 9999px; text-transform: uppercase; ${statusBadgeStyle}">
+                                    ${m.status || 'ACTIVE'}
+                                </span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 11.5px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #64748b; display: flex; align-items: center; gap: 4px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                                        Bird
+                                    </span>
+                                    <span style="font-weight: 600; color: #1e293b;">${m.birdRing || 'Unassigned'}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <span style="color: #64748b; display: flex; align-items: center; gap: 4px; margin-top: 1px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        Last Fix
+                                    </span>
+                                    <span style="font-weight: 600; color: #1e293b; text-align: right; max-width: 150px;">${m.lastFix || '--'}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #64748b; display: flex; align-items: center; gap: 4px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="13" x2="23" y2="11"/></svg>
+                                        Battery
+                                    </span>
+                                    <span style="font-weight: 600; color: ${batteryColor};">${batteryVal}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #64748b; display: flex; align-items: center; gap: 4px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+                                        Type
+                                    </span>
+                                    <span style="font-weight: 700; color: #2563eb;">${m.type || 'GPS'}</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="color: #64748b; display: flex; align-items: center; gap: 4px;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+                                        Air Temp (2m)
+                                    </span>
+                                    <span id="${tempUid}" style="font-weight: 800; color: #ea580c;">Loading...</span>
+                                </div>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; font-family: monospace;">
+                                <span>Lat: ${lat.toFixed(4)}</span>
+                                <span>Lon: ${lon.toFixed(4)}</span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
+                                <button onclick="handleFocusHistory('${idStr}')" style="padding: 6px 4px; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: none; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                    🕒 Focus & History
+                                </button>
+                                <button onclick="handleAIForecast('${idStr}')" style="padding: 6px 4px; background: #faf5ff; color: #7e22ce; font-weight: 700; border-radius: 6px; border: none; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                    🔮 AI Forecast
+                                </button>
+                            </div>
+                            <div style="margin-top: 6px;">
+                                <button onclick="handleGoogleEarth(${lat}, ${lon})" style="width: 100%; padding: 6px 0; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                    🌐 Google Earth
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
                 // Markers Management
                 const markerMap = {};
                 const markerGroup = L.featureGroup().addTo(map);
@@ -451,10 +650,18 @@ struct LeafletMapView: UIViewRepresentable {
                             iconAnchor: [11, 36]
                         });
 
+                        const popupUid = 'tx-temp-' + idStr + '-' + Math.floor(Math.random() * 1000000);
+                        const popupContent = buildTransmitterPopupHtml(m, popupUid);
+
                         if (markerMap[idStr]) {
                             markerMap[idStr].setLatLng([lat, lon]);
                             markerMap[idStr].setIcon(icon);
                             markerMap[idStr].setZIndexOffset(10000);
+                            markerMap[idStr].setPopupContent(popupContent);
+                            markerMap[idStr].off('popupopen');
+                            markerMap[idStr].on('popupopen', () => {
+                                fetchAirTemp2m(lat, lon, m.rawTimestamp, popupUid);
+                            });
                         } else {
                             const marker = L.marker([lat, lon], {
                                 icon: icon,
@@ -473,6 +680,11 @@ struct LeafletMapView: UIViewRepresentable {
                                     className: 'custom-leaflet-tooltip'
                                 }
                             );
+
+                            marker.bindPopup(popupContent, { maxWidth: 290, className: 'transmitter-leaflet-popup' });
+                            marker.on('popupopen', () => {
+                                fetchAirTemp2m(lat, lon, m.rawTimestamp, popupUid);
+                            });
 
                             marker.on('click', () => {
                                 // When GPS is active, set this marker as navigation target
@@ -510,8 +722,8 @@ struct LeafletMapView: UIViewRepresentable {
                         const diffDays = (Date.now() - date.getTime()) / (1000 * 3600 * 24);
                         const isArchive = diffDays > 5;
 
-                        const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m,soil_temperature_0cm,soil_temperature_0_to_7cm&timezone=UTC`;
-                        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m,soil_temperature_0cm,soil_temperature_0_to_7cm&timezone=UTC`;
+                        const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m&timezone=UTC`;
+                        const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&start_date=${dateStr}&end_date=${dateStr}&hourly=temperature_2m&timezone=UTC`;
 
                         const primaryUrl = isArchive ? archiveUrl : forecastUrl;
                         const fallbackUrl = isArchive ? forecastUrl : archiveUrl;
@@ -536,23 +748,13 @@ struct LeafletMapView: UIViewRepresentable {
                             const h = data.hourly;
                             const idx = (utcHour >= 0 && utcHour < 24) ? utcHour : 0;
                             const air = h.temperature_2m[idx];
-                            const s0 = (h.soil_temperature_0cm && h.soil_temperature_0cm[idx] !== null) ? h.soil_temperature_0cm[idx] : null;
-                            const s7 = (h.soil_temperature_0_to_7cm && h.soil_temperature_0_to_7cm[idx] !== null) ? h.soil_temperature_0_to_7cm[idx] : null;
-                            const soil = (s0 !== null && s0 !== undefined) ? s0 : s7;
 
-                            let html = '<div style="display: flex; justify-content: space-around; align-items: center; margin: 4px 0;">';
+                            let html = '<div style="display: flex; justify-content: center; align-items: center; margin: 6px 0;">';
                             if (air !== null && air !== undefined) {
                                 html += `
                                     <div style="text-align: center;">
-                                        <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">Air Temp (2m)</div>
-                                        <div style="font-size: 18px; font-weight: 900; color: #ea580c;">${Number(air).toFixed(1)}°C</div>
-                                    </div>`;
-                            }
-                            if (soil !== null && soil !== undefined) {
-                                html += `
-                                    <div style="text-align: center;">
-                                        <div style="font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase;">Surface / Soil</div>
-                                        <div style="font-size: 16px; font-weight: 800; color: #b45309;">${Number(soil).toFixed(1)}°C</div>
+                                        <div style="font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">Air Temp (2m)</div>
+                                        <div style="font-size: 20px; font-weight: 900; color: #ea580c; margin-top: 1px;">${Number(air).toFixed(1)}°C</div>
                                     </div>`;
                             }
                             html += '</div>';

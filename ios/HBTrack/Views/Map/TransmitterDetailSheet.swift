@@ -3,6 +3,7 @@ import CoreLocation
 
 struct TransmitterDetailSheet: View {
     @ObservedObject var viewModel: MapViewModel
+    @State private var airTempText: String = "Loading..."
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -41,6 +42,8 @@ struct TransmitterDetailSheet: View {
                         }
                         
                         DetailRow(icon: "location", title: "Location Type", value: latestPos.locationType ?? "GPS")
+                        
+                        DetailRow(icon: "thermometer.sun", title: "Air Temp (2m)", value: airTempText)
                         
                         HStack {
                             Label("Coordinates", systemImage: "mappin.and.ellipse")
@@ -89,6 +92,41 @@ struct TransmitterDetailSheet: View {
         .padding()
         .presentationDetents([.fraction(0.45), .medium])
         .presentationDragIndicator(.visible)
+        .task(id: viewModel.selectedTransmitter?.platform_id) {
+            if let tx = viewModel.selectedTransmitter,
+               let pos = viewModel.positions.filter({ $0.effectiveTransmitterId == tx.platform_id }).sorted(by: { $0.timestamp > $1.timestamp }).first {
+                await fetchAirTemp(lat: pos.lat, lon: pos.lon, timestamp: pos.timestamp)
+            } else {
+                airTempText = "--"
+            }
+        }
+    }
+    
+    private func fetchAirTemp(lat: Double, lon: Double, timestamp: String) async {
+        let date = DateFormatters.parseDate(timestamp) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        let dateStr = formatter.string(from: date)
+        let cal = Calendar(identifier: .gregorian)
+        let utcHour = cal.component(.hour, from: date)
+        
+        let urlStr = "https://api.open-meteo.com/v1/forecast?latitude=\(lat)&longitude=\(lon)&start_date=\(dateStr)&end_date=\(dateStr)&hourly=temperature_2m&timezone=UTC"
+        guard let url = URL(string: urlStr) else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let hourly = json["hourly"] as? [String: Any],
+               let temps = hourly["temperature_2m"] as? [Double],
+               utcHour >= 0 && utcHour < temps.count {
+                let t = temps[utcHour]
+                self.airTempText = String(format: "%.1f°C", t)
+            } else {
+                self.airTempText = "--"
+            }
+        } catch {
+            self.airTempText = "--"
+        }
     }
 }
 

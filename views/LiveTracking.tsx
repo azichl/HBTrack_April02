@@ -355,28 +355,20 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
                      <div className="w-3 h-3 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin"></div>
                      <span className="text-xs text-orange-600 font-medium">Loading Data...</span>
                 </div>
-            ) : (data.airTemp !== null || data.soilTemp !== null) ? (
+            ) : (data.airTemp !== null) ? (
                 <div>
-                  <div className="flex items-center justify-around gap-2 my-1">
-                    {data.airTemp !== null && (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] uppercase font-bold text-gray-500">Air Temp (2m)</span>
-                        <span className="text-2xl font-black text-orange-600 tracking-tight">{data.airTemp}°C</span>
-                      </div>
-                    )}
-                    {data.soilTemp !== null && (
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] uppercase font-bold text-gray-500">Surface/Soil</span>
-                        <span className="text-xl font-bold text-amber-700 tracking-tight">{data.soilTemp}°C</span>
-                      </div>
-                    )}
+                  <div className="flex items-center justify-center my-1">
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] uppercase font-bold text-gray-500">Air Temp (2m)</span>
+                      <span className="text-2xl font-black text-orange-600 tracking-tight">{data.airTemp}°C</span>
+                    </div>
                   </div>
-                  <div className="text-[9px] text-orange-400 mt-1 opacity-80">
+                  <div className="text-[9px] text-orange-400 mt-1 opacity-80 text-center">
                     Source: {data.source || 'Open-Meteo'}
                   </div>
                 </div>
             ) : (
-                <div className="text-xs text-gray-400 py-1">Data Unavailable</div>
+                <div className="text-xs text-gray-400 py-1 text-center">Data Unavailable</div>
             )}
         </div>
 
@@ -417,6 +409,40 @@ interface TransmitterMarkerProps {
     transmitters?: any[];
     birds?: any[];
 }
+
+// Component to dynamically fetch and display 2-m Air Temp for the latest position
+const LastFixAirTemp: React.FC<{ lat?: number; lon?: number; timestamp?: string }> = ({ lat, lon, timestamp }) => {
+  const [airTemp, setAirTemp] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (lat === undefined || lon === undefined || !timestamp || !isValidCoordinate(lat, lon)) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    fetchLSTData(lat, lon, timestamp).then(res => {
+      if (isMounted) {
+        if (res && res.airTemp !== null) {
+          setAirTemp(res.airTemp);
+        } else {
+          setAirTemp(null);
+        }
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (isMounted) setLoading(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [lat, lon, timestamp]);
+
+  if (loading) return <span className="text-[10px] text-gray-400 font-normal animate-pulse">Loading...</span>;
+  if (airTemp === null) return <span className="text-[10px] text-gray-400 font-normal">--</span>;
+  return <span className="font-bold text-orange-600 dark:text-orange-400">{airTemp.toFixed(1)}°C</span>;
+};
 
 // Extracted Marker Component to fix Popup data staleness issue & support Group Selection for overlapping markers
 const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({ 
@@ -610,6 +636,10 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                         </span>
                                     </div>
                                 )}
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500 flex items-center gap-1"><ThermometerSun size={12}/> Air Temp (2m)</span>
+                                    <LastFixAirTemp lat={Number(currentPos.lat)} lon={Number(currentPos.lon)} timestamp={currentPos.timestamp} />
+                                </div>
                             </div>
 
                             <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700 flex justify-between text-xs text-gray-400">
@@ -1424,11 +1454,7 @@ const LiveTrackingInner = () => {
         }
 
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
-        const isGpsTag = tr?.model?.toLowerCase().includes('microsensory') || 
-                         tr?.model?.toLowerCase().includes('gps') || 
-                         (tr as any)?.tag_type?.toLowerCase?.().includes('gps') ||
-                         (tr as any)?.manufacturer?.toLowerCase?.().includes('microsensory');
-        const locType = isGpsTag ? 'GPS' : classifyLocationType(p.lc, p.locationType, (p as any).satellite);
+        const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
         if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && locType !== historyFixType) return;
 
         const currentTs = safeParseTimestamp(p.timestamp);
@@ -1585,12 +1611,37 @@ const LiveTrackingInner = () => {
     selectedTransmitterIds.forEach((pttId, index) => {
         let track = rawPositions.filter(p => p.transmitter_id === pttId);
 
-        // For Static Test tags, only display positions from the current calendar month on live map history track
+        // Include the transmitter's up-to-date latest fix (green marker position) so track reaches the latest position
         const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
-        const isGpsTag = tr?.model?.toLowerCase().includes('microsensory') || 
-                         tr?.model?.toLowerCase().includes('gps') || 
-                         (tr as any)?.tag_type?.toLowerCase?.().includes('gps') ||
-                         (tr as any)?.manufacturer?.toLowerCase?.().includes('microsensory');
+        const lp = latestPositions.find(p => String(p.transmitter_id) === String(pttId) || String((p as any).platformId) === String(pttId));
+        const latestLat = lp ? Number(lp.lat) : Number((tr as any)?.last_latitude ?? (tr as any)?.latitude ?? (tr as any)?.lat);
+        const latestLon = lp ? Number(lp.lon) : Number((tr as any)?.last_longitude ?? (tr as any)?.longitude ?? (tr as any)?.lon);
+        const latestTs = lp?.timestamp || tr?.last_fix;
+        const fixType = lp?.locationType || (lp?.lc ? classifyLocationType(lp.lc, lp.locationType, lp.satellite) : 'GPS');
+
+        if (latestTs && isValidCoordinate(latestLat, latestLon)) {
+          const latestParsedMs = safeParseTimestamp(latestTs);
+          const alreadyInTrack = track.some(p => {
+            const pMs = safeParseTimestamp(p.timestamp);
+            return Math.abs(pMs - latestParsedMs) < 60000 && Math.abs(Number(p.lat) - latestLat) < 0.0005 && Math.abs(Number(p.lon) - latestLon) < 0.0005;
+          });
+          if (!alreadyInTrack) {
+            track.push({
+              id: `latest-${pttId}`,
+              transmitter_id: pttId,
+              platformId: pttId,
+              lat: latestLat,
+              lon: latestLon,
+              timestamp: latestTs,
+              lc: lp?.lc || 'GPS',
+              satellite: lp?.satellite || 'GPS',
+              locationType: fixType,
+              speed_kmh: lp?.speed_kmh || 0
+            });
+          }
+        }
+
+        // For Static Test tags, only display positions from the current calendar month on live map history track
         const st = tr?.derived_status || tr?.status;
         if (st === 'Static test' || st === 'Static Test' || st === 'static') {
           track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
@@ -1603,7 +1654,7 @@ const LiveTrackingInner = () => {
             const validCoords = isValidCoordinate(numLat, numLon);
             if (!validCoords) return false;
 
-            const fixType = isGpsTag ? 'GPS' : classifyLocationType(p.lc, p.locationType, (p as any).satellite);
+            const fixType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
             p.locationType = fixType;
 
             // GPS / Doppler / All filter
