@@ -340,6 +340,14 @@ struct LeafletMapView: UIViewRepresentable {
                     background: #ffffff !important;
                 }
                 
+                /* Ensure popups are ALWAYS on top of all markers, tooltips, and canvas layers */
+                .leaflet-pane.leaflet-popup-pane {
+                    z-index: 10000 !important;
+                }
+                .leaflet-popup {
+                    z-index: 10000 !important;
+                }
+                
                 /* Enhanced weather tile colors: 10% above web contrast/saturate/brightness */
                 .weather-enhanced {
                     filter: contrast(1.60) saturate(3.3) brightness(1.20) !important;
@@ -474,6 +482,9 @@ struct LeafletMapView: UIViewRepresentable {
                     const ttPane = map.createPane('transmitterTooltipPane');
                     ttPane.style.zIndex = '800';
                     ttPane.style.pointerEvents = 'auto';
+                }
+                if (map.getPane('popupPane')) {
+                    map.getPane('popupPane').style.zIndex = '10000';
                 }
 
                 // Action Handlers for Transmitter Popups
@@ -675,14 +686,14 @@ struct LeafletMapView: UIViewRepresentable {
                                 <span>Lat: ${lat.toFixed(4)}</span>
                                 <span>Lon: ${lon.toFixed(4)}</span>
                             </div>
-                            <div style="margin-top: 8px;">
-                                <button onclick="handleFocusHistory('${idStr}')" style="width: 100%; padding: 6px 4px; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: none; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                                    🕒 Focus & History
+                            <div style="margin-top: 10px;">
+                                <button onclick="handleGoogleEarth(${lat}, ${lon})" style="width: 100%; padding: 7px 0; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 10px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+                                    🌐 Google Earth
                                 </button>
                             </div>
                             <div style="margin-top: 6px;">
-                                <button onclick="handleGoogleEarth(${lat}, ${lon})" style="width: 100%; padding: 6px 0; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: 1px solid #bfdbfe; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                                    🌐 Google Earth
+                                <button onclick="handleFocusHistory('${idStr}')" style="width: 100%; padding: 7px 4px; background: #f8fafc; color: #1e40af; font-weight: 700; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 10px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                    🕒 Focus & History
                                 </button>
                             </div>
                         </div>
@@ -718,7 +729,8 @@ struct LeafletMapView: UIViewRepresentable {
                             className: 'custom-pin-marker',
                             html: createPinSvg(color),
                             iconSize: [22, 36],
-                            iconAnchor: [11, 36]
+                            iconAnchor: [11, 36],
+                            popupAnchor: [0, -42]
                         });
 
                         const tempUid = 'tx-temp-' + idStr;
@@ -730,8 +742,13 @@ struct LeafletMapView: UIViewRepresentable {
                             markerMap[idStr].setZIndexOffset(10000);
                             markerMap[idStr].setPopupContent(popupContent);
                             markerMap[idStr].off('popupopen');
+                            markerMap[idStr].off('popupclose');
                             markerMap[idStr].on('popupopen', () => {
+                                markerMap[idStr].closeTooltip();
                                 fetchAirTemp2m(lat, lon, m.rawTimestamp, tempUid, idStr);
+                            });
+                            markerMap[idStr].on('popupclose', () => {
+                                markerMap[idStr].openTooltip();
                             });
                             if (markerMap[idStr].isPopupOpen && markerMap[idStr].isPopupOpen()) {
                                 fetchAirTemp2m(lat, lon, m.rawTimestamp, tempUid, idStr);
@@ -755,9 +772,13 @@ struct LeafletMapView: UIViewRepresentable {
                                 }
                             );
 
-                            marker.bindPopup(popupContent, { maxWidth: 290, className: 'transmitter-leaflet-popup' });
+                            marker.bindPopup(popupContent, { maxWidth: 290, className: 'transmitter-leaflet-popup', offset: [0, -4] });
                             marker.on('popupopen', () => {
+                                marker.closeTooltip();
                                 fetchAirTemp2m(lat, lon, m.rawTimestamp, tempUid, idStr);
+                            });
+                            marker.on('popupclose', () => {
+                                marker.openTooltip();
                             });
 
                             marker.on('click', () => {
