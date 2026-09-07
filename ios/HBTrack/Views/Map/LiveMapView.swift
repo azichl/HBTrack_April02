@@ -125,7 +125,9 @@ struct LiveMapView: View {
                                 showToolsDrawer = false
                             }
                             if let tx = viewModel.transmitters.first(where: { $0.platform_id == txId }) {
-                                viewModel.selectTransmitter(tx)
+                                viewModel.selectedTransmitter = tx
+                                viewModel.selectedBird = viewModel.birds.first { $0.ring_id == tx.platform_id || $0.id == tx.id }
+                                viewModel.selectedPosition = viewModel.positions.first { $0.effectiveTransmitterId == tx.platform_id }
                             }
                         },
                         onMapTapped: { _ in
@@ -314,9 +316,6 @@ struct LiveMapView: View {
         }
         .onAppear {
             viewModel.subscribeToUpdates(visibilityFilter: authVM.isTransmitterVisible)
-        }
-        .sheet(isPresented: $viewModel.showDetail) {
-            TransmitterDetailSheet(viewModel: viewModel)
         }
         .sheet(isPresented: $showStatsSheet) {
             MapStatsSummarySheet(viewModel: viewModel)

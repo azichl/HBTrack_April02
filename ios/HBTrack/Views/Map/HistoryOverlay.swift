@@ -254,9 +254,6 @@ struct HistoryOverlay: View {
                                 viewModel.selectedDatePreset = preset
                                 Task {
                                     await viewModel.loadHistory()
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        viewModel.showHistoryOverlay = false
-                                    }
                                 }
                             } label: {
                                 Text(preset.rawValue)
@@ -282,9 +279,6 @@ struct HistoryOverlay: View {
                         Button {
                             Task {
                                 await viewModel.loadHistory()
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    viewModel.showHistoryOverlay = false
-                                }
                             }
                         } label: {
                             Text("Apply Date Filter")
@@ -316,9 +310,6 @@ struct HistoryOverlay: View {
                 .pickerStyle(.segmented)
                 .onChange(of: viewModel.selectedLocationType) { _ in
                     viewModel.applyHistoryFilter()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        viewModel.showHistoryOverlay = false
-                    }
                 }
             }
             

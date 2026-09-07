@@ -432,7 +432,7 @@ class MapViewModel: ObservableObject {
         self.selectedTransmitter = transmitter
         self.selectedBird = birds.first { $0.ring_id == transmitter.platform_id || $0.id == transmitter.id }
         self.selectedPosition = positions.first { $0.effectiveTransmitterId == transmitter.platform_id }
-        self.showDetail = true
+        self.showDetail = false
         
         if let pos = selectedPosition {
             flyTo(pos.coordinate, zoom: 12)

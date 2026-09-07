@@ -325,6 +325,27 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
     return () => { isMounted = false; };
   }, [lat, lon, timestamp]);
 
+  const formatDM = (val: number, isLat: boolean) => {
+    const abs = Math.abs(val || 0);
+    const deg = Math.floor(abs);
+    const min = (abs - deg) * 60;
+    const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
+    return `${deg}° ${min.toFixed(3)}' ${dir}`;
+  };
+
+  const formatDMS = (val: number, isLat: boolean) => {
+    const abs = Math.abs(val || 0);
+    const deg = Math.floor(abs);
+    const min = Math.floor((abs - deg) * 60);
+    const sec = ((abs - deg) * 60 - min) * 60;
+    const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
+    return `${deg}° ${min}' ${sec.toFixed(1)}" ${dir}`;
+  };
+
+  const hddStr = `${lat?.toFixed(5)}, ${lon?.toFixed(5)}`;
+  const hdmmStr = `${formatDM(lat, true)}  ${formatDM(lon, false)}`;
+  const hdmsStr = `${formatDMS(lat, true)}  ${formatDMS(lon, false)}`;
+
   return (
     <div className="text-center p-1 min-w-[210px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
         <div className="flex items-center justify-center gap-1 mb-1">
@@ -340,9 +361,10 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
             {(data.timezone) && <div className="text-[10px] text-gray-400 font-normal mt-0.5">Local: {data.timezone.replace('_', ' ')}</div>}
         </div>
         
-        <div className="flex items-center justify-between text-[12px] mb-2 bg-gray-50 p-1 rounded">
-            <span className="text-gray-500">Location</span>
-            <span className="font-mono text-[11px] text-gray-700">Lat: {lat?.toFixed(3)}, Lon: {lon?.toFixed(3)}</span>
+        <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded text-left font-mono text-[10px] text-slate-700 dark:text-slate-300 mb-2 leading-relaxed">
+            <div><span className="font-bold">HDD:</span> {hddStr}</div>
+            <div><span className="font-bold">HDMM:</span> {hdmmStr}</div>
+            <div><span className="font-bold">HDMS:</span> {hdmsStr}</div>
         </div>
 
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-2.5 border border-orange-200">
@@ -612,7 +634,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                             
                             <div className="space-y-2 text-xs">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Bird</span>
+                                    <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Ring ID</span>
                                     <span className="font-medium text-gray-800 dark:text-gray-200">{currentBird?.ring_id || 'Unassigned'}</span>
                                 </div>
                                 <div className="flex justify-between items-start">
@@ -647,24 +669,16 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                 <span>Lon: {currentPos.lon?.toFixed(4)}</span>
                             </div>
                             
-                            <div className={`grid ${isMobileScreen ? 'grid-cols-1' : 'grid-cols-2'} gap-2 mt-3`}>
+                            <div className="mt-3">
                                 <button 
                                     onClick={() => {
                                         setSelectedTransmitterIds([currentPos.transmitter_id]);
                                         setShowHistory(true);
                                     }}
-                                    className="py-1.5 bg-brand-50 text-brand-700 font-semibold rounded hover:bg-brand-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
+                                    className="w-full py-1.5 bg-brand-50 text-brand-700 font-semibold rounded hover:bg-brand-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
                                 >
                                     <History size={12} /> Focus & History
                                 </button>
-                                {!isMobileScreen && (
-                                    <button 
-                                        onClick={handleAIAnalysis}
-                                        className="py-1.5 bg-purple-50 text-purple-700 font-semibold rounded hover:bg-purple-100 transition-colors text-[10px] uppercase tracking-wide flex items-center justify-center gap-1"
-                                    >
-                                        <BrainCircuit size={12} /> AI Forecast
-                                    </button>
-                                )}
                             </div>
 
                             <div className="mt-2">

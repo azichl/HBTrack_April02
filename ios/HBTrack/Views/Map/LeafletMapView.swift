@@ -157,7 +157,7 @@ struct LeafletMapView: UIViewRepresentable {
         // 5. Update Measurement Mode
         let measureJs = "setMeasurementMode(\(viewModel.isMeasuring));"
         webView.evaluateJavaScript(measureJs, completionHandler: nil)
-        if !viewModel.isMeasuring {
+        if !viewModel.isMeasuring || viewModel.measurePoints.isEmpty {
             webView.evaluateJavaScript("clearMeasurement();", completionHandler: nil)
         }
         
@@ -490,16 +490,68 @@ struct LeafletMapView: UIViewRepresentable {
                         window.open(url, '_blank');
                     }
                 };
-                window.handleAIForecast = function(id) {
-                    alert("AI Forecast for PTT " + id + " is active.");
-                };
+
+                // Coordinate & Local Timezone Formatter
+                const tzCoordCache = {};
+                function formatCoordinateDateTime(isoString, timeZoneName, fallbackLon) {
+                    if (!isoString) return { dateStr: '--', tzStr: '' };
+                    try {
+                        let parsed = String(isoString).trim();
+                        if (!parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                            parsed = parsed.replace(' ', 'T') + 'Z';
+                        }
+                        const d = new Date(parsed);
+                        if (isNaN(d.getTime())) return { dateStr: isoString, tzStr: '' };
+
+                        let targetTz = timeZoneName;
+                        if (!targetTz && fallbackLon !== undefined && !isNaN(fallbackLon)) {
+                            const offsetHours = Math.round(fallbackLon / 15);
+                            const sign = offsetHours >= 0 ? '+' : '-';
+                            const approxLabel = 'UTC' + sign + Math.abs(offsetHours);
+                            const dOffset = new Date(d.getTime() + offsetHours * 3600 * 1000);
+                            const formattedApprox = new Intl.DateTimeFormat('en-GB', {
+                                year: 'numeric', month: '2-digit', day: '2-digit',
+                                hour: '2-digit', minute: '2-digit', second: '2-digit',
+                                hour12: false, timeZone: 'UTC'
+                            }).format(dOffset).replace(',', '');
+                            return { dateStr: formattedApprox, tzStr: approxLabel };
+                        }
+
+                        let opts = {
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit',
+                            hour12: false
+                        };
+                        if (targetTz) {
+                            try {
+                                opts.timeZone = targetTz;
+                                const formatted = new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '');
+                                return { dateStr: formatted, tzStr: targetTz };
+                            } catch(e) {}
+                        }
+                        opts.timeZone = 'UTC';
+                        const formattedUtc = new Intl.DateTimeFormat('en-GB', opts).format(d).replace(',', '');
+                        return { dateStr: formattedUtc, tzStr: 'UTC' };
+                    } catch(e) {
+                        return { dateStr: isoString, tzStr: '' };
+                    }
+                }
 
                 // Quick Air Temp (2m) fetch for Green Marker / Last Position
-                async function fetchAirTemp2m(lat, lon, isoTimestamp, elementId) {
+                const airTempCache = {};
+                async function fetchAirTemp2m(lat, lon, isoTimestamp, elementId, idStr) {
+                    if (idStr && airTempCache[idStr]) {
+                        const el = document.getElementById(elementId);
+                        if (el) el.innerHTML = airTempCache[idStr];
+                        return;
+                    }
                     const el = document.getElementById(elementId);
-                    if (!el) return;
                     try {
-                        let date = new Date(isoTimestamp);
+                        let parsed = String(isoTimestamp || '').trim();
+                        if (parsed && !parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                            parsed = parsed.replace(' ', 'T') + 'Z';
+                        }
+                        let date = new Date(parsed);
                         if (isNaN(date.getTime())) date = new Date();
                         const dateStr = date.toISOString().split('T')[0];
                         const utcHour = date.getUTCHours();
@@ -516,21 +568,41 @@ struct LeafletMapView: UIViewRepresentable {
                             res = await fetch(primaryUrl);
                             if (!res.ok) throw new Error('Primary failed');
                         } catch (e) {
-                            res = await fetch(fallbackUrl);
+                            try {
+                                res = await fetch(fallbackUrl);
+                            } catch (e2) {}
                         }
-                        if (!res.ok) throw new Error('Weather failed');
+                        if (!res || !res.ok) {
+                            try {
+                                res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m');
+                                const currData = await res.json();
+                                if (currData && currData.current && currData.current.temperature_2m !== undefined) {
+                                    const tempText = Number(currData.current.temperature_2m).toFixed(1) + '°C';
+                                    if (idStr) airTempCache[idStr] = tempText;
+                                    const elem = document.getElementById(elementId);
+                                    if (elem) elem.innerHTML = tempText;
+                                    return;
+                                }
+                            } catch(e3) {}
+                            throw new Error('Weather failed');
+                        }
                         const data = await res.json();
                         if (data && data.hourly && data.hourly.temperature_2m) {
                             const idx = (utcHour >= 0 && utcHour < 24) ? utcHour : 0;
                             const air = data.hourly.temperature_2m[idx];
                             if (air !== null && air !== undefined) {
-                                el.innerHTML = Number(air).toFixed(1) + '°C';
+                                const tempText = Number(air).toFixed(1) + '°C';
+                                if (idStr) airTempCache[idStr] = tempText;
+                                const elem = document.getElementById(elementId);
+                                if (elem) elem.innerHTML = tempText;
                                 return;
                             }
                         }
-                        el.innerHTML = '--';
+                        const elem = document.getElementById(elementId);
+                        if (elem) elem.innerHTML = '--';
                     } catch(err) {
-                        el.innerHTML = '--';
+                        const elem = document.getElementById(elementId);
+                        if (elem) elem.innerHTML = '--';
                     }
                 }
 
@@ -552,6 +624,7 @@ struct LeafletMapView: UIViewRepresentable {
 
                     const batteryVal = m.battery || '-- V';
                     const batteryColor = (batteryVal !== '-- V' && parseFloat(batteryVal) < 3.5 && parseFloat(batteryVal) > 0) ? '#dc2626' : '#16a34a';
+                    const initialTemp = airTempCache[idStr] || 'Loading...';
 
                     return `
                         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 230px; max-width: 270px; padding: 2px;">
@@ -565,7 +638,7 @@ struct LeafletMapView: UIViewRepresentable {
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="color: #64748b; display: flex; align-items: center; gap: 4px;">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
-                                        Bird
+                                        Ring ID
                                     </span>
                                     <span style="font-weight: 600; color: #1e293b;">${m.birdRing || 'Unassigned'}</span>
                                 </div>
@@ -595,19 +668,16 @@ struct LeafletMapView: UIViewRepresentable {
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
                                         Air Temp (2m)
                                     </span>
-                                    <span id="${tempUid}" style="font-weight: 800; color: #ea580c;">Loading...</span>
+                                    <span id="${tempUid}" style="font-weight: 800; color: #ea580c;">${initialTemp}</span>
                                 </div>
                             </div>
                             <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; font-family: monospace;">
                                 <span>Lat: ${lat.toFixed(4)}</span>
                                 <span>Lon: ${lon.toFixed(4)}</span>
                             </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
-                                <button onclick="handleFocusHistory('${idStr}')" style="padding: 6px 4px; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: none; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                            <div style="margin-top: 8px;">
+                                <button onclick="handleFocusHistory('${idStr}')" style="width: 100%; padding: 6px 4px; background: #eff6ff; color: #1d4ed8; font-weight: 700; border-radius: 6px; border: none; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
                                     🕒 Focus & History
-                                </button>
-                                <button onclick="handleAIForecast('${idStr}')" style="padding: 6px 4px; background: #faf5ff; color: #7e22ce; font-weight: 700; border-radius: 6px; border: none; font-size: 9.5px; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                                    🔮 AI Forecast
                                 </button>
                             </div>
                             <div style="margin-top: 6px;">
@@ -651,8 +721,8 @@ struct LeafletMapView: UIViewRepresentable {
                             iconAnchor: [11, 36]
                         });
 
-                        const popupUid = 'tx-temp-' + idStr + '-' + Math.floor(Math.random() * 1000000);
-                        const popupContent = buildTransmitterPopupHtml(m, popupUid);
+                        const tempUid = 'tx-temp-' + idStr;
+                        const popupContent = buildTransmitterPopupHtml(m, tempUid);
 
                         if (markerMap[idStr]) {
                             markerMap[idStr].setLatLng([lat, lon]);
@@ -661,8 +731,11 @@ struct LeafletMapView: UIViewRepresentable {
                             markerMap[idStr].setPopupContent(popupContent);
                             markerMap[idStr].off('popupopen');
                             markerMap[idStr].on('popupopen', () => {
-                                fetchAirTemp2m(lat, lon, m.rawTimestamp, popupUid);
+                                fetchAirTemp2m(lat, lon, m.rawTimestamp, tempUid, idStr);
                             });
+                            if (markerMap[idStr].isPopupOpen && markerMap[idStr].isPopupOpen()) {
+                                fetchAirTemp2m(lat, lon, m.rawTimestamp, tempUid, idStr);
+                            }
                         } else {
                             const marker = L.marker([lat, lon], {
                                 icon: icon,
@@ -684,7 +757,7 @@ struct LeafletMapView: UIViewRepresentable {
 
                             marker.bindPopup(popupContent, { maxWidth: 290, className: 'transmitter-leaflet-popup' });
                             marker.on('popupopen', () => {
-                                fetchAirTemp2m(lat, lon, m.rawTimestamp, popupUid);
+                                fetchAirTemp2m(lat, lon, m.rawTimestamp, tempUid, idStr);
                             });
 
                             marker.on('click', () => {
@@ -707,12 +780,43 @@ struct LeafletMapView: UIViewRepresentable {
                 let historyPolyline = null;
                 let historyPointsGroup = L.featureGroup().addTo(map);
 
-                async function fetchMeteoArchive(lat, lon, isoTimestamp, elementId) {
+                async function fetchMeteoArchive(lat, lon, isoTimestamp, elementId, dateElementId) {
                     const el = document.getElementById(elementId);
+
+                    // 1. Timezone detection & local date update for this coordinate
+                    const tzKey = lat.toFixed(1) + ',' + lon.toFixed(1);
+                    let detectedTz = tzCoordCache[tzKey];
+                    if (!detectedTz) {
+                        try {
+                            const tzRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon + '&current=temperature_2m&timezone=auto');
+                            const tzJson = await tzRes.json();
+                            if (tzJson && tzJson.timezone) {
+                                detectedTz = tzJson.timezone;
+                                tzCoordCache[tzKey] = detectedTz;
+                            }
+                        } catch(e) {}
+                    }
+
+                    if (detectedTz && dateElementId) {
+                        const dateEl = document.getElementById(dateElementId);
+                        if (dateEl) {
+                            const localDate = formatCoordinateDateTime(isoTimestamp, detectedTz, lon);
+                            dateEl.innerHTML = `
+                                <div style="font-size: 12px; font-weight: 700; color: #1e293b;">${localDate.dateStr}</div>
+                                <div style="font-size: 10px; color: #64748b; font-weight: 500; margin-top: 1px;">Local: ${detectedTz.replace('_', ' ')}</div>
+                            `;
+                        }
+                    }
+
                     if (!el) return;
 
+                    // 2. Weather Archive / Forecast Air Temp (2m)
                     try {
-                        const date = new Date(isoTimestamp);
+                        let parsed = String(isoTimestamp || '').trim();
+                        if (parsed && !parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                            parsed = parsed.replace(' ', 'T') + 'Z';
+                        }
+                        const date = new Date(parsed);
                         if (isNaN(date.getTime())) {
                             el.innerHTML = '<div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 4px;">Time unavailable</div>';
                             return;
@@ -848,6 +952,7 @@ struct LeafletMapView: UIViewRepresentable {
                             });
 
                             const popupUid = 'meteo-pop-' + Math.floor(Math.random() * 1000000);
+                            const dateElUid = 'history-date-' + popupUid;
                             const fixBadgeStyle = isGps 
                                 ? 'background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd;' 
                                 : 'background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff;';
@@ -874,6 +979,10 @@ struct LeafletMapView: UIViewRepresentable {
                             const hdmmStr = formatDM(latNum, true) + "  " + formatDM(lonNum, false);
                             const hdmsStr = formatDMS(latNum, true) + "  " + formatDMS(lonNum, false);
 
+                            const tzKey = latNum.toFixed(1) + ',' + lonNum.toFixed(1);
+                            const cachedTz = tzCoordCache[tzKey];
+                            const localDate = formatCoordinateDateTime(p.date, cachedTz, lonNum);
+
                             const popupHtml = `
                                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; min-width: 220px; max-width: 260px; padding: 2px;">
                                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">
@@ -882,8 +991,9 @@ struct LeafletMapView: UIViewRepresentable {
                                             ${fixLabel}
                                         </span>
                                     </div>
-                                    <div style="font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 6px;">
-                                        📅 ${p.date || ''}
+                                    <div id="${dateElUid}" style="margin-bottom: 6px; border-bottom: 1px solid #f1f5f9; padding-bottom: 5px;">
+                                        <div style="font-size: 12px; font-weight: 700; color: #1e293b;">${localDate.dateStr}</div>
+                                        ${localDate.tzStr ? `<div style="font-size: 10px; color: #64748b; font-weight: 500; margin-top: 1px;">Local: ${localDate.tzStr.replace('_', ' ')}</div>` : ''}
                                     </div>
                                     <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 8px; border-radius: 6px; font-family: monospace; font-size: 10px; color: #475569; margin-bottom: 6px; line-height: 1.4;">
                                         <div><b>HDD:</b> ${hddStr}</div>
@@ -913,7 +1023,7 @@ struct LeafletMapView: UIViewRepresentable {
 
                             circle.bindPopup(popupHtml, { maxWidth: 280, className: 'custom-history-popup' });
                             circle.on('popupopen', () => {
-                                fetchMeteoArchive(latNum, lonNum, p.date, popupUid);
+                                fetchMeteoArchive(latNum, lonNum, p.date, popupUid, dateElUid);
                             });
 
                             historyLayersGroup.addLayer(circle);
@@ -947,7 +1057,6 @@ struct LeafletMapView: UIViewRepresentable {
                 }
 
                 function clearMeasurement() {
-                    if (measurePoints.length === 0 && !measurePolyline) return;
                     measurePoints = [];
                     if (measurePolyline) {
                         map.removeLayer(measurePolyline);
