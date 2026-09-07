@@ -373,7 +373,7 @@ private struct MapStatsSummarySheet: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             List {
                 Section(header: Text("Transmitters Summary")) {
                     HStack {

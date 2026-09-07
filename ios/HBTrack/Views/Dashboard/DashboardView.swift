@@ -90,7 +90,7 @@ struct DashboardView: View {
                                                     .font(.system(size: 12, weight: .semibold))
                                                     .foregroundColor(AppTheme.textPrimary)
                                                     .lineLimit(1)
-                                                    .minimumScaleFactor(0.8)
+                                                    .minimumScaleFactor(0.7)
                                             }
                                             
                                             Spacer(minLength: 2)
@@ -103,7 +103,7 @@ struct DashboardView: View {
                                                 .background(AppTheme.subtleBackground)
                                                 .cornerRadius(6)
                                         }
-                                        .padding(.horizontal, 10)
+                                        .padding(.horizontal, 8)
                                         .padding(.vertical, 10)
                                         .background(AppTheme.cardBackground)
                                         .cornerRadius(12)

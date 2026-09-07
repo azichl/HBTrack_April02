@@ -5,7 +5,7 @@ struct PrivacyPolicyView: View {
     @Environment(\.openURL) private var openURL
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header card
@@ -98,6 +98,8 @@ struct PrivacyPolicyView: View {
                     .padding(.top, 10)
                 }
                 .padding(20)
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.screenBackground)
             .navigationTitle("Privacy Policy")

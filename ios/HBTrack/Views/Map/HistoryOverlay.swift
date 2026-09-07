@@ -60,9 +60,12 @@ struct HistoryOverlay: View {
                 }
             }
             
-            // Multi-Transmitter Selector with Distinct Color Badges
-            if !viewModel.transmitters.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+            // Scrollable controls for compact phones and landscape orientation
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 12) {
+                    // Multi-Transmitter Selector with Distinct Color Badges
+                    if !viewModel.transmitters.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Active Trajectory:")
                             .font(.system(size: 11, weight: .semibold))
@@ -331,6 +334,9 @@ struct HistoryOverlay: View {
                 .background(AppTheme.brandGoldLight)
                 .cornerRadius(10)
             }
+                }
+            }
+            .frame(maxHeight: 380)
         }
         .padding(16)
         .background(AppTheme.cardBackground.opacity(0.96))

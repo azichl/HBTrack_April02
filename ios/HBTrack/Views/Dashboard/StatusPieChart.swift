@@ -14,9 +14,9 @@ struct StatusPieChart: View {
             let cx = w / 2
             let cy = h / 2
             
-            // Slightly larger donut radius
-            let outerRadius: CGFloat = min(w, h) * 0.38
-            let innerRadius: CGFloat = outerRadius * 0.62
+            // Responsive donut radius tailored for both narrow phones and wide tablets
+            let outerRadius: CGFloat = min(w * 0.23, 86)
+            let innerRadius: CGFloat = outerRadius * 0.58
             let midRadius: CGFloat = (innerRadius + outerRadius) / 2
             
             ZStack {
@@ -50,13 +50,13 @@ struct StatusPieChart: View {
                         let yVal = cy + midRadius * sin(rad)
                         
                         Text("\(item.count)")
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.white)
                             .shadow(color: Color.black.opacity(0.35), radius: 1, x: 0, y: 1)
                             .position(x: xVal, y: yVal)
                     }
                     
-                    // 3. Callout leader lines
+                    // 3. Callout leader lines with safe margins
                     ForEach(layouts, id: \.index) { item in
                         let rad = item.midAngle * .pi / 180.0
                         let cosVal = cos(rad)
@@ -66,23 +66,25 @@ struct StatusPieChart: View {
                         let isTop = abs(cosVal) < 0.30 && sinVal < 0
                         let isBottom = abs(cosVal) < 0.30 && sinVal > 0
                         
+                        let radialOffset: CGFloat = min(12, max(6, w * 0.03))
                         let pElbow: CGPoint = {
                             if isTop {
-                                return CGPoint(x: p0.x, y: p0.y - 18)
+                                return CGPoint(x: p0.x, y: p0.y - 14)
                             } else if isBottom {
-                                return CGPoint(x: p0.x, y: p0.y + 18)
+                                return CGPoint(x: p0.x, y: p0.y + 14)
                             } else {
-                                return CGPoint(x: cx + (outerRadius + 15) * cosVal, y: cy + (outerRadius + 15) * sinVal)
+                                return CGPoint(x: cx + (outerRadius + radialOffset) * cosVal, y: cy + (outerRadius + radialOffset) * sinVal)
                             }
                         }()
                         
+                        let tailLen: CGFloat = 8
                         let pTail: CGPoint = {
                             if isTop || isBottom {
                                 return pElbow
                             } else if cosVal >= 0 {
-                                return CGPoint(x: pElbow.x + 12, y: pElbow.y)
+                                return CGPoint(x: min(w - 8, pElbow.x + tailLen), y: pElbow.y)
                             } else {
-                                return CGPoint(x: pElbow.x - 12, y: pElbow.y)
+                                return CGPoint(x: max(8, pElbow.x - tailLen), y: pElbow.y)
                             }
                         }()
                         
@@ -96,7 +98,7 @@ struct StatusPieChart: View {
                         .stroke(AppTheme.textMuted, lineWidth: 1.2)
                     }
                     
-                    // 4. Callout Labels outside with precise non-overlapping placement
+                    // 4. Callout Labels bounded to screen width
                     ForEach(layouts, id: \.index) { item in
                         let rad = item.midAngle * .pi / 180.0
                         let cosVal = cos(rad)
@@ -105,32 +107,38 @@ struct StatusPieChart: View {
                         let isTop = abs(cosVal) < 0.30 && sinVal < 0
                         let isBottom = abs(cosVal) < 0.30 && sinVal > 0
                         
-                        let textEstWidth = CGFloat(item.status.count) * 6.6
+                        let textEstWidth = CGFloat(item.status.count) * 5.8
                         
                         let labelPos: CGPoint = {
                             if isTop {
-                                return CGPoint(x: cx + outerRadius * cosVal, y: cy - outerRadius - 28)
+                                let clampedX = max(textEstWidth / 2 + 4, min(w - textEstWidth / 2 - 4, cx + outerRadius * cosVal))
+                                return CGPoint(x: clampedX, y: cy - outerRadius - 22)
                             } else if isBottom {
-                                return CGPoint(x: cx + outerRadius * cosVal, y: cy + outerRadius + 28)
+                                let clampedX = max(textEstWidth / 2 + 4, min(w - textEstWidth / 2 - 4, cx + outerRadius * cosVal))
+                                return CGPoint(x: clampedX, y: cy + outerRadius + 22)
                             } else {
-                                let xElbow = cx + (outerRadius + 15) * cosVal
-                                let yElbow = cy + (outerRadius + 15) * sinVal
+                                let radialOffset: CGFloat = min(12, max(6, w * 0.03))
+                                let xElbow = cx + (outerRadius + radialOffset) * cosVal
+                                let yElbow = cy + (outerRadius + radialOffset) * sinVal
                                 if cosVal >= 0 {
-                                    // Right side: tail ends at xElbow + 12, text placed after tail
-                                    let xStart = xElbow + 16
-                                    return CGPoint(x: xStart + textEstWidth / 2, y: yElbow)
+                                    let xTail = min(w - 8, xElbow + 8)
+                                    let preferredX = xTail + 4 + textEstWidth / 2
+                                    let clampedX = min(w - textEstWidth / 2 - 4, max(textEstWidth / 2 + 4, preferredX))
+                                    return CGPoint(x: clampedX, y: yElbow)
                                 } else {
-                                    // Left side: tail ends at xElbow - 12, text placed before tail
-                                    let xEnd = xElbow - 16
-                                    return CGPoint(x: xEnd - textEstWidth / 2, y: yElbow)
+                                    let xTail = max(8, xElbow - 8)
+                                    let preferredX = xTail - 4 - textEstWidth / 2
+                                    let clampedX = max(textEstWidth / 2 + 4, min(w - textEstWidth / 2 - 4, preferredX))
+                                    return CGPoint(x: clampedX, y: yElbow)
                                 }
                             }
                         }()
                         
                         Text(item.status)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 10.5, weight: .semibold))
                             .foregroundColor(AppTheme.textSecondary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .fixedSize()
                             .position(labelPos)
                     }

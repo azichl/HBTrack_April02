@@ -45,11 +45,12 @@ struct LoginView: View {
                 .opacity(0.35)
             
             // Main Glassmorphic Login Card
-            ScrollView {
-                VStack(spacing: 0) {
-                    Spacer(minLength: 40)
-                    
-                    VStack(spacing: 20) {
+            GeometryReader { screenGeo in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 24)
+                        
+                        VStack(spacing: 20) {
                         // Ministry & External Reserves Header Logo
                         VStack(spacing: 12) {
                             if let uiImage = UIImage(named: "MinistryLogo") {
@@ -239,11 +240,14 @@ struct LoginView: View {
                     .padding(.horizontal, 20)
                     .frame(maxWidth: 420)
                     
-                    Spacer(minLength: 40)
+                    Spacer(minLength: 24)
                 }
+                .frame(minHeight: screenGeo.size.height)
+                .frame(maxWidth: .infinity)
             }
         }
-        .sheet(isPresented: $showPrivacyPolicy) {
+    }
+    .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicyView()
         }
     }

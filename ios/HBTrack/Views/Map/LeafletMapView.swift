@@ -294,10 +294,15 @@ struct LeafletMapView: UIViewRepresentable {
                     padding: 0 !important;
                 }
                 
+                /* Lift Leaflet controls safely above the system tab bar & home indicator */
+                .leaflet-bottom {
+                    bottom: 84px !important;
+                }
+                
                 /* Compass Rose positioned cleanly above the zoom controls */
                 .compass-rose {
                     position: absolute;
-                    bottom: 96px;
+                    bottom: 168px;
                     right: 14px;
                     width: 48px;
                     height: 48px;
