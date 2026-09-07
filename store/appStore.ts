@@ -694,7 +694,7 @@ export const useAppStore = create<AppState>()(
 
       sharedMapCenter: [36.0, 42.0],
       sharedMapZoom: 3,
-      activeBaseLayer: 'google_hybrid',
+      activeBaseLayer: 'google_roadmap',
       setSharedMapCenter: (center) => set({ sharedMapCenter: center }),
       setSharedMapZoom: (zoom) => set({ sharedMapZoom: zoom }),
       setActiveBaseLayer: (layer) => set({ activeBaseLayer: layer }),

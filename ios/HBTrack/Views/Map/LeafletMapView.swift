@@ -5,7 +5,7 @@ import CoreLocation
 struct LeafletMapView: UIViewRepresentable {
     @ObservedObject var viewModel: MapViewModel
     var activeWeatherOverlay: String = "none" // "none", "temp_new", "precipitation_new", "wind_new", "clouds_new"
-    var activeBaseLayer: String = "google_hybrid" // "google_hybrid", "google_roadmap", "osm", "esri"
+    var activeBaseLayer: String = "google_roadmap" // "google_roadmap", "google_hybrid", "osm", "esri"
     var onMarkerTapped: ((String) -> Void)?
     var onMapTapped: ((CLLocationCoordinate2D) -> Void)?
     
@@ -402,7 +402,7 @@ struct LeafletMapView: UIViewRepresentable {
                     })
                 };
 
-                let currentBaseLayer = baseLayers['google_hybrid'];
+                let currentBaseLayer = baseLayers['google_roadmap'];
                 currentBaseLayer.addTo(map);
 
                 function setBaseLayer(layerKey) {

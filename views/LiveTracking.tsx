@@ -2049,7 +2049,7 @@ const LiveTrackingInner = () => {
       case 'google_hybrid': return <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
       case 'scienceterrain': return <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />;
       case 'maptiler_outdoor': return <TileLayer url="https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=wSEj7Jfw4drYYrF3X294" attribution='&copy; MapTiler' />;
-      default: return <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
+      default: return <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
     }
   };
 

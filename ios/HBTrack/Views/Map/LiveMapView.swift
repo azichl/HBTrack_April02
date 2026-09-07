@@ -18,8 +18,8 @@ enum MapSubTab: String, CaseIterable, Identifiable {
 }
 
 enum MapTileOption: String, CaseIterable, Identifiable {
+    case googleRoadmap = "Google Maps"
     case googleHybrid = "Google Satellite (Hybrid)"
-    case googleRoadmap = "Google Roadmap"
     case openStreetMap = "OpenStreetMap"
     case esriSatellite = "Esri World Imagery"
     
@@ -27,8 +27,8 @@ enum MapTileOption: String, CaseIterable, Identifiable {
     
     var layerKey: String {
         switch self {
-        case .googleHybrid: return "google_hybrid"
         case .googleRoadmap: return "google_roadmap"
+        case .googleHybrid: return "google_hybrid"
         case .openStreetMap: return "osm"
         case .esriSatellite: return "esri"
         }
@@ -60,7 +60,7 @@ struct LiveMapView: View {
     @StateObject private var viewModel = MapViewModel()
     @State private var selectedSubTab: MapSubTab = .tracking
     
-    @State private var selectedTileLayer: MapTileOption = .googleHybrid
+    @State private var selectedTileLayer: MapTileOption = .googleRoadmap
     @State private var selectedWeatherOverlay: WeatherOverlayOption = .none
     
     @State private var showToolsDrawer = false
