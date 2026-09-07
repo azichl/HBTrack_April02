@@ -1,6 +1,6 @@
 # Privacy Policy for RAF Tracking (HBTrack)
 
-**Last Updated:** August 23, 2026
+**Last Updated:** September 7, 2026
 
 ## Introduction
 This Privacy Policy describes how the RAF Tracking application ("we", "our", or "the App") handles account access, device capabilities, and data security. The App is an internal organizational tool designed for ecological researchers and field teams to monitor Houbara Bustard movement and perform live map navigation.

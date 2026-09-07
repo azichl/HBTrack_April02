@@ -18,7 +18,7 @@ struct PrivacyPolicyView: View {
                             Text("RAF Tracking")
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.primary)
-                            Text("Privacy Policy • Updated August 2026")
+                            Text("Privacy Policy • Updated September 7, 2026")
                                 .font(.system(size: 12))
                                 .foregroundColor(AppTheme.textSecondary)
                         }
