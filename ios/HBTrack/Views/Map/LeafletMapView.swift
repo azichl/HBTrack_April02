@@ -497,7 +497,7 @@ struct LeafletMapView: UIViewRepresentable {
                     if (!isoString) return { dateStr: '--', tzStr: '' };
                     try {
                         let parsed = String(isoString).trim();
-                        if (!parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                        if (!parsed.endsWith('Z') && !parsed.match(/[+-]\\d{2}:?\\d{2}$/)) {
                             parsed = parsed.replace(' ', 'T') + 'Z';
                         }
                         const d = new Date(parsed);
@@ -548,7 +548,7 @@ struct LeafletMapView: UIViewRepresentable {
                     const el = document.getElementById(elementId);
                     try {
                         let parsed = String(isoTimestamp || '').trim();
-                        if (parsed && !parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                        if (parsed && !parsed.endsWith('Z') && !parsed.match(/[+-]\\d{2}:?\\d{2}$/)) {
                             parsed = parsed.replace(' ', 'T') + 'Z';
                         }
                         let date = new Date(parsed);
@@ -813,7 +813,7 @@ struct LeafletMapView: UIViewRepresentable {
                     // 2. Weather Archive / Forecast Air Temp (2m)
                     try {
                         let parsed = String(isoTimestamp || '').trim();
-                        if (parsed && !parsed.endsWith('Z') && !parsed.match(/[+-]\d{2}:?\d{2}$/)) {
+                        if (parsed && !parsed.endsWith('Z') && !parsed.match(/[+-]\\d{2}:?\\d{2}$/)) {
                             parsed = parsed.replace(' ', 'T') + 'Z';
                         }
                         const date = new Date(parsed);
