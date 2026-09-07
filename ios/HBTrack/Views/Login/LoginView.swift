@@ -5,6 +5,7 @@ struct LoginView: View {
     
     @State private var identifier = ""
     @State private var password = ""
+    @State private var showPrivacyPolicy = false
     
     var body: some View {
         ZStack {
@@ -208,6 +209,21 @@ struct LoginView: View {
                         .foregroundColor(Color(hex: "64748b"))
                         .multilineTextAlignment(.center)
                         .padding(.top, 14)
+                        
+                        // Privacy Policy Link
+                        Button {
+                            showPrivacyPolicy = true
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "shield.lefthalf.filled")
+                                    .font(.system(size: 11))
+                                Text("Privacy Policy")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .underline()
+                            }
+                            .foregroundColor(Color(hex: "94a3b8"))
+                        }
+                        .padding(.top, 8)
                     }
                     .padding(26)
                     .background(
@@ -226,6 +242,9 @@ struct LoginView: View {
                     Spacer(minLength: 40)
                 }
             }
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
         }
     }
 }

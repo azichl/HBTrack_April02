@@ -27,6 +27,9 @@ struct SettingsView: View {
     @State private var isErrorMessage = false
     
     @State private var showLogoutAlert = false
+    @State private var showPrivacyPolicy = false
+    @State private var showDeleteRequestAlert = false
+    @Environment(\.openURL) private var openURL
     
     var body: some View {
         VStack(spacing: 0) {
@@ -97,6 +100,23 @@ struct SettingsView: View {
             }
         } message: {
             Text("Are you sure you want to sign out of RAF Tracking?")
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
+        }
+        .alert("Request Account Deletion", isPresented: $showDeleteRequestAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Email Administrator") {
+                let userEmail = authVM.currentUser?.email ?? ""
+                let userId = authVM.currentUser?.uid ?? ""
+                let subject = "Account Deletion Request - RAF Tracking".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                let body = "Hello Administrator,\n\nPlease permanently delete my RAF Tracking user account and associated personal data.\n\nUser Email: \(userEmail)\nUser ID: \(userId)\n\nThank you.".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "mailto:admin@houbaratracker.com?subject=\(subject)&body=\(body)") {
+                    openURL(url)
+                }
+            }
+        } message: {
+            Text("RAF Tracking accounts are provisioned and managed directly by organization Administrators. Would you like to send an account deletion request to admin@houbaratracker.com?")
         }
     }
     
@@ -193,6 +213,43 @@ struct SettingsView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(!isDarkMode ? AppTheme.brandGold : Color(UIColor.separator).opacity(0.4), lineWidth: !isDarkMode ? 1.5 : 1)
+                    )
+                }
+                
+                // Privacy Policy Card
+                Button {
+                    showPrivacyPolicy = true
+                } label: {
+                    HStack(spacing: 16) {
+                        Image(systemName: "hand.raised.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(AppTheme.brandGold)
+                            .frame(width: 44, height: 44)
+                            .background(AppTheme.brandGoldLight)
+                            .cornerRadius(12)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Privacy Policy")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(.primary)
+                            Text("Review our data handling, permissions & security.")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppTheme.textSecondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(AppTheme.textMuted)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .padding(16)
+                    .background(AppTheme.cardBackground)
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
                     )
                 }
                 
@@ -332,6 +389,47 @@ struct SettingsView: View {
                 .disabled(isUpdatingPassword || currentPassword.isEmpty || newPassword.isEmpty)
                 .opacity((currentPassword.isEmpty || newPassword.isEmpty) ? 0.6 : 1.0)
                 .padding(.top, 8)
+                
+                Divider()
+                    .padding(.vertical, 8)
+                
+                // Account Deletion Request Section
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "person.badge.shield.checkmark")
+                            .foregroundColor(AppTheme.brandGold)
+                            .font(.system(size: 16))
+                        Text("Account Administration")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    Text("User accounts are provisioned and managed by organization Administrators for authorized wildlife research teams.")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppTheme.textSecondary)
+                        .lineSpacing(2)
+                    
+                    Button {
+                        showDeleteRequestAlert = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "person.crop.circle.badge.minus")
+                                .font(.system(size: 15))
+                            Text("Request Account Deletion")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundColor(.red.opacity(0.9))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.red.opacity(0.06))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .padding(.top, 4)
+                }
             }
         }
     }

@@ -55,8 +55,10 @@
 		4A82B9F12C8E4E9A00000003 /* WindyMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A00000004 /* WindyMapView.swift */; };
 		4A82B9F12C8E4E9A00000005 /* MeteoblueMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A00000006 /* MeteoblueMapView.swift */; };
 		FB68DB8AB3A473117F7EA69B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39CDD1C89C767E30B72F6EAE /* SettingsView.swift */; };
+		4A82B9F12C8E4E9A0000000A /* PrivacyPolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A0000000B /* PrivacyPolicyView.swift */; };
 		C451BB0C9C982548A2124CA1 /* DataUploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77152F38E8BD756736B48132 /* DataUploadView.swift */; };
 		A052F0B18DED7B2D7B2AFA95 /* SyncLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A757BAE08FFF61AF85C9EAD5 /* SyncLogView.swift */; };
+		4A82B9F12C8E4E9A00000008 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4A82B9F12C8E4E9A00000009 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -108,8 +110,10 @@
 		4A82B9F12C8E4E9A00000004 /* WindyMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WindyMapView.swift"; sourceTree = "<group>"; };
 		4A82B9F12C8E4E9A00000006 /* MeteoblueMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeteoblueMapView.swift"; sourceTree = "<group>"; };
 		39CDD1C89C767E30B72F6EAE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
+		4A82B9F12C8E4E9A0000000B /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PrivacyPolicyView.swift"; sourceTree = "<group>"; };
 		77152F38E8BD756736B48132 /* DataUploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataUploadView.swift"; sourceTree = "<group>"; };
 		A757BAE08FFF61AF85C9EAD5 /* SyncLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SyncLogView.swift"; sourceTree = "<group>"; };
+		4A82B9F12C8E4E9A00000009 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = "PrivacyInfo.xcprivacy"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -156,6 +160,7 @@
 				4A82B9F12C8E4E9A00000007 /* HBTrack.entitlements */,
 				51570F093954B65F706F7C19 /* Info.plist */,
 				E9C2B90A5DCA5D29F2BEC039 /* Assets.xcassets */,
+				4A82B9F12C8E4E9A00000009 /* PrivacyInfo.xcprivacy */,
 			);
 			path = HBTrack;
 			sourceTree = "<group>";
@@ -253,6 +258,7 @@
 			isa = PBXGroup;
 			children = (
 				39CDD1C89C767E30B72F6EAE /* SettingsView.swift */,
+				4A82B9F12C8E4E9A0000000B /* PrivacyPolicyView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -354,6 +360,7 @@
 			files = (
 				028A08C6196B1E735FAB0BEC /* Assets.xcassets in Resources */,
 				A5768AA98EB99E960DC0CFB5 /* GoogleService-Info.plist in Resources */,
+				4A82B9F12C8E4E9A00000008 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -407,6 +414,7 @@
 				33C92DF69F65E0A523E522B2 /* TransmitterAnnotation.swift in Sources */,
 				27B841FC7319DA91C83387FD /* TransmitterDetailSheet.swift in Sources */,
 				FB68DB8AB3A473117F7EA69B /* SettingsView.swift in Sources */,
+				4A82B9F12C8E4E9A0000000A /* PrivacyPolicyView.swift in Sources */,
 				C451BB0C9C982548A2124CA1 /* DataUploadView.swift in Sources */,
 				A052F0B18DED7B2D7B2AFA95 /* SyncLogView.swift in Sources */,
 			);
@@ -580,7 +588,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 			};
 			name = Debug;
 		};
@@ -607,7 +615,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1";
 			};
 			name = Release;
 		};
