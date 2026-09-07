@@ -127,7 +127,7 @@ struct SettingsView: View {
                             .font(.system(size: 18))
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
-                            .background(Color(hex: "4A6E8D"))
+                            .background(Color(hex: "0F172A"))
                             .cornerRadius(12)
                         
                         VStack(alignment: .leading, spacing: 4) {

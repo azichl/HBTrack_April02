@@ -43,43 +43,51 @@ struct AppTheme {
     
     static let brandGoldUI = UIColor(red: 181/255, green: 142/255, blue: 88/255, alpha: 1.0)
     
-    // Dark mode base theme color: #4A6E8D
-    static let darkThemeHex = "4A6E8D"
-    static let darkThemeBackground = Color(hex: "4A6E8D")
-    static let darkThemeBackgroundUI = UIColor(hex: "4A6E8D")
+    // Web App Cloned Tailwind Slate Dark Mode Palette
+    static let slate900Hex = "0F172A" // Web App dark:bg-slate-900 (Main Background, Nav Bar)
+    static let slate800Hex = "1E293B" // Web App dark:bg-slate-800 (Cards, Panels, Modals)
+    static let slate700Hex = "334155" // Web App dark:bg-slate-700 / dark:border-slate-700 (Borders, Pills)
+    static let slate600Hex = "475569" // Web App dark:border-slate-600 (Inputs Border)
+    static let slate500Hex = "64748B" // Web App dark:text-slate-500 (Muted Text)
+    static let slate400Hex = "94A3B8" // Web App dark:text-slate-400 (Secondary Text)
     
-    // Adaptive Screen Background (#F8FAFC in Light, #4A6E8D in Dark)
-    static let screenBackgroundUI = UIColor.dynamic(lightHex: "F8FAFC", darkHex: "4A6E8D")
+    // Web App Primary Dark Mode Hex: #0F172A
+    static let darkThemeHex = slate900Hex
+    static let darkThemeBackground = Color(hex: slate900Hex)
+    static let darkThemeBackgroundUI = UIColor(hex: slate900Hex)
+    
+    // Adaptive Screen Background (#F8FAFC in Light, #0F172A in Dark - Cloned from Web App App.tsx bg-gray-50 dark:bg-slate-900)
+    static let screenBackgroundUI = UIColor.dynamic(lightHex: "F8FAFC", darkHex: slate900Hex)
     static let screenBackground = Color(uiColor: screenBackgroundUI)
     
-    // Adaptive Card Background (#FFFFFF in Light, #3A5770 in Dark)
-    static let cardBackgroundUI = UIColor.dynamic(lightHex: "FFFFFF", darkHex: "3A5770")
+    // Adaptive Card Background (#FFFFFF in Light, #1E293B in Dark - Cloned from Web App bg-white dark:bg-slate-800)
+    static let cardBackgroundUI = UIColor.dynamic(lightHex: "FFFFFF", darkHex: slate800Hex)
     static let cardBackground = Color(uiColor: cardBackgroundUI)
     
-    // Adaptive Card Gradient (for Command cards / highlight containers)
-    static let cardGradientTop = Color(uiColor: UIColor.dynamic(lightHex: "FFFFFF", darkHex: "466885"))
-    static let cardGradientBottom = Color(uiColor: UIColor.dynamic(lightHex: "F8FAFC", darkHex: "355068"))
+    // Adaptive Card Gradient (for Command cards / highlight containers: slate-800 to slate-900)
+    static let cardGradientTop = Color(uiColor: UIColor.dynamic(lightHex: "FFFFFF", darkHex: slate800Hex))
+    static let cardGradientBottom = Color(uiColor: UIColor.dynamic(lightHex: "F8FAFC", darkHex: slate900Hex))
     
-    // Adaptive Card Border
-    static let cardBorderUI = UIColor.dynamic(light: UIColor(hex: "E2E8F0"), dark: UIColor(hex: "6A8EAE").withAlphaComponent(0.35))
+    // Adaptive Card Border (#E2E8F0 in Light, #334155 in Dark - Cloned from Web App border-gray-200 dark:border-slate-700)
+    static let cardBorderUI = UIColor.dynamic(lightHex: "E2E8F0", darkHex: slate700Hex)
     static let cardBorder = Color(uiColor: cardBorderUI)
     
-    // Adaptive Subtle / Pill background
-    static let subtleBackgroundUI = UIColor.dynamic(lightHex: "F1F5F9", darkHex: "354F66")
+    // Adaptive Subtle / Pill background (#F1F5F9 in Light, #334155 in Dark - Cloned from Web App bg-gray-100 dark:bg-slate-700)
+    static let subtleBackgroundUI = UIColor.dynamic(lightHex: "F1F5F9", darkHex: slate700Hex)
     static let subtleBackground = Color(uiColor: subtleBackgroundUI)
     
-    // Adaptive Header / Navigation Bar background
-    static let headerBackgroundUI = UIColor.dynamic(light: .systemBackground, dark: UIColor(hex: "4A6E8D"))
+    // Adaptive Header / Navigation Bar background (#FFFFFF in Light, #0F172A in Dark - Cloned from Web App)
+    static let headerBackgroundUI = UIColor.dynamic(light: .systemBackground, dark: UIColor(hex: slate900Hex))
     static let headerBackground = Color(uiColor: headerBackgroundUI)
     
-    // Adaptive Input Background
-    static let inputBackgroundUI = UIColor.dynamic(light: .systemGroupedBackground, dark: UIColor(hex: "354F66"))
+    // Adaptive Input Background (systemGroupedBackground in Light, #0F172A in Dark - Cloned from Web App dark:bg-slate-900)
+    static let inputBackgroundUI = UIColor.dynamic(light: .systemGroupedBackground, dark: UIColor(hex: slate900Hex))
     static let inputBackground = Color(uiColor: inputBackgroundUI)
     
-    // Adaptive Text Colors
+    // Adaptive Text Colors (Cloned from Web App dark:text-white, dark:text-slate-400, dark:text-slate-500)
     static let textPrimary = Color(uiColor: UIColor.dynamic(lightHex: "0F172A", darkHex: "FFFFFF"))
-    static let textSecondary = Color(uiColor: UIColor.dynamic(lightHex: "64748B", darkHex: "D1DFEC"))
-    static let textMuted = Color(uiColor: UIColor.dynamic(lightHex: "94A3B8", darkHex: "A3BCCF"))
+    static let textSecondary = Color(uiColor: UIColor.dynamic(lightHex: "64748B", darkHex: slate400Hex))
+    static let textMuted = Color(uiColor: UIColor.dynamic(lightHex: "94A3B8", darkHex: slate500Hex))
 }
 
 struct StatusColor {

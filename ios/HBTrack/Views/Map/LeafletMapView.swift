@@ -365,10 +365,11 @@ struct LeafletMapView: UIViewRepresentable {
                 const WEATHER_API_KEY = 'c748a0edae0f262b7a5405b65c42eac9';
                 let currentActiveWeather = 'none';
                 
-                // Initialize Map centered on Middle East / Central Asia (matches web default)
+                // Initialize Map centered on Afro-Eurasia (matches web default sharedMapCenter: [36.0, 42.0], sharedMapZoom: 3)
                 const map = L.map('map', {
-                    center: [25.276987, 51.520008],
-                    zoom: 5,
+                    center: [36.0, 42.0],
+                    zoom: 3,
+                    minZoom: 2,
                     zoomControl: false,
                     attributionControl: true
                 });
