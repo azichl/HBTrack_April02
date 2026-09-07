@@ -37,6 +37,6 @@ struct HBTrackHeaderView: View {
         .padding(.horizontal, 16)
         .padding(.top, 4)
         .padding(.bottom, 6)
-        .background(Color(UIColor.systemBackground))
+        .background(AppTheme.headerBackground)
     }
 }

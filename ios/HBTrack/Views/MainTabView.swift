@@ -8,7 +8,9 @@ struct MainTabView: View {
         // Configure UITabBar appearance
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor.secondarySystemGroupedBackground
+        appearance.backgroundColor = UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? UIColor(hex: "4A6E8D") : UIColor.secondarySystemGroupedBackground
+        }
         
         // Active item color (Warm Gold)
         appearance.stackedLayoutAppearance.selected.iconColor = AppTheme.brandGoldUI
@@ -17,10 +19,13 @@ struct MainTabView: View {
             .font: UIFont.systemFont(ofSize: 10, weight: .semibold)
         ]
         
-        // Inactive item color (Muted Slate)
-        appearance.stackedLayoutAppearance.normal.iconColor = UIColor(red: 148/255, green: 163/255, blue: 184/255, alpha: 1.0)
+        // Inactive item color (Muted Slate in light, adaptive contrast in dark)
+        let inactiveColor = UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark ? UIColor(hex: "D1DFEC").withAlphaComponent(0.7) : UIColor(red: 148/255, green: 163/255, blue: 184/255, alpha: 1.0)
+        }
+        appearance.stackedLayoutAppearance.normal.iconColor = inactiveColor
         appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
-            .foregroundColor: UIColor(red: 148/255, green: 163/255, blue: 184/255, alpha: 1.0),
+            .foregroundColor: inactiveColor,
             .font: UIFont.systemFont(ofSize: 10, weight: .regular)
         ]
         

@@ -52,7 +52,7 @@ struct IngestionChart: View {
             }
         }
         .padding(.vertical)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(AppTheme.cardBackground)
         .cornerRadius(16)
         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
     }

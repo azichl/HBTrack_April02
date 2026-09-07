@@ -91,7 +91,7 @@ struct LiveMapView: View {
                                 .padding(.vertical, 8)
                                 .frame(maxWidth: .infinity)
                                 .background(
-                                    selectedSubTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
+                                    selectedSubTab == tab ? AppTheme.subtleBackground : Color.clear
                                 )
                                 .cornerRadius(10)
                                 .shadow(color: selectedSubTab == tab ? Color.black.opacity(0.04) : Color.clear, radius: 3, x: 0, y: 1)
@@ -99,7 +99,7 @@ struct LiveMapView: View {
                         }
                     }
                     .padding(4)
-                    .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.8))
+                    .background(AppTheme.cardBackground.opacity(0.8))
                     .cornerRadius(14)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
@@ -108,7 +108,7 @@ struct LiveMapView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
-                .background(Color(UIColor.systemBackground))
+                .background(AppTheme.headerBackground)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             

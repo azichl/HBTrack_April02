@@ -7,7 +7,7 @@ struct DashboardView: View {
     var body: some View {
         GeometryReader { screenGeo in
             ZStack {
-                Color(hex: "F8FAFC")
+                AppTheme.screenBackground
                     .ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
@@ -31,21 +31,21 @@ struct DashboardView: View {
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundColor(AppTheme.brandGold)
                                         .frame(width: 44, height: 44)
-                                        .background(Color(hex: "FDF8F0"))
+                                        .background(AppTheme.brandGoldLight)
                                         .cornerRadius(12)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color(hex: "F5E6D0"), lineWidth: 1)
+                                                .stroke(AppTheme.brandGoldBorder, lineWidth: 1)
                                         )
                                     
                                     // Titles
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text("Transmitters Status")
                                             .font(.system(size: 17, weight: .bold))
-                                            .foregroundColor(Color(hex: "0F172A"))
+                                            .foregroundColor(AppTheme.textPrimary)
                                         Text("Real-time health & operational status of deployed PTTs")
                                             .font(.system(size: 12, weight: .regular))
-                                            .foregroundColor(Color(hex: "64748B"))
+                                            .foregroundColor(AppTheme.textSecondary)
                                     }
                                     
                                     Spacer(minLength: 4)
@@ -54,18 +54,18 @@ struct DashboardView: View {
                                     HStack(spacing: 5) {
                                         Text("Total:")
                                             .font(.system(size: 13, weight: .medium))
-                                            .foregroundColor(Color(hex: "64748B"))
+                                            .foregroundColor(AppTheme.textSecondary)
                                         Text("\(viewModel.totalDeployed)")
                                             .font(.system(size: 15, weight: .bold))
-                                            .foregroundColor(Color(hex: "0F172A"))
+                                            .foregroundColor(AppTheme.textPrimary)
                                     }
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 7)
-                                    .background(Color(hex: "F1F5F9"))
+                                    .background(AppTheme.subtleBackground)
                                     .cornerRadius(20)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 20)
-                                            .stroke(Color(hex: "E2E8F0"), lineWidth: 1)
+                                            .stroke(AppTheme.cardBorder, lineWidth: 1)
                                     )
                                 }
                                 
@@ -75,7 +75,7 @@ struct DashboardView: View {
                                 
                                 // Divider Line
                                 Rectangle()
-                                    .fill(Color(hex: "E2E8F0").opacity(0.8))
+                                    .fill(AppTheme.cardBorder)
                                     .frame(height: 1)
                                 
                                 // Status Breakdown Pills (2 Columns)
@@ -88,7 +88,7 @@ struct DashboardView: View {
                                                     .frame(width: 9, height: 9)
                                                 Text("\(item.status):")
                                                     .font(.system(size: 12, weight: .semibold))
-                                                    .foregroundColor(Color(hex: "334155"))
+                                                    .foregroundColor(AppTheme.textPrimary)
                                                     .lineLimit(1)
                                                     .minimumScaleFactor(0.8)
                                             }
@@ -97,19 +97,19 @@ struct DashboardView: View {
                                             
                                             Text("\(item.count)")
                                                 .font(.system(size: 13, weight: .black))
-                                                .foregroundColor(Color(hex: "0F172A"))
+                                                .foregroundColor(AppTheme.textPrimary)
                                                 .padding(.horizontal, 8)
                                                 .padding(.vertical, 3)
-                                                .background(Color(hex: "F1F5F9"))
+                                                .background(AppTheme.subtleBackground)
                                                 .cornerRadius(6)
                                         }
                                         .padding(.horizontal, 10)
                                         .padding(.vertical, 10)
-                                        .background(Color.white)
+                                        .background(AppTheme.cardBackground)
                                         .cornerRadius(12)
                                         .overlay(
                                             RoundedRectangle(cornerRadius: 12)
-                                                .stroke(Color(hex: "E2E8F0"), lineWidth: 1)
+                                                .stroke(AppTheme.cardBorder, lineWidth: 1)
                                         )
                                         .shadow(color: Color.black.opacity(0.02), radius: 3, x: 0, y: 1)
                                     }
@@ -117,7 +117,7 @@ struct DashboardView: View {
                                 
                                 // Divider Line
                                 Rectangle()
-                                    .fill(Color(hex: "E2E8F0").opacity(0.8))
+                                    .fill(AppTheme.cardBorder)
                                     .frame(height: 1)
                                 
                                 // Footer: Last Data Update
@@ -128,14 +128,14 @@ struct DashboardView: View {
                                             .foregroundColor(AppTheme.brandGold)
                                         Text("Last Data Update:")
                                             .font(.system(size: 13, weight: .regular))
-                                            .foregroundColor(Color(hex: "64748B"))
+                                            .foregroundColor(AppTheme.textSecondary)
                                     }
                                     
                                     Spacer()
                                     
                                     Text(viewModel.formattedLastUpdate)
                                         .font(.system(size: 14, weight: .bold))
-                                        .foregroundColor(Color(hex: "0F172A"))
+                                        .foregroundColor(AppTheme.textPrimary)
                                 }
                                 .padding(.top, 2)
                             }
@@ -143,7 +143,7 @@ struct DashboardView: View {
                         }
                         .background(
                             LinearGradient(
-                                colors: [Color.white, Color(hex: "F8FAFC")],
+                                colors: [AppTheme.cardGradientTop, AppTheme.cardGradientBottom],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -151,7 +151,7 @@ struct DashboardView: View {
                         .cornerRadius(24)
                         .overlay(
                             RoundedRectangle(cornerRadius: 24)
-                                .stroke(Color(hex: "E2E8F0"), lineWidth: 1)
+                                .stroke(AppTheme.cardBorder, lineWidth: 1)
                         )
                         .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 4)
                         .padding(.horizontal, 16)

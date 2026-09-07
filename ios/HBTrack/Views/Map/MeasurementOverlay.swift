@@ -54,7 +54,7 @@ struct MeasurementOverlay: View {
             }
         }
         .padding()
-        .background(Color(UIColor.systemBackground).opacity(0.96))
+        .background(AppTheme.cardBackground.opacity(0.96))
         .cornerRadius(18)
         .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
         .padding(.horizontal, 16)

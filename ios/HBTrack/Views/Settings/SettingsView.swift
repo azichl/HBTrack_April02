@@ -50,7 +50,7 @@ struct SettingsView: View {
                                 .padding(.vertical, 10)
                                 .frame(maxWidth: .infinity)
                                 .background(
-                                    selectedTab == tab ? Color(UIColor.secondarySystemGroupedBackground) : Color.clear
+                                    selectedTab == tab ? AppTheme.subtleBackground : Color.clear
                                 )
                                 .cornerRadius(12)
                                 .shadow(color: selectedTab == tab ? Color.black.opacity(0.04) : Color.clear, radius: 4, x: 0, y: 2)
@@ -58,7 +58,7 @@ struct SettingsView: View {
                         }
                     }
                     .padding(4)
-                    .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.8))
+                    .background(AppTheme.cardBackground.opacity(0.8))
                     .cornerRadius(16)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -77,7 +77,7 @@ struct SettingsView: View {
                     }
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(20)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
@@ -88,7 +88,7 @@ struct SettingsView: View {
                 }
                 .padding(.bottom, 24)
             }
-            .background(Color(UIColor.systemGroupedBackground))
+            .background(AppTheme.screenBackground)
         }
         .alert("Sign Out", isPresented: $showLogoutAlert) {
             Button("Cancel", role: .cancel) {}
@@ -127,7 +127,7 @@ struct SettingsView: View {
                             .font(.system(size: 18))
                             .foregroundColor(.white)
                             .frame(width: 44, height: 44)
-                            .background(Color(hex: "0F172A"))
+                            .background(Color(hex: "4A6E8D"))
                             .cornerRadius(12)
                         
                         VStack(alignment: .leading, spacing: 4) {
@@ -149,7 +149,7 @@ struct SettingsView: View {
                         }
                     }
                     .padding(16)
-                    .background(Color(UIColor.systemBackground))
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(16)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -188,7 +188,7 @@ struct SettingsView: View {
                         }
                     }
                     .padding(16)
-                    .background(Color(UIColor.systemBackground))
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(16)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
@@ -252,7 +252,7 @@ struct SettingsView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(UIColor.systemBackground))
+                    .background(AppTheme.inputBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -273,7 +273,7 @@ struct SettingsView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(UIColor.systemBackground))
+                    .background(AppTheme.inputBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -294,7 +294,7 @@ struct SettingsView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color(UIColor.systemBackground))
+                    .background(AppTheme.inputBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)

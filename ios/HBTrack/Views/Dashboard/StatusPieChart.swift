@@ -39,7 +39,7 @@ struct StatusPieChart: View {
                                 innerRadius: innerRadius,
                                 outerRadius: outerRadius
                             )
-                            .stroke(Color.white, lineWidth: 2.5)
+                            .stroke(AppTheme.cardBackground, lineWidth: 2.5)
                         )
                     }
                     
@@ -93,7 +93,7 @@ struct StatusPieChart: View {
                                 path.addLine(to: pTail)
                             }
                         }
-                        .stroke(Color(hex: "94A3B8"), lineWidth: 1.2)
+                        .stroke(AppTheme.textMuted, lineWidth: 1.2)
                     }
                     
                     // 4. Callout Labels outside with precise non-overlapping placement
@@ -129,7 +129,7 @@ struct StatusPieChart: View {
                         
                         Text(item.status)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Color(hex: "475569"))
+                            .foregroundColor(AppTheme.textSecondary)
                             .lineLimit(1)
                             .fixedSize()
                             .position(labelPos)
@@ -140,10 +140,10 @@ struct StatusPieChart: View {
                 VStack(spacing: 3) {
                     Text("\(totalCount)")
                         .font(.system(size: 26, weight: .bold))
-                        .foregroundColor(Color(hex: "0F172A"))
+                        .foregroundColor(AppTheme.textPrimary)
                     Text("UNITS")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(Color(hex: "94A3B8"))
+                        .foregroundColor(AppTheme.textMuted)
                         .tracking(1.4)
                 }
                 .position(x: cx, y: cy)

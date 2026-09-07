@@ -33,6 +33,8 @@ struct HBTrackApp: App {
         _authVM = StateObject(wrappedValue: AuthViewModel())
     }
     
+    @AppStorage("isDarkMode") private var isDarkMode = false
+    
     var body: some Scene {
         WindowGroup {
             Group {
@@ -47,6 +49,7 @@ struct HBTrackApp: App {
                         .environmentObject(authVM)
                 }
             }
+            .preferredColorScheme(isDarkMode ? .dark : .light)
         }
     }
 }

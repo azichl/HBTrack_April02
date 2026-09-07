@@ -342,7 +342,7 @@ struct HistoryOverlay: View {
             }
         }
         .padding(16)
-        .background(Color(UIColor.secondarySystemGroupedBackground).opacity(0.96))
+        .background(AppTheme.cardBackground.opacity(0.96))
         .cornerRadius(20)
         .overlay(
             RoundedRectangle(cornerRadius: 20)

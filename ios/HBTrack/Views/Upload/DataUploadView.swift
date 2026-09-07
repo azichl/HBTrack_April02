@@ -46,7 +46,7 @@ struct DataUploadView: View {
                     }
                     .padding(14)
                     .frame(maxWidth: .infinity)
-                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(18)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
@@ -307,7 +307,7 @@ struct DataUploadView: View {
                         }
                     }
                     .padding(20)
-                    .background(Color(UIColor.secondarySystemGroupedBackground))
+                    .background(AppTheme.cardBackground)
                     .cornerRadius(20)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
@@ -318,7 +318,7 @@ struct DataUploadView: View {
                 }
                 .padding(.bottom, 24)
             }
-            .background(Color(UIColor.systemGroupedBackground))
+            .background(AppTheme.screenBackground)
         }
         .sheet(isPresented: $showSyncLog) {
             if let result = viewModel.syncResult {
