@@ -77,6 +77,7 @@ struct MeasurementOverlay: View {
                 .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 0.8)
         )
         .shadow(color: Color.black.opacity(0.12), radius: 10, x: 0, y: 4)
+        .frame(maxWidth: 440)
         .padding(.horizontal, 16)
         .offset(x: accumulatedOffset.width + dragOffset.width, y: accumulatedOffset.height + dragOffset.height)
         .gesture(

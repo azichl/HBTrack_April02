@@ -316,7 +316,9 @@ struct DataUploadView: View {
                     .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
                     .padding(.horizontal, 16)
                 }
+                .frame(maxWidth: 640)
                 .padding(.bottom, 24)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.screenBackground)
         }

@@ -155,10 +155,12 @@ struct DashboardView: View {
                         )
                         .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 4)
                         .padding(.horizontal, 16)
+                        .frame(maxWidth: 640)
                         
                         Spacer(minLength: 16)
                     }
                     .frame(minHeight: screenGeo.size.height)
+                    .frame(maxWidth: .infinity)
                 }
                 .refreshable {
                     await viewModel.loadData(forceRefresh: true)

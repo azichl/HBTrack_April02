@@ -74,6 +74,7 @@ struct LiveMapView: View {
             if !isFullscreen {
                 // Sub-tabs Pill Bar (Tracking, Windy, Meteoblue)
                 HStack {
+                    Spacer()
                     HStack(spacing: 4) {
                         ForEach(MapSubTab.allCases) { tab in
                             Button {
@@ -98,6 +99,7 @@ struct LiveMapView: View {
                             }
                         }
                     }
+                    .frame(maxWidth: 480)
                     .padding(4)
                     .background(AppTheme.cardBackground.opacity(0.8))
                     .cornerRadius(14)
@@ -105,6 +107,7 @@ struct LiveMapView: View {
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
                     )
+                    Spacer()
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
