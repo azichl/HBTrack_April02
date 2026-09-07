@@ -33,6 +33,11 @@ class AuthService {
         let clean = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return clean }
         
+        // Dedicated mapping for Apple reviewer account
+        if clean.lowercased() == "apple" {
+            return "apple@trackapp.org"
+        }
+        
         // Tier 1: If input already contains '@', use directly
         if clean.contains("@") {
             return clean

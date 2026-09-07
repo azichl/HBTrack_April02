@@ -109,14 +109,16 @@ struct SettingsView: View {
             Button("Email Administrator") {
                 let userEmail = authVM.currentUser?.email ?? ""
                 let userId = authVM.currentUser?.uid ?? ""
+                let isAppleUser = userEmail.lowercased().contains("apple") || (authVM.userProfile?.username?.lowercased() == "apple")
+                let userField = isAppleUser ? "User: Apple" : "User Email: \(userEmail)\nUser ID: \(userId)"
                 let subject = "Account Deletion Request - RAF Tracking".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                let body = "Hello Administrator,\n\nPlease permanently delete my RAF Tracking user account and associated personal data.\n\nUser Email: \(userEmail)\nUser ID: \(userId)\n\nThank you.".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                if let url = URL(string: "mailto:admin@houbaratracker.com?subject=\(subject)&body=\(body)") {
+                let body = "Hello Administrator,\n\nPlease permanently delete my RAF Tracking user account and associated personal data.\n\n\(userField)\n\nThank you.".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                if let url = URL(string: "mailto:abdelaziz.chlih@rawdatalfaras.com?subject=\(subject)&body=\(body)") {
                     openURL(url)
                 }
             }
         } message: {
-            Text("RAF Tracking accounts are provisioned and managed directly by organization Administrators. Would you like to send an account deletion request to admin@houbaratracker.com?")
+            Text("RAF Tracking accounts are provisioned and managed directly by organization Administrators. Would you like to send an account deletion request to abdelaziz.chlih@rawdatalfaras.com?")
         }
     }
     

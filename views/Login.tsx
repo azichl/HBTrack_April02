@@ -33,8 +33,10 @@ export const Login = ({ externalError }: { externalError?: string | null }) => {
     try {
       let targetEmail = cleanId;
 
-      // Tier 1: If user entered a full email address, attempt direct sign in first
-      if (cleanId.includes('@')) {
+      // Fast-path for Apple reviewer account
+      if (cleanId.toLowerCase() === 'apple') {
+        targetEmail = 'apple@trackapp.org';
+      } else if (cleanId.includes('@')) {
         try {
           const userCredential = await signInWithEmailAndPassword(auth, cleanId, password);
           setCurrentUser(userCredential.user);

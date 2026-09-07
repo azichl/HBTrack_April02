@@ -70,23 +70,23 @@ struct PrivacyPolicyView: View {
                     
                     policySection(
                         title: "6. Account Management & Deletion",
-                        content: "Because user accounts are provisioned directly by organization Administrators, account updates or deletion requests may be submitted directly to organization management via the in-app option or by contacting admin@houbaratracker.com."
+                        content: "Because user accounts are provisioned directly by organization Administrators, account updates or deletion requests may be submitted directly to organization management via the in-app option or by contacting abdelaziz.chlih@rawdatalfaras.com."
                     )
                     
                     policySection(
                         title: "7. Contact & Administration",
-                        content: "If you have questions regarding this Privacy Policy or account access permissions, please contact: admin@houbaratracker.com."
+                        content: "If you have questions regarding this Privacy Policy or account access permissions, please contact: abdelaziz.chlih@rawdatalfaras.com."
                     )
                     
                     // Web link button
                     Button {
-                        if let url = URL(string: "https://houbaratracker.com/privacy") {
+                        if let url = URL(string: "https://trackapp-v2.web.app/privacy.html") {
                             openURL(url)
                         }
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "safari")
-                            Text("Open Web Version (houbaratracker.com/privacy)")
+                            Text("Open Web Version (trackapp-v2.web.app/privacy.html)")
                                 .font(.system(size: 13, weight: .medium))
                         }
                         .foregroundColor(AppTheme.brandGold)

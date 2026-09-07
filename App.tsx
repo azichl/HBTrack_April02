@@ -671,8 +671,12 @@ const App = () => {
 
                 <div className="flex items-center gap-3 pl-2 md:pl-4 border-l border-gray-200 dark:border-slate-700">
                   <div className="text-right hidden md:block">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User'}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {currentUser?.email?.toLowerCase().includes('apple') ? 'Apple' : (currentUser?.displayName || currentUser?.email?.split('@')[0] || 'User')}
+                    </p>
+                    {!currentUser?.email?.toLowerCase().includes('apple') && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{currentUser?.email || ''}</p>
+                    )}
                   </div>
                   <div className="w-8 h-8 md:w-10 md:h-10 bg-brand-50 dark:bg-slate-700 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400 border border-brand-100 dark:border-slate-600">
                     <UserCircle size={20} className="md:w-6 md:h-6" />

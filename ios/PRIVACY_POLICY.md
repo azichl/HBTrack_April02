@@ -27,5 +27,7 @@ Information accessed by the App is used solely for internal wildlife conservatio
 ## Changes to This Privacy Policy
 We may update our Privacy Policy from time to time. Any changes will be reflected on this page with an updated date.
 
-## Contact Us
-If you have any questions regarding this Privacy Policy or account access, please contact the system administration team.
+## Contact Us & Account Deletion Requests
+If you have any questions regarding this Privacy Policy, account access, or wish to request account deletion, please contact the system administration team:
+* **Email:** abdelaziz.chlih@rawdatalfaras.com
+* **Official Web Policy URL:** https://trackapp-v2.web.app/privacy.html

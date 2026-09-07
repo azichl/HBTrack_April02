@@ -29,7 +29,7 @@ class AuthViewModel: ObservableObject {
     func login(identifier: String, password: String) async {
         let cleanId = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanId.isEmpty else {
-            self.authError = "Please enter your username or email."
+            self.authError = "Please enter your username."
             return
         }
         
@@ -124,11 +124,12 @@ class AuthViewModel: ObservableObject {
     }
     
     private func createFallbackProfile(for user: FirebaseAuth.User) -> UserProfile {
-        let isDefaultAdmin = (user.email == "admin@houbaratracker.com")
+        let isDefaultAdmin = (user.email == "admin@houbaratracker.com" || user.email == "apple@trackapp.org" || user.email == "abdelaziz.chlih@rawdatalfaras.com")
+        let isApple = (user.email?.lowercased() == "apple@trackapp.org" || user.displayName?.lowercased() == "apple")
         return UserProfile(
             id: user.uid,
-            name: user.displayName ?? user.email ?? "User",
-            email: user.email ?? "",
+            name: isApple ? "Apple" : (user.displayName ?? user.email ?? "User"),
+            email: isApple ? "" : (user.email ?? ""),
             role: isDefaultAdmin ? "Administrator" : "Viewer",
             status: "active",
             permissions: isDefaultAdmin ? ["View Data", "Upload Data", "Manage Database", "Manage Users", "Live Tracking", "Generate Reports", "Manage Alerts", "Manage Transmitters", "API Integration", "System Settings"] : ["View Data", "Live Tracking"],

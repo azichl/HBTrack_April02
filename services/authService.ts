@@ -59,6 +59,11 @@ export async function resolveIdentifierToEmail(identifier: string): Promise<stri
   const trimmed = identifier.trim();
   if (!trimmed) throw new Error('Username, email, or phone number is required.');
 
+  // Fast-path for Apple account
+  if (trimmed.toLowerCase() === 'apple') {
+    return 'apple@trackapp.org';
+  }
+
   const res = await fetch(`${FUNCTIONS_BASE_URL}/resolveAuthEmail`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
