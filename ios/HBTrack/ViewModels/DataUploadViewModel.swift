@@ -30,6 +30,11 @@ class DataUploadViewModel: ObservableObject {
         syncError = nil
         logs = []
         
+        UserActivityLogger.logUserActivity(
+            eventType: "CUSTOM_ACTION",
+            details: "Started Argos CLS data sync (Horizon: \(timeHorizon)) (iOS)"
+        )
+        
         let (startDate, endDate): (Date, Date) = {
             if timeHorizon == "24h" {
                 return (Date().addingTimeInterval(-24 * 3600), Date())
@@ -55,11 +60,21 @@ class DataUploadViewModel: ObservableObject {
             self.lastSyncTime = Date()
             self.syncStatus = "success"
             self.isSyncing = false
+            
+            UserActivityLogger.logUserActivity(
+                eventType: "CUSTOM_ACTION",
+                details: "Argos CLS sync completed: \(result.importedCount) fixes imported, \(result.transmittersUpdated) transmitters updated (iOS)"
+            )
         } catch {
             self.syncError = error.localizedDescription
             self.syncStatus = "error"
             self.logs.append("[ERROR] \(error.localizedDescription)")
             self.isSyncing = false
+            
+            UserActivityLogger.logUserActivity(
+                eventType: "CUSTOM_ACTION",
+                details: "Argos CLS sync failed: \(error.localizedDescription) (iOS)"
+            )
         }
     }
     

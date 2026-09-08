@@ -202,6 +202,10 @@ struct LeafletMapView: UIViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "onMarkerClick" {
                 if let txId = message.body as? String {
+                    UserActivityLogger.logUserActivity(
+                        eventType: "CUSTOM_ACTION",
+                        details: "Selected map marker for PTT \(txId) (iOS)"
+                    )
                     DispatchQueue.main.async {
                         if let transmitter = self.parent.viewModel.transmitters.first(where: { $0.platform_id == txId }) {
                             self.parent.viewModel.selectedTransmitter = transmitter
@@ -213,6 +217,10 @@ struct LeafletMapView: UIViewRepresentable {
                 }
             } else if message.name == "onFocusHistory" {
                 if let txId = message.body as? String {
+                    UserActivityLogger.logUserActivity(
+                        eventType: "CUSTOM_ACTION",
+                        details: "Opened historical trajectory for PTT \(txId) (iOS)"
+                    )
                     DispatchQueue.main.async {
                         if let transmitter = self.parent.viewModel.transmitters.first(where: { $0.platform_id == txId }) {
                             self.parent.viewModel.selectTransmitterForHistory(transmitter)

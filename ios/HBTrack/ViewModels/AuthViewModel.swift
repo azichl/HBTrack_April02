@@ -15,6 +15,7 @@ class AuthViewModel: ObservableObject {
     }
     
     private var authListenerHandle: AuthStateDidChangeListenerHandle?
+    private var hasLoggedSessionRestore = false
     
     init() {
         listenForAuthChanges()
@@ -76,6 +77,15 @@ class AuthViewModel: ObservableObject {
             } else {
                 self.isAuthenticated = true
                 self.authError = nil
+                self.hasLoggedSessionRestore = true
+                
+                // Log session start
+                UserActivityLogger.logUserActivity(
+                    userId: user.uid,
+                    userEmail: user.email ?? targetEmail,
+                    eventType: "SESSION_START",
+                    details: "User logged in (iOS)"
+                )
             }
         } catch let err as NSError {
             print("Login error: \(err.localizedDescription) [code: \(err.code)]")
@@ -96,11 +106,22 @@ class AuthViewModel: ObservableObject {
     }
     
     func logout() {
+        let userId = currentUser?.uid
+        let userEmail = currentUser?.email ?? ""
         do {
             try AuthService.shared.signOut()
             self.currentUser = nil
             self.userProfile = nil
             self.isAuthenticated = false
+            self.hasLoggedSessionRestore = false
+            
+            // Log session end
+            UserActivityLogger.logUserActivity(
+                userId: userId,
+                userEmail: userEmail,
+                eventType: "SESSION_END",
+                details: "User logged out manually (iOS)"
+            )
         } catch {
             self.authError = error.localizedDescription
         }
@@ -114,13 +135,14 @@ class AuthViewModel: ObservableObject {
             let docSnap = try await Firestore.firestore().collection("users").document(uid).getDocument()
             if docSnap.exists, let profile = try? docSnap.data(as: UserProfile.self) {
                 self.userProfile = profile
-            } else {
-                self.userProfile = createFallbackProfile(for: user)
+                return
             }
         } catch {
-            print("Error loading user profile: \(error.localizedDescription)")
-            self.userProfile = createFallbackProfile(for: user)
+            print("Error fetching user profile: \(error.localizedDescription)")
         }
+        
+        // Fallback: create default profile
+        self.userProfile = createFallbackProfile(for: user)
     }
     
     private func createFallbackProfile(for user: FirebaseAuth.User) -> UserProfile {
@@ -151,12 +173,22 @@ class AuthViewModel: ObservableObject {
                     let appAccess = profile.appAccess ?? ["web", "ios"]
                     if appAccess.isEmpty || appAccess.contains("ios") || appAccess.contains("web") {
                         self.isAuthenticated = true
+                        if !self.hasLoggedSessionRestore {
+                            self.hasLoggedSessionRestore = true
+                            UserActivityLogger.logUserActivity(
+                                userId: user.uid,
+                                userEmail: user.email ?? "",
+                                eventType: "SESSION_START",
+                                details: "Session restored on app launch (iOS)"
+                            )
+                        }
                     } else {
                         self.isAuthenticated = false
                     }
                 } else {
                     self.isAuthenticated = false
                     self.userProfile = nil
+                    self.hasLoggedSessionRestore = false
                 }
             }
         }

@@ -92,6 +92,25 @@ struct MainTabView: View {
         .environment(\.horizontalSizeClass, .compact)
         .tint(AppTheme.brandGold)
         .preferredColorScheme(isDarkMode ? .dark : .light)
+        .onChange(of: selectedTab) { newTab in
+            let tabName: String
+            switch newTab {
+            case .dashboard: tabName = "Dashboard"
+            case .liveMap: tabName = "Live Map"
+            case .dataUpload: tabName = "Data Upload"
+            case .settings: tabName = "Settings"
+            }
+            UserActivityLogger.logUserActivity(
+                eventType: "PAGE_VIEW",
+                details: "Viewed \(tabName) (iOS)"
+            )
+        }
+        .onAppear {
+            UserActivityLogger.logUserActivity(
+                eventType: "PAGE_VIEW",
+                details: "Viewed Live Map (iOS initial view)"
+            )
+        }
     }
 }
 
