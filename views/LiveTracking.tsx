@@ -2489,21 +2489,21 @@ const LiveTrackingInner = () => {
         )}
 
         {/* Map Controls (Left) */}
-        {/* Compass Widget - Positioned to the left of the zoom controls, not stacked */}
-        <div className="absolute bottom-20 md:bottom-6 right-16 z-[500]" style={{width:64,height:64}}>
-            <div style={{width:64,height:64,borderRadius:'50%',background:'rgba(0,0,0,0.6)',backdropFilter:'blur(8px)',border:'2px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.4)',position:'relative'}}>
-                <div style={{position:'absolute',top:4,left:'50%',transform:'translateX(-50%)',color:'#ef4444',fontWeight:900,fontSize:11,lineHeight:1}}>N</div>
-                <div style={{position:'absolute',bottom:4,left:'50%',transform:'translateX(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>S</div>
-                <div style={{position:'absolute',right:5,top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>E</div>
-                <div style={{position:'absolute',left:5,top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>W</div>
+        {/* Compass Widget - Positioned cleanly on top of zoom controls, scaled by 70% */}
+        <div className="absolute bottom-36 md:bottom-32 right-3 z-[500]" style={{width:80,height:80}}>
+            <div style={{width:80,height:80,borderRadius:'50%',background:'rgba(0,0,0,0.7)',backdropFilter:'blur(8px)',border:'2px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.4)',position:'relative'}}>
+                <div style={{position:'absolute',top:5,left:'50%',transform:'translateX(-50%)',color:'#ef4444',fontWeight:900,fontSize:13,lineHeight:1}}>N</div>
+                <div style={{position:'absolute',bottom:5,left:'50%',transform:'translateX(-50%)',color:'rgba(255,255,255,0.6)',fontWeight:700,fontSize:11,lineHeight:1}}>S</div>
+                <div style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,0.6)',fontWeight:700,fontSize:11,lineHeight:1}}>E</div>
+                <div style={{position:'absolute',left:6,top:'50%',transform:'translateY(-50%)',color:'rgba(255,255,255,0.6)',fontWeight:700,fontSize:11,lineHeight:1}}>W</div>
                 {/* Compass needle */}
-                <svg width="24" height="40" viewBox="0 0 24 40" style={{position:'absolute'}}>
+                <svg width="28" height="48" viewBox="0 0 24 40" style={{position:'absolute'}}>
                     <polygon points="12,2 8,20 12,17 16,20" fill="#ef4444" />
                     <polygon points="12,38 8,20 12,23 16,20" fill="white" opacity="0.7" />
                 </svg>
                 {/* Tick marks */}
                 {[0,45,90,135,180,225,270,315].map(deg => (
-                    <div key={deg} style={{position:'absolute',width:deg % 90 === 0 ? 2 : 1,height:deg % 90 === 0 ? 6 : 4,background:deg % 90 === 0 ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)',transform:`rotate(${deg}deg) translateY(-27px)`,transformOrigin:'center center'}} />
+                    <div key={deg} style={{position:'absolute',width:deg % 90 === 0 ? 2 : 1,height:deg % 90 === 0 ? 7 : 4,background:deg % 90 === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)',transform:`rotate(${deg}deg) translateY(-34px)`,transformOrigin:'center center'}} />
                 ))}
             </div>
         </div>

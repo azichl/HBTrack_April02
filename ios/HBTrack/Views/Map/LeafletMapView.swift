@@ -294,19 +294,20 @@ struct LeafletMapView: UIViewRepresentable {
                     padding: 0 !important;
                 }
                 
-                /* Reposition Leaflet bottom controls (scale, zoom) down near footer */
+                /* Reposition Leaflet bottom controls (scale, zoom, attribution) */
                 .leaflet-bottom {
-                    bottom: 12px !important;
+                    bottom: 8px !important;
                 }
                 
                 .leaflet-left .leaflet-control-scale {
                     margin-left: 12px !important;
-                    margin-bottom: 2px !important;
+                    margin-bottom: 4px !important;
                 }
                 
+                /* Zoom +/- separated and positioned cleanly on top of Leaflet attribution */
                 .leaflet-right .leaflet-control-zoom {
-                    margin-right: 12px !important;
-                    margin-bottom: 2px !important;
+                    margin-right: 35px !important;
+                    margin-bottom: 10px !important;
                     box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
                     border-radius: 8px !important;
                     overflow: hidden;
@@ -314,32 +315,29 @@ struct LeafletMapView: UIViewRepresentable {
                 }
                 
                 .leaflet-control-attribution {
-                    position: absolute !important;
-                    bottom: -8px !important;
-                    right: 8px !important;
-                    background: rgba(15, 23, 42, 0.75) !important;
+                    background: rgba(15, 23, 42, 0.8) !important;
                     color: #94a3b8 !important;
-                    font-size: 8px !important;
-                    padding: 1px 5px !important;
-                    border-radius: 3px !important;
-                    margin: 0 !important;
-                    pointer-events: auto !important;
+                    font-size: 8.5px !important;
+                    padding: 2px 6px !important;
+                    border-radius: 4px !important;
+                    margin-right: 12px !important;
+                    margin-bottom: 4px !important;
                 }
                 .leaflet-control-attribution a {
                     color: #cbd5e1 !important;
                     text-decoration: none !important;
                 }
                 
-                /* Compass Rose positioned cleanly to the left of the zoom controls (side-by-side, not stacked) */
+                /* Compass Rose: scaled up by 70% (80x80px) and positioned cleanly on top of zoom icon with no overlap */
                 .compass-rose {
                     position: absolute;
-                    bottom: 21px;
-                    right: 56px;
-                    width: 44px;
-                    height: 44px;
+                    bottom: 118px;
+                    right: 12px;
+                    width: 80px;
+                    height: 80px;
                     z-index: 999;
                     pointer-events: none;
-                    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+                    filter: drop-shadow(0 3px 8px rgba(0,0,0,0.5));
                 }
                 
                 /* User GPS Pulse Animation */
