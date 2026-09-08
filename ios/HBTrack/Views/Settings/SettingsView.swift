@@ -28,7 +28,6 @@ struct SettingsView: View {
     
     @State private var showLogoutAlert = false
     @State private var showPrivacyPolicy = false
-    @State private var showActivityLogs = false
     @State private var showDeleteRequestAlert = false
     @Environment(\.openURL) private var openURL
     
@@ -109,9 +108,6 @@ struct SettingsView: View {
         .sheet(isPresented: $showPrivacyPolicy) {
             PrivacyPolicyView()
         }
-        .sheet(isPresented: $showActivityLogs) {
-            ActivityLogsView()
-        }
         .alert("Request Account Deletion", isPresented: $showDeleteRequestAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Email Administrator") {
@@ -119,12 +115,6 @@ struct SettingsView: View {
                 let userId = authVM.currentUser?.uid ?? ""
                 let isAppleUser = userEmail.lowercased().contains("apple") || (authVM.userProfile?.username?.lowercased() == "apple")
                 let userField = isAppleUser ? "User: Apple" : "User Email: \(userEmail)\nUser ID: \(userId)"
-                
-                UserActivityLogger.logUserActivity(
-                    eventType: "CUSTOM_ACTION",
-                    details: "Initiated Account Deletion Request email to admin (iOS)"
-                )
-                
                 let subject = "Account Deletion Request - RAF Tracking".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                 let body = "Hello Administrator,\n\nPlease permanently delete my RAF Tracking user account and associated personal data.\n\n\(userField)\n\nThank you.".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                 if let url = URL(string: "mailto:abdelaziz.chlih@rawdatalfaras.com?subject=\(subject)&body=\(body)") {
@@ -195,56 +185,9 @@ struct SettingsView: View {
                     )
                 }
                 
-                // Dark Mode Card
-                Button {
-                    withAnimation { isDarkMode = true }
-                    UserActivityLogger.logUserActivity(
-                        eventType: "CUSTOM_ACTION",
-                        details: "Switched theme to Dark Mode (iOS)"
-                    )
-                } label: {
-                    HStack(spacing: isPad ? 19 : 16) {
-                        Image(systemName: "moon.stars.fill")
-                            .font(.system(size: isPad ? 22 : 18))
-                            .foregroundColor(.white)
-                            .frame(width: isPad ? 53 : 44, height: isPad ? 53 : 44)
-                            .background(Color(hex: "0F172A"))
-                            .cornerRadius(12)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Dark Mode")
-                                .font(.system(size: isPad ? 18 : 15, weight: .bold))
-                                .foregroundColor(.primary)
-                            Text("Easy on the eyes, suitable for low-light environments.")
-                                .font(.system(size: isPad ? 14.5 : 12))
-                                .foregroundColor(AppTheme.textSecondary)
-                                .multilineTextAlignment(.leading)
-                        }
-                        
-                        Spacer()
-                        
-                        if isDarkMode {
-                            Image(systemName: "checkmark.circle")
-                                .foregroundColor(AppTheme.brandGold)
-                                .font(.system(size: isPad ? 24 : 20))
-                        }
-                    }
-                    .padding(isPad ? 19 : 16)
-                    .background(AppTheme.cardBackground)
-                    .cornerRadius(16)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(isDarkMode ? AppTheme.brandGold : Color(UIColor.separator).opacity(0.4), lineWidth: isDarkMode ? 1.5 : 1)
-                    )
-                }
-                
                 // Light Mode Card
                 Button {
                     withAnimation { isDarkMode = false }
-                    UserActivityLogger.logUserActivity(
-                        eventType: "CUSTOM_ACTION",
-                        details: "Switched theme to Light Mode (iOS)"
-                    )
                 } label: {
                     HStack(spacing: isPad ? 19 : 16) {
                         Image(systemName: "display")
@@ -316,45 +259,6 @@ struct SettingsView: View {
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
                     )
-                }
-                
-                // Activity Logs Card (Visible to Administrators)
-                if authVM.currentUserRole == "Administrator" {
-                    Button {
-                        showActivityLogs = true
-                    } label: {
-                        HStack(spacing: isPad ? 19 : 16) {
-                            Image(systemName: "list.bullet.rectangle.portrait.fill")
-                                .font(.system(size: isPad ? 22 : 18))
-                                .foregroundColor(AppTheme.brandGold)
-                                .frame(width: isPad ? 53 : 44, height: isPad ? 53 : 44)
-                                .background(AppTheme.brandGoldLight)
-                                .cornerRadius(12)
-                            
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Activity Logs")
-                                    .font(.system(size: isPad ? 18 : 15, weight: .bold))
-                                    .foregroundColor(.primary)
-                                Text("Track live iOS and Web user activity in Firebase.")
-                                    .font(.system(size: isPad ? 14.5 : 12))
-                                    .foregroundColor(AppTheme.textSecondary)
-                                    .multilineTextAlignment(.leading)
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(AppTheme.textMuted)
-                                .font(.system(size: isPad ? 17 : 14, weight: .semibold))
-                        }
-                        .padding(isPad ? 19 : 16)
-                        .background(AppTheme.cardBackground)
-                        .cornerRadius(16)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 1)
-                        )
-                    }
                 }
                 
                 // Sign Out Button (down to dark/light mode)
@@ -575,19 +479,9 @@ struct SettingsView: View {
                 currentPassword = ""
                 newPassword = ""
                 confirmPassword = ""
-                
-                UserActivityLogger.logUserActivity(
-                    eventType: "CUSTOM_ACTION",
-                    details: "Updated account password (iOS)"
-                )
             } catch {
                 passwordMessage = error.localizedDescription
                 isErrorMessage = true
-                
-                UserActivityLogger.logUserActivity(
-                    eventType: "CUSTOM_ACTION",
-                    details: "Password update failed: \(error.localizedDescription) (iOS)"
-                )
             }
             isUpdatingPassword = false
         }
