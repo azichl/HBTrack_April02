@@ -294,18 +294,49 @@ struct LeafletMapView: UIViewRepresentable {
                     padding: 0 !important;
                 }
                 
-                /* Lift Leaflet controls safely above the system tab bar & home indicator */
+                /* Reposition Leaflet bottom controls (scale, zoom) down near footer */
                 .leaflet-bottom {
-                    bottom: 84px !important;
+                    bottom: 12px !important;
                 }
                 
-                /* Compass Rose positioned cleanly above the zoom controls */
+                .leaflet-left .leaflet-control-scale {
+                    margin-left: 12px !important;
+                    margin-bottom: 2px !important;
+                }
+                
+                .leaflet-right .leaflet-control-zoom {
+                    margin-right: 12px !important;
+                    margin-bottom: 2px !important;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+                    border-radius: 8px !important;
+                    overflow: hidden;
+                    border: 1px solid rgba(0,0,0,0.15) !important;
+                }
+                
+                .leaflet-control-attribution {
+                    position: absolute !important;
+                    bottom: -8px !important;
+                    right: 8px !important;
+                    background: rgba(15, 23, 42, 0.75) !important;
+                    color: #94a3b8 !important;
+                    font-size: 8px !important;
+                    padding: 1px 5px !important;
+                    border-radius: 3px !important;
+                    margin: 0 !important;
+                    pointer-events: auto !important;
+                }
+                .leaflet-control-attribution a {
+                    color: #cbd5e1 !important;
+                    text-decoration: none !important;
+                }
+                
+                /* Compass Rose positioned cleanly to the left of the zoom controls (side-by-side, not stacked) */
                 .compass-rose {
                     position: absolute;
-                    bottom: 168px;
-                    right: 14px;
-                    width: 48px;
-                    height: 48px;
+                    bottom: 21px;
+                    right: 56px;
+                    width: 44px;
+                    height: 44px;
                     z-index: 999;
                     pointer-events: none;
                     filter: drop-shadow(0 2px 6px rgba(0,0,0,0.5));

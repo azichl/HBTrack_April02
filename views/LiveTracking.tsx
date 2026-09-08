@@ -2489,8 +2489,8 @@ const LiveTrackingInner = () => {
         )}
 
         {/* Map Controls (Left) */}
-        {/* Compass Widget */}
-        <div className="absolute bottom-28 right-4 z-[500]" style={{width:64,height:64}}>
+        {/* Compass Widget - Positioned to the left of the zoom controls, not stacked */}
+        <div className="absolute bottom-20 md:bottom-6 right-16 z-[500]" style={{width:64,height:64}}>
             <div style={{width:64,height:64,borderRadius:'50%',background:'rgba(0,0,0,0.6)',backdropFilter:'blur(8px)',border:'2px solid rgba(255,255,255,0.3)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(0,0,0,0.4)',position:'relative'}}>
                 <div style={{position:'absolute',top:4,left:'50%',transform:'translateX(-50%)',color:'#ef4444',fontWeight:900,fontSize:11,lineHeight:1}}>N</div>
                 <div style={{position:'absolute',bottom:4,left:'50%',transform:'translateX(-50%)',color:'rgba(255,255,255,0.5)',fontWeight:700,fontSize:9,lineHeight:1}}>S</div>
