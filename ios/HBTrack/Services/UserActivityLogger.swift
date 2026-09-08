@@ -1,25 +1,37 @@
 import Foundation
+import UIKit
 import FirebaseFirestore
 
 class UserActivityLogger {
-    static func log(userId: String, email: String, action: String, details: String) async {
-        let db = FirestoreService.shared.db
-        let formatter = ISO8601DateFormatter()
-        let timestamp = formatter.string(from: Date())
-        
+    static var userAgent: String {
+        let device = UIDevice.current
+        let model = device.model
+        let systemVersion = device.systemVersion
+        return "iOS (HBTrack; \(model); iOS \(systemVersion))"
+    }
+    
+    static func logUserActivity(
+        userId: String,
+        userEmail: String,
+        eventType: String,
+        details: String = ""
+    ) {
         let data: [String: Any] = [
             "userId": userId,
-            "email": email,
-            "action": action,
+            "userEmail": userEmail,
+            "eventType": eventType,
             "details": details,
-            "timestamp": timestamp,
-            "platform": "ios"
+            "timestamp": FieldValue.serverTimestamp(),
+            "userAgent": userAgent
         ]
         
-        do {
-            try await db.collection("user_activity_logs").addDocument(data: data)
-        } catch {
-            print("Failed to log user activity: \(error)")
+        let db = FirestoreService.shared.db
+        Task {
+            do {
+                try await db.collection("user_activity_logs").addDocument(data: data)
+            } catch {
+                print("Failed to log user activity: \(error.localizedDescription)")
+            }
         }
     }
 }

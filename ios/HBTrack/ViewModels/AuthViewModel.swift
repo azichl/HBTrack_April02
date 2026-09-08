@@ -15,6 +15,7 @@ class AuthViewModel: ObservableObject {
     }
     
     private var authListenerHandle: AuthStateDidChangeListenerHandle?
+    private var hasLoggedSession = false
     
     init() {
         listenForAuthChanges()
@@ -76,6 +77,13 @@ class AuthViewModel: ObservableObject {
             } else {
                 self.isAuthenticated = true
                 self.authError = nil
+                self.hasLoggedSession = true
+                UserActivityLogger.logUserActivity(
+                    userId: user.uid,
+                    userEmail: user.email ?? targetEmail,
+                    eventType: "SESSION_START",
+                    details: "User logged in"
+                )
             }
         } catch let err as NSError {
             print("Login error: \(err.localizedDescription) [code: \(err.code)]")
@@ -96,11 +104,20 @@ class AuthViewModel: ObservableObject {
     }
     
     func logout() {
+        let userId = currentUser?.uid ?? ""
+        let userEmail = currentUser?.email ?? ""
         do {
             try AuthService.shared.signOut()
             self.currentUser = nil
             self.userProfile = nil
             self.isAuthenticated = false
+            self.hasLoggedSession = false
+            UserActivityLogger.logUserActivity(
+                userId: userId,
+                userEmail: userEmail,
+                eventType: "SESSION_END",
+                details: "User logged out manually"
+            )
         } catch {
             self.authError = error.localizedDescription
         }
@@ -151,12 +168,22 @@ class AuthViewModel: ObservableObject {
                     let appAccess = profile.appAccess ?? ["web", "ios"]
                     if appAccess.isEmpty || appAccess.contains("ios") || appAccess.contains("web") {
                         self.isAuthenticated = true
+                        if !self.hasLoggedSession {
+                            self.hasLoggedSession = true
+                            UserActivityLogger.logUserActivity(
+                                userId: user.uid,
+                                userEmail: user.email ?? "",
+                                eventType: "SESSION_START",
+                                details: "User logged in"
+                            )
+                        }
                     } else {
                         self.isAuthenticated = false
                     }
                 } else {
                     self.isAuthenticated = false
                     self.userProfile = nil
+                    self.hasLoggedSession = false
                 }
             }
         }
