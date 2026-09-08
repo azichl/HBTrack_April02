@@ -9,13 +9,15 @@ struct StatusPieChart: View {
     
     var body: some View {
         GeometryReader { geo in
+            let isPad = UIDevice.current.userInterfaceIdiom == .pad
             let w = geo.size.width
             let h = geo.size.height
             let cx = w / 2
             let cy = h / 2
             
-            // Responsive donut radius tailored for both narrow phones and wide tablets
-            let outerRadius: CGFloat = min(w * 0.23, 86)
+            // Responsive donut radius tailored for both narrow phones and wide tablets (+20% on iPad)
+            let maxRadius: CGFloat = isPad ? 104 : 86
+            let outerRadius: CGFloat = min(w * 0.25, maxRadius)
             let innerRadius: CGFloat = outerRadius * 0.58
             let midRadius: CGFloat = (innerRadius + outerRadius) / 2
             
@@ -39,7 +41,7 @@ struct StatusPieChart: View {
                                 innerRadius: innerRadius,
                                 outerRadius: outerRadius
                             )
-                            .stroke(AppTheme.cardBackground, lineWidth: 2.5)
+                            .stroke(AppTheme.cardBackground, lineWidth: isPad ? 3.0 : 2.5)
                         )
                     }
                     
@@ -50,7 +52,7 @@ struct StatusPieChart: View {
                         let yVal = cy + midRadius * sin(rad)
                         
                         Text("\(item.count)")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: isPad ? 14 : 12, weight: .bold))
                             .foregroundColor(.white)
                             .shadow(color: Color.black.opacity(0.35), radius: 1, x: 0, y: 1)
                             .position(x: xVal, y: yVal)
@@ -66,18 +68,19 @@ struct StatusPieChart: View {
                         let isTop = abs(cosVal) < 0.30 && sinVal < 0
                         let isBottom = abs(cosVal) < 0.30 && sinVal > 0
                         
-                        let radialOffset: CGFloat = min(12, max(6, w * 0.03))
+                        let radialOffset: CGFloat = min(isPad ? 16 : 12, max(6, w * 0.03))
+                        let elbowOffset: CGFloat = isPad ? 18 : 14
                         let pElbow: CGPoint = {
                             if isTop {
-                                return CGPoint(x: p0.x, y: p0.y - 14)
+                                return CGPoint(x: p0.x, y: p0.y - elbowOffset)
                             } else if isBottom {
-                                return CGPoint(x: p0.x, y: p0.y + 14)
+                                return CGPoint(x: p0.x, y: p0.y + elbowOffset)
                             } else {
                                 return CGPoint(x: cx + (outerRadius + radialOffset) * cosVal, y: cy + (outerRadius + radialOffset) * sinVal)
                             }
                         }()
                         
-                        let tailLen: CGFloat = 8
+                        let tailLen: CGFloat = isPad ? 10 : 8
                         let pTail: CGPoint = {
                             if isTop || isBottom {
                                 return pElbow
@@ -95,7 +98,7 @@ struct StatusPieChart: View {
                                 path.addLine(to: pTail)
                             }
                         }
-                        .stroke(AppTheme.textMuted, lineWidth: 1.2)
+                        .stroke(AppTheme.textMuted, lineWidth: isPad ? 1.5 : 1.2)
                     }
                     
                     // 4. Callout Labels bounded to screen width
@@ -107,26 +110,27 @@ struct StatusPieChart: View {
                         let isTop = abs(cosVal) < 0.30 && sinVal < 0
                         let isBottom = abs(cosVal) < 0.30 && sinVal > 0
                         
-                        let textEstWidth = CGFloat(item.status.count) * 5.8
+                        let textEstWidth = CGFloat(item.status.count) * (isPad ? 7.2 : 5.8)
+                        let verticalGap: CGFloat = isPad ? 26 : 22
                         
                         let labelPos: CGPoint = {
                             if isTop {
                                 let clampedX = max(textEstWidth / 2 + 4, min(w - textEstWidth / 2 - 4, cx + outerRadius * cosVal))
-                                return CGPoint(x: clampedX, y: cy - outerRadius - 22)
+                                return CGPoint(x: clampedX, y: cy - outerRadius - verticalGap)
                             } else if isBottom {
                                 let clampedX = max(textEstWidth / 2 + 4, min(w - textEstWidth / 2 - 4, cx + outerRadius * cosVal))
-                                return CGPoint(x: clampedX, y: cy + outerRadius + 22)
+                                return CGPoint(x: clampedX, y: cy + outerRadius + verticalGap)
                             } else {
-                                let radialOffset: CGFloat = min(12, max(6, w * 0.03))
+                                let radialOffset: CGFloat = min(isPad ? 16 : 12, max(6, w * 0.03))
                                 let xElbow = cx + (outerRadius + radialOffset) * cosVal
                                 let yElbow = cy + (outerRadius + radialOffset) * sinVal
                                 if cosVal >= 0 {
-                                    let xTail = min(w - 8, xElbow + 8)
+                                    let xTail = min(w - 8, xElbow + (isPad ? 10 : 8))
                                     let preferredX = xTail + 4 + textEstWidth / 2
                                     let clampedX = min(w - textEstWidth / 2 - 4, max(textEstWidth / 2 + 4, preferredX))
                                     return CGPoint(x: clampedX, y: yElbow)
                                 } else {
-                                    let xTail = max(8, xElbow - 8)
+                                    let xTail = max(8, xElbow - (isPad ? 10 : 8))
                                     let preferredX = xTail - 4 - textEstWidth / 2
                                     let clampedX = max(textEstWidth / 2 + 4, min(w - textEstWidth / 2 - 4, preferredX))
                                     return CGPoint(x: clampedX, y: yElbow)
@@ -135,7 +139,7 @@ struct StatusPieChart: View {
                         }()
                         
                         Text(item.status)
-                            .font(.system(size: 10.5, weight: .semibold))
+                            .font(.system(size: isPad ? 13 : 10.5, weight: .semibold))
                             .foregroundColor(AppTheme.textSecondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
@@ -144,20 +148,20 @@ struct StatusPieChart: View {
                     }
                 }
                 
-                // Center Donut Hole & Total Units Label (Reduced font size as requested)
-                VStack(spacing: 3) {
+                // Center Donut Hole & Total Units Label (+20% on iPad)
+                VStack(spacing: isPad ? 4 : 3) {
                     Text("\(totalCount)")
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: isPad ? 32 : 26, weight: .bold))
                         .foregroundColor(AppTheme.textPrimary)
                     Text("UNITS")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: isPad ? 12 : 10, weight: .bold))
                         .foregroundColor(AppTheme.textMuted)
-                        .tracking(1.4)
+                        .tracking(isPad ? 1.6 : 1.4)
                 }
                 .position(x: cx, y: cy)
             }
         }
-        .frame(height: 300)
+        .frame(height: UIDevice.current.userInterfaceIdiom == .pad ? 360 : 300)
     }
     
     private struct SliceLayout {

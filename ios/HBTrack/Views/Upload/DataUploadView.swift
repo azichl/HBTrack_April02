@@ -7,24 +7,26 @@ struct DataUploadView: View {
     @State private var showSyncLog = false
     
     var body: some View {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 16) {
-                    // Sub-header Card
-                    HStack(spacing: 12) {
+                VStack(spacing: isPad ? 20 : 16) {
+                    // Sub-header Card (+20% on iPad)
+                    HStack(spacing: isPad ? 14 : 12) {
                         Image(systemName: "antenna.radiowaves.left.and.right")
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: isPad ? 22 : 18, weight: .semibold))
                             .foregroundColor(AppTheme.brandGold)
-                            .frame(width: 42, height: 42)
+                            .frame(width: isPad ? 50 : 42, height: isPad ? 50 : 42)
                             .background(AppTheme.brandGoldLight)
-                            .cornerRadius(12)
+                            .cornerRadius(isPad ? 14 : 12)
                         
                         VStack(alignment: .leading, spacing: 2) {
                             Text("CLS Data Upload")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(size: isPad ? 19 : 16, weight: .bold))
                                 .foregroundColor(.primary)
                             Text("Field API Ingestion")
-                                .font(.system(size: 12))
+                                .font(.system(size: isPad ? 14.5 : 12))
                                 .foregroundColor(AppTheme.textSecondary)
                         }
                         
@@ -34,17 +36,17 @@ struct DataUploadView: View {
                         HStack(spacing: 5) {
                             Circle()
                                 .fill(statusColor)
-                                .frame(width: 6, height: 6)
+                                .frame(width: isPad ? 7 : 6, height: isPad ? 7 : 6)
                             Text(statusText)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.system(size: isPad ? 14.5 : 12, weight: .semibold))
                                 .foregroundColor(statusTextColor)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, isPad ? 12 : 10)
+                        .padding(.vertical, isPad ? 6 : 5)
                         .background(statusBgColor)
                         .clipShape(Capsule())
                     }
-                    .padding(14)
+                    .padding(isPad ? 17 : 14)
                     .frame(maxWidth: .infinity)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(18)
@@ -56,23 +58,25 @@ struct DataUploadView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     
-                    // Main Form Card
-                    VStack(alignment: .leading, spacing: 18) {
+                    // Main Form Card (+20% on iPad)
+                    VStack(alignment: .leading, spacing: isPad ? 22 : 18) {
                         // Username Field
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Username")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: isPad ? 15.5 : 13, weight: .semibold))
                                 .foregroundColor(.primary)
                             
                             HStack(spacing: 10) {
                                 Image(systemName: "person")
+                                    .font(.system(size: isPad ? 16 : 14))
                                     .foregroundColor(AppTheme.textMuted)
                                 TextField("username", text: $viewModel.username)
+                                    .font(.system(size: isPad ? 16 : 14))
                                     .autocapitalization(.none)
                                     .disableAutocorrection(true)
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, isPad ? 17 : 14)
+                            .padding(.vertical, isPad ? 14 : 12)
                             .background(Color(UIColor.systemBackground))
                             .cornerRadius(12)
                             .overlay(
@@ -84,30 +88,34 @@ struct DataUploadView: View {
                         // Password Field
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Password")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: isPad ? 15.5 : 13, weight: .semibold))
                                 .foregroundColor(.primary)
                             
                             HStack(spacing: 10) {
                                 Image(systemName: "lock")
+                                    .font(.system(size: isPad ? 16 : 14))
                                     .foregroundColor(AppTheme.textMuted)
                                 
                                 if showPassword {
                                     TextField("••••••••", text: $viewModel.password)
+                                        .font(.system(size: isPad ? 16 : 14))
                                         .autocapitalization(.none)
                                         .disableAutocorrection(true)
                                 } else {
                                     SecureField("••••••••", text: $viewModel.password)
+                                        .font(.system(size: isPad ? 16 : 14))
                                 }
                                 
                                 Button {
                                     showPassword.toggle()
                                 } label: {
                                     Image(systemName: showPassword ? "eye.slash" : "eye")
+                                        .font(.system(size: isPad ? 16 : 14))
                                         .foregroundColor(AppTheme.textMuted)
                                 }
                             }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, isPad ? 17 : 14)
+                            .padding(.vertical, isPad ? 14 : 12)
                             .background(Color(UIColor.systemBackground))
                             .cornerRadius(12)
                             .overlay(
@@ -119,7 +127,7 @@ struct DataUploadView: View {
                         // Time Horizon Picker
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Time Horizon")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: isPad ? 15.5 : 13, weight: .semibold))
                                 .foregroundColor(.primary)
                             
                             HStack(spacing: 4) {
@@ -129,10 +137,10 @@ struct DataUploadView: View {
                                     }
                                 } label: {
                                     Text("Last 24 Hours")
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.system(size: isPad ? 15.5 : 13, weight: .medium))
                                         .foregroundColor(viewModel.timeHorizon == "24h" ? AppTheme.brandGold : AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
+                                        .padding(.vertical, isPad ? 12 : 10)
                                         .background(
                                             viewModel.timeHorizon == "24h" ? Color(UIColor.systemBackground) : Color.clear
                                         )
@@ -146,10 +154,10 @@ struct DataUploadView: View {
                                     }
                                 } label: {
                                     Text("Custom Date")
-                                        .font(.system(size: 13, weight: .medium))
+                                        .font(.system(size: isPad ? 15.5 : 13, weight: .medium))
                                         .foregroundColor(viewModel.timeHorizon == "custom" ? AppTheme.brandGold : AppTheme.textSecondary)
                                         .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
+                                        .padding(.vertical, isPad ? 12 : 10)
                                         .background(
                                             viewModel.timeHorizon == "custom" ? Color(UIColor.systemBackground) : Color.clear
                                         )
@@ -170,11 +178,11 @@ struct DataUploadView: View {
                         if viewModel.timeHorizon == "custom" {
                             VStack(spacing: 8) {
                                 DatePicker("From:", selection: $viewModel.customStartDate, displayedComponents: [.date, .hourAndMinute])
-                                    .font(.system(size: 13))
+                                    .font(.system(size: isPad ? 15.5 : 13))
                                 DatePicker("To:", selection: $viewModel.customEndDate, displayedComponents: [.date, .hourAndMinute])
-                                    .font(.system(size: 13))
+                                    .font(.system(size: isPad ? 15.5 : 13))
                             }
-                            .padding(12)
+                            .padding(isPad ? 15 : 12)
                             .background(Color(UIColor.systemBackground))
                             .cornerRadius(12)
                             .overlay(
@@ -189,12 +197,12 @@ struct DataUploadView: View {
                             HStack(alignment: .top, spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(.red)
-                                    .font(.system(size: 14))
+                                    .font(.system(size: isPad ? 16 : 14))
                                 Text(error)
-                                    .font(.system(size: 12))
+                                    .font(.system(size: isPad ? 14.5 : 12))
                                     .foregroundColor(.red)
                             }
-                            .padding(10)
+                            .padding(isPad ? 12 : 10)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color.red.opacity(0.08))
                             .cornerRadius(8)
@@ -207,14 +215,14 @@ struct DataUploadView: View {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundColor(Color(hex: "15803d"))
                                     Text("CLS Data Upload Completed Successfully ✓")
-                                        .font(.system(size: 13, weight: .bold))
+                                        .font(.system(size: isPad ? 15.5 : 13, weight: .bold))
                                         .foregroundColor(Color(hex: "15803d"))
                                 }
                                 Text("\(result.recordsImported) fixes imported across \(result.transmittersUpdated) transmitters. Synced to Firebase.")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: isPad ? 13 : 11))
                                     .foregroundColor(Color(hex: "166534"))
                             }
-                            .padding(12)
+                            .padding(isPad ? 15 : 12)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Color(hex: "dcfce7"))
                             .cornerRadius(10)
@@ -238,14 +246,15 @@ struct DataUploadView: View {
                                         .fontWeight(.semibold)
                                 } else {
                                     Image(systemName: "play.fill")
-                                        .font(.system(size: 13))
+                                        .font(.system(size: isPad ? 15 : 13))
                                     Text("Execute Request")
                                         .fontWeight(.semibold)
                                 }
                             }
+                            .font(.system(size: isPad ? 17 : 15))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
+                            .padding(.vertical, isPad ? 17 : 14)
                             .background(AppTheme.brandGold)
                             .cornerRadius(12)
                         }
@@ -258,7 +267,7 @@ struct DataUploadView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
                                     Text("Execution Logs")
-                                        .font(.system(size: 12, weight: .bold))
+                                        .font(.system(size: isPad ? 14.5 : 12, weight: .bold))
                                         .foregroundColor(.primary)
                                     
                                     Spacer()
@@ -269,7 +278,7 @@ struct DataUploadView: View {
                                         }
                                     } label: {
                                         Text("Full Details")
-                                            .font(.system(size: 11, weight: .semibold))
+                                            .font(.system(size: isPad ? 13 : 11, weight: .semibold))
                                             .foregroundColor(AppTheme.brandGold)
                                     }
                                 }
@@ -279,15 +288,15 @@ struct DataUploadView: View {
                                         VStack(alignment: .leading, spacing: 4) {
                                             ForEach(Array(viewModel.logs.enumerated()), id: \.offset) { idx, log in
                                                 Text(log)
-                                                    .font(.system(size: 10.5, design: .monospaced))
+                                                    .font(.system(size: isPad ? 12.5 : 10.5, design: .monospaced))
                                                     .foregroundColor(log.contains("[ERROR]") ? .red : (log.contains("✓") ? Color(hex: "22c55e") : Color(UIColor.secondaryLabel)))
                                                     .id(idx)
                                             }
                                         }
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(10)
+                                        .padding(isPad ? 12 : 10)
                                     }
-                                    .frame(maxHeight: 140)
+                                    .frame(maxHeight: isPad ? 170 : 140)
                                     .background(Color(UIColor.systemBackground))
                                     .cornerRadius(10)
                                     .overlay(
@@ -306,7 +315,7 @@ struct DataUploadView: View {
                             .padding(.top, 4)
                         }
                     }
-                    .padding(20)
+                    .padding(isPad ? 24 : 20)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(20)
                     .overlay(
@@ -316,7 +325,7 @@ struct DataUploadView: View {
                     .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
                     .padding(.horizontal, 16)
                 }
-                .frame(maxWidth: 640)
+                .frame(maxWidth: isPad ? 768 : 640)
                 .padding(.bottom, 24)
                 .frame(maxWidth: .infinity)
             }

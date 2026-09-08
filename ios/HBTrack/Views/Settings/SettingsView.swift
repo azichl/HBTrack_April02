@@ -32,25 +32,27 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     
     var body: some View {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        
         VStack(spacing: 0) {
             ScrollView {
-                VStack(spacing: 16) {
-                    // Sub-tabs Segmented Pill
-                    HStack(spacing: 4) {
+                VStack(spacing: isPad ? 20 : 16) {
+                    // Sub-tabs Segmented Pill (+20% on iPad)
+                    HStack(spacing: isPad ? 6 : 4) {
                         ForEach(SettingsTab.allCases) { tab in
                             Button {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     selectedTab = tab
                                 }
                             } label: {
-                                HStack(spacing: 6) {
+                                HStack(spacing: isPad ? 8 : 6) {
                                     Image(systemName: tab.icon)
-                                        .font(.system(size: 14))
+                                        .font(.system(size: isPad ? 17 : 14))
                                     Text(tab.rawValue)
-                                        .font(.system(size: 14, weight: .medium))
+                                        .font(.system(size: isPad ? 17 : 14, weight: .medium))
                                 }
                                 .foregroundColor(selectedTab == tab ? AppTheme.brandGold : AppTheme.textSecondary)
-                                .padding(.vertical, 10)
+                                .padding(.vertical, isPad ? 12 : 10)
                                 .frame(maxWidth: .infinity)
                                 .background(
                                     selectedTab == tab ? AppTheme.subtleBackground : Color.clear
@@ -70,15 +72,15 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
                     
-                    // Tab Content Card
-                    VStack(alignment: .leading, spacing: 20) {
+                    // Tab Content Card (+20% on iPad)
+                    VStack(alignment: .leading, spacing: isPad ? 24 : 20) {
                         if selectedTab == .preferences {
                             preferencesContent
                         } else {
                             securityContent
                         }
                     }
-                    .padding(20)
+                    .padding(isPad ? 24 : 20)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(20)
@@ -89,7 +91,7 @@ struct SettingsView: View {
                     .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
                     .padding(.horizontal, 16)
                 }
-                .frame(maxWidth: 640)
+                .frame(maxWidth: isPad ? 768 : 640)
                 .padding(.bottom, 24)
                 .frame(maxWidth: .infinity)
             }
@@ -126,40 +128,42 @@ struct SettingsView: View {
     
     // MARK: - Preferences View
     private var preferencesContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        
+        return VStack(alignment: .leading, spacing: isPad ? 24 : 20) {
             // Header
-            HStack(spacing: 10) {
+            HStack(spacing: isPad ? 12 : 10) {
                 Image(systemName: "display")
                     .foregroundColor(AppTheme.brandGold)
-                    .font(.system(size: 20))
+                    .font(.system(size: isPad ? 24 : 20))
                 Text("System Preferences")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: isPad ? 20.5 : 17, weight: .bold))
                     .foregroundColor(.primary)
             }
             
             Text("Customize your interface and experience")
-                .font(.system(size: 13))
+                .font(.system(size: isPad ? 15.5 : 13))
                 .foregroundColor(AppTheme.textSecondary)
             
-            VStack(spacing: 14) {
+            VStack(spacing: isPad ? 17 : 14) {
                 // Dark Mode Card
                 Button {
                     withAnimation { isDarkMode = true }
                 } label: {
-                    HStack(spacing: 16) {
+                    HStack(spacing: isPad ? 19 : 16) {
                         Image(systemName: "moon.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: isPad ? 22 : 18))
                             .foregroundColor(.white)
-                            .frame(width: 44, height: 44)
+                            .frame(width: isPad ? 53 : 44, height: isPad ? 53 : 44)
                             .background(Color(hex: "0F172A"))
                             .cornerRadius(12)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Dark Mode")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.system(size: isPad ? 18 : 15, weight: .bold))
                                 .foregroundColor(.primary)
                             Text("Easy on the eyes, suitable for low-light environments.")
-                                .font(.system(size: 12))
+                                .font(.system(size: isPad ? 14.5 : 12))
                                 .foregroundColor(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
                         }
@@ -169,10 +173,10 @@ struct SettingsView: View {
                         if isDarkMode {
                             Image(systemName: "checkmark.circle")
                                 .foregroundColor(AppTheme.brandGold)
-                                .font(.system(size: 20))
+                                .font(.system(size: isPad ? 24 : 20))
                         }
                     }
-                    .padding(16)
+                    .padding(isPad ? 19 : 16)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(16)
                     .overlay(
@@ -185,20 +189,20 @@ struct SettingsView: View {
                 Button {
                     withAnimation { isDarkMode = false }
                 } label: {
-                    HStack(spacing: 16) {
+                    HStack(spacing: isPad ? 19 : 16) {
                         Image(systemName: "display")
-                            .font(.system(size: 18))
+                            .font(.system(size: isPad ? 22 : 18))
                             .foregroundColor(AppTheme.brandGold)
-                            .frame(width: 44, height: 44)
+                            .frame(width: isPad ? 53 : 44, height: isPad ? 53 : 44)
                             .background(AppTheme.brandGoldLight)
                             .cornerRadius(12)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Light Mode")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.system(size: isPad ? 18 : 15, weight: .bold))
                                 .foregroundColor(.primary)
                             Text("Standard display, ideal for bright environments.")
-                                .font(.system(size: 12))
+                                .font(.system(size: isPad ? 14.5 : 12))
                                 .foregroundColor(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
                         }
@@ -208,10 +212,10 @@ struct SettingsView: View {
                         if !isDarkMode {
                             Image(systemName: "checkmark.circle")
                                 .foregroundColor(AppTheme.brandGold)
-                                .font(.system(size: 20))
+                                .font(.system(size: isPad ? 24 : 20))
                         }
                     }
-                    .padding(16)
+                    .padding(isPad ? 19 : 16)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(16)
                     .overlay(
@@ -224,20 +228,20 @@ struct SettingsView: View {
                 Button {
                     showPrivacyPolicy = true
                 } label: {
-                    HStack(spacing: 16) {
+                    HStack(spacing: isPad ? 19 : 16) {
                         Image(systemName: "hand.raised.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: isPad ? 22 : 18))
                             .foregroundColor(AppTheme.brandGold)
-                            .frame(width: 44, height: 44)
+                            .frame(width: isPad ? 53 : 44, height: isPad ? 53 : 44)
                             .background(AppTheme.brandGoldLight)
                             .cornerRadius(12)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Privacy Policy")
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.system(size: isPad ? 18 : 15, weight: .bold))
                                 .foregroundColor(.primary)
                             Text("Review our data handling, permissions & security.")
-                                .font(.system(size: 12))
+                                .font(.system(size: isPad ? 14.5 : 12))
                                 .foregroundColor(AppTheme.textSecondary)
                                 .multilineTextAlignment(.leading)
                         }
@@ -246,9 +250,9 @@ struct SettingsView: View {
                         
                         Image(systemName: "chevron.right")
                             .foregroundColor(AppTheme.textMuted)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: isPad ? 17 : 14, weight: .semibold))
                     }
-                    .padding(16)
+                    .padding(isPad ? 19 : 16)
                     .background(AppTheme.cardBackground)
                     .cornerRadius(16)
                     .overlay(
@@ -263,13 +267,13 @@ struct SettingsView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.system(size: isPad ? 19 : 16, weight: .bold))
                         Text("Sign Out")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: isPad ? 18 : 15, weight: .bold))
                     }
                     .foregroundColor(.red)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, isPad ? 17 : 14)
                     .background(Color.red.opacity(0.08))
                     .cornerRadius(14)
                     .overlay(
@@ -284,35 +288,39 @@ struct SettingsView: View {
     
     // MARK: - Security View
     private var securityContent: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        let isPad = UIDevice.current.userInterfaceIdiom == .pad
+        
+        return VStack(alignment: .leading, spacing: isPad ? 24 : 20) {
             // Header
-            HStack(spacing: 10) {
+            HStack(spacing: isPad ? 12 : 10) {
                 Image(systemName: "shield")
                     .foregroundColor(AppTheme.brandGold)
-                    .font(.system(size: 20))
+                    .font(.system(size: isPad ? 24 : 20))
                 Text("Security Settings")
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.system(size: isPad ? 20.5 : 17, weight: .bold))
                     .foregroundColor(.primary)
             }
             
             Text("Protect your account and data")
-                .font(.system(size: 13))
+                .font(.system(size: isPad ? 15.5 : 13))
                 .foregroundColor(AppTheme.textSecondary)
             
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: isPad ? 17 : 14) {
                 // Current Password
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Current Password")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: isPad ? 15.5 : 13, weight: .semibold))
                         .foregroundColor(.primary)
                     
                     HStack(spacing: 10) {
                         Image(systemName: "lock")
+                            .font(.system(size: isPad ? 16 : 14))
                             .foregroundColor(AppTheme.textMuted)
                         SecureField("••••••••", text: $currentPassword)
+                            .font(.system(size: isPad ? 16 : 14))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, isPad ? 17 : 14)
+                    .padding(.vertical, isPad ? 14 : 12)
                     .background(AppTheme.inputBackground)
                     .cornerRadius(12)
                     .overlay(
@@ -324,16 +332,18 @@ struct SettingsView: View {
                 // New Password
                 VStack(alignment: .leading, spacing: 6) {
                     Text("New Password")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: isPad ? 15.5 : 13, weight: .semibold))
                         .foregroundColor(.primary)
                     
                     HStack(spacing: 10) {
                         Image(systemName: "lock")
+                            .font(.system(size: isPad ? 16 : 14))
                             .foregroundColor(AppTheme.textMuted)
                         SecureField("••••••••", text: $newPassword)
+                            .font(.system(size: isPad ? 16 : 14))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, isPad ? 17 : 14)
+                    .padding(.vertical, isPad ? 14 : 12)
                     .background(AppTheme.inputBackground)
                     .cornerRadius(12)
                     .overlay(
@@ -345,16 +355,18 @@ struct SettingsView: View {
                 // Confirm New Password
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Confirm New Password")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: isPad ? 15.5 : 13, weight: .semibold))
                         .foregroundColor(.primary)
                     
                     HStack(spacing: 10) {
                         Image(systemName: "lock")
+                            .font(.system(size: isPad ? 16 : 14))
                             .foregroundColor(AppTheme.textMuted)
                         SecureField("••••••••", text: $confirmPassword)
+                            .font(.system(size: isPad ? 16 : 14))
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, isPad ? 17 : 14)
+                    .padding(.vertical, isPad ? 14 : 12)
                     .background(AppTheme.inputBackground)
                     .cornerRadius(12)
                     .overlay(
@@ -380,13 +392,15 @@ struct SettingsView: View {
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         } else {
                             Image(systemName: "lock")
+                                .font(.system(size: isPad ? 15 : 13))
                             Text("Update Password")
                                 .fontWeight(.semibold)
                         }
                     }
+                    .font(.system(size: isPad ? 17 : 15))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, isPad ? 17 : 14)
                     .background(AppTheme.brandGold)
                     .cornerRadius(12)
                 }
@@ -402,14 +416,14 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "person.badge.shield.checkmark")
                             .foregroundColor(AppTheme.brandGold)
-                            .font(.system(size: 16))
+                            .font(.system(size: isPad ? 19 : 16))
                         Text("Account Administration")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: isPad ? 18 : 15, weight: .bold))
                             .foregroundColor(.primary)
                     }
                     
                     Text("User accounts are provisioned and managed by organization Administrators for authorized wildlife research teams.")
-                        .font(.system(size: 12))
+                        .font(.system(size: isPad ? 14.5 : 12))
                         .foregroundColor(AppTheme.textSecondary)
                         .lineSpacing(2)
                     
@@ -418,13 +432,13 @@ struct SettingsView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "person.crop.circle.badge.minus")
-                                .font(.system(size: 15))
+                                .font(.system(size: isPad ? 17 : 15))
                             Text("Request Account Deletion")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: isPad ? 17 : 14, weight: .semibold))
                         }
                         .foregroundColor(.red.opacity(0.9))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, isPad ? 15 : 12)
                         .background(Color.red.opacity(0.06))
                         .cornerRadius(12)
                         .overlay(

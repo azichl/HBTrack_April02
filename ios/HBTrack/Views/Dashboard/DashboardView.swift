@@ -6,61 +6,63 @@ struct DashboardView: View {
     
     var body: some View {
         GeometryReader { screenGeo in
+            let isPad = UIDevice.current.userInterfaceIdiom == .pad
+            
             ZStack {
                 AppTheme.screenBackground
                     .ignoresSafeArea()
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-                        Spacer(minLength: 12)
+                        Spacer(minLength: isPad ? 16 : 12)
                         
                         // Transmitters Status Breakdown Command Card
                         ZStack(alignment: .topTrailing) {
-                            // Background watermark antenna waves
+                            // Background watermark antenna waves (+20% on iPad)
                             Image(systemName: "antenna.radiowaves.left.and.right")
-                                .font(.system(size: 140))
+                                .font(.system(size: isPad ? 168 : 140))
                                 .foregroundColor(AppTheme.brandGold.opacity(0.05))
-                                .offset(x: 25, y: -20)
+                                .offset(x: isPad ? 30 : 25, y: isPad ? -24 : -20)
                                 .allowsHitTesting(false)
                             
-                            VStack(spacing: 16) {
+                            VStack(spacing: isPad ? 20 : 16) {
                                 // Card Header
-                                HStack(alignment: .center, spacing: 10) {
+                                HStack(alignment: .center, spacing: isPad ? 12 : 10) {
                                     // Antenna Icon Badge
                                     Image(systemName: "antenna.radiowaves.left.and.right")
-                                        .font(.system(size: 18, weight: .semibold))
+                                        .font(.system(size: isPad ? 22 : 18, weight: .semibold))
                                         .foregroundColor(AppTheme.brandGold)
-                                        .frame(width: 44, height: 44)
+                                        .frame(width: isPad ? 53 : 44, height: isPad ? 53 : 44)
                                         .background(AppTheme.brandGoldLight)
-                                        .cornerRadius(12)
+                                        .cornerRadius(isPad ? 14 : 12)
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 12)
+                                            RoundedRectangle(cornerRadius: isPad ? 14 : 12)
                                                 .stroke(AppTheme.brandGoldBorder, lineWidth: 1)
                                         )
                                     
                                     // Titles
                                     VStack(alignment: .leading, spacing: 3) {
                                         Text("Transmitters Status")
-                                            .font(.system(size: 17, weight: .bold))
+                                            .font(.system(size: isPad ? 20.5 : 17, weight: .bold))
                                             .foregroundColor(AppTheme.textPrimary)
                                         Text("Real-time health & operational status of deployed PTTs")
-                                            .font(.system(size: 12, weight: .regular))
+                                            .font(.system(size: isPad ? 14.5 : 12, weight: .regular))
                                             .foregroundColor(AppTheme.textSecondary)
                                     }
                                     
                                     Spacer(minLength: 4)
                                     
                                     // Total Pill Badge
-                                    HStack(spacing: 5) {
+                                    HStack(spacing: isPad ? 6 : 5) {
                                         Text("Total:")
-                                            .font(.system(size: 13, weight: .medium))
+                                            .font(.system(size: isPad ? 15.5 : 13, weight: .medium))
                                             .foregroundColor(AppTheme.textSecondary)
                                         Text("\(viewModel.totalDeployed)")
-                                            .font(.system(size: 15, weight: .bold))
+                                            .font(.system(size: isPad ? 18 : 15, weight: .bold))
                                             .foregroundColor(AppTheme.textPrimary)
                                     }
-                                    .padding(.horizontal, 14)
-                                    .padding(.vertical, 7)
+                                    .padding(.horizontal, isPad ? 17 : 14)
+                                    .padding(.vertical, isPad ? 8.5 : 7)
                                     .background(AppTheme.subtleBackground)
                                     .cornerRadius(20)
                                     .overlay(
@@ -79,15 +81,15 @@ struct DashboardView: View {
                                     .frame(height: 1)
                                 
                                 // Status Breakdown Pills (2 Columns)
-                                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                                LazyVGrid(columns: [GridItem(.flexible(), spacing: isPad ? 12 : 10), GridItem(.flexible(), spacing: isPad ? 12 : 10)], spacing: isPad ? 12 : 10) {
                                     ForEach(viewModel.statusBreakdown, id: \.status) { item in
                                         HStack {
-                                            HStack(spacing: 6) {
+                                            HStack(spacing: isPad ? 8 : 6) {
                                                 Circle()
                                                     .fill(item.color)
-                                                    .frame(width: 9, height: 9)
+                                                    .frame(width: isPad ? 11 : 9, height: isPad ? 11 : 9)
                                                 Text("\(item.status):")
-                                                    .font(.system(size: 12, weight: .semibold))
+                                                    .font(.system(size: isPad ? 14.5 : 12, weight: .semibold))
                                                     .foregroundColor(AppTheme.textPrimary)
                                                     .lineLimit(1)
                                                     .minimumScaleFactor(0.7)
@@ -96,15 +98,15 @@ struct DashboardView: View {
                                             Spacer(minLength: 2)
                                             
                                             Text("\(item.count)")
-                                                .font(.system(size: 13, weight: .black))
+                                                .font(.system(size: isPad ? 15.5 : 13, weight: .black))
                                                 .foregroundColor(AppTheme.textPrimary)
-                                                .padding(.horizontal, 8)
-                                                .padding(.vertical, 3)
+                                                .padding(.horizontal, isPad ? 10 : 8)
+                                                .padding(.vertical, isPad ? 4 : 3)
                                                 .background(AppTheme.subtleBackground)
                                                 .cornerRadius(6)
                                         }
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 10)
+                                        .padding(.horizontal, isPad ? 10 : 8)
+                                        .padding(.vertical, isPad ? 12 : 10)
                                         .background(AppTheme.cardBackground)
                                         .cornerRadius(12)
                                         .overlay(
@@ -122,24 +124,24 @@ struct DashboardView: View {
                                 
                                 // Footer: Last Data Update
                                 HStack {
-                                    HStack(spacing: 6) {
+                                    HStack(spacing: isPad ? 8 : 6) {
                                         Image(systemName: "waveform.path.ecg")
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(.system(size: isPad ? 17 : 14, weight: .semibold))
                                             .foregroundColor(AppTheme.brandGold)
                                         Text("Last Data Update:")
-                                            .font(.system(size: 13, weight: .regular))
+                                            .font(.system(size: isPad ? 15.5 : 13, weight: .regular))
                                             .foregroundColor(AppTheme.textSecondary)
                                     }
                                     
                                     Spacer()
                                     
                                     Text(viewModel.formattedLastUpdate)
-                                        .font(.system(size: 14, weight: .bold))
+                                        .font(.system(size: isPad ? 17 : 14, weight: .bold))
                                         .foregroundColor(AppTheme.textPrimary)
                                 }
                                 .padding(.top, 2)
                             }
-                            .padding(20)
+                            .padding(isPad ? 24 : 20)
                         }
                         .background(
                             LinearGradient(
@@ -155,9 +157,9 @@ struct DashboardView: View {
                         )
                         .shadow(color: Color.black.opacity(0.04), radius: 14, x: 0, y: 4)
                         .padding(.horizontal, 16)
-                        .frame(maxWidth: 640)
+                        .frame(maxWidth: isPad ? 768 : 640)
                         
-                        Spacer(minLength: 16)
+                        Spacer(minLength: isPad ? 20 : 16)
                     }
                     .frame(minHeight: screenGeo.size.height)
                     .frame(maxWidth: .infinity)
