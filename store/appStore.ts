@@ -1272,91 +1272,14 @@ export const useAppStore = create<AppState>()(
               });
           }
 
-          // 4.5 Evaluate and update derived_status for AFFECTED transmitters only
-          // Only re-evaluate transmitters that received new data to avoid O(N) Firestore queries on every import.
+          // 4.5 Defer heavy status evaluation to run in the background AFTER import completes.
+          // Each affected transmitter requires 4+ Firestore queries (argos_positions, positions,
+          // static_test_periods, status_history) which causes the UI to appear stuck.
           const affectedPids = new Set<string>();
           incomingMessages.forEach(m => { if (m.platformId) affectedPids.add(String(m.platformId).replace(/^trans-/, '').trim()); });
           incomingDevices.forEach(d => { if (d.deviceRef) affectedPids.add(String(d.deviceRef).replace(/^trans-/, '').trim()); });
-          const affectedIndices = newTransmitters
-              .map((t, i) => ({ t, i }))
-              .filter(({ t }) => affectedPids.has(String(t.platform_id || t.id).replace(/^trans-/, '').trim()));
-          onProgress?.(`Evaluating status for ${affectedIndices.length} affected transmitters (${newTransmitters.length} total)...`);
-          let statusUpdated = false;
-          for (const { t, i } of affectedIndices) {
-              try {
-                          // Fetch both argos_positions and positions for this transmitter to calculate accurate barycenters & status
-                          const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
-                          const snapArgos = await getDocs(qArgos);
-                          const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-                          const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
-                          const snapPos = await getDocs(qPos);
-                          const manualPositions = snapPos.docs.map(doc => doc.data());
-
-                          let allPositions = [...argosPositions, ...manualPositions];
-                          if (String(t.platform_id) === '242086') {
-                            allPositions = allPositions.map(p => {
-                              const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
-                              if (!isNaN(lon) && lon < 0) {
-                                return { ...p, lon: Math.abs(lon), longitude: Math.abs(lon) };
-                              }
-                              return p;
-                            });
-
-                            // Fix negative lon docs in Firebase argos_positions
-                            snapArgos.docs.forEach(async (docSnap) => {
-                              const data = docSnap.data();
-                              if (Number(data.lon) < 0) {
-                                await saveDocument('argos_positions', docSnap.id, { lon: Math.abs(Number(data.lon)) });
-                              }
-                            });
-                          }
-                          
-                          // ALWAYS recalculate last_fix from the full Firebase database (argos_positions + positions).
-                          let correctedLastFix = t.last_fix;
-                          if (allPositions.length > 0) {
-                              const allTimestamps = allPositions
-                                  .map(p => safeParseDate(p.timestamp || p.locationDate))
-                                  .filter(ts => !isNaN(ts) && ts > 0);
-                              if (allTimestamps.length > 0) {
-                                  const maxTs = Math.max(...allTimestamps);
-                                  const maxIso = new Date(maxTs).toISOString();
-                                  const currentTs = safeParseDate(t.last_fix);
-                                  if (isNaN(currentTs) || maxTs > currentTs) {
-                                      correctedLastFix = maxIso;
-                                      t.last_fix = maxIso;
-                                      newTransmitters[i].last_fix = maxIso;
-                                      await saveDocument('transmitters', t.id, { last_fix: maxIso });
-                                      statusUpdated = true;
-                                  }
-                              }
-                          }
-
-                          const { status: derived, isNesting } = evaluateTransmitterStatus({ ...t, last_fix: correctedLastFix }, allPositions);
-                          
-                          const statusUpdates = await processTransmitterStatusUpdates(
-                              { ...t, last_fix: correctedLastFix },
-                              derived,
-                              isNesting,
-                              allPositions,
-                              addAlert,
-                              () => get().birds
-                          );
-
-                          if (Object.keys(statusUpdates).length > 0) {
-                              newTransmitters[i] = { ...newTransmitters[i], ...statusUpdates };
-                              statusUpdated = true;
-                              await saveDocument('transmitters', t.id, statusUpdates);
-                          }
-                      } catch (err) {
-                          console.error(`Error evaluating status for ${t.platform_id}:`, err);
-                      }
-              }
-              if (statusUpdated) {
-                  onProgress?.(`Updated derived statuses.`);
-              }
-
-          // 5. Update in-memory state with recent data only (for live map)
+          // 5. Update in-memory state with recent data only (for live map) — do this FIRST so UI unblocks
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
           const recentNewPositions = newPositionDocs.filter(p => {
               const t = new Date(p.timestamp).getTime();
@@ -1381,6 +1304,99 @@ export const useAppStore = create<AppState>()(
           });
 
           onProgress?.(`✅ Done: ${tUpdated} transmitters, ${pCreated} positions, ${incomingMessages.length} raw records`);
+
+          // 6. Run heavy status evaluation asynchronously (non-blocking)
+          const bgTransmitters = [...newTransmitters];
+          setTimeout(async () => {
+            try {
+              console.log(`[AppStore] Background: evaluating status for ${affectedPids.size} affected transmitters...`);
+              const affectedIndices = bgTransmitters
+                  .map((t, i) => ({ t, i }))
+                  .filter(({ t }) => affectedPids.has(String(t.platform_id || t.id).replace(/^trans-/, '').trim()));
+
+              let statusUpdated = false;
+              for (const { t, i } of affectedIndices) {
+                try {
+                  // Fetch both argos_positions and positions for this transmitter to calculate accurate barycenters & status
+                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
+                  const snapArgos = await getDocs(qArgos);
+                  const argosPositions = snapArgos.docs.map(doc => doc.data());
+
+                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
+                  const snapPos = await getDocs(qPos);
+                  const manualPositions = snapPos.docs.map(doc => doc.data());
+
+                  let allPositions = [...argosPositions, ...manualPositions];
+                  if (String(t.platform_id) === '242086') {
+                    allPositions = allPositions.map(p => {
+                      const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
+                      if (!isNaN(lon) && lon < 0) {
+                        return { ...p, lon: Math.abs(lon), longitude: Math.abs(lon) };
+                      }
+                      return p;
+                    });
+
+                    // Fix negative lon docs in Firebase argos_positions
+                    snapArgos.docs.forEach(async (docSnap) => {
+                      const data = docSnap.data();
+                      if (Number(data.lon) < 0) {
+                        await saveDocument('argos_positions', docSnap.id, { lon: Math.abs(Number(data.lon)) });
+                      }
+                    });
+                  }
+                  
+                  // Recalculate last_fix from the full Firebase database (argos_positions + positions).
+                  let correctedLastFix = t.last_fix;
+                  if (allPositions.length > 0) {
+                    const allTimestamps = allPositions
+                        .map(p => safeParseDate(p.timestamp || p.locationDate))
+                        .filter(ts => !isNaN(ts) && ts > 0);
+                    if (allTimestamps.length > 0) {
+                      const maxTs = Math.max(...allTimestamps);
+                      const maxIso = new Date(maxTs).toISOString();
+                      const currentTs = safeParseDate(t.last_fix);
+                      if (isNaN(currentTs) || maxTs > currentTs) {
+                        correctedLastFix = maxIso;
+                        bgTransmitters[i].last_fix = maxIso;
+                        await saveDocument('transmitters', t.id, { last_fix: maxIso });
+                        statusUpdated = true;
+                      }
+                    }
+                  }
+
+                  const { status: derived, isNesting } = evaluateTransmitterStatus({ ...t, last_fix: correctedLastFix }, allPositions);
+                  
+                  const statusUpdatesResult = await processTransmitterStatusUpdates(
+                      { ...t, last_fix: correctedLastFix },
+                      derived,
+                      isNesting,
+                      allPositions,
+                      addAlert,
+                      () => get().birds
+                  );
+
+                  if (Object.keys(statusUpdatesResult).length > 0) {
+                    bgTransmitters[i] = { ...bgTransmitters[i], ...statusUpdatesResult };
+                    statusUpdated = true;
+                    await saveDocument('transmitters', t.id, statusUpdatesResult);
+                  }
+                } catch (err) {
+                  console.error(`Error evaluating status for ${t.platform_id}:`, err);
+                }
+              }
+
+              // Update in-memory state with final status results
+              if (statusUpdated) {
+                const { currentUserIosPttVisibility: vis, currentUserIosVisiblePtts: visPtts } = get();
+                const updatedFiltered = filterTransmittersForUser(bgTransmitters, vis, visPtts);
+                set({ transmitters: updatedFiltered });
+                console.log('[AppStore] Background: status evaluation complete, UI updated.');
+              }
+            } catch (err) {
+              console.error('[AppStore] Background status evaluation error:', err);
+            }
+          }, 100);
+
           return { transmittersUpdated: tUpdated, positionsCreated: pCreated };
       },
 
