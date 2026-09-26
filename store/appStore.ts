@@ -1272,12 +1272,17 @@ export const useAppStore = create<AppState>()(
               });
           }
 
-          // 4.5 Evaluate and update derived_status for ALL transmitters
-          // This ensures that all transmitters, even those without new positions, are evaluated correctly (e.g. for pattern dead or inactive rules).
-          onProgress?.(`Evaluating status for ${newTransmitters.length} transmitters...`);
+          // 4.5 Evaluate and update derived_status for AFFECTED transmitters only
+          // Only re-evaluate transmitters that received new data to avoid O(N) Firestore queries on every import.
+          const affectedPids = new Set<string>();
+          incomingMessages.forEach(m => { if (m.platformId) affectedPids.add(String(m.platformId).replace(/^trans-/, '').trim()); });
+          incomingDevices.forEach(d => { if (d.deviceRef) affectedPids.add(String(d.deviceRef).replace(/^trans-/, '').trim()); });
+          const affectedIndices = newTransmitters
+              .map((t, i) => ({ t, i }))
+              .filter(({ t }) => affectedPids.has(String(t.platform_id || t.id).replace(/^trans-/, '').trim()));
+          onProgress?.(`Evaluating status for ${affectedIndices.length} affected transmitters (${newTransmitters.length} total)...`);
           let statusUpdated = false;
-          for (let i = 0; i < newTransmitters.length; i++) {
-              const t = newTransmitters[i];
+          for (const { t, i } of affectedIndices) {
               try {
                           // Fetch both argos_positions and positions for this transmitter to calculate accurate barycenters & status
                           const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
