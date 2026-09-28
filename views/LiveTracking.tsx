@@ -2190,18 +2190,20 @@ const LiveTrackingInner = () => {
                 <GeoJSON 
                   key={`qgis-${layer.id}-${JSON.stringify(layer.style)}`}
                   data={qgisGeoJSONCache[layer.id]}
-                  style={() => ({
-                    color: layer.style.color,
-                    fillColor: layer.style.fillColor,
+                  style={(feature) => ({
+                    color: feature?.properties?._color || layer.style.color,
+                    fillColor: feature?.properties?._color || layer.style.fillColor,
                     fillOpacity: layer.style.fillOpacity,
                     weight: layer.style.weight,
                     radius: layer.style.radius || 6
                   })}
                   pointToLayer={(feature, latlng) => {
+                    const featColor = feature?.properties?._color || layer.style.fillColor;
+                    const strokeColor = feature?.properties?._color || layer.style.color;
                     return L.circleMarker(latlng, {
                       radius: layer.style.radius || 6,
-                      fillColor: layer.style.fillColor,
-                      color: layer.style.color,
+                      fillColor: featColor,
+                      color: strokeColor,
                       weight: layer.style.weight,
                       opacity: 1,
                       fillOpacity: layer.style.fillOpacity
@@ -2210,11 +2212,11 @@ const LiveTrackingInner = () => {
                   onEachFeature={(feature, leafletLayer) => {
                     if (feature.properties) {
                       const props = Object.entries(feature.properties)
-                        .filter(([, v]) => v !== null && v !== undefined)
-                        .map(([k, v]) => `<b>${k}:</b> ${v}`)
+                        .filter(([k, v]) => v !== null && v !== undefined && k !== '_color')
+                        .map(([k, v]) => `<b>${k === '_qgisLayer' ? 'QGIS Layer' : k}:</b> ${v}`)
                         .join('<br/>');
                       if (props) {
-                        leafletLayer.bindPopup(`<div style="max-height:200px;overflow-y:auto;font-size:12px"><b style="color:#059669">${layer.name}</b><br/><hr style="margin:4px 0;border-color:#e5e7eb"/>${props}</div>`);
+                        leafletLayer.bindPopup(`<div style="max-height:200px;overflow-y:auto;font-size:12px"><b style="color:#059669">${feature.properties._qgisLayer || layer.name}</b><br/><hr style="margin:4px 0;border-color:#e5e7eb"/>${props}</div>`);
                       }
                     }
                   }}

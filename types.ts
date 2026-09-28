@@ -181,7 +181,7 @@ export interface QGISLayer {
   type: 'file' | 'wms' | 'wfs';
   sourceUrl?: string;
   storageUrl?: string;
-  format: 'geojson' | 'shapefile' | 'geopackage' | 'kml';
+  format: 'geojson' | 'shapefile' | 'geopackage' | 'kml' | 'qgz' | 'qgs' | 'qlr' | 'csv' | 'gpx';
   geometryType: 'Point' | 'LineString' | 'Polygon' | 'MultiPolygon' | 'Mixed';
   featureCount: number;
   bounds: {

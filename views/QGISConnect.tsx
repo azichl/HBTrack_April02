@@ -93,11 +93,11 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
   };
 
   const handleFileSelect = async (file: File) => {
-    const validExts = ['.geojson', '.json', '.zip', '.kml', '.kmz', '.gpkg'];
+    const validExts = ['.qgz', '.qgs', '.qlr', '.csv', '.gpx', '.geojson', '.json', '.zip', '.kml', '.kmz', '.gpkg'];
     const isExtValid = validExts.some(ext => file.name.toLowerCase().endsWith(ext));
     
     if (!isExtValid) {
-      setImportStatus({ type: 'error', message: 'Invalid file format. Please upload .geojson, .zip, .kml, .kmz, or .gpkg' });
+      setImportStatus({ type: 'error', message: 'Invalid file format. Please upload .qgz, .qgs, .qlr, .csv, .gpx, .geojson, .zip, .kml, .kmz, or .gpkg' });
       return;
     }
 
@@ -107,7 +107,7 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
     }
 
     setImportFile(file);
-    setLayerName(file.name.split('.')[0]);
+    setLayerName(file.name.replace(/\.[^/.]+$/, ''));
     setIsParsing(true);
     setImportStatus(null);
     setImportPreview(null);
@@ -116,6 +116,16 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
       const ext = file.name.split('.').pop()?.toLowerCase() || '';
       const geojson = await parseFileToGeoJSON(file, ext);
       const metadata = extractMetadata(geojson);
+
+      // Adopt QGIS layer color if present in parsed features
+      const firstColor = metadata.normalizedGeoJSON?.features?.find((f: any) => f?.properties?._color)?.properties?._color;
+      if (firstColor) {
+        setLayerStyle(prev => ({
+          ...prev,
+          strokeColor: firstColor,
+          fillColor: firstColor
+        }));
+      }
       
       setImportPreview({
         geojson: metadata.normalizedGeoJSON,
@@ -139,6 +149,7 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
       const layerId = `qgis_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
       const ext = importFile.name.split('.').pop()?.toLowerCase() || 'geojson';
       const formatMap: Record<string, QGISLayer['format']> = { 
+        qgz: 'qgz', qgs: 'qgs', qlr: 'qlr', csv: 'csv', gpx: 'gpx',
         geojson: 'geojson', json: 'geojson', zip: 'shapefile', kml: 'kml', kmz: 'kml', gpkg: 'geopackage' 
       };
       
@@ -403,7 +414,7 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
                 type="file" 
                 ref={fileInputRef} 
                 className="hidden" 
-                accept=".geojson,.json,.zip,.kml,.kmz,.gpkg"
+                accept=".qgz,.qgs,.qlr,.csv,.gpx,.geojson,.json,.zip,.kml,.kmz,.gpkg"
                 onChange={(e) => {
                   if (e.target.files?.[0]) handleFileSelect(e.target.files[0]);
                 }}
@@ -413,11 +424,11 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
                 {isParsing ? <Loader2 className="animate-spin" size={24} /> : <FileUp size={24} />}
               </div>
               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                {isParsing ? 'Parsing file...' : (importFile ? importFile.name : 'Click or drag file to this area to upload')}
+                {isParsing ? 'Parsing QGIS / GIS file...' : (importFile ? importFile.name : 'Click or drag QGIS project (.qgz) or GIS layer file here')}
               </p>
               {!importFile && !isParsing && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Supports .geojson, .json, .zip (Shapefile), .kml, .kmz, .gpkg
+                  Supports .qgz, .qgs, .qlr (QGIS Projects & Layers), .csv, .gpx, .geojson, .zip (Shapefile), .kml, .kmz, .gpkg
                 </p>
               )}
             </div>

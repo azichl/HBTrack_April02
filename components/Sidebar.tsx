@@ -174,6 +174,7 @@ export const Sidebar = () => {
             )}
 
             <NavItem icon={Map} label="GIS" active={activeTab === 'GIS Features'} onClick={() => handleNavigation('GIS Features')} />
+            <NavItem icon={Globe} label="QGIS Connect" active={activeTab === 'QGIS Connect'} badge="QGIS" badgeColor="bg-emerald-500 text-white" onClick={() => handleNavigation('QGIS Connect')} />
 
             {(hasPermission('Manage Users') || isAdmin) && (
               <>

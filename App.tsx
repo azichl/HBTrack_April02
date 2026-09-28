@@ -18,6 +18,7 @@ import { Reports } from './views/Reports';
 import { Alerts } from './views/Alerts';
 import { UserManagement } from './views/UserManagement';
 import { GISFeatures } from './views/GISFeatures';
+import { QGISConnect } from './views/QGISConnect';
 import { Settings } from './views/Settings';
 import { HelpSupport } from './views/HelpSupport';
 import { GeoSpatialAnalysis } from './views/GeoSpatialAnalysis';
@@ -519,6 +520,7 @@ const App = () => {
 
       case 'User Management': return <UserManagement />;
       case 'GIS Features': return <GISFeatures />;
+      case 'QGIS Connect': return <QGISConnect />;
       case 'Settings': return <Settings />;
       case 'Help & Support': return <HelpSupport />;
       default: return <PlaceholderView title={currentView} />;

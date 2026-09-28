@@ -1019,6 +1019,23 @@ ${coords}
           </p>
         </div>
 
+        {/* QGIS Connect Card */}
+        <div 
+          onClick={() => setCurrentSubView('qgis-connect')}
+          className="bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-5 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-emerald-600 text-white rounded-lg">
+              <Globe size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-sm">QGIS Connect (.qgz / .qgs / .qlr / GeoJSON)</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">Import QGIS projects (.qgz/.qgs), layer files (.qlr/.csv/.gpx/.geojson/.zip), connect WMS/WFS servers, and export tracks.</p>
+            </div>
+          </div>
+          <span className="text-emerald-600 group-hover:translate-x-1 transition-transform font-bold text-xs">Open &rarr;</span>
+        </div>
+
         {/* GPS KML Card */}
         <div 
           onClick={() => setCurrentSubView('kml-converter')}
@@ -1034,23 +1051,6 @@ ${coords}
             </div>
           </div>
           <span className="text-brand-600 group-hover:translate-x-1 transition-transform font-bold text-xs">Convert &rarr;</span>
-        </div>
-
-        {/* QGIS Connect Card */}
-        <div 
-          onClick={() => setCurrentSubView('qgis-connect')}
-          className="bg-emerald-50/50 dark:bg-emerald-950/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-5 hover:shadow-md cursor-pointer transition-all flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-600 text-white rounded-lg">
-              <Globe size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm">QGIS Connect</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">Import GIS layers, connect WMS/WFS servers, and export tracking data for QGIS.</p>
-            </div>
-          </div>
-          <span className="text-emerald-600 group-hover:translate-x-1 transition-transform font-bold text-xs">Open &rarr;</span>
         </div>
         {categories.map((cat, catIdx) => (
           <div key={catIdx} className="space-y-4">
