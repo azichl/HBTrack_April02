@@ -1,6 +1,6 @@
 import React, { Component, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker, GeoJSON } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
@@ -8,6 +8,7 @@ import { Transmitter } from '../types';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
+import { fetchAllLayers } from '../services/qgisLayerService';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
 // Use exact user-requested hex colors for the map markers, adjusted size
@@ -1105,13 +1106,45 @@ const LiveTrackingInner = () => {
       activeBaseLayer,
       setSharedMapCenter,
       setSharedMapZoom,
-      setActiveBaseLayer
+      setActiveBaseLayer,
+      qgisLayers,
+      setQGISLayers,
+      qgisGeoJSONCache,
+      cacheQGISGeoJSON
   } = useAppStore();
   
   const [confirmDeadTransmitter, setConfirmDeadTransmitter] = useState<Transmitter | null>(null);
   
   // View Mode State
   const [viewMode, setViewMode] = useState<'tracking' | 'weather' | 'weather2'>('tracking');
+
+  // Load QGIS layers metadata from Firestore on mount
+  useEffect(() => {
+    fetchAllLayers()
+      .then(layers => {
+        if (layers && layers.length > 0 && setQGISLayers) {
+          setQGISLayers(layers);
+        }
+      })
+      .catch(e => console.warn('Failed to fetch QGIS layers on LiveTracking mount:', e));
+  }, [setQGISLayers]);
+
+  // QGIS Layer GeoJSON loader
+  useEffect(() => {
+    if (!qgisLayers || qgisLayers.length === 0) return;
+    const visibleFileLayers = qgisLayers.filter(l => l.visible && l.type === 'file' && l.storageUrl && !qgisGeoJSONCache?.[l.id]);
+    visibleFileLayers.forEach(async (layer) => {
+      try {
+        const response = await fetch(layer.storageUrl!);
+        if (response.ok) {
+          const geojson = await response.json();
+          if (cacheQGISGeoJSON) cacheQGISGeoJSON(layer.id, geojson);
+        }
+      } catch (e) {
+        console.warn(`Failed to load QGIS layer ${layer.name}:`, e);
+      }
+    });
+  }, [qgisLayers, qgisGeoJSONCache, cacheQGISGeoJSON]);
 
   // Tracking Map State
   const [layerOpen, setLayerOpen] = useState(false);
@@ -2152,6 +2185,51 @@ const LiveTrackingInner = () => {
                 <TileLayer url={geeLstTileUrl} zIndex={400} />
             )}
             
+            {/* QGIS Imported Vector Layers */}
+            {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'file' && qgisGeoJSONCache?.[l.id]).map(layer => (
+                <GeoJSON 
+                  key={`qgis-${layer.id}-${JSON.stringify(layer.style)}`}
+                  data={qgisGeoJSONCache[layer.id]}
+                  style={() => ({
+                    color: layer.style.color,
+                    fillColor: layer.style.fillColor,
+                    fillOpacity: layer.style.fillOpacity,
+                    weight: layer.style.weight,
+                    radius: layer.style.radius || 6
+                  })}
+                  pointToLayer={(feature, latlng) => {
+                    return L.circleMarker(latlng, {
+                      radius: layer.style.radius || 6,
+                      fillColor: layer.style.fillColor,
+                      color: layer.style.color,
+                      weight: layer.style.weight,
+                      opacity: 1,
+                      fillOpacity: layer.style.fillOpacity
+                    });
+                  }}
+                  onEachFeature={(feature, leafletLayer) => {
+                    if (feature.properties) {
+                      const props = Object.entries(feature.properties)
+                        .filter(([, v]) => v !== null && v !== undefined)
+                        .map(([k, v]) => `<b>${k}:</b> ${v}`)
+                        .join('<br/>');
+                      if (props) {
+                        leafletLayer.bindPopup(`<div style="max-height:200px;overflow-y:auto;font-size:12px"><b style="color:#059669">${layer.name}</b><br/><hr style="margin:4px 0;border-color:#e5e7eb"/>${props}</div>`);
+                      }
+                    }
+                  }}
+                />
+            ))}
+
+            {/* QGIS WMS Layers */}
+            {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'wms' && l.sourceUrl).map(layer => (
+                <TileLayer
+                  key={`wms-${layer.id}`}
+                  url={`${layer.sourceUrl}${layer.sourceUrl!.includes('?') ? '&' : '?'}service=WMS&request=GetMap&layers=${layer.wmsLayers || ''}&styles=&format=image/png&transparent=true&version=1.1.1&srs=EPSG:4326&bbox={bbox-epsg-3857}&width=256&height=256`}
+                  zIndex={layer.zIndex || 700}
+                />
+            ))}
+
             {/* Historical Tracks */}
             {showHistory && historyPaths.map((hp) => (
                 <React.Fragment key={hp.id}>

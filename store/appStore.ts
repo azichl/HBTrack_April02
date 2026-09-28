@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord } from '../types';
+import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord, QGISLayer, QGISLayerStyle } from '../types';
 import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
@@ -95,6 +95,15 @@ interface AppState {
   setGeeSaviTileUrl: (url: string | null) => void;
   setGeeNdwiTileUrl: (url: string | null) => void;
   setActiveGeeLayer: (layer: 'ndvi' | 'lst' | 'savi' | 'ndwi' | null) => void;
+
+  qgisLayers: QGISLayer[];
+  qgisGeoJSONCache: Record<string, any>;
+  setQGISLayers: (layers: QGISLayer[]) => void;
+  addQGISLayer: (layer: QGISLayer) => void;
+  removeQGISLayer: (id: string) => void;
+  updateQGISLayerVisibility: (id: string, visible: boolean) => void;
+  updateQGISLayerStyle: (id: string, style: QGISLayerStyle) => void;
+  cacheQGISGeoJSON: (id: string, geojson: any) => void;
 
   // Shared Map State (Synchronized between Live Map & GEE Map)
   sharedMapCenter: [number, number];
@@ -699,6 +708,24 @@ export const useAppStore = create<AppState>()(
       setSharedMapZoom: (zoom) => set({ sharedMapZoom: zoom }),
       setActiveBaseLayer: (layer) => set({ activeBaseLayer: layer }),
       
+      qgisLayers: [],
+      qgisGeoJSONCache: {},
+      setQGISLayers: (layers) => set({ qgisLayers: layers }),
+      addQGISLayer: (layer) => set((state) => ({ qgisLayers: [...state.qgisLayers, layer] })),
+      removeQGISLayer: (id) => set((state) => ({ 
+        qgisLayers: state.qgisLayers.filter(l => l.id !== id),
+        qgisGeoJSONCache: Object.fromEntries(Object.entries(state.qgisGeoJSONCache).filter(([k]) => k !== id))
+      })),
+      updateQGISLayerVisibility: (id, visible) => set((state) => ({
+        qgisLayers: state.qgisLayers.map(l => l.id === id ? { ...l, visible } : l)
+      })),
+      updateQGISLayerStyle: (id, style) => set((state) => ({
+        qgisLayers: state.qgisLayers.map(l => l.id === id ? { ...l, style } : l)
+      })),
+      cacheQGISGeoJSON: (id, geojson) => set((state) => ({
+        qgisGeoJSONCache: { ...state.qgisGeoJSONCache, [id]: geojson }
+      })),
+
       lastSaved: new Date().toISOString(),
       lastIngestTime: null,
       setLastIngestTime: (ts) => set({ lastIngestTime: ts }),

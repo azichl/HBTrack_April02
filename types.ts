@@ -166,3 +166,36 @@ export interface ArgosCount {
   periodStart: string;
   periodEnd: string;
 }
+
+export interface QGISLayerStyle {
+  color: string;
+  fillColor: string;
+  fillOpacity: number;
+  weight: number;
+  radius?: number;
+}
+
+export interface QGISLayer {
+  id: string;
+  name: string;
+  type: 'file' | 'wms' | 'wfs';
+  sourceUrl?: string;
+  storageUrl?: string;
+  format: 'geojson' | 'shapefile' | 'geopackage' | 'kml';
+  geometryType: 'Point' | 'LineString' | 'Polygon' | 'MultiPolygon' | 'Mixed';
+  featureCount: number;
+  bounds: {
+    minLat: number;
+    maxLat: number;
+    minLon: number;
+    maxLon: number;
+  };
+  style: QGISLayerStyle;
+  visible: boolean;
+  zIndex: number;
+  uploadedBy: string;
+  uploadedAt: string;
+  description?: string;
+  wmsLayers?: string;
+  properties?: string[];
+}
