@@ -3,7 +3,7 @@ import {
   FileUp, Download, Layers, Trash2, Eye, EyeOff, 
   MapPin, Globe, Settings, Upload, RefreshCw, 
   ChevronDown, AlertCircle, CheckCircle, Loader2, 
-  Palette, FileCode, ArrowLeft
+  Palette, FileCode, ArrowLeft, Compass
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { 
@@ -15,10 +15,11 @@ import {
   getLayerGeoJSON
 } from '../services/qgisLayerService';
 import { getHistoricalPositions } from '../services/firestoreService';
+import { QGISMapProductionReport } from '../components/reports/QGISMapProductionReport';
 import { saveAs } from 'file-saver';
 import type { QGISLayer, QGISLayerStyle } from '../types';
 
-export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
+export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initialTab?: string }) => {
   const { 
     transmitters, 
     birds, 
@@ -43,7 +44,9 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
       .catch(err => console.warn('Could not load QGIS layers from Firestore:', err));
   }, [setQGISLayers]);
 
-  const [activeTab, setActiveTab] = useState<'import-layers' | 'wms-wfs' | 'export-data' | 'layer-manager'>('import-layers');
+  const [activeTab, setActiveTab] = useState<'map-production' | 'import-layers' | 'wms-wfs' | 'export-data' | 'layer-manager'>(
+    (initialTab as any) || 'map-production'
+  );
 
   // --- Tab 1: Import Layers State ---
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -343,6 +346,7 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
 
   // --- UI Components ---
   const tabs = [
+    { id: 'map-production', label: 'إنتاج الخرائط والتقارير (Map Production)', icon: Compass },
     { id: 'import-layers', label: 'Import Vector Layer', icon: FileUp },
     { id: 'wms-wfs', label: 'Connect WMS/WFS', icon: Globe },
     { id: 'export-data', label: 'Export Tracks', icon: Download },
@@ -397,6 +401,11 @@ export const QGISConnect = ({ onBack }: { onBack?: () => void }) => {
       {/* TAB CONTENT */}
       <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5">
         
+        {/* TAB 0: MAP PRODUCTION & REPORTS */}
+        {activeTab === 'map-production' && (
+          <QGISMapProductionReport />
+        )}
+
         {/* TAB 1: IMPORT LAYERS */}
         {activeTab === 'import-layers' && (
           <div className="space-y-6">

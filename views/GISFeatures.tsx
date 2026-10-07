@@ -1029,8 +1029,8 @@ ${coords}
               <Globe size={24} />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-sm">QGIS Connect (.qgz / .qgs / .qlr / GeoJSON)</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">Import QGIS projects (.qgz/.qgs), layer files (.qlr/.csv/.gpx/.geojson/.zip), connect WMS/WFS servers, and export tracks.</p>
+              <h3 className="font-bold text-gray-900 dark:text-white text-sm">QGIS Connect & Map Production (إنتاج الخرائط)</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-450 mt-1">إنتاج الخرائط الرسمية وتقارير متابعة الحبارى (A4 Landscape)، استيراد مشاريع وطبقات QGIS، والربط مع خوادم WMS/WFS.</p>
             </div>
           </div>
           <span className="text-emerald-600 group-hover:translate-x-1 transition-transform font-bold text-xs">Open &rarr;</span>
