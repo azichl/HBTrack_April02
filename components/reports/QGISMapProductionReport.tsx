@@ -1089,49 +1089,49 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <table className="w-full text-[12px] text-right border-collapse">
                   <tbody>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 text-center">
-                        <span className="font-mono font-black text-[#701a2b] text-[13px]">
-                          {selectedPttId}
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
                         رقم جهاز التتبع
+                      </td>
+                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                        <span className="font-mono font-black text-[#701a2b] text-[13px]">
+                          {String(selectedPttId).replace(/^trans-/, '')}
+                        </span>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 text-center">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                        رقم الحقل
+                      </td>
+                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
                         <span className="bg-gray-100 text-gray-600 font-bold px-2.5 py-0.5 rounded-full text-xs">
                           {customMetadata.birdRing || 'NA'}
                         </span>
                       </td>
-                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
-                        رقم الحقل
-                      </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center">
-                        {customMetadata.species || 'وحش'}
-                      </td>
-                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
                         النوعية
                       </td>
+                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200">
+                        {customMetadata.species === 'Houbara Bustard' ? 'وحش' : (customMetadata.species || 'وحش')}
+                      </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center">
-                        {customMetadata.gender || 'ذكر'}
-                      </td>
-                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
                         الجنس
+                      </td>
+                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200">
+                        {customMetadata.gender || 'ذكر'}
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td className="py-1.5 px-3 text-center">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                        حالة الطائر
+                      </td>
+                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
                         <span className="bg-emerald-50 text-emerald-600 font-bold px-3 py-0.5 rounded-full text-xs">
                           {customMetadata.birdStatus || 'حي'}
                         </span>
-                      </td>
-                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
-                        حالة الطائر
                       </td>
                     </tr>
                   </tbody>
