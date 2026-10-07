@@ -50,8 +50,8 @@ export const calculateBearingDegrees = (lat1: number, lon1: number, lat2: number
   return (rad2deg(θ) + 360) % 360;
 };
 
-/** Formats bearing into Arabic compass direction and degrees, e.g. "شرق (69°)" */
-export const formatArabicBearing = (bearing: number): { text: string; full: string; degrees: number } => {
+/** Formats bearing into Arabic compass direction and degrees, e.g. "شرق" & "69°" */
+export const formatArabicBearing = (bearing: number): { text: string; degrees: number; full: string } => {
   const deg = Math.round(bearing);
   let dir = 'شمال';
   if (deg >= 337.5 || deg < 22.5) dir = 'شمال';
@@ -70,7 +70,7 @@ export const formatArabicBearing = (bearing: number): { text: string; full: stri
   };
 };
 
-/** Formats decimal coordinate to DMM with 4 decimals for minutes, matching the report format */
+/** Formats decimal coordinate to DMM with 4 decimals for minutes: "46° 56.6490'" */
 export const formatDMM = (val: number, isLat: boolean): string => {
   const abs = Math.abs(val || 0);
   const deg = Math.floor(abs);
@@ -110,67 +110,69 @@ export const calculateDurationDays = (startTs: any, endTs: any): number => {
   return Math.max(0, Math.round((t2 - t1) / (1000 * 60 * 60 * 24)));
 };
 
-// ─── LEAFLET ICONS & HELPERS ─────────────────────────────────────────────────
+// ─── LEAFLET ICONS WITH FIXED EXPLICIT SIZES ─────────────────────────────────
 
 const createReportMarkerIcon = (
   colorHex: string, 
   label: string, 
-  badgeTextColor: string = '#111827',
-  iconType: 'pin' | 'camp' = 'pin'
+  badgeTextColor: string,
+  iconType: 'pin' | 'camp'
 ) => {
-  let iconSvg = '';
+  let pinHtml = '';
   if (iconType === 'camp') {
-    iconSvg = `
-      <div style="background-color: #f59e0b; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.35); border: 2px solid #ffffff;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M19 20 10 4 1 20h18Z"></path>
-          <path d="m10 4 9 16"></path>
-          <path d="M14 20v-5a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5"></path>
-        </svg>
+    pinHtml = `
+      <div style="display: flex; flex-direction: column; align-items: center; width: 100px; direction: ltr; pointer-events: none;">
+        <div style="background: #ffffff; border: 1px solid #d97706; border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 800; color: #b45309; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.3); margin-bottom: 2px; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; letter-spacing: normal;">
+          ${label}
+        </div>
+        <div style="background-color: #f59e0b; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.45); border: 2.5px solid #ffffff;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 20 10 4 1 20h18Z"></path>
+            <path d="m10 4 9 16"></path>
+          </svg>
+        </div>
       </div>
     `;
+    return L.divIcon({
+      className: 'report-map-camp-marker',
+      html: pinHtml,
+      iconSize: [100, 50],
+      iconAnchor: [50, 50]
+    });
   } else {
-    iconSvg = `
-      <div style="position: relative; width: 26px; height: 36px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.4));">
-        <svg width="26" height="36" viewBox="0 0 24 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 0C5.37258 0 0 5.37258 0 12C0 21 12 36 12 36C12 36 24 21 24 12C24 5.37258 18.6274 0 12 0Z" fill="${colorHex}" stroke="#ffffff" stroke-width="1.8"/>
-          <circle cx="12" cy="12" r="5" fill="#ffffff"/>
-        </svg>
+    pinHtml = `
+      <div style="display: flex; flex-direction: column; align-items: center; width: 130px; direction: ltr; pointer-events: none;">
+        <div style="background: #ffffff; border: 1px solid ${colorHex}; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 800; color: ${badgeTextColor}; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.3); margin-bottom: 2px; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; letter-spacing: normal;">
+          ${label}
+        </div>
+        <div style="width: 22px; height: 22px; border-radius: 50%; background: ${colorHex}; border: 3px solid #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
+          <div style="width: 7px; height: 7px; border-radius: 50%; background: #ffffff;"></div>
+        </div>
       </div>
     `;
+    return L.divIcon({
+      className: 'report-map-pin-marker',
+      html: pinHtml,
+      iconSize: [130, 50],
+      iconAnchor: [65, 50]
+    });
   }
-
-  const html = `
-    <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); pointer-events: auto;">
-      <div style="background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(2px); border-radius: 4px; padding: 2px 7px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; font-weight: 800; color: ${badgeTextColor}; border: 1px solid rgba(0,0,0,0.18); box-shadow: 0 1px 4px rgba(0,0,0,0.25); white-space: nowrap; margin-bottom: 2px; text-shadow: 0 0 1px rgba(255,255,255,0.8);">
-        ${label}
-      </div>
-      ${iconSvg}
-    </div>
-  `;
-
-  return L.divIcon({
-    className: 'custom-report-marker',
-    html,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0]
-  });
 };
 
-const createDistancePillIcon = (text: string, borderColor: string = '#dc2626') => {
+const createDistancePillIcon = (text: string, borderColor: string) => {
   return L.divIcon({
-    className: 'custom-distance-pill',
+    className: 'report-map-pill-marker',
     html: `
-      <div style="transform: translate(-50%, -50%); background: #ffffff; border: 1.5px solid ${borderColor}; border-radius: 9999px; padding: 1.5px 8px; font-size: 11px; font-weight: 800; color: #111827; box-shadow: 0 1px 4px rgba(0,0,0,0.3); white-space: nowrap; font-family: 'Segoe UI', Arial, sans-serif;">
+      <div style="direction: ltr; background: #ffffff; border: 1.5px solid ${borderColor}; border-radius: 9999px; padding: 1.5px 8px; font-size: 11px; font-weight: 800; color: #111827; box-shadow: 0 1px 4px rgba(0,0,0,0.35); white-space: nowrap; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; letter-spacing: normal;">
         ${text}
       </div>
     `,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0]
+    iconSize: [70, 22],
+    iconAnchor: [35, 11]
   });
 };
 
-/** Controller component to fit bounds around the 3 key points with padding */
+/** Controller component to fit bounds and ensure Leaflet renders all tiles and layers */
 const ReportMapFitter = ({ 
   points 
 }: { 
@@ -182,13 +184,21 @@ const ReportMapFitter = ({
     const validPoints = points.filter(p => !isNaN(p[0]) && !isNaN(p[1]) && p[0] !== 0 && p[1] !== 0);
     if (validPoints.length === 0) return;
 
+    // Invalidate size immediately and after delay
+    map.invalidateSize();
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
     const bounds = L.latLngBounds(validPoints.map(p => L.latLng(p[0], p[1])));
-    map.fitBounds(bounds, { padding: [50, 50], maxZoom: 12 });
+    map.fitBounds(bounds, { padding: [55, 55], maxZoom: 10 });
+
+    return () => clearTimeout(timer);
   }, [map, JSON.stringify(points)]);
   return null;
 };
 
-// ─── KAZAKHSTAN SVG PATH FOR LOCATOR INSET MAP ───────────────────────────────
+// ─── KAZAKHSTAN SVG PATH FOR INSET LOCATOR MAP ───────────────────────────────
 const KAZAKHSTAN_SVG_PATH = "M87.9,0L85.1,1.3L85.3,2L85.1,2.7L73.3,5.6L73.5,6.9L73,7.1L72.4,6.5L68.5,7.3L68.7,7.8L68.3,8L67.9,7.5L63.1,8.9L63,9.7L62.6,9.9L62.3,9.1L60.8,9L60.9,9.7L60.5,10.2L60.2,9.3L59.2,9.1L58.6,8.2L57.5,7.5L56.9,8L56.4,7.8L56.1,8.2L55.3,7.9L55,8.3L54.1,8L53.7,8.8L52.8,8.8L51.8,9.7L51.9,10.8L50.8,11.2L50,12.3L48.8,12.3L48.5,13.2L47.5,13.4L47.1,14.2L46.3,13.9L45.4,14.6L44.2,14.4L44.1,15.1L43.2,14.9L42.6,15.7L41.7,15.3L41.3,16L40.2,15.7L39.8,16.5L38.7,16.2L38.1,17.1L37.1,16.9L36.7,17.6L35.4,17.4L34.7,18.4L33.6,18.2L33,19.2L31.8,19L31.3,20L29.9,20.1L29.2,21.3L27.9,21.5L27.1,22.8L25.8,23.1L25.1,24.4L23.7,24.7L22.9,26.1L21.4,26.5L20.6,28L19,28.5L18.2,30.1L16.5,30.8L15.6,32.4L13.8,33.2L12.9,34.9L11,35.8L10.2,37.5L8.2,38.7L7.3,40.4L5.3,41.7L4.4,43.5L2.4,44.9L1.5,46.7L0,48.4L0,52.3L1.5,53.8L2.7,54.7L4.1,55.9L5.3,57.1L6.7,58.3L7.9,59.6L9.3,60.8L10.5,62.1L11.9,63.3L13.1,64.7L14.5,65.9L15.7,67.3L17.1,68.5L18.4,70L19.8,71.2L21.1,72.7L22.6,73.9L23.9,75.4L25.4,76.6L26.7,78.2L28.2,79.4L29.5,81L31.1,82.2L32.4,83.8L34,84.9L35.4,86.6L37,87.6L38.4,89.3L40.1,90.3L41.6,92L43.3,92.9L44.8,94.7L46.6,95.6L48.2,97.3L50.1,98.1L51.8,99.8L53.7,100L55.7,99.3L57.5,98.1L59.5,97.1L61.4,95.7L63.4,94.5L65.3,92.9L67.3,91.5L69.2,89.8L71.1,88.2L73,86.3L74.8,84.6L76.6,82.6L78.3,80.8L80,78.7L81.7,76.7L83.3,74.5L84.8,72.4L86.3,70.1L87.7,67.9L89.1,65.5L90.3,63.2L91.6,60.8L92.7,58.3L93.9,55.9L94.9,53.4L95.9,50.8L96.8,48.3L97.7,45.7L98.5,43.1L99.2,40.4L99.9,37.8L100,35.2L99.8,32.6L99.5,29.9L99.1,27.4L98.5,24.8L97.8,22.3L97,19.8L96.1,17.4L95.1,15.1L94,12.8L92.7,10.6L91.4,8.5L90,6.5L88.5,4.7L86.9,2.9L85.2,1.3Z";
 
 // ─── COMPONENT DEFINITION ───────────────────────────────────────────────────
@@ -210,7 +220,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   // Selected Camp State
-  const [selectedCampId, setSelectedCampId] = useState<string>('auto'); // 'auto', 'zhezkazgan_camp', 'almaty_camp'
+  const [selectedCampId, setSelectedCampId] = useState<string>('auto');
 
   // Loading & Customization State
   const [isLoadingTelemetry, setIsLoadingTelemetry] = useState<boolean>(false);
@@ -233,14 +243,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     issueDate: '2026-10-07'
   });
 
-  // Telemetry Coordinates State
+  // Telemetry Coordinates State (Defaults to exact values for 244289)
   const [telemetryData, setTelemetryData] = useState<{
     releasePos: { lat: number; lon: number; dateStr: string };
     lastGpsPos: { lat: number; lon: number; dateStr: string };
     rawGpsCount: number;
     dataSource: 'telemetry' | 'reference_pdf';
   }>({
-    // Initialized with exact reference values for 244289 from the attached PDF
     releasePos: { lat: 46.94415, lon: 66.8242, dateStr: '16-10-2024' },
     lastGpsPos: { lat: 46.9965, lon: 67.0222, dateStr: '01-10-2026' },
     rawGpsCount: 1,
@@ -257,7 +266,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     async function loadTelemetryForPtt() {
       if (!selectedPttId) return;
 
-      // Special case: if 244289, provide reference PDF data unless live data override exists
       if (selectedPttId === '244289') {
         setCustomMetadata({
           birdRing: 'NA',
@@ -277,13 +285,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
       setIsLoadingTelemetry(true);
       try {
-        // Find transmitter and bird
         const currentTransmitter = transmitters.find(
           t => t.id === selectedPttId || t.platform_id === selectedPttId
         );
         const currentBird = currentTransmitter ? findBirdForTransmitter(birds, currentTransmitter) : null;
 
-        // Fetch telemetry positions for this transmitter
         const pttIdsToQuery = [selectedPttId];
         if (currentTransmitter && currentTransmitter.platform_id) {
           pttIdsToQuery.push(currentTransmitter.platform_id);
@@ -299,7 +305,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           console.warn('Historical query error, checking store positions:', e);
         }
 
-        // Combine with positions in memory store
         const storePositions = positions.filter(p => {
           const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
           return pttIdsToQuery.includes(pid);
@@ -313,18 +318,14 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           return locType === 'GPS';
         });
 
-        // Sort chronologically
         gpsPositions.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
         if (!isMounted) return;
 
         if (gpsPositions.length > 0) {
-          // Latest chronological GPS fix
           const latestGps = gpsPositions[gpsPositions.length - 1];
           const latestGpsDate = formatDateDDMMYYYY(latestGps.timestamp);
 
-          // Release / installation coordinate:
-          // Check bird release coordinate first, or fallback to earliest recorded fix
           let relLat = currentBird?.release_lat ? parseFloat(String(currentBird.release_lat)) : NaN;
           let relLon = currentBird?.release_lon ? parseFloat(String(currentBird.release_lon)) : NaN;
           let relDate = currentBird?.release_date ? formatDateDDMMYYYY(currentBird.release_date) : '';
@@ -351,7 +352,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             dataSource: 'telemetry'
           });
 
-          // Prepopulate bird metadata
           setCustomMetadata(prev => ({
             ...prev,
             birdRing: currentBird?.ring_id || 'NA',
@@ -361,8 +361,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             issueDate: formatDateYYYYMMDD(new Date()) || '2026-10-07'
           }));
         } else {
-          // If no GPS telemetry found for this ID, notify and keep reference coordinates
-          console.warn(`No GPS fixes found for transmitter ${selectedPttId}. Using default reference positions.`);
           setTelemetryData(prev => ({
             ...prev,
             rawGpsCount: 0,
@@ -391,7 +389,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     if (selectedCampId === 'almaty_camp') {
       return FIXED_FIELD_CAMPS[1];
     }
-    // Auto mode: select camp nearest to last GPS position
     const { lat, lon } = telemetryData.lastGpsPos;
     let nearest = FIXED_FIELD_CAMPS[0];
     let minDist = Infinity;
@@ -409,29 +406,24 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   const metrics = useMemo(() => {
     const { releasePos, lastGpsPos } = telemetryData;
     
-    // 1. Distance from release location to last GPS position
     const distFromRelease = calculateDistanceKm(
       releasePos.lat, releasePos.lon,
       lastGpsPos.lat, lastGpsPos.lon
     );
 
-    // 2. Bearing from release location to last GPS position
     const bearing = calculateBearingDegrees(
       releasePos.lat, releasePos.lon,
       lastGpsPos.lat, lastGpsPos.lon
     );
     const bearingArabic = formatArabicBearing(bearing);
 
-    // 3. Distance from last GPS position to Field Camp
     const distToCamp = calculateDistanceKm(
       lastGpsPos.lat, lastGpsPos.lon,
       activeCamp.lat, activeCamp.lon
     );
 
-    // 4. Tracking duration in days
     const durationDays = calculateDurationDays(releasePos.dateStr, lastGpsPos.dateStr);
 
-    // Coordinate formatting in DMM
     const releaseLatDMM = formatDMM(releasePos.lat, true);
     const releaseLonDMM = formatDMM(releasePos.lon, false);
     const lastGpsLatDMM = formatDMM(lastGpsPos.lat, true);
@@ -446,7 +438,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       releaseLonDMM,
       lastGpsLatDMM,
       lastGpsLonDMM,
-      // Midpoints for vector badges
       releaseToLastMid: [
         (releasePos.lat + lastGpsPos.lat) / 2,
         (releasePos.lon + lastGpsPos.lon) / 2
@@ -458,14 +449,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     };
   }, [telemetryData, activeCamp]);
 
-  // Points to fit Leaflet map view
   const mapPoints = useMemo<Array<[number, number]>>(() => [
     [telemetryData.releasePos.lat, telemetryData.releasePos.lon],
     [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon],
     [activeCamp.lat, activeCamp.lon]
   ], [telemetryData, activeCamp]);
 
-  // Filtered transmitters for autocomplete search
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289'];
     transmitters.forEach(t => {
@@ -478,28 +467,24 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
   // ─── EXPORT HANDLERS ────────────────────────────────────────────────────────
 
-  /** Direct browser print using @media print styled rules */
   const handlePrint = () => {
     window.print();
   };
 
-  /** High-fidelity A4 Landscape PDF export via html2canvas & jsPDF */
   const handleExportPdf = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPdf(true);
 
     try {
-      // Allow Leaflet tiles and fonts to render cleanly
       await new Promise(r => setTimeout(r, 400));
-
       const element = reportContainerRef.current;
       const canvas = await html2canvas(element, {
-        scale: 2.2, // High resolution crispness
+        scale: 2.2,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: 1400
+        windowWidth: 1200
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
@@ -509,7 +494,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         format: 'a4'
       });
 
-      // A4 Landscape dimensions: 297mm x 210mm
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
@@ -523,7 +507,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     }
   };
 
-  /** High-resolution PNG export */
   const handleExportPng = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPng(true);
@@ -552,7 +535,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   };
 
   return (
-    <div className="space-y-6" dir="rtl">
+    <div className="space-y-6">
       
       {/* ─── PRINT ONLY STYLES ──────────────────────────────────────────────── */}
       <style>{`
@@ -561,14 +544,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             size: A4 landscape;
             margin: 0;
           }
-          body {
+          html, body {
             background: #ffffff !important;
             margin: 0 !important;
             padding: 0 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          /* Hide all UI elements except the report sheet */
           nav, header, aside, .no-print, .report-toolbar {
             display: none !important;
           }
@@ -579,17 +561,18 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             width: 297mm !important;
             height: 210mm !important;
             margin: 0 !important;
-            padding: 10mm 12mm !important;
+            padding: 8mm 10mm !important;
             box-shadow: none !important;
             border: none !important;
             page-break-after: avoid !important;
             page-break-inside: avoid !important;
+            direction: ltr !important;
           }
         }
       `}</style>
 
-      {/* ─── CONTROL TOOLBAR (HIDDEN ON PRINT) ────────────────────────────────── */}
-      <div className="no-print bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4">
+      {/* ─── INTERACTIVE CONTROL TOOLBAR (RTL FOR USER, HIDDEN ON PRINT) ───────── */}
+      <div className="no-print bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4" dir="rtl">
         
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 pb-4">
           <div className="flex items-center gap-3">
@@ -841,41 +824,45 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
       </div>
 
-      {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE) ───────────────────── */}
+      {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE: LTR FRAME, RTL CONTENT) ─── */}
       <div className="overflow-x-auto pb-6 flex justify-center">
         
         <div 
           id="map-production-print-area"
           ref={reportContainerRef}
-          className="bg-white text-gray-900 w-[1080px] min-w-[1080px] p-8 shadow-2xl rounded-sm border border-gray-300 relative select-none"
+          className="bg-white text-gray-900 w-[1080px] min-w-[1080px] p-7 shadow-2xl rounded-sm border border-gray-300 relative select-none"
           style={{
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif"
+            direction: 'ltr',
+            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif",
+            letterSpacing: 'normal'
           }}
         >
 
-          {/* 1. REPORT HEADER */}
-          <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-5">
+          {/* 1. REPORT HEADER (LTR: LEFT LOGO, CENTER TITLE, RIGHT LOGO) */}
+          <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
             
-            {/* Left Header: Qatar Houbara & Falcon Breeding Center Logo */}
-            <div className="flex items-center gap-3 w-[260px]">
+            {/* Top-Left Header: Qatar Houbara & Falcon Breeding Center Logo */}
+            <div className="flex items-center justify-start w-[260px]">
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[62px] w-auto object-contain"
+                className="h-[60px] w-auto object-contain"
                 onError={(e) => {
-                  // Fallback graceful rendering if asset loading is interrupted
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
             </div>
 
-            {/* Center Header: Title & Subtitle */}
-            <div className="text-center flex-1 px-4">
-              <h1 className="text-[23px] font-black text-gray-900 tracking-tight leading-tight mb-1.5">
+            {/* Center Header: Title & Subtitle (Centered, Clean Arabic) */}
+            <div className="text-center flex-1 px-3" style={{ direction: 'rtl' }}>
+              <h1 
+                className="text-[22px] font-black text-gray-900 leading-tight mb-1"
+                style={{ letterSpacing: 'normal', fontFeatureSettings: '"liga" 1' }}
+              >
                 تقرير متابعة طائر حبارى مزود بجهاز تتبع
               </h1>
-              <div className="text-[13px] font-bold text-gray-700 flex items-center justify-center gap-2">
-                <span>جهاز التتبع <span className="font-mono text-gray-950 font-black">{selectedPttId}</span></span>
+              <div className="text-[12.5px] font-bold text-gray-700 flex items-center justify-center gap-2">
+                <span>جهاز التتبع <span className="font-mono text-[#701a2b] font-black">{selectedPttId}</span></span>
                 <span>•</span>
                 <span>منطقة {activeCamp.name.replace('مخيم ', '')} – {activeCamp.country || 'كازاخستان'}</span>
                 <span>•</span>
@@ -883,12 +870,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               </div>
             </div>
 
-            {/* Right Header: External Reserves Office Logo */}
+            {/* Top-Right Header: External Reserves Office Logo */}
             <div className="flex items-center justify-end w-[260px]">
               <img 
                 src="/external-reserves-office-logo.png" 
                 alt="مكتب محميات الدولة الخارجية - External Reserves Office of The State" 
-                className="h-[50px] w-auto object-contain"
+                className="h-[48px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -897,23 +884,27 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
           </div>
 
-          {/* 2. MAIN REPORT BODY (2 COLUMNS: MAP LEFT, DATA TABLES RIGHT) */}
-          <div className="grid grid-cols-12 gap-5 items-start">
+          {/* 2. MAIN REPORT BODY (LTR: COLUMN 1 LEFT = MAP, COLUMN 2 RIGHT = TABLES) */}
+          <div className="flex gap-4 items-start" style={{ direction: 'ltr' }}>
             
-            {/* ─── LEFT COLUMN: GIS SATELLITE MAP (7 COLUMNS) ───────────────── */}
-            <div className="col-span-7 flex flex-col space-y-2">
+            {/* ─── COLUMN 1 (LEFT): GIS SATELLITE MAP (approx 58% width) ───── */}
+            <div className="w-[58%] flex flex-col space-y-2" style={{ direction: 'ltr' }}>
               
               {/* Map Viewport with GIS Border Frame */}
-              <div className="relative border-2 border-gray-800 rounded-sm overflow-hidden bg-stone-900 h-[430px] shadow-sm">
+              <div 
+                className="relative border-2 border-gray-800 rounded-sm overflow-hidden bg-stone-900 h-[435px] shadow-sm"
+                style={{ direction: 'ltr', textAlign: 'left' }}
+              >
                 
                 {/* Leaflet Satellite Map */}
                 <MapContainer
-                  center={[telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]}
+                  center={[47.05, 67.32]}
                   zoom={9}
                   scrollWheelZoom={false}
                   zoomControl={false}
                   attributionControl={false}
                   className="w-full h-full"
+                  style={{ direction: 'ltr', width: '100%', height: '100%' }}
                 >
                   {/* High Resolution Esri World Imagery Basemap */}
                   <TileLayer
@@ -933,7 +924,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     ]}
                     pathOptions={{
                       color: '#dc2626',
-                      weight: 3,
+                      weight: 2.5,
+                      dashArray: '6, 6',
                       opacity: 0.95
                     }}
                   />
@@ -954,7 +946,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     pathOptions={{
                       color: '#f59e0b',
                       weight: 2.5,
-                      dashArray: '5, 5',
+                      dashArray: '6, 6',
                       opacity: 0.95
                     }}
                   />
@@ -969,13 +961,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* 1. Marker: Installation / Release Location */}
                   <Marker
                     position={[telemetryData.releasePos.lat, telemetryData.releasePos.lon]}
-                    icon={createReportMarkerIcon('#dc2626', 'موقع تركيب الجهاز', '#991b1b', 'pin')}
+                    icon={createReportMarkerIcon('#701a2b', 'موقع تركيب الجهاز', '#701a2b', 'pin')}
                   />
 
                   {/* 2. Marker: Last GPS Location */}
                   <Marker
                     position={[telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]}
-                    icon={createReportMarkerIcon('#06b6d4', 'آخر موقع', '#0f766e', 'pin')}
+                    icon={createReportMarkerIcon('#0d9488', 'آخر موقع', '#0f766e', 'pin')}
                   />
 
                   {/* 3. Marker: Field Camp */}
@@ -988,18 +980,18 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 {/* ─── MAP OVERLAYS ────────────────────────────────────────── */}
 
                 {/* Top-Left Inset: Kazakhstan Locator Map */}
-                <div className="absolute top-2.5 left-2.5 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-600 rounded-sm p-1.5 shadow-md w-[125px]">
-                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-1">
+                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[130px] pointer-events-none">
+                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5">
                     <span className="text-[9px] font-bold text-gray-700">Kazakhstan</span>
-                    <span className="text-[8px] font-bold text-gray-500">N ▲</span>
+                    <span className="text-[8px] font-black text-gray-800">▲ N</span>
                   </div>
-                  <div className="relative w-full h-[65px] flex items-center justify-center bg-gray-50 border border-gray-200">
+                  <div className="relative w-full h-[68px] flex items-center justify-center bg-stone-50 border border-gray-200">
                     <svg viewBox="0 0 100 100" className="w-full h-full">
                       <path
                         d={KAZAKHSTAN_SVG_PATH}
-                        fill="#f3f4f6"
-                        stroke="#6b7280"
-                        strokeWidth="1.2"
+                        fill="#fdfbf7"
+                        stroke="#701a2b"
+                        strokeWidth="1.6"
                       />
                       {/* Location point marker in Kazakhstan */}
                       {(() => {
@@ -1009,12 +1001,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                         const maxLat = 55.38;
                         const x = ((telemetryData.lastGpsPos.lon - minLon) / (maxLon - minLon)) * 100;
                         const y = 100 - ((telemetryData.lastGpsPos.lat - minLat) / (maxLat - minLat)) * 100;
-                        const clampedX = Math.max(10, Math.min(90, x));
-                        const clampedY = Math.max(10, Math.min(90, y));
+                        const clampedX = Math.max(12, Math.min(88, x));
+                        const clampedY = Math.max(12, Math.min(88, y));
                         return (
                           <g>
-                            <circle cx={clampedX} cy={clampedY} r="4" fill="#dc2626" opacity="0.4" />
-                            <circle cx={clampedX} cy={clampedY} r="2.5" fill="#dc2626" stroke="#ffffff" strokeWidth="0.8" />
+                            <circle cx={clampedX} cy={clampedY} r="4.5" fill="#dc2626" opacity="0.3" />
+                            <circle cx={clampedX} cy={clampedY} r="2.8" fill="#dc2626" stroke="#ffffff" strokeWidth="0.9" />
                           </g>
                         );
                       })()}
@@ -1023,17 +1015,17 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 </div>
 
                 {/* Top-Right: GIS North Arrow Symbol */}
-                <div className="absolute top-3 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
-                  <span className="text-[12px] font-black text-white font-mono leading-none mb-0.5">N</span>
+                <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
                   <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
                     <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
                     <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
                   </svg>
+                  <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
                 </div>
 
                 {/* Bottom-Right: GIS Scale Bar (25 km) */}
-                <div className="absolute bottom-2.5 right-3 z-[1000] bg-white/90 backdrop-blur-sm px-2 py-1 rounded border border-gray-400 text-center pointer-events-none shadow-sm">
-                  <div className="text-[9px] font-bold text-gray-900 leading-none mb-1 font-mono">25 km</div>
+                <div className="absolute bottom-2.5 right-3 z-[1000] bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded border border-gray-400 text-center pointer-events-none shadow-sm">
+                  <div className="text-[8.5px] font-bold text-gray-900 leading-none mb-1 font-mono">25 km</div>
                   <div className="w-16 h-1.5 flex border border-black">
                     <div className="w-1/2 h-full bg-black"></div>
                     <div className="w-1/2 h-full bg-white"></div>
@@ -1041,26 +1033,29 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 </div>
 
                 {/* Graticule Perimeter Labels (Ticks) */}
-                <div className="absolute top-2 right-12 z-[900] text-[8.5px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
+                <div className="absolute top-1 left-36 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
                   47° 15.0000'N
                 </div>
-                <div className="absolute top-1/2 -translate-y-1/2 right-1 z-[900] text-[8.5px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
+                <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
                   47° 00.0000'N
                 </div>
-                <div className="absolute bottom-10 right-1 z-[900] text-[8.5px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
+                <div className="absolute bottom-6 left-1 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
                   46° 45.0000'N
                 </div>
 
               </div>
 
-              {/* Map Legend Bar */}
-              <div className="border border-gray-300 rounded-sm bg-gray-50/90 py-2 px-3 text-[10.5px] font-bold text-gray-800 flex items-center justify-between flex-wrap gap-2">
+              {/* Map Legend Bar Under Map */}
+              <div 
+                className="border border-gray-300 rounded-sm bg-white py-1.5 px-3 text-[10px] font-bold text-gray-800 flex items-center justify-between flex-wrap gap-2 shadow-xs"
+                style={{ direction: 'rtl' }}
+              >
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 border border-white inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#701a2b] border border-white inline-block"></span>
                   <span>موقع تركيب الجهاز</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 border border-white inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#0d9488] border border-white inline-block"></span>
                   <span>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
                 </div>
                 <div className="flex items-center gap-1.5">
@@ -1083,53 +1078,59 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
             </div>
 
-            {/* ─── RIGHT COLUMN: DATA TABLES & METRIC CARDS (5 COLUMNS) ────────── */}
-            <div className="col-span-5 flex flex-col space-y-4">
+            {/* ─── COLUMN 2 (RIGHT): DATA TABLES & METRICS (approx 42% width) ── */}
+            <div className="w-[42%] flex flex-col space-y-3.5" style={{ direction: 'rtl' }}>
               
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
-              <div className="border border-gray-300 rounded-sm overflow-hidden shadow-sm">
-                <div className="bg-[#6f152b] text-white py-2 px-4 text-center text-[13px] font-black tracking-wide">
+              <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
+                <div className="bg-[#701a2b] text-white py-1.5 px-3 text-center text-[13px] font-black tracking-wide">
                   بيانات الطائر
                 </div>
                 <table className="w-full text-[12px] text-right border-collapse">
                   <tbody>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-2 px-3 font-black text-gray-900 w-1/2 font-mono text-[13px]">
-                        {selectedPttId}
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="font-mono font-black text-[#701a2b] text-[13px]">
+                          {selectedPttId}
+                        </span>
                       </td>
-                      <td className="py-2 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 border-r border-gray-200">
                         رقم جهاز التتبع
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-2 px-3 font-semibold text-gray-800">
-                        {customMetadata.birdRing || 'NA'}
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="bg-gray-100 text-gray-600 font-bold px-2.5 py-0.5 rounded-full text-xs">
+                          {customMetadata.birdRing || 'NA'}
+                        </span>
                       </td>
-                      <td className="py-2 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
                         رقم الحقل
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-2 px-3 font-semibold text-gray-800">
+                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center">
                         {customMetadata.species || 'وحش'}
                       </td>
-                      <td className="py-2 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
                         النوعية
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-2 px-3 font-semibold text-gray-800">
+                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center">
                         {customMetadata.gender || 'ذكر'}
                       </td>
-                      <td className="py-2 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
                         الجنس
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td className="py-2 px-3 font-semibold text-gray-800">
-                        {customMetadata.birdStatus || 'حي'}
+                      <td className="py-1.5 px-3 text-center">
+                        <span className="bg-emerald-50 text-emerald-600 font-bold px-3 py-0.5 rounded-full text-xs">
+                          {customMetadata.birdStatus || 'حي'}
+                        </span>
                       </td>
-                      <td className="py-2 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
                         حالة الطائر
                       </td>
                     </tr>
@@ -1138,65 +1139,65 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               </div>
 
               {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
-              <div className="border border-gray-300 rounded-sm overflow-hidden shadow-sm">
+              <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
                 <table className="w-full text-[12px] text-center border-collapse">
                   <thead>
                     <tr>
-                      <th className="bg-[#0f766e] text-white py-2 px-2 text-[12.5px] font-bold w-[38%]">
-                        آخر موقع
+                      <th className="bg-white text-gray-800 py-1.5 px-2 text-[12px] font-bold w-[22%] border-b border-gray-200">
+                        البيان
                       </th>
-                      <th className="bg-[#6f152b] text-white py-2 px-2 text-[12.5px] font-bold w-[38%] border-r border-white/20">
+                      <th className="bg-[#701a2b] text-white py-1.5 px-2 text-[12px] font-bold w-[39%] border-r border-gray-300">
                         تركيب الجهاز
                       </th>
-                      <th className="bg-gray-100 text-gray-800 py-2 px-2 text-[12px] font-bold w-[24%] border-r border-gray-200">
-                        البيان
+                      <th className="bg-[#0f766e] text-white py-1.5 px-2 text-[12px] font-bold w-[39%] border-r border-gray-300">
+                        آخر موقع
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-2 px-2 font-mono font-bold text-gray-900 text-[11.5px]">
-                        {telemetryData.lastGpsPos.dateStr}
-                      </td>
-                      <td className="py-2 px-2 font-mono font-bold text-gray-900 text-[11.5px] border-r border-gray-200">
-                        {telemetryData.releasePos.dateStr}
-                      </td>
-                      <td className="py-2 px-2 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200">
+                      <td className="py-1.5 px-2 font-bold text-gray-700 bg-gray-50/70">
                         التاريخ
+                      </td>
+                      <td className="py-1.5 px-2 font-mono font-bold text-gray-900 text-[11.5px] border-r border-gray-200">
+                        <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
+                      </td>
+                      <td className="py-1.5 px-2 font-mono font-bold text-gray-900 text-[11.5px] border-r border-gray-200">
+                        <span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-2 px-1 font-mono font-bold text-gray-900 text-[12px]">
-                        {metrics.lastGpsLatDMM}
-                      </td>
-                      <td className="py-2 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
-                        {metrics.releaseLatDMM}
-                      </td>
-                      <td className="py-2 px-2 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200 text-[11px]">
+                      <td className="py-1.5 px-2 font-bold text-gray-700 bg-gray-50/70 text-[11px]">
                         خط العرض (N)
+                      </td>
+                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span>
+                      </td>
+                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span>
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td className="py-2 px-1 font-mono font-bold text-gray-900 text-[12px]">
-                        {metrics.lastGpsLonDMM}
-                      </td>
-                      <td className="py-2 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
-                        {metrics.releaseLonDMM}
-                      </td>
-                      <td className="py-2 px-2 font-bold text-gray-700 bg-gray-50/70 border-r border-gray-200 text-[11px]">
+                      <td className="py-1.5 px-2 font-bold text-gray-700 bg-gray-50/70 text-[11px]">
                         خط الطول (E)
+                      </td>
+                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span>
+                      </td>
+                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span>
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
 
-              {/* 4 KPI METRIC CARDS (GRID OF 4 COLUMNS) */}
-              <div className="grid grid-cols-4 gap-2 pt-1">
+              {/* 4 KPI METRIC CARDS (GRID OF 4 COLUMNS IN RTL) */}
+              <div className="grid grid-cols-4 gap-2 pt-0.5">
                 
-                {/* Metric 1: Distance from Release */}
-                <div className="border border-gray-300 rounded-sm bg-gray-50/60 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-rose-800 font-mono leading-tight mb-1">
+                {/* Metric 1 (Far Right in RTL): Distance from Release */}
+                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
+                  <div className="text-[14px] font-black text-[#991b1b] font-mono leading-tight mb-0.5">
                     {metrics.distFromReleaseKm} km
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
@@ -1205,18 +1206,18 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 </div>
 
                 {/* Metric 2: Bearing & Direction */}
-                <div className="border border-gray-300 rounded-sm bg-gray-50/60 p-2 text-center shadow-xs">
-                  <div className="text-[13px] font-black text-gray-900 leading-tight mb-1">
-                    {metrics.bearingArabic.full}
+                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
+                  <div className="text-[13.5px] font-black text-gray-900 leading-tight mb-0.5">
+                    {metrics.bearingArabic.text}
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
-                    الاتجاه
+                    الاتجاه ({metrics.bearingArabic.degrees}°)
                   </div>
                 </div>
 
                 {/* Metric 3: Distance from Camp */}
-                <div className="border border-gray-300 rounded-sm bg-gray-50/60 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 font-mono leading-tight mb-1">
+                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
+                  <div className="text-[14px] font-black text-gray-900 font-mono leading-tight mb-0.5">
                     {metrics.distToCampKm} km
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
@@ -1224,9 +1225,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   </div>
                 </div>
 
-                {/* Metric 4: Tracking Duration in Days */}
-                <div className="border border-gray-300 rounded-sm bg-gray-50/60 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-1">
+                {/* Metric 4 (Far Left in RTL): Tracking Duration in Days */}
+                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
+                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-0.5">
                     {metrics.durationDays} يوم
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
@@ -1241,7 +1242,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           </div>
 
           {/* 3. REPORT FOOTER */}
-          <div className="mt-7 pt-3 border-t border-gray-200 text-center text-[12px] font-semibold text-gray-500">
+          <div className="mt-5 pt-2.5 border-t border-gray-200 text-center text-[11.5px] font-semibold text-gray-500" style={{ direction: 'rtl' }}>
             المركز القطري لتكاثر الحبارى والصقور – كازاخستان
           </div>
 
