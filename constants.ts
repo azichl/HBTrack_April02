@@ -149,5 +149,14 @@ export const FIXED_FIELD_CAMPS: FieldCampPoint[] = [
     lon: 67.810600,
     region: 'Ulytau / Karaganda',
     country: 'Kazakhstan'
+  },
+  {
+    id: 'almaty_camp',
+    name: 'مخيم ألماتي',
+    nameEn: 'Almaty Camp',
+    lat: 44.398198,
+    lon: 75.290787,
+    region: 'Almaty Region',
+    country: 'Kazakhstan'
   }
 ];

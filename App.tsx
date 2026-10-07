@@ -83,8 +83,8 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
         c.name.toLowerCase().includes(q) ||
         (c.nameEn && c.nameEn.toLowerCase().includes(q)) ||
         q.includes('مخيم') ||
-        q.includes('جيزقازغان') ||
-        q.includes('zhezkazgan')
+        (c.id === 'almaty_camp' && (q.includes('ألماتي') || q.includes('الماتي') || q.includes('almaty'))) ||
+        (c.id === 'zhezkazgan_camp' && (q.includes('جيزقازغان') || q.includes('zhezkazgan') || q.includes('جيز')))
       )
     : [];
 

@@ -78,8 +78,8 @@ const getStatusIcon = (status: string) => {
     return blackIcon;
 };
 
-// Fixed Field Camp Icon (Zhezkazgan Camp / مخيم جيزقازغان)
-const campIcon = L.divIcon({
+// Fixed Field Camp Icon Helper
+const createCampIcon = (campName: string) => L.divIcon({
   className: 'bg-transparent',
   html: `<div style="display: flex; flex-direction: column; align-items: center; pointer-events: auto; cursor: pointer; user-select: none;">
            <div style="
@@ -117,7 +117,7 @@ const campIcon = L.divIcon({
              direction: rtl;
              line-height: 1.2;
            ">
-             مخيم جيزقازغان
+             ${campName}
            </div>
          </div>`,
   iconSize: [110, 58],
@@ -739,7 +739,7 @@ export const GeoSpatialAnalysis = () => {
                   <Marker
                       key={camp.id}
                       position={[camp.lat, camp.lon]}
-                      icon={campIcon}
+                      icon={createCampIcon(camp.name)}
                       zIndexOffset={1200}
                   >
                       <Popup>

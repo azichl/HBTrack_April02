@@ -73,8 +73,8 @@ const measureEndIcon = L.divIcon({
     iconAnchor: [8, 8]
 });
 
-// Fixed Field Camp Icon (Zhezkazgan Camp / مخيم جيزقازغان)
-const campIcon = L.divIcon({
+// Fixed Field Camp Icon Helper
+const createCampIcon = (campName: string) => L.divIcon({
   className: 'bg-transparent',
   html: `<div style="display: flex; flex-direction: column; align-items: center; pointer-events: auto; cursor: pointer; user-select: none;">
            <div style="
@@ -113,7 +113,7 @@ const campIcon = L.divIcon({
              direction: rtl;
              line-height: 1.2;
            ">
-             مخيم جيزقازغان
+             ${campName}
            </div>
          </div>`,
   iconSize: [110, 60],
@@ -1820,14 +1820,13 @@ const LiveTrackingInner = () => {
          return;
     }
 
-    // Match known field camps (e.g. مخيم جيزقازغان / Zhezkazgan Camp)
+    // Match known field camps (e.g. مخيم جيزقازغان / مخيم ألماتي)
     const lowerQ = geoQuery.trim().toLowerCase();
     const matchedCamp = FIXED_FIELD_CAMPS.find(c =>
          lowerQ.includes(c.name.toLowerCase()) ||
-         lowerQ.includes('جيزقازغان') ||
-         lowerQ.includes('zhezkazgan') ||
-         (lowerQ.includes('مخيم') && (lowerQ.includes('جيز') || lowerQ.includes('قازغان'))) ||
-         (c.nameEn && lowerQ.includes(c.nameEn.toLowerCase()))
+         (c.nameEn && lowerQ.includes(c.nameEn.toLowerCase())) ||
+         (c.id === 'almaty_camp' && (lowerQ.includes('ألماتي') || lowerQ.includes('الماتي') || lowerQ.includes('almaty'))) ||
+         (c.id === 'zhezkazgan_camp' && (lowerQ.includes('جيزقازغان') || lowerQ.includes('zhezkazgan') || lowerQ.includes('جيز')))
     );
     if (matchedCamp) {
          setCustomFlyTo({ lat: matchedCamp.lat, lon: matchedCamp.lon });
@@ -2487,7 +2486,7 @@ const LiveTrackingInner = () => {
                 <Marker
                     key={camp.id}
                     position={[camp.lat, camp.lon]}
-                    icon={campIcon}
+                    icon={createCampIcon(camp.name)}
                     zIndexOffset={1200}
                 >
                     <Popup className="camp-popup" minWidth={240}>
@@ -2947,7 +2946,7 @@ const LiveTrackingInner = () => {
                       />
                       <span className="text-sm text-gray-700 flex items-center gap-2">
                         <Tent size={14} className="text-emerald-600" />
-                        <span>مخيم جيزقازغان (Field Camp)</span>
+                        <span>مخيمات الميدان (Field Camps)</span>
                       </span>
                     </label>
                   </div>
@@ -3162,7 +3161,7 @@ const LiveTrackingInner = () => {
                                 />
                                 <span className="text-sm text-gray-700 flex items-center gap-2">
                                     <Tent size={14} className="text-emerald-600" />
-                                    <span>مخيم جيزقازغان (Field Camp)</span>
+                                    <span>مخيمات الميدان (Field Camps)</span>
                                 </span>
                             </label>
                         </div>
