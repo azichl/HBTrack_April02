@@ -3,9 +3,9 @@ import {
   Printer, Download, RefreshCw, Compass, MapPin, 
   Calendar, ChevronDown, Check, Search, SlidersHorizontal, 
   Layers, Info, ArrowRight, Share2, FileDown, CheckCircle2,
-  AlertCircle
+  AlertCircle, Plus, Minus, Crosshair
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap, GeoJSON } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import html2canvas from 'html2canvas';
@@ -206,11 +206,79 @@ const createDistancePillIcon = (text: string, borderColor: string) => {
   });
 };
 
+/** Helper to return dynamic tile layer matching Live Tracking options with Google Hybrid as default */
+export const getProductionTileLayer = (layerId: string) => {
+  switch (layerId) {
+    case 'google_hybrid':
+      return (
+        <TileLayer
+          key="google_hybrid"
+          url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+          attribution="&copy; Google"
+          maxZoom={20}
+          crossOrigin="anonymous"
+        />
+      );
+    case 'google_roadmap':
+      return (
+        <TileLayer
+          key="google_roadmap"
+          url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+          attribution="&copy; Google"
+          maxZoom={20}
+          crossOrigin="anonymous"
+        />
+      );
+    case 'google_satellite':
+      return (
+        <TileLayer
+          key="google_satellite"
+          url="https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}"
+          attribution="&copy; Google"
+          maxZoom={20}
+          crossOrigin="anonymous"
+        />
+      );
+    case 'scienceterrain':
+      return (
+        <TileLayer
+          key="scienceterrain"
+          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          attribution="&copy; Esri"
+          maxZoom={18}
+          crossOrigin="anonymous"
+        />
+      );
+    case 'roadmap':
+      return (
+        <TileLayer
+          key="roadmap"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap"
+          maxZoom={19}
+          crossOrigin="anonymous"
+        />
+      );
+    default:
+      return (
+        <TileLayer
+          key="default_google_hybrid"
+          url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+          attribution="&copy; Google"
+          maxZoom={20}
+          crossOrigin="anonymous"
+        />
+      );
+  }
+};
+
 /** Controller component to fit bounds and ensure Leaflet renders all tiles and layers */
 const ReportMapFitter = ({ 
-  points 
+  points,
+  fitKey = 0
 }: { 
-  points: Array<[number, number]> 
+  points: Array<[number, number]>;
+  fitKey?: number;
 }) => {
   const map = useMap();
   useEffect(() => {
@@ -228,7 +296,16 @@ const ReportMapFitter = ({
     map.fitBounds(bounds, { padding: [55, 55], maxZoom: 10 });
 
     return () => clearTimeout(timer);
-  }, [map, JSON.stringify(points)]);
+  }, [map, JSON.stringify(points), fitKey]);
+  return null;
+};
+
+/** Binds Leaflet map instance to parent state for zoom and pan buttons */
+const MapInstanceBinder = ({ onMapInstance }: { onMapInstance: (map: L.Map) => void }) => {
+  const map = useMap();
+  useEffect(() => {
+    if (map) onMapInstance(map);
+  }, [map, onMapInstance]);
   return null;
 };
 
@@ -369,7 +446,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   initialTransmitterId = '244289',
   onBack
 }) => {
-  const { transmitters = [], birds = [], positions = [] } = useAppStore();
+  const { 
+    transmitters = [], 
+    birds = [], 
+    positions = [],
+    qgisLayers = [],
+    qgisGeoJSONCache = {}
+  } = useAppStore();
 
   // Selected Transmitter State
   const [selectedPttId, setSelectedPttId] = useState<string>(initialTransmitterId);
@@ -378,6 +461,14 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
   // Selected Camp State
   const [selectedCampId, setSelectedCampId] = useState<string>('auto');
+
+  // Dynamic Base Map Layer State (Default: Google Maps Hybrid View)
+  const [activeBaseLayer, setActiveBaseLayer] = useState<
+    'google_hybrid' | 'google_roadmap' | 'google_satellite' | 'scienceterrain' | 'roadmap'
+  >('google_hybrid');
+  const [fitKey, setFitKey] = useState<number>(0);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
 
   // Loading & Customization State
   const [isLoadingTelemetry, setIsLoadingTelemetry] = useState<boolean>(false);
@@ -648,7 +739,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: 1200
+        windowWidth: 1200,
+        ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('leaflet-control-container')
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
@@ -683,7 +775,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('leaflet-control-container')
       });
 
       const link = document.createElement('a');
@@ -800,7 +893,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         </div>
 
         {/* Filters and Inputs Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
           
           {/* 1. Transmitter Selector / Combobox */}
           <div className="relative">
@@ -885,7 +978,29 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             </div>
           </div>
 
-          {/* 3. Info / Status Badge */}
+          {/* 3. Base Map Layer Selector */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
+              <span>نوع الخريطة (Base Map):</span>
+              <span className="text-[10px] text-brand-600 dark:text-brand-400 font-normal">افتراضي: جوجل</span>
+            </label>
+            <div className="relative">
+              <select
+                value={activeBaseLayer}
+                onChange={(e) => setActiveBaseLayer(e.target.value as any)}
+                className="w-full px-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer font-medium"
+              >
+                <option value="google_hybrid">خرائط جوجل هجين – أقمار وشوارع (Google Hybrid)</option>
+                <option value="google_roadmap">خرائط جوجل عادية – شوارع وتضاريس (Google Roadmap)</option>
+                <option value="google_satellite">خرائط جوجل – أقمار صناعية نقية (Google Satellite)</option>
+                <option value="scienceterrain">أقمار صناعية Esri (Esri Satellite)</option>
+                <option value="roadmap">خريطة الشوارع (OpenStreetMap)</option>
+              </select>
+              <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* 4. Info / Status Badge */}
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-900/60 rounded-xl border border-gray-100 dark:border-slate-700/60">
             <div className="space-y-0.5">
               <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block">
@@ -944,7 +1059,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               </div>
 
               <div>
-                <label className="block text-[11px] text-gray-500 mb-1">رقم الحقل (Ring):</label>
+                <label className="block text-[11px] text-gray-500 mb-1">رقم الحجل (Ring):</label>
                 <input
                   type="text"
                   value={customMetadata.birdRing}
@@ -1019,11 +1134,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
             
             {/* Top-Left Header: Qatar Houbara & Falcon Breeding Center Logo */}
-            <div className="flex items-center justify-start w-[260px]">
+            <div className="flex items-center justify-start w-[240px]">
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[60px] w-auto object-contain"
+                className="h-[58px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1031,9 +1146,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             </div>
 
             {/* Center Header: Title & Subtitle (Centered, Clean Arabic) */}
-            <div className="text-center flex-1 px-3" style={{ direction: 'rtl' }}>
+            <div className="text-center flex-1 px-2" style={{ direction: 'rtl' }}>
               <h1 
-                className="text-[22px] font-black text-gray-900 leading-tight mb-1"
+                className="text-[21px] font-black text-gray-900 leading-tight mb-1"
                 style={{ letterSpacing: 'normal', fontFeatureSettings: '"liga" 1' }}
               >
                 تقرير متابعة طائر حبارى مزود بجهاز تتبع
@@ -1048,11 +1163,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             </div>
 
             {/* Top-Right Header: External Reserves Office Logo */}
-            <div className="flex items-center justify-end w-[240px]">
+            <div className="flex items-center justify-end w-[350px]">
               <img 
                 src="/external-reserves-office-logo.png" 
                 alt="مكتب محميات الدولة الخارجية - External Reserves Office of The State" 
-                className="h-[28px] max-w-[185px] w-auto object-contain"
+                className="h-[52px] w-auto max-w-[340px] object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1073,25 +1188,73 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 style={{ direction: 'ltr', textAlign: 'left' }}
               >
                 
-                {/* Leaflet Satellite Map */}
+                {/* Leaflet Dynamic Interactive Map */}
                 <MapContainer
                   center={[47.05, 67.32]}
                   zoom={9}
-                  scrollWheelZoom={false}
+                  scrollWheelZoom={true}
+                  dragging={true}
+                  doubleClickZoom={true}
+                  touchZoom={true}
                   zoomControl={false}
                   attributionControl={false}
-                  className="w-full h-full"
+                  className="w-full h-full cursor-grab active:cursor-grabbing"
                   style={{ direction: 'ltr', width: '100%', height: '100%' }}
                 >
-                  {/* High Resolution Esri World Imagery Basemap */}
-                  <TileLayer
-                    url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-                    crossOrigin="anonymous"
-                    maxZoom={18}
-                  />
+                  <MapInstanceBinder onMapInstance={setMapInstance} />
 
-                  {/* Auto-fit map to points */}
-                  <ReportMapFitter points={mapPoints} />
+                  {/* Dynamic Base Tile Layer (Default: Google Maps Hybrid View) */}
+                  {getProductionTileLayer(activeBaseLayer)}
+
+                  {/* Auto-fit map to points & recenter */}
+                  <ReportMapFitter points={mapPoints} fitKey={fitKey} />
+
+                  {/* QGIS Imported Vector Layers from Store */}
+                  {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'file' && qgisGeoJSONCache?.[l.id]).map(layer => (
+                    <GeoJSON 
+                      key={`qgis-${layer.id}-${JSON.stringify(layer.style)}`}
+                      data={qgisGeoJSONCache[layer.id]}
+                      style={(feature) => ({
+                        color: feature?.properties?._color || layer.style.color,
+                        fillColor: feature?.properties?._color || layer.style.fillColor,
+                        fillOpacity: layer.style.fillOpacity,
+                        weight: layer.style.weight,
+                        radius: layer.style.radius || 6
+                      })}
+                      pointToLayer={(feature, latlng) => {
+                        const featColor = feature?.properties?._color || layer.style.fillColor;
+                        const strokeColor = feature?.properties?._color || layer.style.color;
+                        return L.circleMarker(latlng, {
+                          radius: layer.style.radius || 6,
+                          fillColor: featColor,
+                          color: strokeColor,
+                          weight: layer.style.weight,
+                          opacity: 1,
+                          fillOpacity: layer.style.fillOpacity
+                        });
+                      }}
+                      onEachFeature={(feature, leafletLayer) => {
+                        if (feature.properties) {
+                          const props = Object.entries(feature.properties)
+                            .filter(([k, v]) => v !== null && v !== undefined && k !== '_color')
+                            .map(([k, v]) => `<b>${k === '_qgisLayer' ? 'QGIS Layer' : k}:</b> ${v}`)
+                            .join('<br/>');
+                          if (props) {
+                            leafletLayer.bindPopup(`<div style="max-height:200px;overflow-y:auto;font-size:12px"><b style="color:#059669">${feature.properties._qgisLayer || layer.name}</b><br/><hr style="margin:4px 0;border-color:#e5e7eb"/>${props}</div>`);
+                          }
+                        }
+                      }}
+                    />
+                  ))}
+
+                  {/* QGIS WMS Layers from Store */}
+                  {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'wms' && l.sourceUrl).map(layer => (
+                    <TileLayer
+                      key={`wms-${layer.id}`}
+                      url={`${layer.sourceUrl}${layer.sourceUrl!.includes('?') ? '&' : '?'}service=WMS&request=GetMap&layers=${layer.wmsLayers || ''}&styles=&format=image/png&transparent=true&version=1.1.1&srs=EPSG:4326&bbox={bbox-epsg-3857}&width=256&height=256`}
+                      zIndex={layer.zIndex || 700}
+                    />
+                  ))}
 
                   {/* Red Vector Line: Release Location -> Last GPS Position */}
                   <Polyline
@@ -1153,6 +1316,103 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     icon={createReportMarkerIcon('#f59e0b', 'المخيم', '#b45309', 'camp')}
                   />
                 </MapContainer>
+
+                {/* Floating Map Controls for Interactive Live Tracking feel (Hidden on Print & Export) */}
+                <div 
+                  className="no-print absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
+                  style={{ direction: 'rtl' }}
+                >
+                  {/* Zoom In */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      mapInstance?.zoomIn();
+                    }}
+                    className="p-1 hover:bg-white/20 rounded transition-colors text-white"
+                    title="تكبير الخريطة (Zoom In)"
+                  >
+                    <Plus size={14} />
+                  </button>
+                  {/* Zoom Out */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      mapInstance?.zoomOut();
+                    }}
+                    className="p-1 hover:bg-white/20 rounded transition-colors text-white"
+                    title="تصغير الخريطة (Zoom Out)"
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+                  {/* Recenter */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFitKey(k => k + 1);
+                    }}
+                    className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/20 rounded text-[11px] font-medium transition-colors text-white"
+                    title="إعادة ضبط الموقع ليتناسب مع النقاط"
+                  >
+                    <Crosshair size={13} />
+                    <span>توسيط</span>
+                  </button>
+                  <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+                  {/* Layer Quick Switcher */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowLayerMenu(prev => !prev);
+                      }}
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors text-white ${
+                        showLayerMenu ? 'bg-brand-600' : 'hover:bg-white/20'
+                      }`}
+                      title="تغيير نوع الخريطة"
+                    >
+                      <Layers size={13} />
+                      <span>الطبقات</span>
+                    </button>
+                    {showLayerMenu && (
+                      <div 
+                        className="absolute bottom-full left-0 mb-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg p-1.5 shadow-2xl min-w-[175px] space-y-1 text-right z-[1100]"
+                        dir="rtl"
+                      >
+                        <div className="text-[10px] font-bold text-gray-400 px-2 py-0.5 border-b border-slate-800">
+                          نوع الخريطة (Base Map):
+                        </div>
+                        {[
+                          { id: 'google_hybrid', name: 'جوجل هجين (Google Hybrid)' },
+                          { id: 'google_roadmap', name: 'جوجل شوارع (Google Roadmap)' },
+                          { id: 'google_satellite', name: 'جوجل أقمار (Google Satellite)' },
+                          { id: 'scienceterrain', name: 'أقمار Esri (Esri Satellite)' },
+                          { id: 'roadmap', name: 'OpenStreetMap' }
+                        ].map(l => (
+                          <button
+                            key={l.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveBaseLayer(l.id as any);
+                              setShowLayerMenu(false);
+                            }}
+                            className={`w-full text-right px-2 py-1 text-[11px] rounded flex items-center justify-between transition-colors ${
+                              activeBaseLayer === l.id 
+                                ? 'bg-brand-600 text-white font-bold' 
+                                : 'text-gray-200 hover:bg-slate-800'
+                            }`}
+                          >
+                            <span>{l.name}</span>
+                            {activeBaseLayer === l.id && <Check size={12} />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* ─── MAP OVERLAYS ────────────────────────────────────────── */}
 
@@ -1325,7 +1585,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
-                        رقم الحقل
+                        رقم الحجل
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
                         <span className="bg-gray-100 text-gray-600 font-bold px-2.5 py-0.5 rounded-full text-xs">
