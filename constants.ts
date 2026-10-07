@@ -129,3 +129,25 @@ export const generatePositions = (count: number): Position[] => {
   }
   return positions;
 };
+
+export interface FieldCampPoint {
+  id: string;
+  name: string;
+  nameEn?: string;
+  lat: number;
+  lon: number;
+  region?: string;
+  country?: string;
+}
+
+export const FIXED_FIELD_CAMPS: FieldCampPoint[] = [
+  {
+    id: 'zhezkazgan_camp',
+    name: 'مخيم جيزقازغان',
+    nameEn: 'Zhezkazgan Camp',
+    lat: 47.143761,
+    lon: 67.810600,
+    region: 'Ulytau / Karaganda',
+    country: 'Kazakhstan'
+  }
+];

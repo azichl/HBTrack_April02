@@ -1,10 +1,11 @@
 import React, { Component, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal } from 'lucide-react';
+import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal, Tent } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker, GeoJSON } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
+import { FIXED_FIELD_CAMPS } from '../constants';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -70,6 +71,54 @@ const measureEndIcon = L.divIcon({
            </div>`,
     iconSize: [16, 16],
     iconAnchor: [8, 8]
+});
+
+// Fixed Field Camp Icon (Zhezkazgan Camp / مخيم جيزقازغان)
+const campIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: `<div style="display: flex; flex-direction: column; align-items: center; pointer-events: auto; cursor: pointer; user-select: none;">
+           <div style="
+             position: relative;
+             width: 38px;
+             height: 38px;
+             border-radius: 50%;
+             background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+             border: 2.5px solid #ffffff;
+             box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             color: #ffffff;
+             transition: transform 0.15s ease;
+           ">
+             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M19 20 10 4 1 20h18Z" fill="#34d399" fill-opacity="0.35"/>
+               <path d="M10 4 23 20"/>
+               <path d="m10 4 4.5 16"/>
+             </svg>
+             <div style="position: absolute; top: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: #34d399; border: 1.5px solid #ffffff;"></div>
+           </div>
+           <div style="
+             margin-top: 3px;
+             background: rgba(15, 23, 42, 0.94);
+             color: #ffffff;
+             padding: 2px 7px;
+             border-radius: 6px;
+             font-size: 11px;
+             font-weight: 700;
+             white-space: nowrap;
+             box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+             border: 1px solid rgba(255,255,255,0.25);
+             font-family: 'Sakkal Majalla', sans-serif;
+             direction: rtl;
+             line-height: 1.2;
+           ">
+             مخيم جيزقازغان
+           </div>
+         </div>`,
+  iconSize: [110, 60],
+  iconAnchor: [55, 19],
+  popupAnchor: [0, -22]
 });
 
 // Helper to parse various coordinate formats (HDD, HDMM, HDMS)
@@ -1158,6 +1207,7 @@ const LiveTrackingInner = () => {
   }, [activeBaseLayer]);
   const [activeWeatherLayer, setActiveWeatherLayer] = useState('none');
   const [showLabels, setShowLabels] = useState(false);
+  const [showFieldCamps, setShowFieldCamps] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   // Measurement Tool State
@@ -1765,6 +1815,22 @@ const LiveTrackingInner = () => {
     if (coords) {
          setCustomFlyTo(coords);
          setSearchMarkerPos({ lat: coords.lat, lon: coords.lon, label: `Coordinates: ${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}` });
+         closeAllDropdowns();
+         return;
+    }
+
+    // Match known field camps (e.g. مخيم جيزقازغان / Zhezkazgan Camp)
+    const lowerQ = geoQuery.trim().toLowerCase();
+    const matchedCamp = FIXED_FIELD_CAMPS.find(c =>
+         lowerQ.includes(c.name.toLowerCase()) ||
+         lowerQ.includes('جيزقازغان') ||
+         lowerQ.includes('zhezkazgan') ||
+         (lowerQ.includes('مخيم') && (lowerQ.includes('جيز') || lowerQ.includes('قازغان'))) ||
+         (c.nameEn && lowerQ.includes(c.nameEn.toLowerCase()))
+    );
+    if (matchedCamp) {
+         setCustomFlyTo({ lat: matchedCamp.lat, lon: matchedCamp.lon });
+         setSearchMarkerPos({ lat: matchedCamp.lat, lon: matchedCamp.lon, label: `${matchedCamp.name} (${matchedCamp.nameEn})` });
          closeAllDropdowns();
          return;
     }
@@ -2415,6 +2481,69 @@ const LiveTrackingInner = () => {
                 />
             )}
 
+            {/* Fixed Field Camps (e.g. مخيم جيزقازغان 47.143761, 67.810600) */}
+            {showFieldCamps && FIXED_FIELD_CAMPS.map((camp) => (
+                <Marker
+                    key={camp.id}
+                    position={[camp.lat, camp.lon]}
+                    icon={campIcon}
+                    zIndexOffset={1200}
+                >
+                    <Popup className="camp-popup" minWidth={240}>
+                        <div className="p-1 space-y-2.5" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+                            <div className="flex items-center gap-2.5 border-b border-gray-100 pb-2">
+                                <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M19 20 10 4 1 20h18Z" fill="#34d399" fillOpacity="0.35"/>
+                                        <path d="M10 4 23 20"/>
+                                        <path d="m10 4 4.5 16"/>
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-gray-900 text-base leading-tight">{camp.name}</h4>
+                                    <span className="text-[11px] text-emerald-700 font-semibold block">{camp.nameEn} • {camp.country}</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2 text-xs space-y-1.5 border border-slate-100 dark:border-slate-700">
+                                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                                    <span className="text-gray-400 font-medium">الإحداثيات (Coords):</span>
+                                    <span className="font-mono font-bold text-gray-900 dark:text-white">{camp.lat.toFixed(6)}, {camp.lon.toFixed(6)}</span>
+                                </div>
+                                {camp.region && (
+                                    <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                                        <span className="text-gray-400 font-medium">المنطقة (Region):</span>
+                                        <span className="font-semibold text-gray-800 dark:text-gray-200">{camp.region}</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-2 pt-0.5">
+                                <button
+                                    onClick={() => {
+                                        setCustomFlyTo({ lat: camp.lat, lon: camp.lon });
+                                    }}
+                                    className="flex-1 py-1.5 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 border border-emerald-200"
+                                >
+                                    <Crosshair size={13} />
+                                    <span>تكبير (Center)</span>
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setNavTarget({ id: camp.id, lat: camp.lat, lon: camp.lon });
+                                        if (!isTrackingUser) toggleUserTracking();
+                                    }}
+                                    className="flex-1 py-1.5 px-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
+                                >
+                                    <Navigation size={13} />
+                                    <span>ملاحة (Navigate)</span>
+                                </button>
+                            </div>
+                        </div>
+                    </Popup>
+                </Marker>
+            ))}
+
             {/* Weather Popup */}
             {tempPopup && (
                 <Popup position={[tempPopup.lat, tempPopup.lon]} className="weather-mini-popup">
@@ -2799,6 +2928,18 @@ const LiveTrackingInner = () => {
                       />
                       <span className="text-sm text-gray-700">Google Labels</span>
                     </label>
+                    <label className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={showFieldCamps}
+                        onChange={(e) => setShowFieldCamps(e.target.checked)}
+                        className="rounded text-brand-500 focus:ring-brand-500" 
+                      />
+                      <span className="text-sm text-gray-700 flex items-center gap-2">
+                        <Tent size={14} className="text-emerald-600" />
+                        <span>مخيم جيزقازغان (Field Camp)</span>
+                      </span>
+                    </label>
                   </div>
                 </div>
               )}
@@ -3001,6 +3142,18 @@ const LiveTrackingInner = () => {
                                     className="rounded text-brand-500 focus:ring-brand-500" 
                                 />
                                 <span className="text-sm text-gray-700">Google Labels</span>
+                            </label>
+                            <label className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={showFieldCamps}
+                                    onChange={(e) => setShowFieldCamps(e.target.checked)}
+                                    className="rounded text-brand-500 focus:ring-brand-500" 
+                                />
+                                <span className="text-sm text-gray-700 flex items-center gap-2">
+                                    <Tent size={14} className="text-emerald-600" />
+                                    <span>مخيم جيزقازغان (Field Camp)</span>
+                                </span>
                             </label>
                         </div>
 

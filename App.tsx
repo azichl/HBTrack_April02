@@ -25,8 +25,9 @@ import { GeoSpatialAnalysis } from './views/GeoSpatialAnalysis';
 import { DataUpload } from './views/DataUpload';
 import { Role } from './types';
 import { IOSBottomNav } from './components/IOSBottomNav';
-import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info, Tent } from 'lucide-react';
 import { HoubaraIcon } from './components/HoubaraIcon';
+import { FIXED_FIELD_CAMPS } from './constants';
 
 // Placeholder components for other views
 const PlaceholderView = ({ title }: { title: string }) => (
@@ -77,12 +78,30 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
       ).slice(0, 4)
     : [];
 
-  const hasResults = matchedTransmitters.length > 0 || matchedBirds.length > 0 || matchedAlerts.length > 0;
+  const matchedCamps = q
+    ? FIXED_FIELD_CAMPS.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        (c.nameEn && c.nameEn.toLowerCase().includes(q)) ||
+        q.includes('مخيم') ||
+        q.includes('جيزقازغان') ||
+        q.includes('zhezkazgan')
+      )
+    : [];
+
+  const hasResults = matchedTransmitters.length > 0 || matchedBirds.length > 0 || matchedAlerts.length > 0 || matchedCamps.length > 0;
 
   const handleSelect = (tab: string) => {
     setQuery('');
     setOpen(false);
     onNavigate(tab);
+  };
+
+  const handleSelectCamp = (camp: typeof FIXED_FIELD_CAMPS[0]) => {
+    setQuery('');
+    setOpen(false);
+    useAppStore.getState().setSharedMapCenter([camp.lat, camp.lon]);
+    useAppStore.getState().setSharedMapZoom(11);
+    onNavigate('Live Tracking');
   };
 
   return (
@@ -156,6 +175,23 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{a.message}</p>
                     <p className="text-xs text-gray-400 truncate">{a.transmitter_id} · {a.type.replace(/_/g, ' ')}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {matchedCamps.length > 0 && (
+            <div>
+              <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/50">Field Camps (مخيمات الميدان)</div>
+              {matchedCamps.map(c => (
+                <button key={c.id} onClick={() => handleSelectCamp(c)} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors text-left group">
+                  <div className="w-8 h-8 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Tent size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{c.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{c.nameEn} · {c.lat.toFixed(5)}, {c.lon.toFixed(5)} ({c.country})</p>
                   </div>
                 </button>
               ))}

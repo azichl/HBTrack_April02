@@ -22,6 +22,7 @@ import {
   Droplets
 } from 'lucide-react';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
+import { FIXED_FIELD_CAMPS } from '../constants';
 import { getAuth } from 'firebase/auth';
 
 // Setup Map Center Updater helper component
@@ -76,6 +77,53 @@ const getStatusIcon = (status: string) => {
     if (status === 'Dead' || status === 'dead') return redIcon;
     return blackIcon;
 };
+
+// Fixed Field Camp Icon (Zhezkazgan Camp / مخيم جيزقازغان)
+const campIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: `<div style="display: flex; flex-direction: column; align-items: center; pointer-events: auto; cursor: pointer; user-select: none;">
+           <div style="
+             position: relative;
+             width: 36px;
+             height: 36px;
+             border-radius: 50%;
+             background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+             border: 2.5px solid #ffffff;
+             box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             color: #ffffff;
+           ">
+             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M19 20 10 4 1 20h18Z" fill="#34d399" fill-opacity="0.35"/>
+               <path d="M10 4 23 20"/>
+               <path d="m10 4 4.5 16"/>
+             </svg>
+             <div style="position: absolute; top: -1px; right: -1px; width: 10px; height: 10px; border-radius: 50%; background: #34d399; border: 1.5px solid #ffffff;"></div>
+           </div>
+           <div style="
+             margin-top: 3px;
+             background: rgba(15, 23, 42, 0.94);
+             color: #ffffff;
+             padding: 2px 7px;
+             border-radius: 6px;
+             font-size: 11px;
+             font-weight: 700;
+             white-space: nowrap;
+             box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+             border: 1px solid rgba(255,255,255,0.25);
+             font-family: 'Sakkal Majalla', sans-serif;
+             direction: rtl;
+             line-height: 1.2;
+           ">
+             مخيم جيزقازغان
+           </div>
+         </div>`,
+  iconSize: [110, 58],
+  iconAnchor: [55, 18],
+  popupAnchor: [0, -22]
+});
 
 export const GeoSpatialAnalysis = () => {
     const { 
@@ -685,6 +733,30 @@ export const GeoSpatialAnalysis = () => {
                       </Marker>
                   );
               })}
+
+              {/* Fixed Field Camps */}
+              {FIXED_FIELD_CAMPS.map(camp => (
+                  <Marker
+                      key={camp.id}
+                      position={[camp.lat, camp.lon]}
+                      icon={campIcon}
+                      zIndexOffset={1200}
+                  >
+                      <Popup>
+                          <div className="p-1 space-y-1 text-slate-800 min-w-[180px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
+                              <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+                                  <span className="text-base">⛺</span>
+                                  <div>
+                                      <h4 className="text-sm font-bold text-emerald-700 m-0 leading-tight">{camp.name}</h4>
+                                      <span className="text-[10px] text-gray-500">{camp.nameEn} • {camp.country}</span>
+                                  </div>
+                              </div>
+                              <p className="text-[10px] m-0"><b>الإحداثيات:</b> {camp.lat.toFixed(6)}, {camp.lon.toFixed(6)}</p>
+                              {camp.region && <p className="text-[10px] m-0"><b>المنطقة:</b> {camp.region}</p>}
+                          </div>
+                      </Popup>
+                  </Marker>
+              ))}
           </MapContainer>
       </div>
 
