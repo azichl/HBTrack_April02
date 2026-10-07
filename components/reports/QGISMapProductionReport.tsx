@@ -144,66 +144,275 @@ export const calculateDurationDays = (startTs: any, endTs: any): number => {
   return Math.max(0, Math.round((t2 - t1) / (1000 * 60 * 60 * 24)));
 };
 
-// ─── LEAFLET ICONS WITH FIXED EXPLICIT SIZES ─────────────────────────────────
+// ─── LEAFLET ICONS WITH EXACT LIVE TRACKING SIZES & STYLING ─────────────────
 
-const createReportMarkerIcon = (
-  colorHex: string, 
-  label: string, 
-  badgeTextColor: string,
-  iconType: 'pin' | 'camp'
-) => {
-  let pinHtml = '';
-  if (iconType === 'camp') {
-    pinHtml = `
-      <div style="display: flex; flex-direction: column; align-items: center; width: 100px; direction: ltr; pointer-events: none;">
-        <div style="background: #ffffff; border: 1px solid #d97706; border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 800; color: #b45309; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.3); margin-bottom: 2px; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; letter-spacing: normal;">
-          ${label}
+/**
+ * Creates transmitter marker matching Live Tracking exactly:
+ * - 21x35px SVG Teardrop Pin
+ * - Rounded number pill with 2px border and transmitter ID
+ * - Crisp title above with text-shadow (zero bulky box overlap)
+ */
+const createLiveTrackingMarkerIcon = ({
+  number,
+  pinColorHex,
+  borderColorHex,
+  labelTitle
+}: {
+  number: string;
+  pinColorHex: string;
+  borderColorHex: string;
+  labelTitle?: string;
+}) => {
+  const cleanId = String(number).replace(/^trans-/, '');
+  const hasTitle = Boolean(labelTitle);
+  const totalH = hasTitle ? 72 : 56;
+
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `
+      <div style="display: flex; flex-direction: column; align-items: center; width: 140px; pointer-events: none; font-family: 'Segoe UI', Tahoma, Arial, sans-serif;">
+        ${hasTitle ? `
+          <div style="
+            color: #ffffff; 
+            font-weight: 800; 
+            font-size: 11px; 
+            white-space: nowrap; 
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.85); 
+            margin-bottom: 2px; 
+            direction: rtl;
+          ">
+            ${labelTitle}
+          </div>
+        ` : ''}
+        <!-- Number Label (exact Live Tracking size and style) -->
+        <div style="
+          background: #ffffff; 
+          color: #0f172a; 
+          border: 2px solid ${borderColorHex}; 
+          border-radius: 9999px; 
+          padding: 1px 7px; 
+          font-size: 11px; 
+          font-weight: 800; 
+          white-space: nowrap; 
+          box-shadow: 0 1px 4px rgba(0,0,0,0.35); 
+          margin-bottom: 2px; 
+          display: flex; 
+          align-items: center; 
+          direction: ltr; 
+          line-height: 1.25; 
+          font-family: monospace;
+        ">
+          ${cleanId}
         </div>
-        <div style="background-color: #f59e0b; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.45); border: 2.5px solid #ffffff;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 20 10 4 1 20h18Z"></path>
-            <path d="m10 4 9 16"></path>
+
+        <!-- Live Tracking Exact 21x35 SVG Pin Icon -->
+        <div style="position: relative; width: 21px; height: 35px;">
+          <svg width="21" height="35" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));">
+            <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
+            <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
           </svg>
         </div>
       </div>
-    `;
-    return L.divIcon({
-      className: 'report-map-camp-marker',
-      html: pinHtml,
-      iconSize: [100, 50],
-      iconAnchor: [50, 50]
-    });
-  } else {
-    pinHtml = `
-      <div style="display: flex; flex-direction: column; align-items: center; width: 130px; direction: ltr; pointer-events: none;">
-        <div style="background: #ffffff; border: 1px solid ${colorHex}; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 800; color: ${badgeTextColor}; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,0.3); margin-bottom: 2px; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; letter-spacing: normal;">
-          ${label}
-        </div>
-        <div style="width: 22px; height: 22px; border-radius: 50%; background: ${colorHex}; border: 3px solid #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
-          <div style="width: 7px; height: 7px; border-radius: 50%; background: #ffffff;"></div>
-        </div>
-      </div>
-    `;
-    return L.divIcon({
-      className: 'report-map-pin-marker',
-      html: pinHtml,
-      iconSize: [130, 50],
-      iconAnchor: [65, 50]
-    });
-  }
+    `,
+    iconSize: [140, totalH],
+    iconAnchor: [70, totalH],
+    popupAnchor: [0, -totalH + 12]
+  });
 };
 
+/**
+ * Creates Field Camp Marker matching Live Tracking styling
+ */
+const createLiveTrackingCampIcon = (campName: string) => {
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `
+      <div style="display: flex; flex-direction: column; align-items: center; width: 120px; pointer-events: none; font-family: 'Segoe UI', Tahoma, Arial, sans-serif;">
+        <!-- Camp Title in clean shadowed text -->
+        <div style="
+          color: #ffffff; 
+          font-weight: 800; 
+          font-size: 11.5px; 
+          white-space: nowrap; 
+          text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.85); 
+          margin-bottom: 2px; 
+          direction: rtl;
+        ">
+          ${campName}
+        </div>
+
+        <!-- Camp Amber Circular Tent Badge -->
+        <div style="
+          position: relative;
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          border: 2px solid #ffffff;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #ffffff;
+        ">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.3"/>
+            <path d="M10 4 23 20"/>
+            <path d="m10 4 4.5 16"/>
+          </svg>
+        </div>
+      </div>
+    `,
+    iconSize: [120, 50],
+    iconAnchor: [60, 40]
+  });
+};
+
+/** Distance badge along connecting lines */
 const createDistancePillIcon = (text: string, borderColor: string) => {
   return L.divIcon({
-    className: 'report-map-pill-marker',
+    className: 'bg-transparent',
     html: `
-      <div style="direction: ltr; background: #ffffff; border: 1.5px solid ${borderColor}; border-radius: 9999px; padding: 1.5px 8px; font-size: 11px; font-weight: 800; color: #111827; box-shadow: 0 1px 4px rgba(0,0,0,0.35); white-space: nowrap; font-family: 'Segoe UI', Arial, sans-serif; text-align: center; letter-spacing: normal;">
+      <div style="
+        direction: ltr; 
+        background: #ffffff; 
+        border: 1.5px solid ${borderColor}; 
+        border-radius: 9999px; 
+        padding: 1px 6px; 
+        font-size: 10px; 
+        font-weight: 800; 
+        color: ${borderColor}; 
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3); 
+        white-space: nowrap; 
+        font-family: monospace, Arial, sans-serif; 
+        text-align: center;
+        letter-spacing: normal;
+        line-height: 1.25;
+      ">
         ${text}
       </div>
     `,
-    iconSize: [70, 22],
-    iconAnchor: [35, 11]
+    iconSize: [60, 18],
+    iconAnchor: [30, 9]
   });
+};
+
+/**
+ * Renders SVG dashed vector lines connecting the report points with arrow.
+ * Uses map.latLngToContainerPoint to guarantee rendering in all browsers,
+ * print stylesheets, and html2canvas exports with zero transform issues.
+ */
+const ReportVectorOverlay = ({
+  releasePoint,
+  lastGpsPoint,
+  campPoint
+}: {
+  releasePoint: [number, number];
+  lastGpsPoint: [number, number];
+  campPoint: [number, number];
+}) => {
+  const map = useMap();
+  const [coords, setCoords] = useState<{
+    pRelease: { x: number; y: number };
+    pLast: { x: number; y: number };
+    pCamp: { x: number; y: number };
+  } | null>(null);
+
+  const updatePositions = useCallback(() => {
+    try {
+      if (!map) return;
+      if (
+        isNaN(releasePoint[0]) || isNaN(releasePoint[1]) ||
+        isNaN(lastGpsPoint[0]) || isNaN(lastGpsPoint[1]) ||
+        isNaN(campPoint[0]) || isNaN(campPoint[1])
+      ) {
+        return;
+      }
+      const pRelease = map.latLngToContainerPoint(L.latLng(releasePoint[0], releasePoint[1]));
+      const pLast = map.latLngToContainerPoint(L.latLng(lastGpsPoint[0], lastGpsPoint[1]));
+      const pCamp = map.latLngToContainerPoint(L.latLng(campPoint[0], campPoint[1]));
+      setCoords({ pRelease, pLast, pCamp });
+    } catch (e) {
+      console.warn('Vector overlay projection error:', e);
+    }
+  }, [map, releasePoint[0], releasePoint[1], lastGpsPoint[0], lastGpsPoint[1], campPoint[0], campPoint[1]]);
+
+  useEffect(() => {
+    updatePositions();
+    const t1 = setTimeout(updatePositions, 150);
+    const t2 = setTimeout(updatePositions, 450);
+    const t3 = setTimeout(updatePositions, 900);
+    map.on('move', updatePositions);
+    map.on('zoom', updatePositions);
+    map.on('viewreset', updatePositions);
+    map.on('resize', updatePositions);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      map.off('move', updatePositions);
+      map.off('zoom', updatePositions);
+      map.off('viewreset', updatePositions);
+      map.off('resize', updatePositions);
+    };
+  }, [map, updatePositions]);
+
+  if (!coords) return null;
+
+  return (
+    <svg 
+      className="absolute inset-0 w-full h-full pointer-events-none" 
+      style={{ 
+        position: 'absolute', 
+        top: 0, 
+        left: 0, 
+        width: '100%', 
+        height: '100%', 
+        zIndex: 420,
+        pointerEvents: 'none'
+      }}
+    >
+      <defs>
+        {/* Red arrowhead pointing at the Last GPS position */}
+        <marker 
+          id="report-arrow-red" 
+          viewBox="0 0 10 10" 
+          refX="7" 
+          refY="5" 
+          markerWidth="7" 
+          markerHeight="7" 
+          orient="auto"
+        >
+          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
+        </marker>
+      </defs>
+
+      {/* Red dashed vector line: Release Location -> Last GPS Position */}
+      <line
+        x1={coords.pRelease.x}
+        y1={coords.pRelease.y}
+        x2={coords.pLast.x}
+        y2={coords.pLast.y}
+        stroke="#dc2626"
+        strokeWidth="3"
+        strokeDasharray="8 6"
+        strokeOpacity="0.95"
+        markerEnd="url(#report-arrow-red)"
+      />
+
+      {/* Amber dashed vector line: Last GPS Position -> Field Camp */}
+      <line
+        x1={coords.pLast.x}
+        y1={coords.pLast.y}
+        x2={coords.pCamp.x}
+        y2={coords.pCamp.y}
+        stroke="#f59e0b"
+        strokeWidth="3"
+        strokeDasharray="8 6"
+        strokeOpacity="0.95"
+      />
+    </svg>
+  );
 };
 
 /** Helper to return dynamic tile layer matching Live Tracking options with Google Hybrid as default */
@@ -580,20 +789,23 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
           if (isNaN(relLat) || isNaN(relLon)) {
             const firstFix = gpsPositions[0];
-            relLat = firstFix.lat;
-            relLon = firstFix.lon;
+            relLat = parseFloat(String(firstFix.lat));
+            relLon = parseFloat(String(firstFix.lon));
             relDate = formatDateDDMMYYYY(firstFix.timestamp);
           }
 
+          const lastLat = parseFloat(String(latestGps.lat));
+          const lastLon = parseFloat(String(latestGps.lon));
+
           setTelemetryData({
             releasePos: {
-              lat: relLat,
-              lon: relLon,
+              lat: isNaN(relLat) ? 46.94415 : relLat,
+              lon: isNaN(relLon) ? 66.8242 : relLon,
               dateStr: relDate || '16-10-2024'
             },
             lastGpsPos: {
-              lat: latestGps.lat,
-              lon: latestGps.lon,
+              lat: isNaN(lastLat) ? 46.9965 : lastLat,
+              lon: isNaN(lastLon) ? 67.0222 : lastLon,
               dateStr: latestGpsDate || '01-10-2026'
             },
             rawGpsCount: gpsPositions.length,
@@ -637,7 +849,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     if (selectedCampId === 'almaty_camp') {
       return FIXED_FIELD_CAMPS[1];
     }
-    const { lat, lon } = telemetryData.lastGpsPos;
+    const lat = parseFloat(String(telemetryData.lastGpsPos.lat)) || 46.9965;
+    const lon = parseFloat(String(telemetryData.lastGpsPos.lon)) || 67.0222;
     let nearest = FIXED_FIELD_CAMPS[0];
     let minDist = Infinity;
     for (const c of FIXED_FIELD_CAMPS) {
@@ -652,33 +865,31 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
   // Distance & Bearing calculations
   const metrics = useMemo(() => {
-    const { releasePos, lastGpsPos } = telemetryData;
-    
-    const distFromRelease = calculateDistanceKm(
-      releasePos.lat, releasePos.lon,
-      lastGpsPos.lat, lastGpsPos.lon
-    );
+    const rLat = parseFloat(String(telemetryData.releasePos.lat)) || 0;
+    const rLon = parseFloat(String(telemetryData.releasePos.lon)) || 0;
+    const lLat = parseFloat(String(telemetryData.lastGpsPos.lat)) || 0;
+    const lLon = parseFloat(String(telemetryData.lastGpsPos.lon)) || 0;
+    const cLat = parseFloat(String(activeCamp.lat)) || 0;
+    const cLon = parseFloat(String(activeCamp.lon)) || 0;
 
-    const bearing = calculateBearingDegrees(
-      releasePos.lat, releasePos.lon,
-      lastGpsPos.lat, lastGpsPos.lon
-    );
+    const distFromRelease = calculateDistanceKm(rLat, rLon, lLat, lLon);
+    const bearing = calculateBearingDegrees(rLat, rLon, lLat, lLon);
     const bearingArabic = formatArabicBearing(bearing);
+    const distToCamp = calculateDistanceKm(lLat, lLon, cLat, cLon);
+    const durationDays = calculateDurationFromReleaseToToday(telemetryData.releasePos.dateStr);
 
-    const distToCamp = calculateDistanceKm(
-      lastGpsPos.lat, lastGpsPos.lon,
-      activeCamp.lat, activeCamp.lon
-    );
-
-    // Tracking duration calculated from release date until current day (today)
-    const durationDays = calculateDurationFromReleaseToToday(releasePos.dateStr);
-
-    const releaseLatDMM = formatDMM(releasePos.lat, true);
-    const releaseLonDMM = formatDMM(releasePos.lon, false);
-    const lastGpsLatDMM = formatDMM(lastGpsPos.lat, true);
-    const lastGpsLonDMM = formatDMM(lastGpsPos.lon, false);
+    const releaseLatDMM = formatDMM(rLat, true);
+    const releaseLonDMM = formatDMM(rLon, false);
+    const lastGpsLatDMM = formatDMM(lLat, true);
+    const lastGpsLonDMM = formatDMM(lLon, false);
 
     return {
+      rLat,
+      rLon,
+      lLat,
+      lLon,
+      cLat,
+      cLon,
       distFromReleaseKm: distFromRelease.toFixed(2),
       bearingArabic,
       distToCampKm: distToCamp.toFixed(2),
@@ -688,21 +899,21 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       lastGpsLatDMM,
       lastGpsLonDMM,
       releaseToLastMid: [
-        (releasePos.lat + lastGpsPos.lat) / 2,
-        (releasePos.lon + lastGpsPos.lon) / 2
+        (rLat + lLat) / 2,
+        (rLon + lLon) / 2
       ] as [number, number],
       lastToCampMid: [
-        (lastGpsPos.lat + activeCamp.lat) / 2,
-        (lastGpsPos.lon + activeCamp.lon) / 2
+        (lLat + cLat) / 2,
+        (lLon + cLon) / 2
       ] as [number, number]
     };
   }, [telemetryData, activeCamp]);
 
   const mapPoints = useMemo<Array<[number, number]>>(() => [
-    [telemetryData.releasePos.lat, telemetryData.releasePos.lon],
-    [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon],
-    [activeCamp.lat, activeCamp.lon]
-  ], [telemetryData, activeCamp]);
+    [metrics.rLat, metrics.rLon],
+    [metrics.lLat, metrics.lLon],
+    [metrics.cLat, metrics.cLon]
+  ], [metrics.rLat, metrics.rLon, metrics.lLat, metrics.lLon, metrics.cLat, metrics.cLon]);
 
   // Dynamic country silhouette & bird location for the top-left locator map
   const insetMapData = useMemo(() => {
@@ -1192,6 +1403,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <MapContainer
                   center={[47.05, 67.32]}
                   zoom={9}
+                  preferCanvas={true}
                   scrollWheelZoom={true}
                   dragging={true}
                   doubleClickZoom={true}
@@ -1208,6 +1420,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                   {/* Auto-fit map to points & recenter */}
                   <ReportMapFitter points={mapPoints} fitKey={fitKey} />
+
+                  {/* High-visibility SVG Vector Line Overlay connecting all points */}
+                  <ReportVectorOverlay
+                    releasePoint={[metrics.rLat, metrics.rLon]}
+                    lastGpsPoint={[metrics.lLat, metrics.lLon]}
+                    campPoint={[metrics.cLat, metrics.cLon]}
+                  />
 
                   {/* QGIS Imported Vector Layers from Store */}
                   {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'file' && qgisGeoJSONCache?.[l.id]).map(layer => (
@@ -1259,13 +1478,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* Red Vector Line: Release Location -> Last GPS Position */}
                   <Polyline
                     positions={[
-                      [telemetryData.releasePos.lat, telemetryData.releasePos.lon],
-                      [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]
+                      [metrics.rLat, metrics.rLon],
+                      [metrics.lLat, metrics.lLon]
                     ]}
                     pathOptions={{
                       color: '#dc2626',
-                      weight: 2.5,
-                      dashArray: '6, 6',
+                      weight: 3,
+                      dashArray: '8, 6',
                       opacity: 0.95
                     }}
                   />
@@ -1280,13 +1499,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* Dashed Amber Vector Line: Last GPS Position -> Field Camp */}
                   <Polyline
                     positions={[
-                      [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon],
-                      [activeCamp.lat, activeCamp.lon]
+                      [metrics.lLat, metrics.lLon],
+                      [metrics.cLat, metrics.cLon]
                     ]}
                     pathOptions={{
                       color: '#f59e0b',
-                      weight: 2.5,
-                      dashArray: '6, 6',
+                      weight: 3,
+                      dashArray: '8, 6',
                       opacity: 0.95
                     }}
                   />
@@ -1294,26 +1513,36 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* Distance badge on Last-to-Camp line */}
                   <Marker
                     position={metrics.lastToCampMid}
-                    icon={createDistancePillIcon(`${metrics.distToCampKm} km`, '#f59e0b')}
+                    icon={createDistancePillIcon(`${metrics.distToCampKm} km`, '#d97706')}
                     interactive={false}
                   />
 
-                  {/* 1. Marker: Installation / Release Location */}
+                  {/* 1. Marker: Installation / Release Location (Live Tracking Pin & Number Label) */}
                   <Marker
-                    position={[telemetryData.releasePos.lat, telemetryData.releasePos.lon]}
-                    icon={createReportMarkerIcon('#701a2b', 'موقع تركيب الجهاز', '#701a2b', 'pin')}
+                    position={[metrics.rLat, metrics.rLon]}
+                    icon={createLiveTrackingMarkerIcon({
+                      number: String(selectedPttId).replace(/^trans-/, ''),
+                      pinColorHex: '#701a2b',
+                      borderColorHex: '#701a2b',
+                      labelTitle: 'موقع تركيب الجهاز'
+                    })}
                   />
 
-                  {/* 2. Marker: Last GPS Location */}
+                  {/* 2. Marker: Last GPS Location (Live Tracking Pin & Number Label) */}
                   <Marker
-                    position={[telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]}
-                    icon={createReportMarkerIcon('#0d9488', 'آخر موقع', '#0f766e', 'pin')}
+                    position={[metrics.lLat, metrics.lLon]}
+                    icon={createLiveTrackingMarkerIcon({
+                      number: String(selectedPttId).replace(/^trans-/, ''),
+                      pinColorHex: '#22c55e',
+                      borderColorHex: '#22c55e',
+                      labelTitle: 'آخر موقع'
+                    })}
                   />
 
-                  {/* 3. Marker: Field Camp */}
+                  {/* 3. Marker: Field Camp (Live Tracking Camp Badge & Label) */}
                   <Marker
-                    position={[activeCamp.lat, activeCamp.lon]}
-                    icon={createReportMarkerIcon('#f59e0b', 'المخيم', '#b45309', 'camp')}
+                    position={[metrics.cLat, metrics.cLon]}
+                    icon={createLiveTrackingCampIcon(activeCamp.name || 'المخيم')}
                   />
                 </MapContainer>
 
@@ -1544,20 +1773,24 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 style={{ direction: 'rtl' }}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#701a2b] border border-white inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#701a2b] border border-white inline-block shadow-xs"></span>
                   <span>موقع تركيب الجهاز</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#0d9488] border border-white inline-block"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] border border-white inline-block shadow-xs"></span>
                   <span>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <span className="w-4 border-b-2 border-dashed border-[#dc2626] inline-block"></span>
+                  <span>المسار المباشر</span>
+                </div>
+                <div className="flex items-center gap-1.5">
                   <span className="text-amber-500 text-xs">▲</span>
-                  <span>المخيم</span>
+                  <span>{activeCamp.name || 'المخيم'}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-4 border-b-2 border-dashed border-amber-500 inline-block"></span>
-                  <span>البعد عنه</span>
+                  <span>البعد عن المخيم</span>
                 </div>
               </div>
 
@@ -1568,7 +1801,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
               <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
-                <div className="bg-[#701a2b] text-white py-1.5 px-3 text-center text-[13px] font-black tracking-wide">
+                <div 
+                  className="bg-[#701a2b] text-white py-1.5 px-3 text-center text-[13.5px] font-bold"
+                  style={{ direction: 'rtl', letterSpacing: 'normal' }}
+                >
                   بيانات الطائر
                 </div>
                 <table className="w-full text-[12px] text-right border-collapse">
@@ -1682,7 +1918,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 
                 {/* Metric 1 (Far Right in RTL): Distance from Release */}
                 <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-[#991b1b] font-mono leading-tight mb-0.5">
+                  <div className="text-[14px] font-black text-[#991b1b] font-mono leading-tight mb-0.5" dir="ltr">
                     {metrics.distFromReleaseKm} km
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
@@ -1702,7 +1938,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                 {/* Metric 3: Distance from Camp */}
                 <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 font-mono leading-tight mb-0.5">
+                  <div className="text-[14px] font-black text-gray-900 font-mono leading-tight mb-0.5" dir="ltr">
                     {metrics.distToCampKm} km
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
@@ -1712,7 +1948,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                 {/* Metric 4 (Far Left in RTL): Tracking Duration in Days */}
                 <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-0.5">
+                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-0.5" dir="ltr">
                     {metrics.durationDays} يوم
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
