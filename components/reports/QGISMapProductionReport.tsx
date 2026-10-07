@@ -300,29 +300,31 @@ export function buildCountrySvgData(
   const availW = width - padding * 2;
   const availH = height - padding * 2;
 
-  // Preserve geographic aspect ratio with cos(midLat)
+  // Ground dimensions in pseudo-degrees scaled by cos(midLat)
   const midLat = (minLat + maxLat) / 2;
   const cosMid = Math.max(0.1, Math.cos((midLat * Math.PI) / 180));
-  const geoAspect = (spanLon * cosMid) / spanLat;
+  const geoW = spanLon * cosMid;
+  const geoH = spanLat;
+  const geoAspect = geoW / geoH;
+  const boxAspect = availW / availH;
 
-  let scaleX: number;
-  let scaleY: number;
-  if (availW / availH > geoAspect) {
-    scaleY = availH / spanLat;
-    scaleX = scaleY / cosMid;
+  let scale: number;
+  if (boxAspect > geoAspect) {
+    // Box is wider than geography, height is the constraining dimension
+    scale = availH / geoH;
   } else {
-    scaleX = availW / (spanLon * cosMid);
-    scaleY = scaleX * cosMid;
+    // Box is taller than geography, width is the constraining dimension
+    scale = availW / geoW;
   }
 
-  const projW = spanLon * scaleX;
-  const projH = spanLat * scaleY;
+  const projW = geoW * scale;
+  const projH = geoH * scale;
   const offsetX = padding + (availW - projW) / 2;
   const offsetY = padding + (availH - projH) / 2;
 
   const project = (pLon: number, pLat: number) => ({
-    x: offsetX + (pLon - minLon) * scaleX,
-    y: offsetY + (maxLat - pLat) * scaleY
+    x: offsetX + (pLon - minLon) * cosMid * scale,
+    y: offsetY + (maxLat - pLat) * scale
   });
 
   const ringsToD = (rings: any[]) => {
@@ -614,7 +616,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   // Dynamic country silhouette & bird location for the top-left locator map
   const insetMapData = useMemo(() => {
     const { lat, lon } = telemetryData.lastGpsPos;
-    return buildCountrySvgData(lon, lat, 140, 78, 5);
+    return buildCountrySvgData(lon, lat, 150, 82, 6);
   }, [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]);
 
   const filteredPtts = useMemo(() => {
@@ -1154,42 +1156,90 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                 {/* ─── MAP OVERLAYS ────────────────────────────────────────── */}
 
-                {/* Top-Left Inset: Country Locator Map & Exact Bird Position */}
-                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[140px] pointer-events-none">
-                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5 px-0.5">
-                    <span className="text-[9.5px] font-black text-gray-800 tracking-tight">
+                {/* Top-Left Inset: Country Locator Map & Exact Bird Position with Transmitter ID */}
+                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[150px] pointer-events-none">
+                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5 px-1">
+                    <span className="text-[10px] font-black text-gray-800 tracking-tight">
                       {insetMapData.countryNameEn}
                     </span>
                     <span className="text-[8px] font-black text-gray-700">▲ N</span>
                   </div>
-                  <div className="relative w-full h-[76px] flex items-center justify-center bg-stone-50 border border-gray-200 overflow-hidden">
+                  <div className="relative w-full h-[82px] flex items-center justify-center bg-stone-50 border border-gray-200 overflow-hidden">
                     {insetMapData.svgPath ? (
                       <svg viewBox={insetMapData.viewBox} className="w-full h-full">
+                        {/* Complete Country Silhouette Border */}
                         <path
                           d={insetMapData.svgPath}
                           fill="#fdfbf7"
                           stroke="#475569"
-                          strokeWidth="1.2"
+                          strokeWidth="1.1"
                           strokeLinejoin="round"
                         />
-                        {/* Red Point: Exact last location of the bird */}
-                        <g>
-                          <circle 
-                            cx={insetMapData.birdPoint.x} 
-                            cy={insetMapData.birdPoint.y} 
-                            r="4.5" 
-                            fill="#dc2626" 
-                            opacity="0.35" 
-                          />
-                          <circle 
-                            cx={insetMapData.birdPoint.x} 
-                            cy={insetMapData.birdPoint.y} 
-                            r="2.8" 
-                            fill="#dc2626" 
-                            stroke="#ffffff" 
-                            strokeWidth="0.9" 
-                          />
-                        </g>
+
+                        {/* Red Location Point & Transmitter ID Callout Badge */}
+                        {(() => {
+                          const pttLabel = String(selectedPttId).replace(/^trans-/, '');
+                          const labelW = Math.max(28, pttLabel.length * 5.2 + 6);
+                          const labelH = 10;
+                          const badgeX = Math.max(labelW / 2 + 2, Math.min(150 - labelW / 2 - 2, insetMapData.birdPoint.x));
+                          const isNearTop = insetMapData.birdPoint.y < 16;
+                          const badgeY = isNearTop ? insetMapData.birdPoint.y + 4.5 : insetMapData.birdPoint.y - 12.5;
+
+                          return (
+                            <g>
+                              {/* Pointer triangle connecting badge to exact point */}
+                              <polygon 
+                                points={
+                                  isNearTop
+                                    ? `${insetMapData.birdPoint.x - 2},${badgeY} ${insetMapData.birdPoint.x + 2},${badgeY} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y + 1}`
+                                    : `${insetMapData.birdPoint.x - 2},${badgeY + labelH} ${insetMapData.birdPoint.x + 2},${badgeY + labelH} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y - 1}`
+                                } 
+                                fill="#b91c1c" 
+                              />
+
+                              {/* Transmitter ID Badge */}
+                              <rect 
+                                x={badgeX - labelW / 2} 
+                                y={badgeY} 
+                                width={labelW} 
+                                height={labelH} 
+                                rx="2" 
+                                fill="#ffffff" 
+                                stroke="#b91c1c" 
+                                strokeWidth="0.8" 
+                              />
+                              <text 
+                                x={badgeX} 
+                                y={badgeY + labelH / 2 + 0.6} 
+                                textAnchor="middle" 
+                                dominantBaseline="middle" 
+                                fontSize="6.8" 
+                                fontWeight="bold" 
+                                fontFamily="'Segoe UI', Roboto, monospace, sans-serif" 
+                                fill="#701a2b"
+                              >
+                                {pttLabel}
+                              </text>
+
+                              {/* Red GPS Point with subtle halo */}
+                              <circle 
+                                cx={insetMapData.birdPoint.x} 
+                                cy={insetMapData.birdPoint.y} 
+                                r="4.2" 
+                                fill="#dc2626" 
+                                opacity="0.35" 
+                              />
+                              <circle 
+                                cx={insetMapData.birdPoint.x} 
+                                cy={insetMapData.birdPoint.y} 
+                                r="2.5" 
+                                fill="#dc2626" 
+                                stroke="#ffffff" 
+                                strokeWidth="0.8" 
+                              />
+                            </g>
+                          );
+                        })()}
                       </svg>
                     ) : (
                       <div className="text-[9px] text-gray-400 font-bold">{insetMapData.countryNameEn}</div>
