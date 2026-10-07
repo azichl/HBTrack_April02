@@ -1048,11 +1048,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             </div>
 
             {/* Top-Right Header: External Reserves Office Logo */}
-            <div className="flex items-center justify-end w-[260px]">
+            <div className="flex items-center justify-end w-[240px]">
               <img 
                 src="/external-reserves-office-logo.png" 
                 alt="مكتب محميات الدولة الخارجية - External Reserves Office of The State" 
-                className="h-[48px] w-auto object-contain"
+                className="h-[28px] max-w-[185px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
