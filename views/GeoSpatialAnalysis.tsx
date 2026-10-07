@@ -21,7 +21,7 @@ import {
   Leaf,
   Droplets
 } from 'lucide-react';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
+import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter, formatCoordinateSystems } from '../utils/formatting';
 import { FIXED_FIELD_CAMPS } from '../constants';
 import { getAuth } from 'firebase/auth';
 
@@ -751,8 +751,11 @@ export const GeoSpatialAnalysis = () => {
                                       <span className="text-[10px] text-gray-500">{camp.nameEn} • {camp.country}</span>
                                   </div>
                               </div>
-                              <p className="text-[10px] m-0"><b>الإحداثيات:</b> {camp.lat.toFixed(6)}, {camp.lon.toFixed(6)}</p>
-                              {camp.region && <p className="text-[10px] m-0"><b>المنطقة:</b> {camp.region}</p>}
+                              <div className="text-[11px] space-y-1 bg-slate-50 p-2 rounded border border-slate-100">
+                                  <div><span className="text-gray-400 font-bold">HDD:</span> <span className="font-mono font-bold text-slate-800">{formatCoordinateSystems(camp.lat, camp.lon).HDD}</span></div>
+                                  <div><span className="text-gray-400 font-bold">HDDMM:</span> <span className="font-mono font-bold text-emerald-700">{formatCoordinateSystems(camp.lat, camp.lon).HDMM}</span></div>
+                              </div>
+                              {camp.region && <p className="text-[10px] m-0 text-gray-600"><b>المنطقة:</b> {camp.region}</p>}
                           </div>
                       </Popup>
                   </Marker>

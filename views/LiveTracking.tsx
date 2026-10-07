@@ -1110,8 +1110,9 @@ const formatCoordinateSystems = (lat: number, lon: number) => {
         const abs = Math.abs(val || 0);
         const deg = Math.floor(abs);
         const min = (abs - deg) * 60;
+        const minStr = min < 10 ? `0${min.toFixed(3)}` : min.toFixed(3);
         const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
-        return `${deg}° ${min.toFixed(3)}' ${dir}`;
+        return `${deg}° ${minStr}' ${dir}`;
     };
 
     const formatDMS = (val: number, isLat: boolean) => {
@@ -1124,7 +1125,7 @@ const formatCoordinateSystems = (lat: number, lon: number) => {
     };
 
     return {
-        HDD: `${lat?.toFixed(5)}, ${lon?.toFixed(5)}`,
+        HDD: `${lat?.toFixed(6)}, ${lon?.toFixed(6)}`,
         HDMM: `${formatDM(lat, true)}  ${formatDM(lon, false)}`,
         HDMS: `${formatDMS(lat, true)}  ${formatDMS(lon, false)}`
     };
@@ -2505,18 +2506,27 @@ const LiveTrackingInner = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2 text-xs space-y-1.5 border border-slate-100 dark:border-slate-700">
-                                <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-                                    <span className="text-gray-400 font-medium">الإحداثيات (Coords):</span>
-                                    <span className="font-mono font-bold text-gray-900 dark:text-white">{camp.lat.toFixed(6)}, {camp.lon.toFixed(6)}</span>
-                                </div>
-                                {camp.region && (
-                                    <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
-                                        <span className="text-gray-400 font-medium">المنطقة (Region):</span>
-                                        <span className="font-semibold text-gray-800 dark:text-gray-200">{camp.region}</span>
+                            {(() => {
+                                const cSys = formatCoordinateSystems(camp.lat, camp.lon);
+                                return (
+                                    <div className="bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2.5 text-xs space-y-1.5 border border-slate-100 dark:border-slate-700">
+                                        <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                                            <span className="text-gray-400 font-semibold font-sans">HDD:</span>
+                                            <span className="font-mono font-bold text-gray-900 dark:text-white select-all">{cSys.HDD}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-gray-600 dark:text-gray-300">
+                                            <span className="text-gray-400 font-semibold font-sans">HDDMM:</span>
+                                            <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400 select-all">{cSys.HDMM}</span>
+                                        </div>
+                                        {camp.region && (
+                                            <div className="flex justify-between items-center text-gray-600 dark:text-gray-300 pt-1 border-t border-slate-200/60 dark:border-slate-700">
+                                                <span className="text-gray-400 font-medium">المنطقة (Region):</span>
+                                                <span className="font-semibold text-gray-800 dark:text-gray-200">{camp.region}</span>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                );
+                            })()}
 
                             <div className="flex gap-2 pt-0.5">
                                 <button

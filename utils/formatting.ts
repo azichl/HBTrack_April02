@@ -233,4 +233,33 @@ export const isBirdLinkedToTransmitter = (bird: any, transmitter: any): boolean 
   });
 };
 
+/**
+ * Formats coordinates into HDD (Decimal Degrees) and HDDMM (Degrees Decimal Minutes)
+ */
+export const formatCoordinateSystems = (lat: number, lon: number) => {
+  const formatDM = (val: number, isLat: boolean) => {
+    const abs = Math.abs(val || 0);
+    const deg = Math.floor(abs);
+    const min = (abs - deg) * 60;
+    const minStr = min < 10 ? `0${min.toFixed(3)}` : min.toFixed(3);
+    const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
+    return `${deg}° ${minStr}' ${dir}`;
+  };
+
+  const formatDMS = (val: number, isLat: boolean) => {
+    const abs = Math.abs(val || 0);
+    const deg = Math.floor(abs);
+    const min = Math.floor((abs - deg) * 60);
+    const sec = ((abs - deg) * 60 - min) * 60;
+    const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
+    return `${deg}° ${min}' ${sec.toFixed(1)}" ${dir}`;
+  };
+
+  return {
+    HDD: `${lat?.toFixed(6)}, ${lon?.toFixed(6)}`,
+    HDMM: `${formatDM(lat, true)}  ${formatDM(lon, false)}`,
+    HDMS: `${formatDMS(lat, true)}  ${formatDMS(lon, false)}`
+  };
+};
+
 
