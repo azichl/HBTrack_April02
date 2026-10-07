@@ -19,6 +19,15 @@ import {
   findBirdForTransmitter, 
   formatCoordinateSystems 
 } from '../../utils/formatting';
+import * as countryCoder from '@rapideditor/country-coder';
+import * as countries from 'i18n-iso-countries';
+import englishCountries from 'i18n-iso-countries/langs/en.json';
+import arabicCountries from 'i18n-iso-countries/langs/ar.json';
+
+try {
+  countries.registerLocale(englishCountries);
+  countries.registerLocale(arabicCountries);
+} catch (_) {}
 
 // ─── GEODETIC & MATH UTILITIES ───────────────────────────────────────────────
 
@@ -102,10 +111,35 @@ export const formatDateYYYYMMDD = (ts: any): string => {
   return `${year}-${month}-${day}`;
 };
 
+/** Robustly parses DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, or timestamps to UTC ms */
+export const parseAnyDateToMs = (val: any): number => {
+  if (!val) return NaN;
+  const str = String(val).trim();
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (dmyMatch) {
+    const [_, d, m, y] = dmyMatch;
+    return Date.UTC(Number(y), Number(m) - 1, Number(d));
+  }
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (ymdMatch) {
+    const [_, y, m, d] = ymdMatch;
+    return Date.UTC(Number(y), Number(m) - 1, Number(d));
+  }
+  return safeParseTimestamp(val);
+};
+
+/** Calculates tracking duration in days from release date until current day (today) */
+export const calculateDurationFromReleaseToToday = (releaseDateVal: any): number => {
+  const relMs = parseAnyDateToMs(releaseDateVal);
+  if (isNaN(relMs) || relMs <= 0) return 0;
+  const nowMs = Date.now();
+  return Math.max(0, Math.round((nowMs - relMs) / (1000 * 60 * 60 * 24)));
+};
+
 /** Calculates tracking duration in days between two dates */
 export const calculateDurationDays = (startTs: any, endTs: any): number => {
-  const t1 = safeParseTimestamp(startTs);
-  const t2 = safeParseTimestamp(endTs);
+  const t1 = parseAnyDateToMs(startTs);
+  const t2 = parseAnyDateToMs(endTs);
   if (isNaN(t1) || isNaN(t2)) return 0;
   return Math.max(0, Math.round((t2 - t1) / (1000 * 60 * 60 * 24)));
 };
@@ -198,8 +232,129 @@ const ReportMapFitter = ({
   return null;
 };
 
-// ─── KAZAKHSTAN SVG PATH FOR INSET LOCATOR MAP ───────────────────────────────
-const KAZAKHSTAN_SVG_PATH = "M87.9,0L85.1,1.3L85.3,2L85.1,2.7L73.3,5.6L73.5,6.9L73,7.1L72.4,6.5L68.5,7.3L68.7,7.8L68.3,8L67.9,7.5L63.1,8.9L63,9.7L62.6,9.9L62.3,9.1L60.8,9L60.9,9.7L60.5,10.2L60.2,9.3L59.2,9.1L58.6,8.2L57.5,7.5L56.9,8L56.4,7.8L56.1,8.2L55.3,7.9L55,8.3L54.1,8L53.7,8.8L52.8,8.8L51.8,9.7L51.9,10.8L50.8,11.2L50,12.3L48.8,12.3L48.5,13.2L47.5,13.4L47.1,14.2L46.3,13.9L45.4,14.6L44.2,14.4L44.1,15.1L43.2,14.9L42.6,15.7L41.7,15.3L41.3,16L40.2,15.7L39.8,16.5L38.7,16.2L38.1,17.1L37.1,16.9L36.7,17.6L35.4,17.4L34.7,18.4L33.6,18.2L33,19.2L31.8,19L31.3,20L29.9,20.1L29.2,21.3L27.9,21.5L27.1,22.8L25.8,23.1L25.1,24.4L23.7,24.7L22.9,26.1L21.4,26.5L20.6,28L19,28.5L18.2,30.1L16.5,30.8L15.6,32.4L13.8,33.2L12.9,34.9L11,35.8L10.2,37.5L8.2,38.7L7.3,40.4L5.3,41.7L4.4,43.5L2.4,44.9L1.5,46.7L0,48.4L0,52.3L1.5,53.8L2.7,54.7L4.1,55.9L5.3,57.1L6.7,58.3L7.9,59.6L9.3,60.8L10.5,62.1L11.9,63.3L13.1,64.7L14.5,65.9L15.7,67.3L17.1,68.5L18.4,70L19.8,71.2L21.1,72.7L22.6,73.9L23.9,75.4L25.4,76.6L26.7,78.2L28.2,79.4L29.5,81L31.1,82.2L32.4,83.8L34,84.9L35.4,86.6L37,87.6L38.4,89.3L40.1,90.3L41.6,92L43.3,92.9L44.8,94.7L46.6,95.6L48.2,97.3L50.1,98.1L51.8,99.8L53.7,100L55.7,99.3L57.5,98.1L59.5,97.1L61.4,95.7L63.4,94.5L65.3,92.9L67.3,91.5L69.2,89.8L71.1,88.2L73,86.3L74.8,84.6L76.6,82.6L78.3,80.8L80,78.7L81.7,76.7L83.3,74.5L84.8,72.4L86.3,70.1L87.7,67.9L89.1,65.5L90.3,63.2L91.6,60.8L92.7,58.3L93.9,55.9L94.9,53.4L95.9,50.8L96.8,48.3L97.7,45.7L98.5,43.1L99.2,40.4L99.9,37.8L100,35.2L99.8,32.6L99.5,29.9L99.1,27.4L98.5,24.8L97.8,22.3L97,19.8L96.1,17.4L95.1,15.1L94,12.8L92.7,10.6L91.4,8.5L90,6.5L88.5,4.7L86.9,2.9L85.2,1.3Z";
+// ─── DYNAMIC COUNTRY SVG GENERATOR & PROJECTOR ──────────────────────────────
+
+export interface CountrySvgResult {
+  countryNameEn: string;
+  countryNameAr: string;
+  svgPath: string;
+  birdPoint: { x: number; y: number };
+  viewBox: string;
+}
+
+export function buildCountrySvgData(
+  lon: number,
+  lat: number,
+  width: number = 140,
+  height: number = 78,
+  padding: number = 5
+): CountrySvgResult {
+  let feat: any = null;
+  try {
+    feat = (countryCoder as any).feature([lon, lat]);
+  } catch (e) {
+    console.warn('countryCoder.feature([lon, lat]) failed:', e);
+  }
+  if (!feat || !feat.geometry) {
+    try {
+      feat = (countryCoder as any).feature('KZ');
+    } catch (_) {}
+  }
+
+  const countryNameEn = feat?.properties?.nameEn || 'Kazakhstan';
+  let countryNameAr = 'كازاخستان';
+  const iso2 = feat?.properties?.iso1A2;
+  if (iso2) {
+    try {
+      const ar = countries.getName(iso2, 'ar');
+      if (ar) countryNameAr = ar;
+    } catch (_) {}
+  }
+
+  if (!feat || !feat.geometry) {
+    return {
+      countryNameEn,
+      countryNameAr,
+      svgPath: '',
+      birdPoint: { x: width / 2, y: height / 2 },
+      viewBox: `0 0 ${width} ${height}`
+    };
+  }
+
+  let minLon = Infinity, maxLon = -Infinity, minLat = Infinity, maxLat = -Infinity;
+  const scanCoords = (coords: any) => {
+    if (typeof coords[0] === 'number') {
+      const [cLon, cLat] = coords;
+      if (cLon < minLon) minLon = cLon;
+      if (cLon > maxLon) maxLon = cLon;
+      if (cLat < minLat) minLat = cLat;
+      if (cLat > maxLat) maxLat = cLat;
+    } else {
+      for (const sub of coords) scanCoords(sub);
+    }
+  };
+  scanCoords(feat.geometry.coordinates);
+
+  const spanLon = maxLon - minLon || 1;
+  const spanLat = maxLat - minLat || 1;
+  const availW = width - padding * 2;
+  const availH = height - padding * 2;
+
+  // Preserve geographic aspect ratio with cos(midLat)
+  const midLat = (minLat + maxLat) / 2;
+  const cosMid = Math.max(0.1, Math.cos((midLat * Math.PI) / 180));
+  const geoAspect = (spanLon * cosMid) / spanLat;
+
+  let scaleX: number;
+  let scaleY: number;
+  if (availW / availH > geoAspect) {
+    scaleY = availH / spanLat;
+    scaleX = scaleY / cosMid;
+  } else {
+    scaleX = availW / (spanLon * cosMid);
+    scaleY = scaleX * cosMid;
+  }
+
+  const projW = spanLon * scaleX;
+  const projH = spanLat * scaleY;
+  const offsetX = padding + (availW - projW) / 2;
+  const offsetY = padding + (availH - projH) / 2;
+
+  const project = (pLon: number, pLat: number) => ({
+    x: offsetX + (pLon - minLon) * scaleX,
+    y: offsetY + (maxLat - pLat) * scaleY
+  });
+
+  const ringsToD = (rings: any[]) => {
+    return rings.map(ring => {
+      return ring.map((pt: [number, number], i: number) => {
+        const { x, y } = project(pt[0], pt[1]);
+        return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+      }).join('') + 'Z';
+    }).join(' ');
+  };
+
+  let svgPath = '';
+  if (feat.geometry.type === 'Polygon') {
+    svgPath = ringsToD(feat.geometry.coordinates);
+  } else if (feat.geometry.type === 'MultiPolygon') {
+    svgPath = feat.geometry.coordinates.map((poly: any) => ringsToD(poly)).join(' ');
+  }
+
+  let birdPoint = project(lon, lat);
+  birdPoint = {
+    x: Math.max(padding, Math.min(width - padding, birdPoint.x)),
+    y: Math.max(padding, Math.min(height - padding, birdPoint.y))
+  };
+
+  return {
+    countryNameEn,
+    countryNameAr,
+    svgPath,
+    birdPoint,
+    viewBox: `0 0 ${width} ${height}`
+  };
+}
 
 // ─── COMPONENT DEFINITION ───────────────────────────────────────────────────
 
@@ -422,7 +577,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       activeCamp.lat, activeCamp.lon
     );
 
-    const durationDays = calculateDurationDays(releasePos.dateStr, lastGpsPos.dateStr);
+    // Tracking duration calculated from release date until current day (today)
+    const durationDays = calculateDurationFromReleaseToToday(releasePos.dateStr);
 
     const releaseLatDMM = formatDMM(releasePos.lat, true);
     const releaseLonDMM = formatDMM(releasePos.lon, false);
@@ -433,7 +589,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       distFromReleaseKm: distFromRelease.toFixed(2),
       bearingArabic,
       distToCampKm: distToCamp.toFixed(2),
-      durationDays: durationDays > 0 ? durationDays : 715,
+      durationDays: durationDays > 0 ? durationDays : 0,
       releaseLatDMM,
       releaseLonDMM,
       lastGpsLatDMM,
@@ -454,6 +610,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon],
     [activeCamp.lat, activeCamp.lon]
   ], [telemetryData, activeCamp]);
+
+  // Dynamic country silhouette & bird location for the top-left locator map
+  const insetMapData = useMemo(() => {
+    const { lat, lon } = telemetryData.lastGpsPos;
+    return buildCountrySvgData(lon, lat, 140, 78, 5);
+  }, [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]);
 
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289'];
@@ -765,7 +927,20 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-3">
               تخصيص بيانات التقرير والطيور يدوياً (اختياري):
             </h4>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div>
+                <label className="block text-[11px] text-gray-500 mb-1">المخيم لحساب المسافة:</label>
+                <select
+                  value={selectedCampId}
+                  onChange={(e) => setSelectedCampId(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none cursor-pointer"
+                >
+                  <option value="auto">تلقائي (الأقرب لموقع الطائر)</option>
+                  <option value="zhezkazgan_camp">مخيم جيزقازغان (Zhezkazgan Camp)</option>
+                  <option value="almaty_camp">مخيم ألماتي (Almaty Camp)</option>
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[11px] text-gray-500 mb-1">رقم الحقل (Ring):</label>
                 <input
@@ -979,38 +1154,46 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                 {/* ─── MAP OVERLAYS ────────────────────────────────────────── */}
 
-                {/* Top-Left Inset: Kazakhstan Locator Map */}
-                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[130px] pointer-events-none">
-                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5">
-                    <span className="text-[9px] font-bold text-gray-700">Kazakhstan</span>
-                    <span className="text-[8px] font-black text-gray-800">▲ N</span>
+                {/* Top-Left Inset: Country Locator Map & Exact Bird Position */}
+                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[140px] pointer-events-none">
+                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5 px-0.5">
+                    <span className="text-[9.5px] font-black text-gray-800 tracking-tight">
+                      {insetMapData.countryNameEn}
+                    </span>
+                    <span className="text-[8px] font-black text-gray-700">▲ N</span>
                   </div>
-                  <div className="relative w-full h-[68px] flex items-center justify-center bg-stone-50 border border-gray-200">
-                    <svg viewBox="0 0 100 100" className="w-full h-full">
-                      <path
-                        d={KAZAKHSTAN_SVG_PATH}
-                        fill="#fdfbf7"
-                        stroke="#701a2b"
-                        strokeWidth="1.6"
-                      />
-                      {/* Location point marker in Kazakhstan */}
-                      {(() => {
-                        const minLon = 46.49;
-                        const maxLon = 87.31;
-                        const minLat = 40.56;
-                        const maxLat = 55.38;
-                        const x = ((telemetryData.lastGpsPos.lon - minLon) / (maxLon - minLon)) * 100;
-                        const y = 100 - ((telemetryData.lastGpsPos.lat - minLat) / (maxLat - minLat)) * 100;
-                        const clampedX = Math.max(12, Math.min(88, x));
-                        const clampedY = Math.max(12, Math.min(88, y));
-                        return (
-                          <g>
-                            <circle cx={clampedX} cy={clampedY} r="4.5" fill="#dc2626" opacity="0.3" />
-                            <circle cx={clampedX} cy={clampedY} r="2.8" fill="#dc2626" stroke="#ffffff" strokeWidth="0.9" />
-                          </g>
-                        );
-                      })()}
-                    </svg>
+                  <div className="relative w-full h-[76px] flex items-center justify-center bg-stone-50 border border-gray-200 overflow-hidden">
+                    {insetMapData.svgPath ? (
+                      <svg viewBox={insetMapData.viewBox} className="w-full h-full">
+                        <path
+                          d={insetMapData.svgPath}
+                          fill="#fdfbf7"
+                          stroke="#475569"
+                          strokeWidth="1.2"
+                          strokeLinejoin="round"
+                        />
+                        {/* Red Point: Exact last location of the bird */}
+                        <g>
+                          <circle 
+                            cx={insetMapData.birdPoint.x} 
+                            cy={insetMapData.birdPoint.y} 
+                            r="4.5" 
+                            fill="#dc2626" 
+                            opacity="0.35" 
+                          />
+                          <circle 
+                            cx={insetMapData.birdPoint.x} 
+                            cy={insetMapData.birdPoint.y} 
+                            r="2.8" 
+                            fill="#dc2626" 
+                            stroke="#ffffff" 
+                            strokeWidth="0.9" 
+                          />
+                        </g>
+                      </svg>
+                    ) : (
+                      <div className="text-[9px] text-gray-400 font-bold">{insetMapData.countryNameEn}</div>
+                    )}
                   </div>
                 </div>
 
@@ -1047,7 +1230,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               {/* Map Legend Bar Under Map */}
               <div 
-                className="border border-gray-300 rounded-sm bg-white py-1.5 px-3 text-[10px] font-bold text-gray-800 flex items-center justify-between flex-wrap gap-2 shadow-xs"
+                className="border border-gray-300 rounded-sm bg-white py-1.5 px-4 text-[10.5px] font-bold text-gray-800 flex items-center justify-around gap-2 shadow-xs"
                 style={{ direction: 'rtl' }}
               >
                 <div className="flex items-center gap-1.5">
@@ -1065,14 +1248,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <div className="flex items-center gap-1.5">
                   <span className="w-4 border-b-2 border-dashed border-amber-500 inline-block"></span>
                   <span>البعد عنه</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-4 border-b-2 border-red-500 inline-block"></span>
-                  <span>طريق رئيسي</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 bg-blue-900 inline-block"></span>
-                  <span>مدن وقرى</span>
                 </div>
               </div>
 
