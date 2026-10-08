@@ -947,9 +947,57 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               </marker>
             `;
           }
+          
+      // Fix html2canvas stacking context issue for Leaflet panes
+      const mapPane = clonedDoc.querySelector('.leaflet-map-pane');
+      const markerPane = clonedDoc.querySelector('.leaflet-marker-pane');
+      const tooltipPane = clonedDoc.querySelector('.leaflet-tooltip-pane');
+      const popupPane = clonedDoc.querySelector('.leaflet-popup-pane');
+      
+      if (mapPane && markerPane) mapPane.appendChild(markerPane);
+      if (mapPane && tooltipPane) mapPane.appendChild(tooltipPane);
+      if (mapPane && popupPane) mapPane.appendChild(popupPane);
+
+      // Force HTML2Canvas to respect stacking by removing z-index and relying on DOM order
+      const panes = clonedDoc.querySelectorAll('.leaflet-pane');
+      panes.forEach(pane => {
+        (pane as HTMLElement).style.zIndex = 'auto';
+      });
+      // Also remove z-index from markers if they have it
+      const markers = clonedDoc.querySelectorAll('.leaflet-marker-icon, .leaflet-tooltip');
+      markers.forEach(marker => {
+        (marker as HTMLElement).style.zIndex = 'auto';
+      });
+
+
+          
+
           const redPath = clonedOverlayPane.querySelector('path.report-release-polyline');
           if (redPath) {
             redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
+          }
+
+          // HTML2Canvas SVG Stacking Fix: Convert the entire overlay SVG to an image
+          // so HTML2Canvas respects its DOM position (under the markers).
+          try {
+            const xml = new XMLSerializer().serializeToString(clonedSvg);
+            const svg64 = btoa(unescape(encodeURIComponent(xml)));
+            const img = clonedDoc.createElement('img');
+            img.src = 'data:image/svg+xml;base64,' + svg64;
+            
+            // Match the SVG's positioning and sizing
+            img.style.width = clonedSvg.style.width || clonedSvg.getAttribute('width') || '100%';
+            img.style.height = clonedSvg.style.height || clonedSvg.getAttribute('height') || '100%';
+            img.style.position = clonedSvg.style.position || 'absolute';
+            img.style.left = clonedSvg.style.left || '0px';
+            img.style.top = clonedSvg.style.top || '0px';
+            img.style.transform = clonedSvg.style.transform || '';
+            img.className = clonedSvg.className.baseVal || clonedSvg.className || '';
+            img.style.zIndex = '400';
+
+            clonedSvg.parentNode?.replaceChild(img, clonedSvg);
+          } catch (err) {
+            console.error('Error converting SVG to Image in onclone:', err);
           }
         }
       }
@@ -1359,11 +1407,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
             
             {/* Top-Left Header: Qatar Houbara & Falcon Breeding Center Logo */}
-            <div className="flex items-center justify-start w-[240px]">
+            <div className="flex items-center justify-start w-[300px]">
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[88px] w-auto object-contain"
+                className="h-[125px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1388,11 +1436,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             </div>
 
             {/* Top-Right Header: External Reserves Office Logo */}
-            <div className="flex items-center justify-end w-[350px]">
+            <div className="flex items-center justify-end w-[440px]">
               <img 
                 src="/external-reserves-office-logo.png" 
                 alt="مكتب محميات الدولة الخارجية - External Reserves Office of The State" 
-                className="h-[52px] w-auto max-w-[340px] object-contain"
+                className="h-[75px] w-auto max-w-[420px] object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1754,7 +1802,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                         })()}
                       </svg>
                     ) : (
-                      <div className="text-[9px] text-gray-400 font-bold">{insetMapData.countryNameEn}</div>
+                      <div className="text-[9px] text-gray-400 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
                     )}
                   </div>
                 </div>
@@ -1772,7 +1820,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <div className="absolute top-1 left-36 z-[900] pointer-events-none select-none">
                   <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
                     <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
                       47° 15.0000'N
                     </text>
                   </svg>
@@ -1780,7 +1828,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] pointer-events-none select-none">
                   <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
                     <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
                       47° 00.0000'N
                     </text>
                   </svg>
@@ -1788,7 +1836,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
                   <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
                     <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
                       46° 45.0000'N
                     </text>
                   </svg>
@@ -1806,49 +1854,49 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     <tr>
                       {/* 1. موقع تركيب الجهاز */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
-                          <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
-                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>موقع تركيب الجهاز</span>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                          <span style={{ display: 'inline-block', marginLeft: '5px', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>موقع تركيب الجهاز</span>
                         </span>
                       </td>
 
                       {/* 2. آخر موقع */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
-                          <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
-                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                          <span style={{ display: 'inline-block', marginLeft: '5px', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
                         </span>
                       </td>
 
                       {/* 3. المسار المباشر */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
-                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', flexShrink: 0 }}>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', marginLeft: '5px', verticalAlign: 'middle', flexShrink: 0 }}>
                             <line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
                           </svg>
-                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>المسار المباشر</span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>المسار المباشر</span>
                         </span>
                       </td>
 
                       {/* 4. المخيم */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', flexShrink: 0 }}>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', marginLeft: '5px', verticalAlign: 'middle', flexShrink: 0 }}>
                             <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
                             <path d="M10 4 23 20"/>
                             <path d="m10 4 4.5 16"/>
                           </svg>
-                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>{activeCamp.name || 'المخيم'}</span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>{activeCamp.name || 'المخيم'}</span>
                         </span>
                       </td>
 
                       {/* 5. البعد عن المخيم */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
-                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', flexShrink: 0 }}>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', marginLeft: '5px', verticalAlign: 'middle', flexShrink: 0 }}>
                             <line x1="0" y1="4" x2="18" y2="4" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
                           </svg>
-                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>البعد عن المخيم</span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>البعد عن المخيم</span>
                         </span>
                       </td>
                     </tr>
