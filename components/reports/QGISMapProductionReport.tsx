@@ -5,7 +5,7 @@ import {
   Layers, Info, ArrowRight, Share2, FileDown, CheckCircle2,
   AlertCircle, Plus, Minus, Crosshair
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap, GeoJSON } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap, GeoJSON, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import html2canvas from 'html2canvas';
@@ -150,7 +150,7 @@ export const calculateDurationDays = (startTs: any, endTs: any): number => {
  * Creates transmitter marker matching Live Tracking exactly:
  * - 21x35px SVG Teardrop Pin
  * - Rounded number pill with 2px border and transmitter ID
- * - Crisp title above with text-shadow (zero bulky box overlap)
+ * - Crisp title above with text-shadow (zero overlap, strictly separated zones)
  */
 const createLiveTrackingMarkerIcon = ({
   number,
@@ -165,48 +165,63 @@ const createLiveTrackingMarkerIcon = ({
 }) => {
   const cleanId = String(number).replace(/^trans-/, '');
   const hasTitle = Boolean(labelTitle);
-  const totalH = hasTitle ? 72 : 56;
+  const totalH = hasTitle ? 76 : 58;
 
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <div style="display: flex; flex-direction: column; align-items: center; width: 140px; pointer-events: none; font-family: 'Segoe UI', Tahoma, Arial, sans-serif;">
+      <div style="
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: flex-end; 
+        width: 150px; 
+        height: ${totalH}px; 
+        pointer-events: none; 
+        font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      ">
         ${hasTitle ? `
           <div style="
             color: #ffffff; 
             font-weight: 800; 
             font-size: 11px; 
             white-space: nowrap; 
-            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.85); 
-            margin-bottom: 2px; 
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.9); 
+            margin-bottom: 3px; 
             direction: rtl;
+            line-height: 1;
+            flex-shrink: 0;
           ">
             ${labelTitle}
           </div>
         ` : ''}
         <!-- Number Label (exact Live Tracking size and style) -->
         <div style="
+          box-sizing: border-box;
+          height: 20px;
           background: #ffffff; 
           color: #0f172a; 
           border: 2px solid ${borderColorHex}; 
           border-radius: 9999px; 
-          padding: 1px 7px; 
+          padding: 0 8px; 
           font-size: 11px; 
           font-weight: 800; 
           white-space: nowrap; 
           box-shadow: 0 1px 4px rgba(0,0,0,0.35); 
-          margin-bottom: 2px; 
-          display: flex; 
+          margin-bottom: 3px; 
+          display: inline-flex; 
           align-items: center; 
+          justify-content: center;
           direction: ltr; 
-          line-height: 1.25; 
+          line-height: 1; 
           font-family: monospace;
+          flex-shrink: 0;
         ">
           ${cleanId}
         </div>
 
         <!-- Live Tracking Exact 21x35 SVG Pin Icon -->
-        <div style="position: relative; width: 21px; height: 35px;">
+        <div style="position: relative; width: 21px; height: 35px; flex-shrink: 0;">
           <svg width="21" height="35" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));">
             <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
             <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
@@ -214,8 +229,8 @@ const createLiveTrackingMarkerIcon = ({
         </div>
       </div>
     `,
-    iconSize: [140, totalH],
-    iconAnchor: [70, totalH],
+    iconSize: [150, totalH],
+    iconAnchor: [75, totalH],
     popupAnchor: [0, -totalH + 12]
   });
 };
@@ -227,16 +242,27 @@ const createLiveTrackingCampIcon = (campName: string) => {
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <div style="display: flex; flex-direction: column; align-items: center; width: 120px; pointer-events: none; font-family: 'Segoe UI', Tahoma, Arial, sans-serif;">
+      <div style="
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        justify-content: flex-end;
+        width: 130px; 
+        height: 52px;
+        pointer-events: none; 
+        font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      ">
         <!-- Camp Title in clean shadowed text -->
         <div style="
           color: #ffffff; 
           font-weight: 800; 
           font-size: 11.5px; 
           white-space: nowrap; 
-          text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.85); 
-          margin-bottom: 2px; 
+          text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.9); 
+          margin-bottom: 3px; 
           direction: rtl;
+          line-height: 1;
+          flex-shrink: 0;
         ">
           ${campName}
         </div>
@@ -254,6 +280,7 @@ const createLiveTrackingCampIcon = (campName: string) => {
           align-items: center;
           justify-content: center;
           color: #ffffff;
+          flex-shrink: 0;
         ">
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
             <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.3"/>
@@ -263,37 +290,42 @@ const createLiveTrackingCampIcon = (campName: string) => {
         </div>
       </div>
     `,
-    iconSize: [120, 50],
-    iconAnchor: [60, 40]
+    iconSize: [130, 52],
+    iconAnchor: [65, 40]
   });
 };
 
-/** Distance badge along connecting lines */
+/** Distance badge along connecting lines - strictly horizontal with solid background covering the line behind */
 const createDistancePillIcon = (text: string, borderColor: string) => {
   return L.divIcon({
     className: 'bg-transparent',
     html: `
       <div style="
+        box-sizing: border-box;
+        width: 68px;
+        height: 22px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         direction: ltr; 
         background: #ffffff; 
         border: 1.5px solid ${borderColor}; 
         border-radius: 9999px; 
-        padding: 1px 6px; 
-        font-size: 10px; 
+        font-size: 11px; 
         font-weight: 800; 
         color: ${borderColor}; 
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3); 
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3); 
         white-space: nowrap; 
         font-family: monospace, Arial, sans-serif; 
         text-align: center;
         letter-spacing: normal;
-        line-height: 1.25;
+        line-height: 1;
       ">
         ${text}
       </div>
     `,
-    iconSize: [60, 18],
-    iconAnchor: [30, 9]
+    iconSize: [68, 22],
+    iconAnchor: [34, 11]
   });
 };
 
@@ -495,17 +527,16 @@ const ReportMapFitter = ({
     const validPoints = points.filter(p => !isNaN(p[0]) && !isNaN(p[1]) && p[0] !== 0 && p[1] !== 0);
     if (validPoints.length === 0) return;
 
-    // Invalidate size immediately and after delay
     map.invalidateSize();
     const timer = setTimeout(() => {
       map.invalidateSize();
     }, 150);
 
     const bounds = L.latLngBounds(validPoints.map(p => L.latLng(p[0], p[1])));
-    map.fitBounds(bounds, { padding: [55, 55], maxZoom: 10 });
+    map.fitBounds(bounds, { padding: [45, 45] });
 
     return () => clearTimeout(timer);
-  }, [map, JSON.stringify(points), fitKey]);
+  }, [map, fitKey]);
   return null;
 };
 
@@ -723,27 +754,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     async function loadTelemetryForPtt() {
       if (!selectedPttId) return;
 
-      if (selectedPttId === '244289') {
-        setCustomMetadata({
-          birdRing: 'NA',
-          species: 'وحش',
-          gender: 'ذكر',
-          birdStatus: 'حي',
-          issueDate: '2026-10-07'
-        });
-        setTelemetryData({
-          releasePos: { lat: 46.94415, lon: 66.8242, dateStr: '16-10-2024' },
-          lastGpsPos: { lat: 46.9965, lon: 67.0222, dateStr: '01-10-2026' },
-          rawGpsCount: 1,
-          dataSource: 'reference_pdf'
-        });
-        return;
-      }
-
       setIsLoadingTelemetry(true);
       try {
+        const cleanId = String(selectedPttId).replace(/^trans-/, '');
         const currentTransmitter = transmitters.find(
-          t => t.id === selectedPttId || t.platform_id === selectedPttId
+          t => t.id === selectedPttId || t.platform_id === selectedPttId ||
+               String(t.platform_id).replace(/^trans-/, '') === cleanId
         );
         const currentBird = currentTransmitter ? findBirdForTransmitter(birds, currentTransmitter) : null;
 
@@ -825,6 +841,14 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             ...prev,
             rawGpsCount: 0,
             dataSource: 'reference_pdf'
+          }));
+          setCustomMetadata(prev => ({
+            ...prev,
+            birdRing: currentBird?.ring_id || currentTransmitter?.assigned_bird_ring || prev.birdRing,
+            species: currentBird?.species === 'Asian Houbara' ? 'وحش' : (currentBird?.species || prev.species),
+            gender: currentBird?.sex === 'M' ? 'ذكر' : currentBird?.sex === 'F' ? 'أنثى' : prev.gender,
+            birdStatus: currentTransmitter?.status === 'active' ? 'حي' : (currentTransmitter?.status || prev.birdStatus),
+            issueDate: formatDateYYYYMMDD(new Date()) || '2026-10-07'
           }));
         }
       } catch (err) {
@@ -950,7 +974,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: 1200,
         ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('leaflet-control-container')
       });
 
@@ -1421,6 +1444,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* Auto-fit map to points & recenter */}
                   <ReportMapFitter points={mapPoints} fitKey={fitKey} />
 
+                  {/* Dynamic GIS Scale Bar matching Live Tracking */}
+                  <ScaleControl position="bottomright" metric={true} imperial={false} />
+
                   {/* High-visibility SVG Vector Line Overlay connecting all points */}
                   <ReportVectorOverlay
                     releasePoint={[metrics.rLat, metrics.rLon]}
@@ -1745,15 +1771,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
                 </div>
 
-                {/* Bottom-Right: GIS Scale Bar (25 km) */}
-                <div className="absolute bottom-2.5 right-3 z-[1000] bg-white/90 backdrop-blur-sm px-2 py-0.5 rounded border border-gray-400 text-center pointer-events-none shadow-sm">
-                  <div className="text-[8.5px] font-bold text-gray-900 leading-none mb-1 font-mono">25 km</div>
-                  <div className="w-16 h-1.5 flex border border-black">
-                    <div className="w-1/2 h-full bg-black"></div>
-                    <div className="w-1/2 h-full bg-white"></div>
-                  </div>
-                </div>
-
                 {/* Graticule Perimeter Labels (Ticks) */}
                 <div className="absolute top-1 left-36 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
                   47° 15.0000'N
@@ -1767,30 +1784,38 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               </div>
 
-              {/* Map Legend Bar Under Map */}
+              {/* Map Legend Bar Under Map - All icons and text perfectly aligned on the same horizontal baseline */}
               <div 
-                className="border border-gray-300 rounded-sm bg-white py-1.5 px-4 text-[10.5px] font-bold text-gray-800 flex items-center justify-around gap-2 shadow-xs"
+                className="border border-gray-300 rounded-sm bg-white py-1.5 px-3 text-[10.5px] font-bold text-gray-800 flex items-center justify-around gap-2 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#701a2b] border border-white inline-block shadow-xs"></span>
-                  <span>موقع تركيب الجهاز</span>
+                <div className="flex items-center gap-1.5 leading-none">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#701a2b] border border-white inline-block shrink-0 shadow-xs"></span>
+                  <span className="leading-none pt-0.5">موقع تركيب الجهاز</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] border border-white inline-block shadow-xs"></span>
-                  <span>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
+                <div className="flex items-center gap-1.5 leading-none">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] border border-white inline-block shrink-0 shadow-xs"></span>
+                  <span className="leading-none pt-0.5">آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-4 border-b-2 border-dashed border-[#dc2626] inline-block"></span>
-                  <span>المسار المباشر</span>
+                <div className="flex items-center gap-1.5 leading-none">
+                  <svg width="22" height="10" viewBox="0 0 22 10" className="shrink-0 inline-block">
+                    <line x1="0" y1="5" x2="22" y2="5" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                  </svg>
+                  <span className="leading-none pt-0.5">المسار المباشر</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-amber-500 text-xs">▲</span>
-                  <span>{activeCamp.name || 'المخيم'}</span>
+                <div className="flex items-center gap-1.5 leading-none">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 inline-block">
+                    <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
+                    <path d="M10 4 23 20"/>
+                    <path d="m10 4 4.5 16"/>
+                  </svg>
+                  <span className="leading-none pt-0.5">{activeCamp.name || 'المخيم'}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-4 border-b-2 border-dashed border-amber-500 inline-block"></span>
-                  <span>البعد عن المخيم</span>
+                <div className="flex items-center gap-1.5 leading-none">
+                  <svg width="22" height="10" viewBox="0 0 22 10" className="shrink-0 inline-block">
+                    <line x1="0" y1="5" x2="22" y2="5" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
+                  </svg>
+                  <span className="leading-none pt-0.5">البعد عن المخيم</span>
                 </div>
               </div>
 
@@ -1802,8 +1827,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
               <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
                 <div 
-                  className="bg-[#701a2b] text-white py-1.5 px-3 text-center text-[13.5px] font-bold"
-                  style={{ direction: 'rtl', letterSpacing: 'normal' }}
+                  className="w-full bg-[#701a2b] text-white py-1.5 px-3 flex items-center justify-center text-center text-[13.5px] font-bold"
+                  style={{ letterSpacing: 'normal' }}
                 >
                   بيانات الطائر
                 </div>
@@ -1864,8 +1889,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <table className="w-full text-[12px] text-center border-collapse">
                   <thead>
                     <tr>
-                      <th className="bg-white text-gray-800 py-1.5 px-2 text-[12px] font-bold w-[22%] border-b border-gray-200">
-                        البيان
+                      <th className="bg-transparent py-1.5 px-2 w-[22%] border-b border-gray-200">
                       </th>
                       <th className="bg-[#701a2b] text-white py-1.5 px-2 text-[12px] font-bold w-[39%] border-r border-gray-300">
                         تركيب الجهاز
