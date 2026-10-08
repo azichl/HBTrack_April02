@@ -982,12 +982,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             birdHeader.style.textAlign = 'center';
             birdHeader.style.width = '100%';
           }
-
-          // 3. Align map legend icons with Arabic text baseline in html2canvas
-          const legendIcons = clonedDoc.querySelectorAll('.map-legend-icon');
-          legendIcons.forEach((icon) => {
-            (icon as HTMLElement).style.transform = 'translateY(2.5px)';
-          });
         },
         ignoreElements: (el: Element) => 
           el.classList?.contains('no-print') || 
@@ -1047,12 +1041,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             birdHeader.style.textAlign = 'center';
             birdHeader.style.width = '100%';
           }
-
-          // 3. Align map legend icons with Arabic text baseline in html2canvas
-          const legendIcons = clonedDoc.querySelectorAll('.map-legend-icon');
-          legendIcons.forEach((icon) => {
-            (icon as HTMLElement).style.transform = 'translateY(2.5px)';
-          });
         },
         ignoreElements: (el: Element) => 
           el.classList?.contains('no-print') || 
@@ -1810,66 +1798,60 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               </div>
 
-              {/* Map Legend Bar Under Map - Table columns layout guarantees icons and text are permanently locked on the exact same baseline with zero clipping */}
+              {/* Map Legend Bar Under Map - 5 unified cells ensure icons and writing are permanently locked on the exact same horizontal baseline on both web and export */}
               <div 
                 className="border border-gray-300 rounded-sm bg-white py-1.5 px-2 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
               >
-                <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0, tableLayout: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
                   <tbody>
                     <tr>
                       {/* 1. موقع تركيب الجهاز */}
-                      <td style={{ width: 14, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <span className="map-legend-icon" style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
-                      </td>
-                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
-                        موقع تركيب الجهاز
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
+                          <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>موقع تركيب الجهاز</span>
+                        </span>
                       </td>
 
                       {/* 2. آخر موقع */}
-                      <td style={{ width: 14, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <span className="map-legend-icon" style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
-                      </td>
-                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
-                        آخر موقع ({telemetryData.lastGpsPos.dateStr})
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
+                          <span style={{ display: 'inline-block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
+                        </span>
                       </td>
 
                       {/* 3. المسار المباشر */}
-                      <td style={{ width: 20, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <div className="map-legend-icon" style={{ display: 'block', margin: '0 auto' }}>
-                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
+                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', flexShrink: 0 }}>
                             <line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
                           </svg>
-                        </div>
-                      </td>
-                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
-                        المسار المباشر
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>المسار المباشر</span>
+                        </span>
                       </td>
 
                       {/* 4. المخيم */}
-                      <td style={{ width: 16, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <div className="map-legend-icon" style={{ display: 'block', margin: '0 auto' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: '0 auto' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', flexShrink: 0 }}>
                             <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
                             <path d="M10 4 23 20"/>
                             <path d="m10 4 4.5 16"/>
                           </svg>
-                        </div>
-                      </td>
-                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
-                        {activeCamp.name || 'المخيم'}
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>{activeCamp.name || 'المخيم'}</span>
+                        </span>
                       </td>
 
                       {/* 5. البعد عن المخيم */}
-                      <td style={{ width: 20, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <div className="map-legend-icon" style={{ display: 'block', margin: '0 auto' }}>
-                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, verticalAlign: 'middle' }}>
+                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', flexShrink: 0 }}>
                             <line x1="0" y1="4" x2="18" y2="4" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
                           </svg>
-                        </div>
-                      </td>
-                      <td style={{ paddingRight: 4, paddingLeft: 2, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
-                        البعد عن المخيم
+                          <span style={{ fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>البعد عن المخيم</span>
+                        </span>
                       </td>
                     </tr>
                   </tbody>
@@ -1890,23 +1872,23 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 >
                   بيانات الطائر
                 </div>
-                <table className="w-full text-[12px] text-right border-collapse">
+                <table className="w-full text-[12px] text-center border-collapse" style={{ textAlign: 'center' }}>
                   <tbody>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         رقم جهاز التتبع
                       </td>
-                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         <span className="font-mono font-black text-[#701a2b] text-[13px]">
                           {String(selectedPttId).replace(/^trans-/, '')}
                         </span>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         رقم الحجل
                       </td>
-                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         <svg width="76" height="22" viewBox="0 0 76 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                           <rect x="1" y="1" width="74" height="20" rx="10" fill="#f3f4f6"/>
                           <text x="38" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#374151" fontFamily="monospace, 'Segoe UI', Arial">
@@ -1916,26 +1898,26 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         النوعية
                       </td>
-                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         {customMetadata.species === 'Houbara Bustard' ? 'وحش' : (customMetadata.species || 'وحش')}
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         الجنس
                       </td>
-                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200">
+                      <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         {customMetadata.gender || 'ذكر'}
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-right">
+                      <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         حالة الطائر
                       </td>
-                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                      <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
                         <svg width="56" height="22" viewBox="0 0 56 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                           <rect x="1" y="1" width="54" height="20" rx="10" fill="#ecfdf5"/>
                           <text x="28" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#059669" fontFamily="'Segoe UI', Tahoma, sans-serif">
@@ -1962,47 +1944,47 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 >
                   <thead>
                     <tr>
-                      <th style={{ width: '22%', backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '6px 8px' }}>
+                      <th style={{ width: '22%', backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                       </th>
-                      <th style={{ width: '39%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                      <th style={{ width: '39%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>
                         تركيب الجهاز
                       </th>
-                      <th style={{ width: '39%', backgroundColor: '#0f766e', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                      <th style={{ width: '39%', backgroundColor: '#0f766e', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>
                         آخر موقع
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="bg-white">
-                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
                         التاريخ
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span>
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
                         خط العرض (N)
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span>
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span>
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px' }}>
+                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         خط الطول (E)
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span>
                       </td>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span>
                       </td>
                     </tr>
