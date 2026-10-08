@@ -165,124 +165,154 @@ const createLiveTrackingMarkerIcon = ({
 }) => {
   const cleanId = String(number).replace(/^trans-/, '');
   const hasTitle = Boolean(labelTitle);
-  const totalH = hasTitle ? 76 : 58;
+  const totalW = 160;
+  const totalH = hasTitle ? 78 : 60;
+  const pillW = Math.max(54, cleanId.length * 7.5 + 16);
+  const titleH = 16;
+  const pillH = 20;
+  const pinH = 35;
+  const pinW = 21;
+  const titleTop = 0;
+  const pillTop = hasTitle ? 19 : 0;
+  const pinTop = hasTitle ? 42 : 23;
 
   return L.divIcon({
     className: 'bg-transparent',
     html: `
       <div style="
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: flex-end; 
-        width: 150px; 
+        position: relative;
+        width: ${totalW}px; 
         height: ${totalH}px; 
         pointer-events: none; 
-        font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+        box-sizing: border-box;
       ">
         ${hasTitle ? `
+          <!-- Zone 1 (Top): Label Title (موقع تركيب الجهاز / آخر موقع) -->
           <div style="
+            position: absolute;
+            top: ${titleTop}px;
+            left: 0;
+            width: ${totalW}px;
+            height: ${titleH}px;
+            line-height: ${titleH}px;
+            text-align: center;
             color: #ffffff; 
             font-weight: 800; 
             font-size: 11px; 
             white-space: nowrap; 
             text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.9); 
-            margin-bottom: 3px; 
             direction: rtl;
-            line-height: 1;
-            flex-shrink: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif;
+            pointer-events: none;
           ">
             ${labelTitle}
           </div>
         ` : ''}
-        <!-- Number Label (exact Live Tracking size and style) -->
+
+        <!-- Zone 2 (Middle): Transmitter ID Pill Badge (e.g. 244289) -->
         <div style="
+          position: absolute;
+          top: ${pillTop}px;
+          left: ${(totalW - pillW) / 2}px;
+          width: ${pillW}px;
+          height: ${pillH}px;
+          line-height: ${pillH - 4}px;
+          text-align: center;
           box-sizing: border-box;
-          height: 20px;
           background: #ffffff; 
           color: #0f172a; 
           border: 2px solid ${borderColorHex}; 
           border-radius: 9999px; 
-          padding: 0 8px; 
           font-size: 11px; 
           font-weight: 800; 
           white-space: nowrap; 
-          box-shadow: 0 1px 4px rgba(0,0,0,0.35); 
-          margin-bottom: 3px; 
-          display: inline-flex; 
-          align-items: center; 
-          justify-content: center;
+          box-shadow: 0 1.5px 4px rgba(0,0,0,0.35); 
           direction: ltr; 
-          line-height: 1; 
-          font-family: monospace;
-          flex-shrink: 0;
+          font-family: monospace, Arial, sans-serif;
+          pointer-events: none;
         ">
           ${cleanId}
         </div>
 
-        <!-- Live Tracking Exact 21x35 SVG Pin Icon -->
-        <div style="position: relative; width: 21px; height: 35px; flex-shrink: 0;">
-          <svg width="21" height="35" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));">
+        <!-- Zone 3 (Bottom): Live Tracking 21x35 SVG Teardrop Pin -->
+        <div style="
+          position: absolute;
+          top: ${pinTop}px;
+          left: ${(totalW - pinW) / 2}px;
+          width: ${pinW}px;
+          height: ${pinH}px;
+          pointer-events: none;
+        ">
+          <svg width="${pinW}" height="${pinH}" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));">
             <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
             <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
           </svg>
         </div>
       </div>
     `,
-    iconSize: [150, totalH],
-    iconAnchor: [75, totalH],
+    iconSize: [totalW, totalH],
+    iconAnchor: [totalW / 2, totalH],
     popupAnchor: [0, -totalH + 12]
   });
 };
 
 /**
- * Creates Field Camp Marker matching Live Tracking styling
+ * Creates Field Camp Marker matching Live Tracking styling with absolute positioned zones
  */
 const createLiveTrackingCampIcon = (campName: string) => {
+  const totalW = 140;
+  const totalH = 54;
+  const titleH = 16;
+  const badgeSize = 30;
+  const titleTop = 0;
+  const badgeTop = 20;
+
   return L.divIcon({
     className: 'bg-transparent',
     html: `
       <div style="
-        display: flex; 
-        flex-direction: column; 
-        align-items: center; 
-        justify-content: flex-end;
-        width: 130px; 
-        height: 52px;
+        position: relative;
+        width: ${totalW}px; 
+        height: ${totalH}px; 
         pointer-events: none; 
-        font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+        box-sizing: border-box;
       ">
-        <!-- Camp Title in clean shadowed text -->
+        <!-- Zone 1 (Top): Camp Title with clean text shadow -->
         <div style="
+          position: absolute;
+          top: ${titleTop}px;
+          left: 0;
+          width: ${totalW}px;
+          height: ${titleH}px;
+          line-height: ${titleH}px;
+          text-align: center;
           color: #ffffff; 
           font-weight: 800; 
           font-size: 11.5px; 
           white-space: nowrap; 
           text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.9); 
-          margin-bottom: 3px; 
           direction: rtl;
-          line-height: 1;
-          flex-shrink: 0;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif;
+          pointer-events: none;
         ">
           ${campName}
         </div>
 
-        <!-- Camp Amber Circular Tent Badge -->
+        <!-- Zone 2 (Bottom): Camp Amber Circular Tent Badge -->
         <div style="
-          position: relative;
-          width: 30px;
-          height: 30px;
+          position: absolute;
+          top: ${badgeTop}px;
+          left: ${(totalW - badgeSize) / 2}px;
+          width: ${badgeSize}px;
+          height: ${badgeSize}px;
           border-radius: 50%;
           background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
           border: 2px solid #ffffff;
           box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-          flex-shrink: 0;
+          box-sizing: border-box;
+          pointer-events: none;
         ">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; top: 4px; left: 4px;">
             <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.3"/>
             <path d="M10 4 23 20"/>
             <path d="m10 4 4.5 16"/>
@@ -290,42 +320,46 @@ const createLiveTrackingCampIcon = (campName: string) => {
         </div>
       </div>
     `,
-    iconSize: [130, 52],
-    iconAnchor: [65, 40]
+    iconSize: [totalW, totalH],
+    iconAnchor: [totalW / 2, badgeTop + badgeSize / 2 + 6]
   });
 };
 
-/** Distance badge along connecting lines - strictly horizontal with solid background covering the line behind */
-const createDistancePillIcon = (text: string, borderColor: string) => {
+/** Distance badge along connecting lines - offset cleanly so it does not lie on the line */
+const createDistancePillIcon = (
+  text: string, 
+  borderColor: string, 
+  anchorOffset: [number, number] = [36, 11]
+) => {
+  const pillW = 72;
+  const pillH = 22;
   return L.divIcon({
     className: 'bg-transparent',
     html: `
       <div style="
         box-sizing: border-box;
-        width: 68px;
-        height: 22px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width: ${pillW}px;
+        height: ${pillH}px;
+        line-height: ${pillH - 4}px;
+        text-align: center;
         direction: ltr; 
         background: #ffffff; 
-        border: 1.5px solid ${borderColor}; 
+        border: 1.8px solid ${borderColor}; 
         border-radius: 9999px; 
         font-size: 11px; 
         font-weight: 800; 
         color: ${borderColor}; 
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3); 
+        box-shadow: 0 1.5px 4px rgba(0,0,0,0.3); 
         white-space: nowrap; 
         font-family: monospace, Arial, sans-serif; 
-        text-align: center;
         letter-spacing: normal;
-        line-height: 1;
+        pointer-events: none;
       ">
         ${text}
       </div>
     `,
-    iconSize: [68, 22],
-    iconAnchor: [34, 11]
+    iconSize: [pillW, pillH],
+    iconAnchor: anchorOffset
   });
 };
 
@@ -969,12 +1003,17 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       const canvas = await html2canvas(element, {
-        scale: 2.2,
+        scale: 2.5,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('leaflet-control-container')
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el) => 
+          el.classList?.contains('no-print') || 
+          el.classList?.contains('leaflet-control-zoom') || 
+          el.classList?.contains('leaflet-control-attribution')
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
@@ -1010,7 +1049,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        ignoreElements: (el) => el.classList?.contains('no-print') || el.classList?.contains('leaflet-control-container')
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el) => 
+          el.classList?.contains('no-print') || 
+          el.classList?.contains('leaflet-control-zoom') || 
+          el.classList?.contains('leaflet-control-attribution')
       });
 
       const link = document.createElement('a');
@@ -1501,45 +1545,17 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     />
                   ))}
 
-                  {/* Red Vector Line: Release Location -> Last GPS Position */}
-                  <Polyline
-                    positions={[
-                      [metrics.rLat, metrics.rLon],
-                      [metrics.lLat, metrics.lLon]
-                    ]}
-                    pathOptions={{
-                      color: '#dc2626',
-                      weight: 3,
-                      dashArray: '8, 6',
-                      opacity: 0.95
-                    }}
-                  />
-
-                  {/* Distance badge on Release-to-Last line */}
+                  {/* Distance badge on Release-to-Last line - offset 10px to the right of the line so it never overlaps the line */}
                   <Marker
                     position={metrics.releaseToLastMid}
-                    icon={createDistancePillIcon(`${metrics.distFromReleaseKm} km`, '#dc2626')}
+                    icon={createDistancePillIcon(`${metrics.distFromReleaseKm} km`, '#dc2626', [-10, 11])}
                     interactive={false}
                   />
 
-                  {/* Dashed Amber Vector Line: Last GPS Position -> Field Camp */}
-                  <Polyline
-                    positions={[
-                      [metrics.lLat, metrics.lLon],
-                      [metrics.cLat, metrics.cLon]
-                    ]}
-                    pathOptions={{
-                      color: '#f59e0b',
-                      weight: 3,
-                      dashArray: '8, 6',
-                      opacity: 0.95
-                    }}
-                  />
-
-                  {/* Distance badge on Last-to-Camp line */}
+                  {/* Distance badge on Last-to-Camp line - offset 10px above the line so it never overlaps the line */}
                   <Marker
                     position={metrics.lastToCampMid}
-                    icon={createDistancePillIcon(`${metrics.distToCampKm} km`, '#d97706')}
+                    icon={createDistancePillIcon(`${metrics.distToCampKm} km`, '#d97706', [36, 32])}
                     interactive={false}
                   />
 
@@ -1784,39 +1800,45 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               </div>
 
-              {/* Map Legend Bar Under Map - All icons and text perfectly aligned on the same horizontal baseline */}
+              {/* Map Legend Bar Under Map - Table layout guarantees all icons and text remain strictly on the same line during export and in all browsers */}
               <div 
-                className="border border-gray-300 rounded-sm bg-white py-1.5 px-3 text-[10.5px] font-bold text-gray-800 flex items-center justify-around gap-2 shadow-xs select-none"
+                className="border border-gray-300 rounded-sm bg-white py-1 px-1 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
               >
-                <div className="flex items-center gap-1.5 leading-none">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#701a2b] border border-white inline-block shrink-0 shadow-xs"></span>
-                  <span className="leading-none pt-0.5">موقع تركيب الجهاز</span>
-                </div>
-                <div className="flex items-center gap-1.5 leading-none">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] border border-white inline-block shrink-0 shadow-xs"></span>
-                  <span className="leading-none pt-0.5">آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
-                </div>
-                <div className="flex items-center gap-1.5 leading-none">
-                  <svg width="22" height="10" viewBox="0 0 22 10" className="shrink-0 inline-block">
-                    <line x1="0" y1="5" x2="22" y2="5" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
-                  </svg>
-                  <span className="leading-none pt-0.5">المسار المباشر</span>
-                </div>
-                <div className="flex items-center gap-1.5 leading-none">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 inline-block">
-                    <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
-                    <path d="M10 4 23 20"/>
-                    <path d="m10 4 4.5 16"/>
-                  </svg>
-                  <span className="leading-none pt-0.5">{activeCamp.name || 'المخيم'}</span>
-                </div>
-                <div className="flex items-center gap-1.5 leading-none">
-                  <svg width="22" height="10" viewBox="0 0 22 10" className="shrink-0 inline-block">
-                    <line x1="0" y1="5" x2="22" y2="5" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
-                  </svg>
-                  <span className="leading-none pt-0.5">البعد عن المخيم</span>
-                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
+                  <tbody>
+                    <tr>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', width: 10, height: 10, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.2)', marginLeft: 6 }}></span>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>موقع تركيب الجهاز</span>
+                      </td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', width: 10, height: 10, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.2)', marginLeft: 6 }}></span>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
+                      </td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
+                        <svg width="20" height="10" viewBox="0 0 20 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 6 }}>
+                          <line x1="0" y1="5" x2="20" y2="5" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                        </svg>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>المسار المباشر</span>
+                      </td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 6 }}>
+                          <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
+                          <path d="M10 4 23 20"/>
+                          <path d="m10 4 4.5 16"/>
+                        </svg>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>{activeCamp.name || 'المخيم'}</span>
+                      </td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
+                        <svg width="20" height="10" viewBox="0 0 20 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 6 }}>
+                          <line x1="0" y1="5" x2="20" y2="5" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
+                        </svg>
+                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>البعد عن المخيم</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
             </div>
@@ -1849,7 +1871,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                         رقم الحجل
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
-                        <span className="bg-gray-100 text-gray-600 font-bold px-2.5 py-0.5 rounded-full text-xs">
+                        <span 
+                          className="bg-gray-100 text-gray-700 font-bold px-3 py-0.5 rounded-full text-xs"
+                          style={{ display: 'inline-block', lineHeight: '18px', borderRadius: '9999px', verticalAlign: 'middle' }}
+                        >
                           {customMetadata.birdRing || 'NA'}
                         </span>
                       </td>
@@ -1875,7 +1900,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                         حالة الطائر
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
-                        <span className="bg-emerald-50 text-emerald-600 font-bold px-3 py-0.5 rounded-full text-xs">
+                        <span 
+                          className="bg-emerald-50 text-emerald-700 font-bold px-3 py-0.5 rounded-full text-xs"
+                          style={{ display: 'inline-block', lineHeight: '18px', borderRadius: '9999px', verticalAlign: 'middle' }}
+                        >
                           {customMetadata.birdStatus || 'حي'}
                         </span>
                       </td>
