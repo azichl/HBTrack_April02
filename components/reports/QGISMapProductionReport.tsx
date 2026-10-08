@@ -963,24 +963,50 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       }
 
       // 3. Center all table cells and headers in both tables
-      const tableCells = clonedDoc.querySelectorAll('#bird-data-table td, #bird-data-table th, #table2-coordinates td, #table2-coordinates th');
-      tableCells.forEach(cell => {
+      const allTableElements = clonedDoc.querySelectorAll('#bird-data-table td, #bird-data-table th, #bird-data-table div, #table2-coordinates td, #table2-coordinates th, #table2-coordinates div');
+      allTableElements.forEach(cell => {
         const el = cell as HTMLElement;
         el.setAttribute('align', 'center');
-        el.style.textAlign = 'center';
-        el.style.verticalAlign = 'middle';
-        el.style.direction = 'ltr';
         el.style.setProperty('text-align', 'center', 'important');
         el.style.setProperty('vertical-align', 'middle', 'important');
-      });
-      const tableDivs = clonedDoc.querySelectorAll('#bird-data-table div, #table2-coordinates div');
-      tableDivs.forEach(div => {
-        const el = div as HTMLElement;
-        el.style.textAlign = 'center';
-        el.style.setProperty('text-align', 'center', 'important');
+        el.style.setProperty('margin-left', 'auto', 'important');
+        el.style.setProperty('margin-right', 'auto', 'important');
+        if (el.tagName === 'DIV') {
+          el.style.setProperty('display', 'block', 'important');
+          el.style.setProperty('width', '100%', 'important');
+        }
       });
 
-      // 4. Copy live canvas contents to cloned canvas for any base tile or GIS layers
+      // 4. Align map legend icons and writing on the exact same vertical center line
+      const legendElements = clonedDoc.querySelectorAll('#map-legend-bar td, #map-legend-bar div, #map-legend-bar span, #map-legend-bar svg');
+      legendElements.forEach(el => {
+        const h = el as HTMLElement;
+        h.style.setProperty('vertical-align', 'middle', 'important');
+      });
+
+      // 5. Style Map Scale Control on gray background
+      const clonedScaleControls = clonedDoc.querySelectorAll('.leaflet-control-scale');
+      clonedScaleControls.forEach(sc => {
+        const el = sc as HTMLElement;
+        el.style.setProperty('background', 'rgba(30, 41, 59, 0.85)', 'important');
+        el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.35)', 'important');
+        el.style.setProperty('border-radius', '4px', 'important');
+        el.style.setProperty('padding', '2px 5px 3px 5px', 'important');
+        el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.4)', 'important');
+      });
+      const clonedScaleLines = clonedDoc.querySelectorAll('.leaflet-control-scale-line');
+      clonedScaleLines.forEach(sl => {
+        const el = sl as HTMLElement;
+        el.style.setProperty('background', 'transparent', 'important');
+        el.style.setProperty('border', '2px solid #ffffff', 'important');
+        el.style.setProperty('border-top', 'none', 'important');
+        el.style.setProperty('color', '#ffffff', 'important');
+        el.style.setProperty('font-weight', '800', 'important');
+        el.style.setProperty('font-family', "monospace, 'Segoe UI', Arial, sans-serif", 'important');
+        el.style.setProperty('text-shadow', '0 1px 2px rgba(0, 0, 0, 0.9)', 'important');
+      });
+
+      // 6. Copy live canvas contents to cloned canvas for any base tile or GIS layers
       const origCanvases = Array.from(document.querySelectorAll('#map-production-print-area canvas'));
       const clonedCanvases = Array.from(clonedDoc.querySelectorAll('#map-production-print-area canvas'));
       clonedCanvases.forEach((clonedC, i) => {
@@ -995,7 +1021,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         }
       });
 
-      // 5. BULLETPROOF DISTANCE LINES IN CLONED OVERLAY PANE:
+      // 7. BULLETPROOF DISTANCE LINES IN CLONED OVERLAY PANE:
       // Remove shifted Leaflet SVG polyline paths in clonedDoc and draw pixel-perfect lines
       // directly on a dedicated, non-transformed Canvas positioned at the exact layer coordinates.
       const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
@@ -1038,7 +1064,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           if (ctx) {
             ctx.translate(-minX, -minY);
 
-            // Red dashed line: Release Location -> Last GPS Position
+            // Red dashed line: Release Location -> Last GPS Position (WITHOUT arrowhead as requested)
             if (metrics.rLat !== 0 && metrics.lLat !== 0) {
               ctx.beginPath();
               ctx.strokeStyle = '#dc2626';
@@ -1048,32 +1074,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               ctx.setLineDash([8, 6]);
               ctx.moveTo(rPt.x, rPt.y);
               ctx.lineTo(lPt.x, lPt.y);
-              ctx.stroke();
-
-              // Red Arrowhead at Last GPS point pointing along trajectory
-              const angle = Math.atan2(lPt.y - rPt.y, lPt.x - rPt.x);
-              const arrowLen = 14;
-              const arrowWidth = 7;
-              ctx.setLineDash([]);
-              ctx.fillStyle = '#dc2626';
-              ctx.strokeStyle = '#ffffff';
-              ctx.lineWidth = 1.2;
-              ctx.beginPath();
-              ctx.moveTo(lPt.x, lPt.y);
-              ctx.lineTo(
-                lPt.x - arrowLen * Math.cos(angle) + arrowWidth * Math.sin(angle),
-                lPt.y - arrowLen * Math.sin(angle) - arrowWidth * Math.cos(angle)
-              );
-              ctx.lineTo(
-                lPt.x - (arrowLen - 4) * Math.cos(angle),
-                lPt.y - (arrowLen - 4) * Math.sin(angle)
-              );
-              ctx.lineTo(
-                lPt.x - arrowLen * Math.cos(angle) - arrowWidth * Math.sin(angle),
-                lPt.y - arrowLen * Math.sin(angle) + arrowWidth * Math.cos(angle)
-              );
-              ctx.closePath();
-              ctx.fill();
               ctx.stroke();
             }
 
@@ -1612,6 +1612,31 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 style={{ direction: 'ltr', textAlign: 'left' }}
               >
                 
+                <style>{`
+                  #map-production-print-area .leaflet-control-scale {
+                    background: rgba(30, 41, 59, 0.85) !important;
+                    backdrop-filter: blur(4px) !important;
+                    padding: 2px 5px 3px 5px !important;
+                    border-radius: 4px !important;
+                    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
+                    margin-right: 8px !important;
+                    margin-bottom: 8px !important;
+                  }
+                  #map-production-print-area .leaflet-control-scale-line {
+                    background: transparent !important;
+                    border: 2px solid #ffffff !important;
+                    border-top: none !important;
+                    color: #ffffff !important;
+                    font-weight: 800 !important;
+                    font-family: monospace, 'Segoe UI', Arial, sans-serif !important;
+                    font-size: 10px !important;
+                    line-height: 1.1 !important;
+                    padding: 1px 4px !important;
+                    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+                  }
+                `}</style>
+
                 {/* Leaflet Dynamic Interactive Map */}
                 <MapContainer
                   center={[47.05, 67.32]}
@@ -1633,11 +1658,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* Auto-fit map to points & recenter */}
                   <ReportMapFitter points={mapPoints} fitKey={fitKey} />
 
-                  {/* Dynamic GIS Scale Bar matching Live Tracking */}
+                  {/* Dynamic GIS Scale Bar on gray background */}
                   <ScaleControl position="bottomright" metric={true} imperial={false} />
-
-                  {/* Inject SVG defs for arrowhead directly into Leaflet's SVG renderer */}
-                  <ReportPolylineArrowDefs />
 
                   {/* Red dashed vector line: Release Location -> Last GPS Position */}
                   {metrics.rLat !== 0 && metrics.lLat !== 0 && (
@@ -1710,16 +1732,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       }}
                     />
                   ))}
-
-                                    {/* Red Arrowhead pointing along release-to-last trajectory */}
-                  {metrics.rLat !== 0 && metrics.lLat !== 0 && (
-                    <Marker
-                      position={[metrics.lLat, metrics.lLon]}
-                      icon={createArrowHeadIcon((metrics as any).bearingDegrees || 0)}
-                      zIndexOffset={1900}
-                      interactive={false}
-                    />
-                  )}
 
                   {/* QGIS WMS Layers from Store */}
                   {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'wms' && l.sourceUrl).map(layer => (
@@ -2042,55 +2054,59 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 className="border border-gray-300 rounded-sm bg-white py-1.5 px-2 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
               >
-                <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
+                <table id="map-legend-bar" style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
                   <tbody>
                     <tr>
                       {/* 1. موقع تركيب الجهاز */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                          <span style={{ display: 'inline-block', marginLeft: '5px', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                          <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+                            <circle cx="5" cy="5" r="4.2" fill="#701a2b" stroke="#ffffff" strokeWidth="1" />
+                          </svg>
                           <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>موقع تركيب الجهاز</span>
-                        </span>
+                        </div>
                       </td>
 
                       {/* 2. آخر موقع */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                          <span style={{ display: 'inline-block', marginLeft: '5px', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', flexShrink: 0 }}></span>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                          <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+                            <circle cx="5" cy="5" r="4.2" fill="#22c55e" stroke="#ffffff" strokeWidth="1" />
+                          </svg>
                           <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
-                        </span>
+                        </div>
                       </td>
 
                       {/* 3. المسار المباشر */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', marginLeft: '5px', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                          <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+                            <line x1="0" y1="5" x2="18" y2="5" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
                           </svg>
                           <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>المسار المباشر</span>
-                        </span>
+                        </div>
                       </td>
 
                       {/* 4. المخيم */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', marginLeft: '5px', verticalAlign: 'middle', flexShrink: 0 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
                             <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
                             <path d="M10 4 23 20"/>
                             <path d="m10 4 4.5 16"/>
                           </svg>
                           <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>{activeCamp.name || 'المخيم'}</span>
-                        </span>
+                        </div>
                       </td>
 
                       {/* 5. البعد عن المخيم */}
                       <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
-                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'inline-block', marginLeft: '5px', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <line x1="0" y1="4" x2="18" y2="4" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                          <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+                            <line x1="0" y1="5" x2="18" y2="5" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
                           </svg>
                           <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap', lineHeight: '14px' }}>البعد عن المخيم</span>
-                        </span>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -2115,10 +2131,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   <tbody>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>رقم جهاز التتبع</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>رقم جهاز التتبع</div>
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>
                           <span className="font-mono font-black text-[#701a2b] text-[13px]">
                             {String(selectedPttId).replace(/^trans-/, '')}
                           </span>
@@ -2127,10 +2143,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>رقم الحجل</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>رقم الحجل</div>
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>
                           <svg width="76" height="22" viewBox="0 0 76 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                           <rect x="1" y="1" width="74" height="20" rx="10" fill="#f3f4f6"/>
                           <text x="38" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#374151" fontFamily="monospace, 'Segoe UI', Arial">
@@ -2142,30 +2158,30 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>النوعية</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>النوعية</div>
                       </td>
                       <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>
                           {customMetadata.species === 'Houbara Bustard' ? 'وحش' : (customMetadata.species || 'وحش')}
                         </div>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>الجنس</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>الجنس</div>
                       </td>
                       <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>
                           {customMetadata.gender || 'ذكر'}
                         </div>
                       </td>
                     </tr>
                     <tr className="bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>حالة الطائر</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>حالة الطائر</div>
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>
                           <svg width="56" height="22" viewBox="0 0 56 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                           <rect x="1" y="1" width="54" height="20" rx="10" fill="#ecfdf5"/>
                           <text x="28" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#059669" fontFamily="'Segoe UI', Tahoma, sans-serif">
@@ -2196,45 +2212,45 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       <th style={{ width: '22%', backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                       </th>
                       <th style={{ width: '39%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>تركيب الجهاز</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>تركيب الجهاز</div>
                       </th>
                       <th style={{ width: '39%', backgroundColor: '#0f766e', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>آخر موقع</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>آخر موقع</div>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="bg-white">
                       <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>التاريخ</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>التاريخ</div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr">{telemetryData.releasePos.dateStr}</span></div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}><span dir="ltr">{telemetryData.releasePos.dateStr}</span></div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span></div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}><span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span></div>
                       </td>
                     </tr>
                     <tr className="bg-white">
                       <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>خط العرض (N)</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>خط العرض (N)</div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span></div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span></div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span></div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span></div>
                       </td>
                     </tr>
                     <tr className="bg-white">
                       <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>خط الطول (E)</div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}>خط الطول (E)</div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span></div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span></div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span></div>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'block', margin: '0 auto' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span></div>
                       </td>
                     </tr>
                   </tbody>
@@ -2276,8 +2292,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                 {/* Metric 4 (Far Left in RTL): Tracking Duration in Days */}
                 <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-0.5" dir="ltr">
-                    {metrics.durationDays} يوم
+                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-0.5" dir="rtl">
+                    <span className="font-mono">{metrics.durationDays}</span> يوم
                   </div>
                   <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
                     مدة المتابعة
