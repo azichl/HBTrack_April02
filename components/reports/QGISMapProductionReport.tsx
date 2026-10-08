@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Printer, Download, RefreshCw, Compass, MapPin, 
   Calendar, ChevronDown, Check, Search, SlidersHorizontal, 
@@ -321,8 +322,9 @@ const createDistancePillIcon = (
 
 /**
  * Renders SVG dashed vector lines connecting the report points with arrow.
- * Uses map.latLngToContainerPoint to guarantee rendering in all browsers,
- * print stylesheets, and html2canvas exports with zero transform issues.
+ * Portals directly into Leaflet's overlayPane (z-index: 400), ensuring lines are
+ * permanently rendered BEHIND/UNDER marker labels and distance pills (markerPane z-index: 600)
+ * in both the interactive web map and exported PNG/PDF images.
  */
 const ReportVectorOverlay = ({
   releasePoint,
@@ -350,9 +352,9 @@ const ReportVectorOverlay = ({
       ) {
         return;
       }
-      const pRelease = map.latLngToContainerPoint(L.latLng(releasePoint[0], releasePoint[1]));
-      const pLast = map.latLngToContainerPoint(L.latLng(lastGpsPoint[0], lastGpsPoint[1]));
-      const pCamp = map.latLngToContainerPoint(L.latLng(campPoint[0], campPoint[1]));
+      const pRelease = map.latLngToLayerPoint(L.latLng(releasePoint[0], releasePoint[1]));
+      const pLast = map.latLngToLayerPoint(L.latLng(lastGpsPoint[0], lastGpsPoint[1]));
+      const pCamp = map.latLngToLayerPoint(L.latLng(campPoint[0], campPoint[1]));
       setCoords({ pRelease, pLast, pCamp });
     } catch (e) {
       console.warn('Vector overlay projection error:', e);
@@ -379,18 +381,20 @@ const ReportVectorOverlay = ({
     };
   }, [map, updatePositions]);
 
-  if (!coords) return null;
+  if (!coords || !map) return null;
+  const overlayPane = map.getPanes()?.overlayPane;
+  if (!overlayPane) return null;
 
-  return (
+  return createPortal(
     <svg 
-      className="absolute inset-0 w-full h-full pointer-events-none" 
+      className="leaflet-zoom-animated pointer-events-none" 
       style={{ 
         position: 'absolute', 
         top: 0, 
         left: 0, 
         width: '100%', 
         height: '100%', 
-        zIndex: 420,
+        overflow: 'visible',
         pointerEvents: 'none'
       }}
     >
@@ -433,7 +437,8 @@ const ReportVectorOverlay = ({
         strokeDasharray="8 6"
         strokeOpacity="0.95"
       />
-    </svg>
+    </svg>,
+    overlayPane
   );
 };
 
@@ -1409,7 +1414,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[77px] w-auto object-contain"
+                className="h-[88px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1785,15 +1790,30 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
                 </div>
 
-                {/* Graticule Perimeter Labels (Ticks) */}
-                <div className="absolute top-1 left-36 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
-                  47° 15.0000'N
+                {/* Graticule Perimeter Labels (Ticks) - Vector SVGs ensure coordinate text is permanently centered inside the gray pill on both web and html2canvas exports */}
+                <div className="absolute top-1 left-36 z-[900] pointer-events-none select-none">
+                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="36" y="8.5" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      47° 15.0000'N
+                    </text>
+                  </svg>
                 </div>
-                <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
-                  47° 00.0000'N
+                <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] pointer-events-none select-none">
+                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="36" y="8.5" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      47° 00.0000'N
+                    </text>
+                  </svg>
                 </div>
-                <div className="absolute bottom-6 left-1 z-[900] text-[8px] font-mono font-bold text-white/90 bg-black/40 px-1 rounded pointer-events-none">
-                  46° 45.0000'N
+                <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
+                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="36" y="8.5" textAnchor="middle" dominantBaseline="central" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      46° 45.0000'N
+                    </text>
+                  </svg>
                 </div>
 
               </div>
