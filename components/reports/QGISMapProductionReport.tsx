@@ -277,6 +277,20 @@ const createLiveTrackingCampIcon = (campName: string) => {
   });
 };
 
+/** Custom directional arrowhead icon pointing along the trajectory */
+const createArrowHeadIcon = (deg: number) => {
+  return L.divIcon({
+    className: 'bg-transparent pointer-events-none',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    html: `
+      <svg width="20" height="20" viewBox="0 0 20 20" style="transform: rotate(${deg}deg); overflow: visible; display: block;">
+        <polygon points="10,2 17,17 10,12 3,17" fill="#dc2626" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round" />
+      </svg>
+    `
+  });
+};
+
 /** Distance badge along connecting lines - pure vector SVG that never distorts or separates */
 const createDistancePillIcon = (
   text: string, 
