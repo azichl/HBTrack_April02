@@ -1409,7 +1409,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[67px] w-auto object-contain"
+                className="h-[77px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
