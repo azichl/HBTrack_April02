@@ -926,8 +926,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       const tableCells = clonedDoc.querySelectorAll('#bird-data-table td, #bird-data-table th, #table2-coordinates td, #table2-coordinates th');
       tableCells.forEach(cell => {
         const el = cell as HTMLElement;
+        el.setAttribute('align', 'center');
         el.style.textAlign = 'center';
         el.style.verticalAlign = 'middle';
+        el.style.direction = 'ltr';
         el.style.setProperty('text-align', 'center', 'important');
         el.style.setProperty('vertical-align', 'middle', 'important');
       });
@@ -935,43 +937,43 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       tableDivs.forEach(div => {
         const el = div as HTMLElement;
         el.style.textAlign = 'center';
-        el.style.justifyContent = 'center';
-        el.style.alignItems = 'center';
         el.style.setProperty('text-align', 'center', 'important');
       });
 
-      // 4. Ensure Leaflet panes have proper stacking without modifying DOM hierarchy or transforms
-      const clonedOverlay = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
-      if (clonedOverlay) {
-        clonedOverlay.style.zIndex = '350';
-      }
-      const clonedMarkers = clonedDoc.querySelector('.leaflet-marker-pane') as HTMLElement;
-      if (clonedMarkers) {
-        clonedMarkers.style.zIndex = '800';
-      }
+      // 4. PRECISE DISTANCE LINES RECONSTRUCTION FOR HTML2CANVAS:
+      // Replace Leaflet's multi-layered viewBox SVG overlay with a clean, exact SVG overlay
+      // using exact layer coordinates from mapInstance.
+      // This completely eliminates any SVG coordinate shifting in html2canvas while keeping lines strictly under markers.
+      const overlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
+      if (overlayPane && mapInstance) {
+        try {
+          const pR = mapInstance.latLngToLayerPoint([metrics.rLat, metrics.rLon]);
+          const pL = mapInstance.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
+          const pC = mapInstance.latLngToLayerPoint([metrics.cLat, metrics.cLon]);
 
-      // 4. Ensure SVG arrow defs and marker-end exist in the cloned Leaflet overlay SVG
-      const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane');
-      if (clonedOverlayPane) {
-        const clonedSvg = clonedOverlayPane.querySelector('svg');
-        if (clonedSvg) {
-          if (!clonedSvg.querySelector('#report-arrow-red')) {
-            let defs = clonedSvg.querySelector('defs');
-            if (!defs) {
-              defs = clonedDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
-              clonedSvg.prepend(defs);
-            }
-            defs.innerHTML = `
-              <marker id="report-arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
-              </marker>
-            `;
-          }
-          
-          const redPath = clonedOverlayPane.querySelector('path.report-release-polyline');
-          if (redPath) {
-            redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
-          }
+          overlayPane.innerHTML = `
+            <svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;">
+              <defs>
+                <marker id="report-arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                  <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
+                </marker>
+              </defs>
+              <line 
+                x1="${pR.x}" y1="${pR.y}" 
+                x2="${pL.x}" y2="${pL.y}" 
+                stroke="#dc2626" stroke-width="3" stroke-dasharray="8, 6" stroke-opacity="0.95" 
+                marker-end="url(#report-arrow-red)" 
+              />
+              <line 
+                x1="${pL.x}" y1="${pL.y}" 
+                x2="${pC.x}" y2="${pC.y}" 
+                stroke="#f59e0b" stroke-width="3" stroke-dasharray="8, 6" stroke-opacity="0.95" 
+              />
+            </svg>
+          `;
+          overlayPane.style.zIndex = '350';
+        } catch (err) {
+          console.warn('Error reconstructing export vector overlay:', err);
         }
       }
     },
@@ -1384,7 +1386,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[125px] w-auto object-contain"
+                className="h-[100px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
@@ -1413,7 +1415,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               <img 
                 src="/external-reserves-office-logo.png" 
                 alt="مكتب محميات الدولة الخارجية - External Reserves Office of The State" 
-                className="h-[60px] w-auto max-w-[336px] object-contain"
+                className="h-[48px] w-auto max-w-[270px] object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
