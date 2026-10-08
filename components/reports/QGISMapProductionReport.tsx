@@ -922,7 +922,33 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         birdHeader.style.width = '100%';
       }
 
-      // 3. Ensure SVG arrow defs and marker-end exist in the cloned Leaflet overlay SVG
+      // 3. Leaflet Stacking Fix for HTML2Canvas
+      // Move marker/tooltip/popup panes to the very end of mapPane so they paint last
+      const mapPane = clonedDoc.querySelector('.leaflet-map-pane');
+      const markerPane = clonedDoc.querySelector('.leaflet-marker-pane');
+      const tooltipPane = clonedDoc.querySelector('.leaflet-tooltip-pane');
+      const popupPane = clonedDoc.querySelector('.leaflet-popup-pane');
+      
+      if (mapPane && markerPane) mapPane.appendChild(markerPane);
+      if (mapPane && tooltipPane) mapPane.appendChild(tooltipPane);
+      if (mapPane && popupPane) mapPane.appendChild(popupPane);
+
+      // Force HTML2Canvas to respect stacking by removing z-index from panes so it relies purely on DOM order
+      const panes = clonedDoc.querySelectorAll('.leaflet-pane');
+      panes.forEach(pane => {
+        (pane as HTMLElement).style.setProperty('z-index', 'auto', 'important');
+      });
+
+      // Boost marker z-indexes so they are guaranteed to sit on top of everything else (like SVG overlays)
+      const mapElements = clonedDoc.querySelectorAll('.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup, .leaflet-marker-pane > *');
+      mapElements.forEach((el) => {
+        const htmlEl = el as HTMLElement;
+        const currentZ = parseInt(htmlEl.style.zIndex || '0', 10);
+        // Using setProperty is the only valid way to inject !important in JS
+        htmlEl.style.setProperty('z-index', (currentZ + 10000).toString(), 'important');
+      });
+
+      // 4. Ensure SVG arrow defs and marker-end exist in the cloned Leaflet overlay SVG
       const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane');
       if (clonedOverlayPane) {
         const clonedSvg = clonedOverlayPane.querySelector('svg');
@@ -934,70 +960,15 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               clonedSvg.prepend(defs);
             }
             defs.innerHTML = `
-              <marker 
-                id="report-arrow-red" 
-                viewBox="0 0 10 10" 
-                refX="7" 
-                refY="5" 
-                markerWidth="7" 
-                markerHeight="7" 
-                orient="auto"
-              >
+              <marker id="report-arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
                 <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
               </marker>
             `;
           }
           
-      // Fix html2canvas stacking context issue for Leaflet panes
-      const mapPane = clonedDoc.querySelector('.leaflet-map-pane');
-      const markerPane = clonedDoc.querySelector('.leaflet-marker-pane');
-      const tooltipPane = clonedDoc.querySelector('.leaflet-tooltip-pane');
-      const popupPane = clonedDoc.querySelector('.leaflet-popup-pane');
-      
-      if (mapPane && markerPane) mapPane.appendChild(markerPane);
-      if (mapPane && tooltipPane) mapPane.appendChild(tooltipPane);
-      if (mapPane && popupPane) mapPane.appendChild(popupPane);
-
-      // Force HTML2Canvas to respect stacking by removing z-index and relying on DOM order
-      const panes = clonedDoc.querySelectorAll('.leaflet-pane');
-      panes.forEach(pane => {
-        (pane as HTMLElement).style.zIndex = 'auto';
-      });
-      // Also remove z-index from markers if they have it
-      const markers = clonedDoc.querySelectorAll('.leaflet-marker-icon, .leaflet-tooltip');
-      markers.forEach(marker => {
-        (marker as HTMLElement).style.zIndex = 'auto';
-      });
-
-
-          
-
           const redPath = clonedOverlayPane.querySelector('path.report-release-polyline');
           if (redPath) {
             redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
-          }
-
-          // HTML2Canvas SVG Stacking Fix: Convert the entire overlay SVG to an image
-          // so HTML2Canvas respects its DOM position (under the markers).
-          try {
-            const xml = new XMLSerializer().serializeToString(clonedSvg);
-            const svg64 = btoa(unescape(encodeURIComponent(xml)));
-            const img = clonedDoc.createElement('img');
-            img.src = 'data:image/svg+xml;base64,' + svg64;
-            
-            // Match the SVG's positioning and sizing
-            img.style.width = clonedSvg.style.width || clonedSvg.getAttribute('width') || '100%';
-            img.style.height = clonedSvg.style.height || clonedSvg.getAttribute('height') || '100%';
-            img.style.position = clonedSvg.style.position || 'absolute';
-            img.style.left = clonedSvg.style.left || '0px';
-            img.style.top = clonedSvg.style.top || '0px';
-            img.style.transform = clonedSvg.style.transform || '';
-            img.className = clonedSvg.className.baseVal || clonedSvg.className || '';
-            img.style.zIndex = '400';
-
-            clonedSvg.parentNode?.replaceChild(img, clonedSvg);
-          } catch (err) {
-            console.error('Error converting SVG to Image in onclone:', err);
           }
         }
       }
@@ -1407,7 +1378,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
             
             {/* Top-Left Header: Qatar Houbara & Falcon Breeding Center Logo */}
-            <div className="flex items-center justify-start w-[300px]">
+            <div className="flex items-center justify-start w-[240px]">
               <img 
                 src="/qatar-houbara-center-logo.png" 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
@@ -1436,11 +1407,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             </div>
 
             {/* Top-Right Header: External Reserves Office Logo */}
-            <div className="flex items-center justify-end w-[440px]">
+            <div className="flex items-center justify-end w-[350px]">
               <img 
                 src="/external-reserves-office-logo.png" 
                 alt="مكتب محميات الدولة الخارجية - External Reserves Office of The State" 
-                className="h-[75px] w-auto max-w-[420px] object-contain"
+                className="h-[60px] w-auto max-w-[336px] object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
