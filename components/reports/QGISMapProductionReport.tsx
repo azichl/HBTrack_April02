@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { 
   Printer, Download, RefreshCw, Compass, MapPin, 
   Calendar, ChevronDown, Check, Search, SlidersHorizontal, 
@@ -321,125 +320,68 @@ const createDistancePillIcon = (
 };
 
 /**
- * Renders SVG dashed vector lines connecting the report points with arrow.
- * Portals directly into Leaflet's overlayPane (z-index: 400), ensuring lines are
- * permanently rendered BEHIND/UNDER marker labels and distance pills (markerPane z-index: 600)
- * in both the interactive web map and exported PNG/PDF images.
+ * Injects arrowhead marker definitions into Leaflet's SVG overlay pane,
+ * and sets marker-end on the red polyline path so the arrowhead is rendered
+ * natively within Leaflet's SVG overlay (z-index: 400), perfectly positioned
+ * above map tiles (z-index: 200) and below all markers and labels (z-index: 600).
  */
-const ReportVectorOverlay = ({
-  releasePoint,
-  lastGpsPoint,
-  campPoint
-}: {
-  releasePoint: [number, number];
-  lastGpsPoint: [number, number];
-  campPoint: [number, number];
-}) => {
+const ReportPolylineArrowDefs = () => {
   const map = useMap();
-  const [coords, setCoords] = useState<{
-    pRelease: { x: number; y: number };
-    pLast: { x: number; y: number };
-    pCamp: { x: number; y: number };
-  } | null>(null);
-
-  const updatePositions = useCallback(() => {
-    try {
-      if (!map) return;
-      if (
-        isNaN(releasePoint[0]) || isNaN(releasePoint[1]) ||
-        isNaN(lastGpsPoint[0]) || isNaN(lastGpsPoint[1]) ||
-        isNaN(campPoint[0]) || isNaN(campPoint[1])
-      ) {
-        return;
-      }
-      const pRelease = map.latLngToLayerPoint(L.latLng(releasePoint[0], releasePoint[1]));
-      const pLast = map.latLngToLayerPoint(L.latLng(lastGpsPoint[0], lastGpsPoint[1]));
-      const pCamp = map.latLngToLayerPoint(L.latLng(campPoint[0], campPoint[1]));
-      setCoords({ pRelease, pLast, pCamp });
-    } catch (e) {
-      console.warn('Vector overlay projection error:', e);
-    }
-  }, [map, releasePoint[0], releasePoint[1], lastGpsPoint[0], lastGpsPoint[1], campPoint[0], campPoint[1]]);
 
   useEffect(() => {
-    updatePositions();
-    const t1 = setTimeout(updatePositions, 150);
-    const t2 = setTimeout(updatePositions, 450);
-    const t3 = setTimeout(updatePositions, 900);
-    map.on('move', updatePositions);
-    map.on('zoom', updatePositions);
-    map.on('viewreset', updatePositions);
-    map.on('resize', updatePositions);
+    if (!map) return;
+    const updateDefs = () => {
+      try {
+        const overlayPane = map.getPanes()?.overlayPane;
+        if (!overlayPane) return;
+        const svg = overlayPane.querySelector('svg');
+        if (!svg) return;
+
+        if (!svg.querySelector('#report-arrow-red')) {
+          let defs = svg.querySelector('defs');
+          if (!defs) {
+            defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            svg.prepend(defs);
+          }
+          defs.innerHTML = `
+            <marker 
+              id="report-arrow-red" 
+              viewBox="0 0 10 10" 
+              refX="7" 
+              refY="5" 
+              markerWidth="7" 
+              markerHeight="7" 
+              orient="auto"
+            >
+              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
+            </marker>
+          `;
+        }
+
+        const redPath = overlayPane.querySelector('path.report-release-polyline');
+        if (redPath && redPath.getAttribute('marker-end') !== 'url(#report-arrow-red)') {
+          redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
+        }
+      } catch (e) {
+        console.warn('Polyline arrow def injection error:', e);
+      }
+    };
+
+    updateDefs();
+    const t1 = setTimeout(updateDefs, 100);
+    const t2 = setTimeout(updateDefs, 300);
+    const t3 = setTimeout(updateDefs, 700);
+
+    map.on('moveend zoomend viewreset resize', updateDefs);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
-      map.off('move', updatePositions);
-      map.off('zoom', updatePositions);
-      map.off('viewreset', updatePositions);
-      map.off('resize', updatePositions);
+      map.off('moveend zoomend viewreset resize', updateDefs);
     };
-  }, [map, updatePositions]);
+  }, [map]);
 
-  if (!coords || !map) return null;
-  const overlayPane = map.getPanes()?.overlayPane;
-  if (!overlayPane) return null;
-
-  return createPortal(
-    <svg 
-      className="leaflet-zoom-animated pointer-events-none" 
-      style={{ 
-        position: 'absolute', 
-        top: 0, 
-        left: 0, 
-        width: '100%', 
-        height: '100%', 
-        overflow: 'visible',
-        pointerEvents: 'none'
-      }}
-    >
-      <defs>
-        {/* Red arrowhead pointing at the Last GPS position */}
-        <marker 
-          id="report-arrow-red" 
-          viewBox="0 0 10 10" 
-          refX="7" 
-          refY="5" 
-          markerWidth="7" 
-          markerHeight="7" 
-          orient="auto"
-        >
-          <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
-        </marker>
-      </defs>
-
-      {/* Red dashed vector line: Release Location -> Last GPS Position */}
-      <line
-        x1={coords.pRelease.x}
-        y1={coords.pRelease.y}
-        x2={coords.pLast.x}
-        y2={coords.pLast.y}
-        stroke="#dc2626"
-        strokeWidth="3"
-        strokeDasharray="8 6"
-        strokeOpacity="0.95"
-        markerEnd="url(#report-arrow-red)"
-      />
-
-      {/* Amber dashed vector line: Last GPS Position -> Field Camp */}
-      <line
-        x1={coords.pLast.x}
-        y1={coords.pLast.y}
-        x2={coords.pCamp.x}
-        y2={coords.pCamp.y}
-        stroke="#f59e0b"
-        strokeWidth="3"
-        strokeDasharray="8 6"
-        strokeOpacity="0.95"
-      />
-    </svg>,
-    overlayPane
-  );
+  return null;
 };
 
 /** Helper to return dynamic tile layer matching Live Tracking options with Google Hybrid as default */
@@ -956,6 +898,68 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     window.print();
   };
 
+  const createExportHtml2CanvasOptions = () => ({
+    scale: 2.5,
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: '#ffffff',
+    logging: false,
+    scrollX: 0,
+    scrollY: 0,
+    onclone: (clonedDoc: Document) => {
+      // 1. Ensure country inset title Arabic ligatures stay connected
+      const countryTitle = clonedDoc.getElementById('country-inset-title');
+      if (countryTitle) {
+        countryTitle.style.letterSpacing = '0px';
+        countryTitle.style.direction = 'rtl';
+      }
+
+      // 2. Ensure Table 1 header stays 100% centered horizontally
+      const birdHeader = clonedDoc.getElementById('bird-data-header');
+      if (birdHeader) {
+        birdHeader.style.display = 'block';
+        birdHeader.style.textAlign = 'center';
+        birdHeader.style.width = '100%';
+      }
+
+      // 3. Ensure SVG arrow defs and marker-end exist in the cloned Leaflet overlay SVG
+      const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane');
+      if (clonedOverlayPane) {
+        const clonedSvg = clonedOverlayPane.querySelector('svg');
+        if (clonedSvg) {
+          if (!clonedSvg.querySelector('#report-arrow-red')) {
+            let defs = clonedSvg.querySelector('defs');
+            if (!defs) {
+              defs = clonedDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
+              clonedSvg.prepend(defs);
+            }
+            defs.innerHTML = `
+              <marker 
+                id="report-arrow-red" 
+                viewBox="0 0 10 10" 
+                refX="7" 
+                refY="5" 
+                markerWidth="7" 
+                markerHeight="7" 
+                orient="auto"
+              >
+                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
+              </marker>
+            `;
+          }
+          const redPath = clonedOverlayPane.querySelector('path.report-release-polyline');
+          if (redPath) {
+            redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
+          }
+        }
+      }
+    },
+    ignoreElements: (el: Element) => 
+      el.classList?.contains('no-print') || 
+      el.classList?.contains('leaflet-control-zoom') || 
+      el.classList?.contains('leaflet-control-attribution')
+  });
+
   const handleExportPdf = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPdf(true);
@@ -964,37 +968,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
-      const exportHtml2CanvasOptions = {
-        scale: 2.5,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDoc: Document) => {
-          // 1. Ensure country inset title Arabic ligatures stay connected
-          const countryTitle = clonedDoc.getElementById('country-inset-title');
-          if (countryTitle) {
-            countryTitle.style.letterSpacing = '0px';
-            countryTitle.style.direction = 'rtl';
-          }
 
-          // 2. Ensure Table 1 header stays 100% centered horizontally
-          const birdHeader = clonedDoc.getElementById('bird-data-header');
-          if (birdHeader) {
-            birdHeader.style.display = 'block';
-            birdHeader.style.textAlign = 'center';
-            birdHeader.style.width = '100%';
-          }
-        },
-        ignoreElements: (el: Element) => 
-          el.classList?.contains('no-print') || 
-          el.classList?.contains('leaflet-control-zoom') || 
-          el.classList?.contains('leaflet-control-attribution')
-      };
-
-      const canvas = await html2canvas(element, exportHtml2CanvasOptions);
+      const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
@@ -1023,37 +998,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
-      const exportHtml2CanvasOptions = {
-        scale: 2.5,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        onclone: (clonedDoc: Document) => {
-          // 1. Ensure country inset title Arabic ligatures stay connected
-          const countryTitle = clonedDoc.getElementById('country-inset-title');
-          if (countryTitle) {
-            countryTitle.style.letterSpacing = '0px';
-            countryTitle.style.direction = 'rtl';
-          }
 
-          // 2. Ensure Table 1 header stays 100% centered horizontally
-          const birdHeader = clonedDoc.getElementById('bird-data-header');
-          if (birdHeader) {
-            birdHeader.style.display = 'block';
-            birdHeader.style.textAlign = 'center';
-            birdHeader.style.width = '100%';
-          }
-        },
-        ignoreElements: (el: Element) => 
-          el.classList?.contains('no-print') || 
-          el.classList?.contains('leaflet-control-zoom') || 
-          el.classList?.contains('leaflet-control-attribution')
-      };
-
-      const canvas = await html2canvas(element, exportHtml2CanvasOptions);
+      const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
 
       const link = document.createElement('a');
       link.download = `Houbara_Report_${selectedPttId}_${customMetadata.issueDate}.png`;
@@ -1070,8 +1016,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   return (
     <div className="space-y-6">
       
-      {/* ─── PRINT ONLY STYLES ──────────────────────────────────────────────── */}
+      {/* ─── PRINT & VECTOR STYLES ─────────────────────────────────────────── */}
       <style>{`
+        path.report-release-polyline {
+          marker-end: url(#report-arrow-red) !important;
+        }
         @media print {
           @page {
             size: A4 landscape;
@@ -1468,7 +1417,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <MapContainer
                   center={[47.05, 67.32]}
                   zoom={9}
-                  preferCanvas={true}
                   scrollWheelZoom={true}
                   dragging={true}
                   doubleClickZoom={true}
@@ -1489,12 +1437,42 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   {/* Dynamic GIS Scale Bar matching Live Tracking */}
                   <ScaleControl position="bottomright" metric={true} imperial={false} />
 
-                  {/* High-visibility SVG Vector Line Overlay connecting all points */}
-                  <ReportVectorOverlay
-                    releasePoint={[metrics.rLat, metrics.rLon]}
-                    lastGpsPoint={[metrics.lLat, metrics.lLon]}
-                    campPoint={[metrics.cLat, metrics.cLon]}
-                  />
+                  {/* Inject SVG defs for arrowhead directly into Leaflet's SVG renderer */}
+                  <ReportPolylineArrowDefs />
+
+                  {/* Red dashed vector line: Release Location -> Last GPS Position */}
+                  {metrics.rLat !== 0 && metrics.lLat !== 0 && (
+                    <Polyline
+                      positions={[
+                        [metrics.rLat, metrics.rLon],
+                        [metrics.lLat, metrics.lLon]
+                      ]}
+                      pathOptions={{
+                        color: '#dc2626',
+                        weight: 3,
+                        dashArray: '8, 6',
+                        opacity: 0.95,
+                        className: 'report-release-polyline'
+                      }}
+                    />
+                  )}
+
+                  {/* Amber dashed vector line: Last GPS Position -> Field Camp */}
+                  {metrics.lLat !== 0 && metrics.cLat !== 0 && (
+                    <Polyline
+                      positions={[
+                        [metrics.lLat, metrics.lLon],
+                        [metrics.cLat, metrics.cLon]
+                      ]}
+                      pathOptions={{
+                        color: '#f59e0b',
+                        weight: 3,
+                        dashArray: '8, 6',
+                        opacity: 0.95,
+                        className: 'report-camp-polyline'
+                      }}
+                    />
+                  )}
 
                   {/* QGIS Imported Vector Layers from Store */}
                   {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'file' && qgisGeoJSONCache?.[l.id]).map(layer => (
