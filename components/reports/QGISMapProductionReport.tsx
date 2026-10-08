@@ -1756,47 +1756,60 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               </div>
 
-              {/* Map Legend Bar Under Map - Self-contained inline SVGs guarantee icons and text are permanently locked on the exact same baseline */}
+              {/* Map Legend Bar Under Map - Table columns layout guarantees icons and text are permanently locked on the exact same baseline with zero clipping */}
               <div 
-                className="border border-gray-300 rounded-sm bg-white py-1 px-1 shadow-xs select-none"
+                className="border border-gray-300 rounded-sm bg-white py-1.5 px-2 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
               >
-                <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0, tableLayout: 'auto' }}>
                   <tbody>
                     <tr>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
-                        <svg width="118" height="18" viewBox="0 0 118 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                          <circle cx="8" cy="9" r="4.5" fill="#701a2b" stroke="#ffffff" strokeWidth="1.2"/>
-                          <text x="18" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">موقع تركيب الجهاز</text>
+                      {/* 1. موقع تركيب الجهاز */}
+                      <td style={{ width: 14, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
+                        <span style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
+                      </td>
+                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
+                        موقع تركيب الجهاز
+                      </td>
+
+                      {/* 2. آخر موقع */}
+                      <td style={{ width: 14, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
+                        <span style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
+                      </td>
+                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
+                        آخر موقع ({telemetryData.lastGpsPos.dateStr})
+                      </td>
+
+                      {/* 3. المسار المباشر */}
+                      <td style={{ width: 20, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
+                        <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
+                          <line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
                         </svg>
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
-                        <svg width="138" height="18" viewBox="0 0 138 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                          <circle cx="8" cy="9" r="4.5" fill="#22c55e" stroke="#ffffff" strokeWidth="1.2"/>
-                          <text x="18" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">آخر موقع ({telemetryData.lastGpsPos.dateStr})</text>
+                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
+                        المسار المباشر
+                      </td>
+
+                      {/* 4. المخيم */}
+                      <td style={{ width: 16, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: '0 auto' }}>
+                          <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
+                          <path d="M10 4 23 20"/>
+                          <path d="m10 4 4.5 16"/>
                         </svg>
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
-                        <svg width="92" height="18" viewBox="0 0 92 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                          <line x1="2" y1="9" x2="20" y2="9" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
-                          <text x="25" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">المسار المباشر</text>
+                      <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
+                        {activeCamp.name || 'المخيم'}
+                      </td>
+
+                      {/* 5. البعد عن المخيم */}
+                      <td style={{ width: 20, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
+                        <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
+                          <line x1="0" y1="4" x2="18" y2="4" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
                         </svg>
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
-                        <svg width="95" height="18" viewBox="0 0 95 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                          <g transform="translate(1, 2) scale(0.6)">
-                            <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
-                            <path d="M10 4 23 20" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round"/>
-                            <path d="m10 4 4.5 16" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round"/>
-                          </g>
-                          <text x="20" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">{activeCamp.name || 'المخيم'}</text>
-                        </svg>
-                      </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
-                        <svg width="98" height="18" viewBox="0 0 98 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
-                          <line x1="2" y1="9" x2="20" y2="9" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
-                          <text x="25" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">البعد عن المخيم</text>
-                        </svg>
+                      <td style={{ paddingRight: 4, paddingLeft: 2, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
+                        البعد عن المخيم
                       </td>
                     </tr>
                   </tbody>
