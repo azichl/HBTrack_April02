@@ -938,6 +938,32 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     window.print();
   };
 
+  const hideLiveDistanceLinesForExport = () => {
+    const liveOverlayPaths = document.querySelectorAll<SVGPathElement>(
+      '#map-production-print-area .leaflet-overlay-pane path, #map-production-print-area svg path'
+    );
+    const hiddenPaths: SVGPathElement[] = [];
+    liveOverlayPaths.forEach(p => {
+      const stroke = (p.getAttribute('stroke') || p.style.stroke || '').toLowerCase();
+      const dash = p.getAttribute('stroke-dasharray') || p.style.strokeDasharray || '';
+      const cls = (p.getAttribute('class') || '').toLowerCase();
+      if (
+        cls.includes('report-') ||
+        stroke.includes('dc2626') || stroke.includes('220, 38, 38') ||
+        stroke.includes('f59e0b') || stroke.includes('245, 158, 11') ||
+        dash.includes('8') || dash.includes('6')
+      ) {
+        p.style.display = 'none';
+        hiddenPaths.push(p);
+      }
+    });
+    return () => {
+      hiddenPaths.forEach(p => {
+        p.style.display = '';
+      });
+    };
+  };
+
   const createExportHtml2CanvasOptions = () => ({
     scale: 2.5,
     useCORS: true,
@@ -984,26 +1010,34 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         h.style.setProperty('vertical-align', 'middle', 'important');
       });
 
-      // 5. Style Map Scale Control on gray background
-      const clonedScaleControls = clonedDoc.querySelectorAll('.leaflet-control-scale');
+      // 5. Style Map Scale Control on solid dark-slate / black background
+      const clonedScaleControls = clonedDoc.querySelectorAll('#map-production-print-area .leaflet-control-scale');
       clonedScaleControls.forEach(sc => {
         const el = sc as HTMLElement;
-        el.style.setProperty('background', 'rgba(30, 41, 59, 0.85)', 'important');
-        el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.35)', 'important');
+        el.style.setProperty('background', '#1e293b', 'important');
+        el.style.setProperty('background-color', '#1e293b', 'important');
+        el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.4)', 'important');
         el.style.setProperty('border-radius', '4px', 'important');
         el.style.setProperty('padding', '2px 5px 3px 5px', 'important');
-        el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.4)', 'important');
+        el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.6)', 'important');
+        el.style.setProperty('display', 'inline-block', 'important');
       });
-      const clonedScaleLines = clonedDoc.querySelectorAll('.leaflet-control-scale-line');
+      const clonedScaleLines = clonedDoc.querySelectorAll('#map-production-print-area .leaflet-control-scale-line');
       clonedScaleLines.forEach(sl => {
         const el = sl as HTMLElement;
-        el.style.setProperty('background', 'transparent', 'important');
+        el.style.setProperty('background', '#1e293b', 'important');
+        el.style.setProperty('background-color', '#1e293b', 'important');
         el.style.setProperty('border', '2px solid #ffffff', 'important');
         el.style.setProperty('border-top', 'none', 'important');
         el.style.setProperty('color', '#ffffff', 'important');
         el.style.setProperty('font-weight', '800', 'important');
         el.style.setProperty('font-family', "monospace, 'Segoe UI', Arial, sans-serif", 'important');
+        el.style.setProperty('font-size', '10px', 'important');
+        el.style.setProperty('line-height', '1.1', 'important');
+        el.style.setProperty('padding', '2px 6px 1px 6px', 'important');
+        el.style.setProperty('border-radius', '2px', 'important');
         el.style.setProperty('text-shadow', '0 1px 2px rgba(0, 0, 0, 0.9)', 'important');
+        el.style.setProperty('display', 'block', 'important');
       });
 
       // 6. Copy live canvas contents to cloned canvas for any base tile or GIS layers
@@ -1021,19 +1055,55 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         }
       });
 
-      // 7. BULLETPROOF DISTANCE LINES IN CLONED OVERLAY PANE:
-      // Remove shifted Leaflet SVG polyline paths in clonedDoc and draw pixel-perfect lines
-      // directly on a dedicated, non-transformed Canvas positioned at the exact layer coordinates.
-      const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
+      // 7. REMOVE SHIFTED LEAFLET SVG DISTANCE POLYLINES FROM CLONED OVERLAY PANE:
+      // Leaflet renders SVG paths inside .leaflet-overlay-pane with CSS transforms that
+      // html2canvas incorrectly double-translates, shifting the polylines to the top-left edge.
+      // We wipe out these shifted SVG paths completely so ONLY the pixel-perfect canvas lines remain.
+      const printArea = clonedDoc.getElementById('map-production-print-area');
+      const hasNoQgisLayers = !qgisLayers || qgisLayers.filter(l => l.visible && l.type === 'file' && qgisGeoJSONCache?.[l.id]).length === 0;
+
+      if (printArea) {
+        const allOverlayPaths = printArea.querySelectorAll('path');
+        allOverlayPaths.forEach(path => {
+          const p = path as SVGPathElement;
+          const stroke = (p.getAttribute('stroke') || p.style.stroke || '').toLowerCase();
+          const cls = (p.getAttribute('class') || '').toLowerCase();
+          const dash = p.getAttribute('stroke-dasharray') || p.style.strokeDasharray || '';
+          const parentOverlay = p.closest('.leaflet-overlay-pane');
+
+          const isDistanceLine = 
+            cls.includes('report-') ||
+            stroke.includes('dc2626') || stroke.includes('220, 38, 38') ||
+            stroke.includes('f59e0b') || stroke.includes('245, 158, 11') ||
+            dash.includes('8') || dash.includes('6') ||
+            (Boolean(parentOverlay) && hasNoQgisLayers);
+
+          if (isDistanceLine) {
+            p.setAttribute('d', '');
+            p.setAttribute('stroke', 'none');
+            p.setAttribute('fill', 'none');
+            p.setAttribute('display', 'none');
+            p.setAttribute('visibility', 'hidden');
+            p.style.display = 'none';
+            p.style.visibility = 'hidden';
+            p.remove();
+          }
+        });
+
+        // Also if no QGIS vector file layers are active, clear any SVG element in the overlay pane
+        if (hasNoQgisLayers) {
+          const overlaySvgs = printArea.querySelectorAll('.leaflet-overlay-pane svg');
+          overlaySvgs.forEach(svg => {
+            svg.innerHTML = '';
+            (svg as HTMLElement).style.display = 'none';
+          });
+        }
+      }
+
+      // Draw custom pixel-perfect canvas lines positioned at the exact layer coordinates
+      const clonedOverlayPane = clonedDoc.querySelector('#map-production-print-area .leaflet-overlay-pane, .leaflet-overlay-pane') as HTMLElement;
       if (clonedOverlayPane && mapInstance) {
         clonedOverlayPane.style.zIndex = '350';
-
-        // Hide any Leaflet SVG polylines that suffer from the html2canvas viewBox double-transform shift
-        const polylines = clonedOverlayPane.querySelectorAll('path.report-release-polyline, path.report-camp-polyline');
-        polylines.forEach(p => {
-          (p as HTMLElement).style.display = 'none';
-          p.remove();
-        });
 
         try {
           const rPt = mapInstance.latLngToLayerPoint([metrics.rLat, metrics.rLon]);
@@ -1064,7 +1134,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           if (ctx) {
             ctx.translate(-minX, -minY);
 
-            // Red dashed line: Release Location -> Last GPS Position (WITHOUT arrowhead as requested)
+            // Red dashed line: Release Location -> Last GPS Position
             if (metrics.rLat !== 0 && metrics.lLat !== 0) {
               ctx.beginPath();
               ctx.strokeStyle = '#dc2626';
@@ -1111,11 +1181,14 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   const handleExportPdf = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPdf(true);
+    let restoreLiveLines = () => {};
 
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
+
+      restoreLiveLines = hideLiveDistanceLinesForExport();
 
       const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
 
@@ -1135,6 +1208,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       console.error('Error generating PDF:', error);
       alert('حدث خطأ أثناء تصدير ملف PDF. يمكنك استخدام زر الطباعة للحفظ كـ PDF مباشرة.');
     } finally {
+      restoreLiveLines();
       setIsExportingPdf(false);
     }
   };
@@ -1142,10 +1216,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   const handleExportPng = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPng(true);
+    let restoreLiveLines = () => {};
 
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
+
+      restoreLiveLines = hideLiveDistanceLinesForExport();
 
       const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
 
@@ -1157,6 +1234,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       console.error('Error exporting image:', error);
       alert('حدث خطأ أثناء حفظ الصورة.');
     } finally {
+      restoreLiveLines();
       setIsExportingPng(false);
     }
   };
@@ -1166,9 +1244,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       
       {/* ─── PRINT & VECTOR STYLES ─────────────────────────────────────────── */}
       <style>{`
-        path.report-release-polyline {
-          marker-end: url(#report-arrow-red) !important;
-        }
         @media print {
           @page {
             size: A4 landscape;
@@ -1614,17 +1689,20 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 
                 <style>{`
                   #map-production-print-area .leaflet-control-scale {
-                    background: rgba(30, 41, 59, 0.85) !important;
+                    background: rgba(30, 41, 59, 0.88) !important;
+                    background-color: rgba(30, 41, 59, 0.88) !important;
                     backdrop-filter: blur(4px) !important;
                     padding: 2px 5px 3px 5px !important;
                     border-radius: 4px !important;
-                    border: 1px solid rgba(255, 255, 255, 0.35) !important;
-                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
+                    border: 1px solid rgba(255, 255, 255, 0.4) !important;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5) !important;
                     margin-right: 8px !important;
                     margin-bottom: 8px !important;
+                    display: inline-block !important;
                   }
                   #map-production-print-area .leaflet-control-scale-line {
-                    background: transparent !important;
+                    background: rgba(30, 41, 59, 0.88) !important;
+                    background-color: rgba(30, 41, 59, 0.88) !important;
                     border: 2px solid #ffffff !important;
                     border-top: none !important;
                     color: #ffffff !important;
@@ -1632,8 +1710,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     font-family: monospace, 'Segoe UI', Arial, sans-serif !important;
                     font-size: 10px !important;
                     line-height: 1.1 !important;
-                    padding: 1px 4px !important;
+                    padding: 2px 6px 1px 6px !important;
+                    border-radius: 2px !important;
                     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+                    box-sizing: border-box !important;
+                    display: block !important;
                   }
                 `}</style>
 
