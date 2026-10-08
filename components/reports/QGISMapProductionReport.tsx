@@ -168,87 +168,62 @@ const createLiveTrackingMarkerIcon = ({
   const totalW = 160;
   const totalH = hasTitle ? 78 : 60;
   const pillW = Math.max(54, cleanId.length * 7.5 + 16);
-  const titleH = 16;
-  const pillH = 20;
-  const pinH = 35;
   const pinW = 21;
-  const titleTop = 0;
-  const pillTop = hasTitle ? 19 : 0;
-  const pinTop = hasTitle ? 42 : 23;
 
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <div style="
-        position: relative;
-        width: ${totalW}px; 
-        height: ${totalH}px; 
-        pointer-events: none; 
-        box-sizing: border-box;
-      ">
+      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
         ${hasTitle ? `
-          <!-- Zone 1 (Top): Label Title (موقع تركيب الجهاز / آخر موقع) -->
-          <div style="
-            position: absolute;
-            top: ${titleTop}px;
-            left: 0;
-            width: ${totalW}px;
-            height: ${titleH}px;
-            line-height: ${titleH}px;
-            text-align: center;
-            color: #ffffff; 
-            font-weight: 800; 
-            font-size: 11px; 
-            white-space: nowrap; 
-            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.9); 
-            direction: rtl;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif;
-            pointer-events: none;
-          ">
+          <!-- Zone 1 (Top): Label Title with crisp black outline -->
+          <text 
+            x="${totalW / 2}" 
+            y="12" 
+            text-anchor="middle" 
+            dominant-baseline="middle"
+            font-family="'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" 
+            font-size="11" 
+            font-weight="800" 
+            fill="#ffffff" 
+            stroke="#000000" 
+            stroke-width="2.6" 
+            stroke-linejoin="round" 
+            paint-order="stroke fill"
+          >
             ${labelTitle}
-          </div>
+          </text>
         ` : ''}
 
         <!-- Zone 2 (Middle): Transmitter ID Pill Badge (e.g. 244289) -->
-        <div style="
-          position: absolute;
-          top: ${pillTop}px;
-          left: ${(totalW - pillW) / 2}px;
-          width: ${pillW}px;
-          height: ${pillH}px;
-          line-height: ${pillH - 4}px;
-          text-align: center;
-          box-sizing: border-box;
-          background: #ffffff; 
-          color: #0f172a; 
-          border: 2px solid ${borderColorHex}; 
-          border-radius: 9999px; 
-          font-size: 11px; 
-          font-weight: 800; 
-          white-space: nowrap; 
-          box-shadow: 0 1.5px 4px rgba(0,0,0,0.35); 
-          direction: ltr; 
-          font-family: monospace, Arial, sans-serif;
-          pointer-events: none;
-        ">
+        <rect 
+          x="${(totalW - pillW) / 2}" 
+          y="${hasTitle ? 20 : 2}" 
+          width="${pillW}" 
+          height="20" 
+          rx="10" 
+          fill="#ffffff" 
+          stroke="${borderColorHex}" 
+          stroke-width="2"
+        />
+        <text 
+          x="${totalW / 2}" 
+          y="${hasTitle ? 30.5 : 12.5}" 
+          text-anchor="middle" 
+          dominant-baseline="middle"
+          font-family="monospace, 'Segoe UI', Arial" 
+          font-size="11.5" 
+          font-weight="800" 
+          fill="#0f172a"
+        >
           ${cleanId}
-        </div>
+        </text>
 
-        <!-- Zone 3 (Bottom): Live Tracking 21x35 SVG Teardrop Pin -->
-        <div style="
-          position: absolute;
-          top: ${pinTop}px;
-          left: ${(totalW - pinW) / 2}px;
-          width: ${pinW}px;
-          height: ${pinH}px;
-          pointer-events: none;
-        ">
-          <svg width="${pinW}" height="${pinH}" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="display: block; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));">
-            <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
-            <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
-          </svg>
-        </div>
-      </div>
+        <!-- Zone 3 (Bottom): Live Tracking 21x35 Teardrop Pin -->
+        <g transform="translate(${(totalW - pinW) / 2}, ${hasTitle ? 43 : 25}) scale(0.84)">
+          <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
+          <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
+        </g>
+      </svg>
     `,
     iconSize: [totalW, totalH],
     iconAnchor: [totalW / 2, totalH],
@@ -257,106 +232,87 @@ const createLiveTrackingMarkerIcon = ({
 };
 
 /**
- * Creates Field Camp Marker matching Live Tracking styling with absolute positioned zones
+ * Creates Field Camp Marker matching Live Tracking styling using pure vector SVG
  */
 const createLiveTrackingCampIcon = (campName: string) => {
   const totalW = 140;
   const totalH = 54;
-  const titleH = 16;
   const badgeSize = 30;
-  const titleTop = 0;
-  const badgeTop = 20;
 
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <div style="
-        position: relative;
-        width: ${totalW}px; 
-        height: ${totalH}px; 
-        pointer-events: none; 
-        box-sizing: border-box;
-      ">
-        <!-- Zone 1 (Top): Camp Title with clean text shadow -->
-        <div style="
-          position: absolute;
-          top: ${titleTop}px;
-          left: 0;
-          width: ${totalW}px;
-          height: ${titleH}px;
-          line-height: ${titleH}px;
-          text-align: center;
-          color: #ffffff; 
-          font-weight: 800; 
-          font-size: 11.5px; 
-          white-space: nowrap; 
-          text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 1px 4px rgba(0,0,0,0.9); 
-          direction: rtl;
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif;
-          pointer-events: none;
-        ">
+      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
+        <!-- Zone 1 (Top): Camp Title with solid dark outline -->
+        <text 
+          x="${totalW / 2}" 
+          y="12" 
+          text-anchor="middle" 
+          dominant-baseline="middle"
+          font-family="'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" 
+          font-size="11.5" 
+          font-weight="800" 
+          fill="#ffffff" 
+          stroke="#000000" 
+          stroke-width="2.6" 
+          stroke-linejoin="round" 
+          paint-order="stroke fill"
+        >
           ${campName}
-        </div>
+        </text>
 
-        <!-- Zone 2 (Bottom): Camp Amber Circular Tent Badge -->
-        <div style="
-          position: absolute;
-          top: ${badgeTop}px;
-          left: ${(totalW - badgeSize) / 2}px;
-          width: ${badgeSize}px;
-          height: ${badgeSize}px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-          border: 2px solid #ffffff;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.45);
-          box-sizing: border-box;
-          pointer-events: none;
-        ">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; top: 4px; left: 4px;">
-            <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.3"/>
-            <path d="M10 4 23 20"/>
-            <path d="m10 4 4.5 16"/>
-          </svg>
-        </div>
-      </div>
+        <!-- Zone 2 (Bottom): Circular Amber Tent Badge -->
+        <g transform="translate(${(totalW - badgeSize) / 2}, 20)">
+          <circle cx="${badgeSize / 2}" cy="${badgeSize / 2}" r="${badgeSize / 2 - 1}" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+          <g transform="translate(6, 6) scale(0.75)">
+            <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
+            <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+            <path d="m10 4 4.5 16" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+          </g>
+        </g>
+      </svg>
     `,
     iconSize: [totalW, totalH],
-    iconAnchor: [totalW / 2, badgeTop + badgeSize / 2 + 6]
+    iconAnchor: [totalW / 2, 20 + badgeSize / 2 + 5]
   });
 };
 
-/** Distance badge along connecting lines - offset cleanly so it does not lie on the line */
+/** Distance badge along connecting lines - pure vector SVG that never distorts or separates */
 const createDistancePillIcon = (
   text: string, 
   borderColor: string, 
-  anchorOffset: [number, number] = [36, 11]
+  anchorOffset: [number, number] = [37, 12]
 ) => {
-  const pillW = 72;
-  const pillH = 22;
+  const pillW = 74;
+  const pillH = 24;
+
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <div style="
-        box-sizing: border-box;
-        width: ${pillW}px;
-        height: ${pillH}px;
-        line-height: ${pillH - 4}px;
-        text-align: center;
-        direction: ltr; 
-        background: #ffffff; 
-        border: 1.8px solid ${borderColor}; 
-        border-radius: 9999px; 
-        font-size: 11px; 
-        font-weight: 800; 
-        color: ${borderColor}; 
-        box-shadow: 0 1.5px 4px rgba(0,0,0,0.3); 
-        white-space: nowrap; 
-        font-family: monospace, Arial, sans-serif; 
-        letter-spacing: normal;
-        pointer-events: none;
-      ">
-        ${text}
-      </div>
+      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
+        <rect 
+          x="1" 
+          y="1" 
+          width="${pillW - 2}" 
+          height="${pillH - 2}" 
+          rx="10" 
+          fill="#ffffff" 
+          stroke="${borderColor}" 
+          stroke-width="1.8"
+        />
+        <text 
+          x="${pillW / 2}" 
+          y="${pillH / 2 + 0.5}" 
+          text-anchor="middle" 
+          dominant-baseline="middle"
+          font-family="monospace, Arial, sans-serif" 
+          font-size="11" 
+          font-weight="800" 
+          fill="${borderColor}"
+        >
+          ${text}
+        </text>
+      </svg>
     `,
     iconSize: [pillW, pillH],
     iconAnchor: anchorOffset
@@ -1434,7 +1390,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               <div className="text-[12.5px] font-bold text-gray-700 flex items-center justify-center gap-2">
                 <span>جهاز التتبع <span className="font-mono text-[#701a2b] font-black">{selectedPttId}</span></span>
                 <span>•</span>
-                <span>منطقة {activeCamp.name.replace('مخيم ', '')} – {activeCamp.country || 'كازاخستان'}</span>
+                <span>منطقة {activeCamp.name.replace('مخيم ', '')} – كازاخستان</span>
                 <span>•</span>
                 <span>تاريخ الإصدار {formatDateDDMMYYYY(customMetadata.issueDate) || customMetadata.issueDate}</span>
               </div>
@@ -1691,7 +1647,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[150px] pointer-events-none">
                   <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5 px-1">
                     <span className="text-[10px] font-black text-gray-800 tracking-tight">
-                      {insetMapData.countryNameEn}
+                      {insetMapData.countryNameAr || 'كازاخستان'}
                     </span>
                     <span className="text-[8px] font-black text-gray-700">▲ N</span>
                   </div>
@@ -1800,7 +1756,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               </div>
 
-              {/* Map Legend Bar Under Map - Table layout guarantees all icons and text remain strictly on the same line during export and in all browsers */}
+              {/* Map Legend Bar Under Map - Self-contained inline SVGs guarantee icons and text are permanently locked on the exact same baseline */}
               <div 
                 className="border border-gray-300 rounded-sm bg-white py-1 px-1 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
@@ -1808,33 +1764,39 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 <table style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
                   <tbody>
                     <tr>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', width: 10, height: 10, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.2)', marginLeft: 6 }}></span>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>موقع تركيب الجهاز</span>
-                      </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', width: 10, height: 10, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.2)', marginLeft: 6 }}></span>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
-                      </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
-                        <svg width="20" height="10" viewBox="0 0 20 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 6 }}>
-                          <line x1="0" y1="5" x2="20" y2="5" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
+                        <svg width="118" height="18" viewBox="0 0 118 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <circle cx="8" cy="9" r="4.5" fill="#701a2b" stroke="#ffffff" strokeWidth="1.2"/>
+                          <text x="18" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">موقع تركيب الجهاز</text>
                         </svg>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>المسار المباشر</span>
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 6 }}>
-                          <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
-                          <path d="M10 4 23 20"/>
-                          <path d="m10 4 4.5 16"/>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
+                        <svg width="138" height="18" viewBox="0 0 138 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <circle cx="8" cy="9" r="4.5" fill="#22c55e" stroke="#ffffff" strokeWidth="1.2"/>
+                          <text x="18" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">آخر موقع ({telemetryData.lastGpsPos.dateStr})</text>
                         </svg>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>{activeCamp.name || 'المخيم'}</span>
                       </td>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '2px 4px' }}>
-                        <svg width="20" height="10" viewBox="0 0 20 10" style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 6 }}>
-                          <line x1="0" y1="5" x2="20" y2="5" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
+                        <svg width="92" height="18" viewBox="0 0 92 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <line x1="2" y1="9" x2="20" y2="9" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                          <text x="25" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">المسار المباشر</text>
                         </svg>
-                        <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#1f2937', lineHeight: '14px' }}>البعد عن المخيم</span>
+                      </td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
+                        <svg width="95" height="18" viewBox="0 0 95 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <g transform="translate(1, 2) scale(0.6)">
+                            <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
+                            <path d="M10 4 23 20" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round"/>
+                            <path d="m10 4 4.5 16" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round"/>
+                          </g>
+                          <text x="20" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">{activeCamp.name || 'المخيم'}</text>
+                        </svg>
+                      </td>
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '1px 2px' }}>
+                        <svg width="98" height="18" viewBox="0 0 98 18" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <line x1="2" y1="9" x2="20" y2="9" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
+                          <text x="25" y="9.5" dominantBaseline="middle" fontSize="10" fontWeight="bold" fill="#1f2937" fontFamily="'Segoe UI', Tahoma, sans-serif">البعد عن المخيم</text>
+                        </svg>
                       </td>
                     </tr>
                   </tbody>
@@ -1871,12 +1833,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                         رقم الحجل
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
-                        <span 
-                          className="bg-gray-100 text-gray-700 font-bold px-3 py-0.5 rounded-full text-xs"
-                          style={{ display: 'inline-block', lineHeight: '18px', borderRadius: '9999px', verticalAlign: 'middle' }}
-                        >
-                          {customMetadata.birdRing || 'NA'}
-                        </span>
+                        <svg width="76" height="22" viewBox="0 0 76 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <rect x="1" y="1" width="74" height="20" rx="10" fill="#f3f4f6"/>
+                          <text x="38" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#374151" fontFamily="monospace, 'Segoe UI', Arial">
+                            {customMetadata.birdRing || 'NA'}
+                          </text>
+                        </svg>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
@@ -1900,12 +1862,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                         حالة الطائر
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
-                        <span 
-                          className="bg-emerald-50 text-emerald-700 font-bold px-3 py-0.5 rounded-full text-xs"
-                          style={{ display: 'inline-block', lineHeight: '18px', borderRadius: '9999px', verticalAlign: 'middle' }}
-                        >
-                          {customMetadata.birdStatus || 'حي'}
-                        </span>
+                        <svg width="56" height="22" viewBox="0 0 56 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                          <rect x="1" y="1" width="54" height="20" rx="10" fill="#ecfdf5"/>
+                          <text x="28" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#059669" fontFamily="'Segoe UI', Tahoma, sans-serif">
+                            {customMetadata.birdStatus || 'حي'}
+                          </text>
+                        </svg>
                       </td>
                     </tr>
                   </tbody>
@@ -1919,11 +1881,15 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     <tr>
                       <th className="bg-transparent py-1.5 px-2 w-[22%] border-b border-gray-200">
                       </th>
-                      <th className="bg-[#701a2b] text-white py-1.5 px-2 text-[12px] font-bold w-[39%] border-r border-gray-300">
-                        تركيب الجهاز
+                      <th className="bg-[#701a2b] text-white p-0 text-[12px] font-bold w-[39%] border-r border-gray-300">
+                        <div style={{ height: '28px', lineHeight: '28px', textAlign: 'center', color: '#ffffff' }}>
+                          تركيب الجهاز
+                        </div>
                       </th>
-                      <th className="bg-[#0f766e] text-white py-1.5 px-2 text-[12px] font-bold w-[39%] border-r border-gray-300">
-                        آخر موقع
+                      <th className="bg-[#0f766e] text-white p-0 text-[12px] font-bold w-[39%] border-r border-gray-300">
+                        <div style={{ height: '28px', lineHeight: '28px', textAlign: 'center', color: '#ffffff' }}>
+                          آخر موقع
+                        </div>
                       </th>
                     </tr>
                   </thead>
