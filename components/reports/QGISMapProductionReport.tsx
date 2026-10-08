@@ -958,7 +958,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
-      const canvas = await html2canvas(element, {
+      if (!element) return;
+      const exportHtml2CanvasOptions = {
         scale: 2.5,
         useCORS: true,
         allowTaint: true,
@@ -966,11 +967,35 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        ignoreElements: (el) => 
+        onclone: (clonedDoc: Document) => {
+          // 1. Ensure country inset title Arabic ligatures stay connected
+          const countryTitle = clonedDoc.getElementById('country-inset-title');
+          if (countryTitle) {
+            countryTitle.style.letterSpacing = '0px';
+            countryTitle.style.direction = 'rtl';
+          }
+
+          // 2. Ensure Table 1 header stays 100% centered horizontally
+          const birdHeader = clonedDoc.getElementById('bird-data-header');
+          if (birdHeader) {
+            birdHeader.style.display = 'block';
+            birdHeader.style.textAlign = 'center';
+            birdHeader.style.width = '100%';
+          }
+
+          // 3. Align map legend icons with Arabic text baseline in html2canvas
+          const legendIcons = clonedDoc.querySelectorAll('.map-legend-icon');
+          legendIcons.forEach((icon) => {
+            (icon as HTMLElement).style.transform = 'translateY(2.5px)';
+          });
+        },
+        ignoreElements: (el: Element) => 
           el.classList?.contains('no-print') || 
           el.classList?.contains('leaflet-control-zoom') || 
           el.classList?.contains('leaflet-control-attribution')
-      });
+      };
+
+      const canvas = await html2canvas(element, exportHtml2CanvasOptions);
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
@@ -999,7 +1024,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
-      const canvas = await html2canvas(element, {
+      const exportHtml2CanvasOptions = {
         scale: 2.5,
         useCORS: true,
         allowTaint: true,
@@ -1007,11 +1032,35 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         logging: false,
         scrollX: 0,
         scrollY: 0,
-        ignoreElements: (el) => 
+        onclone: (clonedDoc: Document) => {
+          // 1. Ensure country inset title Arabic ligatures stay connected
+          const countryTitle = clonedDoc.getElementById('country-inset-title');
+          if (countryTitle) {
+            countryTitle.style.letterSpacing = '0px';
+            countryTitle.style.direction = 'rtl';
+          }
+
+          // 2. Ensure Table 1 header stays 100% centered horizontally
+          const birdHeader = clonedDoc.getElementById('bird-data-header');
+          if (birdHeader) {
+            birdHeader.style.display = 'block';
+            birdHeader.style.textAlign = 'center';
+            birdHeader.style.width = '100%';
+          }
+
+          // 3. Align map legend icons with Arabic text baseline in html2canvas
+          const legendIcons = clonedDoc.querySelectorAll('.map-legend-icon');
+          legendIcons.forEach((icon) => {
+            (icon as HTMLElement).style.transform = 'translateY(2.5px)';
+          });
+        },
+        ignoreElements: (el: Element) => 
           el.classList?.contains('no-print') || 
           el.classList?.contains('leaflet-control-zoom') || 
           el.classList?.contains('leaflet-control-attribution')
-      });
+      };
+
+      const canvas = await html2canvas(element, exportHtml2CanvasOptions);
 
       const link = document.createElement('a');
       link.download = `Houbara_Report_${selectedPttId}_${customMetadata.issueDate}.png`;
@@ -1646,7 +1695,12 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 {/* Top-Left Inset: Country Locator Map & Exact Bird Position with Transmitter ID */}
                 <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[150px] pointer-events-none">
                   <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5 px-1">
-                    <span className="text-[10px] font-black text-gray-800 tracking-tight">
+                    <span 
+                      id="country-inset-title"
+                      dir="rtl"
+                      className="text-[10.5px] font-black text-gray-800"
+                      style={{ letterSpacing: '0px', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" }}
+                    >
                       {insetMapData.countryNameAr || 'كازاخستان'}
                     </span>
                     <span className="text-[8px] font-black text-gray-700">▲ N</span>
@@ -1766,7 +1820,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     <tr>
                       {/* 1. موقع تركيب الجهاز */}
                       <td style={{ width: 14, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <span style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
+                        <span className="map-legend-icon" style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#701a2b', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
                       </td>
                       <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
                         موقع تركيب الجهاز
@@ -1774,7 +1828,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                       {/* 2. آخر موقع */}
                       <td style={{ width: 14, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <span style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
+                        <span className="map-legend-icon" style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', backgroundColor: '#22c55e', border: '1px solid #ffffff', boxShadow: '0 1px 2px rgba(0,0,0,0.25)', margin: '0 auto' }}></span>
                       </td>
                       <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
                         آخر موقع ({telemetryData.lastGpsPos.dateStr})
@@ -1782,9 +1836,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                       {/* 3. المسار المباشر */}
                       <td style={{ width: 20, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
-                          <line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
-                        </svg>
+                        <div className="map-legend-icon" style={{ display: 'block', margin: '0 auto' }}>
+                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
+                            <line x1="0" y1="4" x2="18" y2="4" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                          </svg>
+                        </div>
                       </td>
                       <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
                         المسار المباشر
@@ -1792,11 +1848,13 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                       {/* 4. المخيم */}
                       <td style={{ width: 16, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: '0 auto' }}>
-                          <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
-                          <path d="M10 4 23 20"/>
-                          <path d="m10 4 4.5 16"/>
-                        </svg>
+                        <div className="map-legend-icon" style={{ display: 'block', margin: '0 auto' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block', margin: '0 auto' }}>
+                            <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
+                            <path d="M10 4 23 20"/>
+                            <path d="m10 4 4.5 16"/>
+                          </svg>
+                        </div>
                       </td>
                       <td style={{ paddingRight: 4, paddingLeft: 10, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
                         {activeCamp.name || 'المخيم'}
@@ -1804,9 +1862,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                       {/* 5. البعد عن المخيم */}
                       <td style={{ width: 20, textAlign: 'center', verticalAlign: 'middle', padding: 0 }}>
-                        <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
-                          <line x1="0" y1="4" x2="18" y2="4" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
-                        </svg>
+                        <div className="map-legend-icon" style={{ display: 'block', margin: '0 auto' }}>
+                          <svg width="18" height="8" viewBox="0 0 18 8" style={{ display: 'block', margin: '0 auto' }}>
+                            <line x1="0" y1="4" x2="18" y2="4" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
+                          </svg>
+                        </div>
                       </td>
                       <td style={{ paddingRight: 4, paddingLeft: 2, verticalAlign: 'middle', whiteSpace: 'nowrap', fontSize: '10.5px', fontWeight: 700, color: '#1f2937' }}>
                         البعد عن المخيم
@@ -1824,8 +1884,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
               <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
                 <div 
-                  className="w-full bg-[#701a2b] text-white py-1.5 px-3 flex items-center justify-center text-center text-[13.5px] font-bold"
-                  style={{ letterSpacing: 'normal' }}
+                  id="bird-data-header"
+                  className="w-full bg-[#701a2b] text-white py-1.5 px-3 text-center text-[13.5px] font-bold"
+                  style={{ letterSpacing: 'normal', display: 'block', textAlign: 'center', width: '100%', lineHeight: '22px' }}
                 >
                   بيانات الطائر
                 </div>
@@ -1889,54 +1950,59 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
               {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
               <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
-                <table className="w-full text-[12px] text-center border-collapse">
+                <table 
+                  id="table2-coordinates"
+                  className="w-full text-[12px] text-center"
+                  style={{ 
+                    borderCollapse: 'separate', 
+                    borderSpacing: 0,
+                    direction: 'rtl',
+                    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif"
+                  }}
+                >
                   <thead>
                     <tr>
-                      <th className="bg-transparent py-1.5 px-2 w-[22%] border-b border-gray-200">
+                      <th style={{ width: '22%', backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '6px 8px' }}>
                       </th>
-                      <th className="bg-[#701a2b] text-white p-0 text-[12px] font-bold w-[39%] border-r border-gray-300">
-                        <div style={{ height: '28px', lineHeight: '28px', textAlign: 'center', color: '#ffffff' }}>
-                          تركيب الجهاز
-                        </div>
+                      <th style={{ width: '39%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                        تركيب الجهاز
                       </th>
-                      <th className="bg-[#0f766e] text-white p-0 text-[12px] font-bold w-[39%] border-r border-gray-300">
-                        <div style={{ height: '28px', lineHeight: '28px', textAlign: 'center', color: '#ffffff' }}>
-                          آخر موقع
-                        </div>
+                      <th style={{ width: '39%', backgroundColor: '#0f766e', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                        آخر موقع
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-2 font-bold text-gray-700 bg-gray-50/70">
+                    <tr className="bg-white">
+                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>
                         التاريخ
                       </td>
-                      <td className="py-1.5 px-2 font-mono font-bold text-gray-900 text-[11.5px] border-r border-gray-200">
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                         <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
                       </td>
-                      <td className="py-1.5 px-2 font-mono font-bold text-gray-900 text-[11.5px] border-r border-gray-200">
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                         <span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span>
                       </td>
                     </tr>
-                    <tr className="border-b border-gray-200 bg-white">
-                      <td className="py-1.5 px-2 font-bold text-gray-700 bg-gray-50/70 text-[11px]">
+                    <tr className="bg-white">
+                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>
                         خط العرض (N)
                       </td>
-                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span>
                       </td>
-                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span>
                       </td>
                     </tr>
                     <tr className="bg-white">
-                      <td className="py-1.5 px-2 font-bold text-gray-700 bg-gray-50/70 text-[11px]">
+                      <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px' }}>
                         خط الطول (E)
                       </td>
-                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span>
                       </td>
-                      <td className="py-1.5 px-1 font-mono font-bold text-gray-900 text-[12px] border-r border-gray-200">
+                      <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                         <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span>
                       </td>
                     </tr>
