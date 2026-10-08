@@ -922,31 +922,33 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         birdHeader.style.width = '100%';
       }
 
-      // 3. Leaflet Stacking Fix for HTML2Canvas
-      // Move marker/tooltip/popup panes to the very end of mapPane so they paint last
-      const mapPane = clonedDoc.querySelector('.leaflet-map-pane');
-      const markerPane = clonedDoc.querySelector('.leaflet-marker-pane');
-      const tooltipPane = clonedDoc.querySelector('.leaflet-tooltip-pane');
-      const popupPane = clonedDoc.querySelector('.leaflet-popup-pane');
-      
-      if (mapPane && markerPane) mapPane.appendChild(markerPane);
-      if (mapPane && tooltipPane) mapPane.appendChild(tooltipPane);
-      if (mapPane && popupPane) mapPane.appendChild(popupPane);
-
-      // Force HTML2Canvas to respect stacking by removing z-index from panes so it relies purely on DOM order
-      const panes = clonedDoc.querySelectorAll('.leaflet-pane');
-      panes.forEach(pane => {
-        (pane as HTMLElement).style.setProperty('z-index', 'auto', 'important');
+      // 3. Center all table cells and headers in both tables
+      const tableCells = clonedDoc.querySelectorAll('#bird-data-table td, #bird-data-table th, #table2-coordinates td, #table2-coordinates th');
+      tableCells.forEach(cell => {
+        const el = cell as HTMLElement;
+        el.style.textAlign = 'center';
+        el.style.verticalAlign = 'middle';
+        el.style.setProperty('text-align', 'center', 'important');
+        el.style.setProperty('vertical-align', 'middle', 'important');
+      });
+      const tableDivs = clonedDoc.querySelectorAll('#bird-data-table div, #table2-coordinates div');
+      tableDivs.forEach(div => {
+        const el = div as HTMLElement;
+        el.style.textAlign = 'center';
+        el.style.justifyContent = 'center';
+        el.style.alignItems = 'center';
+        el.style.setProperty('text-align', 'center', 'important');
       });
 
-      // Boost marker z-indexes so they are guaranteed to sit on top of everything else (like SVG overlays)
-      const mapElements = clonedDoc.querySelectorAll('.leaflet-marker-icon, .leaflet-tooltip, .leaflet-popup, .leaflet-marker-pane > *');
-      mapElements.forEach((el) => {
-        const htmlEl = el as HTMLElement;
-        const currentZ = parseInt(htmlEl.style.zIndex || '0', 10);
-        // Using setProperty is the only valid way to inject !important in JS
-        htmlEl.style.setProperty('z-index', (currentZ + 10000).toString(), 'important');
-      });
+      // 4. Ensure Leaflet panes have proper stacking without modifying DOM hierarchy or transforms
+      const clonedOverlay = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
+      if (clonedOverlay) {
+        clonedOverlay.style.zIndex = '350';
+      }
+      const clonedMarkers = clonedDoc.querySelector('.leaflet-marker-pane') as HTMLElement;
+      if (clonedMarkers) {
+        clonedMarkers.style.zIndex = '800';
+      }
 
       // 4. Ensure SVG arrow defs and marker-end exist in the cloned Leaflet overlay SVG
       const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane');
@@ -1544,6 +1546,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   <Marker
                     position={metrics.releaseToLastMid}
                     icon={createDistancePillIcon(`${metrics.distFromReleaseKm} km`, '#dc2626', [-10, 11])}
+                    zIndexOffset={2000}
                     interactive={false}
                   />
 
@@ -1551,6 +1554,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   <Marker
                     position={metrics.lastToCampMid}
                     icon={createDistancePillIcon(`${metrics.distToCampKm} km`, '#d97706', [36, 32])}
+                    zIndexOffset={2000}
                     interactive={false}
                   />
 
@@ -1563,6 +1567,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       borderColorHex: '#701a2b',
                       labelTitle: 'موقع تركيب الجهاز'
                     })}
+                    zIndexOffset={2000}
                   />
 
                   {/* 2. Marker: Last GPS Location (Live Tracking Pin & Number Label) */}
@@ -1574,12 +1579,14 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       borderColorHex: '#22c55e',
                       labelTitle: 'آخر موقع'
                     })}
+                    zIndexOffset={2000}
                   />
 
                   {/* 3. Marker: Field Camp (Live Tracking Camp Badge & Label) */}
                   <Marker
                     position={[metrics.cLat, metrics.cLon]}
                     icon={createLiveTrackingCampIcon(activeCamp.name || 'المخيم')}
+                    zIndexOffset={2000}
                   />
                 </MapContainer>
 
@@ -1889,58 +1896,68 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 >
                   بيانات الطائر
                 </div>
-                <table className="w-full text-[12px] text-center border-collapse" style={{ textAlign: 'center' }}>
+                <table id="bird-data-table" className="w-full text-[12px] text-center border-collapse" style={{ textAlign: 'center' }}>
                   <tbody>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        رقم جهاز التتبع
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>رقم جهاز التتبع</div>
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span className="font-mono font-black text-[#701a2b] text-[13px]">
-                          {String(selectedPttId).replace(/^trans-/, '')}
-                        </span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span className="font-mono font-black text-[#701a2b] text-[13px]">
+                            {String(selectedPttId).replace(/^trans-/, '')}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        رقم الحجل
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>رقم الحجل</div>
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <svg width="76" height="22" viewBox="0 0 76 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="76" height="22" viewBox="0 0 76 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                           <rect x="1" y="1" width="74" height="20" rx="10" fill="#f3f4f6"/>
                           <text x="38" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#374151" fontFamily="monospace, 'Segoe UI', Arial">
                             {customMetadata.birdRing || 'NA'}
                           </text>
                         </svg>
+                        </div>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        النوعية
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>النوعية</div>
                       </td>
                       <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        {customMetadata.species === 'Houbara Bustard' ? 'وحش' : (customMetadata.species || 'وحش')}
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {customMetadata.species === 'Houbara Bustard' ? 'وحش' : (customMetadata.species || 'وحش')}
+                        </div>
                       </td>
                     </tr>
                     <tr className="border-b border-gray-200 bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        الجنس
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>الجنس</div>
                       </td>
                       <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        {customMetadata.gender || 'ذكر'}
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {customMetadata.gender || 'ذكر'}
+                        </div>
                       </td>
                     </tr>
                     <tr className="bg-white">
                       <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        حالة الطائر
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>حالة الطائر</div>
                       </td>
                       <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200" style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                        <svg width="56" height="22" viewBox="0 0 56 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width="56" height="22" viewBox="0 0 56 22" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                           <rect x="1" y="1" width="54" height="20" rx="10" fill="#ecfdf5"/>
                           <text x="28" y="11.5" textAnchor="middle" dominantBaseline="middle" fontSize="11.5" fontWeight="bold" fill="#059669" fontFamily="'Segoe UI', Tahoma, sans-serif">
                             {customMetadata.birdStatus || 'حي'}
                           </text>
                         </svg>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -1964,45 +1981,45 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       <th style={{ width: '22%', backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
                       </th>
                       <th style={{ width: '39%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>
-                        تركيب الجهاز
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>تركيب الجهاز</div>
                       </th>
                       <th style={{ width: '39%', backgroundColor: '#0f766e', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center', verticalAlign: 'middle' }}>
-                        آخر موقع
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>آخر موقع</div>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr className="bg-white">
                       <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                        التاريخ
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>التاريخ</div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr">{telemetryData.releasePos.dateStr}</span></div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span></div>
                       </td>
                     </tr>
                     <tr className="bg-white">
                       <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center', verticalAlign: 'middle' }}>
-                        خط العرض (N)
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>خط العرض (N)</div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLatDMM}</span></div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLatDMM}</span></div>
                       </td>
                     </tr>
                     <tr className="bg-white">
                       <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        خط الطول (E)
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>خط الطول (E)</div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.releaseLonDMM}</span></div>
                       </td>
                       <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center', verticalAlign: 'middle' }}>
-                        <span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span>
+                        <div style={{ textAlign: 'center', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span dir="ltr" style={{ unicodeBidi: 'isolate' }}>{metrics.lastGpsLonDMM}</span></div>
                       </td>
                     </tr>
                   </tbody>
