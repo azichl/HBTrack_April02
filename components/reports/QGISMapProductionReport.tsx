@@ -3,7 +3,7 @@ import {
   Printer, Download, RefreshCw, Compass, MapPin, 
   Calendar, ChevronDown, Check, Search, SlidersHorizontal, 
   Layers, Info, ArrowRight, Share2, FileDown, CheckCircle2,
-  AlertCircle, Plus, Minus, Crosshair
+  AlertCircle, Plus, Minus, Crosshair, Maximize2, Minimize2
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap, GeoJSON, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -651,6 +651,29 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   const [isLoadingTelemetry, setIsLoadingTelemetry] = useState<boolean>(false);
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
+  const [isMapFullscreen, setIsMapFullscreen] = useState<boolean>(false);
+
+  // Handle ESC key to exit fullscreen map mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMapFullscreen) {
+        setIsMapFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMapFullscreen]);
+
+  // Handle map resize on fullscreen toggle
+  useEffect(() => {
+    if (mapInstance) {
+      setTimeout(() => {
+        mapInstance.invalidateSize();
+        setFitKey(k => k + 1);
+      }, 150);
+    }
+  }, [isMapFullscreen, mapInstance]);
+
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
 
   // Report Editable Metadata
@@ -940,41 +963,34 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         el.style.setProperty('text-align', 'center', 'important');
       });
 
-      // 4. PRECISE DISTANCE LINES RECONSTRUCTION FOR HTML2CANVAS:
-      // Replace Leaflet's multi-layered viewBox SVG overlay with a clean, exact SVG overlay
-      // using exact layer coordinates from mapInstance.
-      // This completely eliminates any SVG coordinate shifting in html2canvas while keeping lines strictly under markers.
-      const overlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
-      if (overlayPane && mapInstance) {
-        try {
-          const pR = mapInstance.latLngToLayerPoint([metrics.rLat, metrics.rLon]);
-          const pL = mapInstance.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
-          const pC = mapInstance.latLngToLayerPoint([metrics.cLat, metrics.cLon]);
-
-          overlayPane.innerHTML = `
-            <svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none;">
-              <defs>
-                <marker id="report-arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-                  <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
-                </marker>
-              </defs>
-              <line 
-                x1="${pR.x}" y1="${pR.y}" 
-                x2="${pL.x}" y2="${pL.y}" 
-                stroke="#dc2626" stroke-width="3" stroke-dasharray="8, 6" stroke-opacity="0.95" 
-                marker-end="url(#report-arrow-red)" 
-              />
-              <line 
-                x1="${pL.x}" y1="${pL.y}" 
-                x2="${pC.x}" y2="${pC.y}" 
-                stroke="#f59e0b" stroke-width="3" stroke-dasharray="8, 6" stroke-opacity="0.95" 
-              />
-            </svg>
-          `;
-          overlayPane.style.zIndex = '350';
-        } catch (err) {
-          console.warn('Error reconstructing export vector overlay:', err);
+      // 4. Ensure distance lines overlay stays under markers while keeping Leaflet native vectors intact
+      const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
+      if (clonedOverlayPane) {
+        clonedOverlayPane.style.zIndex = '350';
+        const clonedSvg = clonedOverlayPane.querySelector('svg');
+        if (clonedSvg) {
+          if (!clonedSvg.querySelector('#report-arrow-red')) {
+            let defs = clonedSvg.querySelector('defs');
+            if (!defs) {
+              defs = clonedDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
+              clonedSvg.prepend(defs);
+            }
+            defs.innerHTML = `
+              <marker id="report-arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
+              </marker>
+            `;
+          }
+          const redPath = clonedOverlayPane.querySelector('path.report-release-polyline');
+          if (redPath) {
+            redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
+          }
         }
+      }
+
+      const clonedMarkerPane = clonedDoc.querySelector('.leaflet-marker-pane') as HTMLElement;
+      if (clonedMarkerPane) {
+        clonedMarkerPane.style.zIndex = '800';
       }
     },
     ignoreElements: (el: Element) => 
@@ -1592,11 +1608,40 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   />
                 </MapContainer>
 
+                {/* Floating exit button when in Fullscreen mode */}
+                {isMapFullscreen && (
+                  <button
+                    type="button"
+                    onClick={() => setIsMapFullscreen(false)}
+                    className="no-print absolute top-4 right-4 z-[1000] flex items-center gap-1.5 bg-slate-900/90 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg border border-white/20 shadow-xl text-xs font-bold transition-colors"
+                  >
+                    <Minimize2 size={14} />
+                    <span>إغلاق ملء الشاشة (Esc)</span>
+                  </button>
+                )}
+
+
                 {/* Floating Map Controls for Interactive Live Tracking feel (Hidden on Print & Export) */}
                 <div 
                   className="no-print absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
                   style={{ direction: 'rtl' }}
                 >
+                  {/* Fullscreen Map Toggle */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsMapFullscreen(prev => !prev);
+                    }}
+                    className={`p-1 rounded transition-colors text-white ${
+                      isMapFullscreen ? 'bg-brand-600 text-white' : 'hover:bg-white/20'
+                    }`}
+                    title={isMapFullscreen ? 'إلغاء ملء الشاشة (Esc)' : 'عرض الخريطة بملء الشاشة'}
+                  >
+                    {isMapFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                  </button>
+                  <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+
                   {/* Zoom In */}
                   <button
                     type="button"
