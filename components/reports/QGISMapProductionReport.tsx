@@ -652,17 +652,19 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
   const [isExportingPdf, setIsExportingPdf] = useState<boolean>(false);
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
   const [isMapFullscreen, setIsMapFullscreen] = useState<boolean>(false);
+  const [isReportFullscreen, setIsReportFullscreen] = useState<boolean>(false);
 
-  // Handle ESC key to exit fullscreen map mode
+  // Handle ESC key to exit fullscreen report or map mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isMapFullscreen) {
-        setIsMapFullscreen(false);
+      if (e.key === 'Escape') {
+        if (isReportFullscreen) setIsReportFullscreen(false);
+        if (isMapFullscreen) setIsMapFullscreen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMapFullscreen]);
+  }, [isReportFullscreen, isMapFullscreen]);
 
   // Handle map resize on fullscreen toggle
   useEffect(() => {
@@ -670,9 +672,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       setTimeout(() => {
         mapInstance.invalidateSize();
         setFitKey(k => k + 1);
-      }, 150);
+      }, 200);
     }
-  }, [isMapFullscreen, mapInstance]);
+  }, [isMapFullscreen, isReportFullscreen, mapInstance]);
 
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
 
@@ -874,6 +876,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       lLon,
       cLat,
       cLon,
+      bearingDegrees: bearing,
       distFromReleaseKm: distFromRelease.toFixed(2),
       bearingArabic,
       distToCampKm: distToCamp.toFixed(2),
@@ -963,28 +966,120 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
         el.style.setProperty('text-align', 'center', 'important');
       });
 
-      // 4. Ensure distance lines overlay stays under markers while keeping Leaflet native vectors intact
+      // 4. Copy live canvas contents to cloned canvas for any base tile or GIS layers
+      const origCanvases = Array.from(document.querySelectorAll('#map-production-print-area canvas'));
+      const clonedCanvases = Array.from(clonedDoc.querySelectorAll('#map-production-print-area canvas'));
+      clonedCanvases.forEach((clonedC, i) => {
+        const origC = origCanvases[i] as HTMLCanvasElement;
+        if (origC && origC.width && origC.height) {
+          clonedC.width = origC.width;
+          clonedC.height = origC.height;
+          const ctx = clonedC.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(origC, 0, 0);
+          }
+        }
+      });
+
+      // 5. BULLETPROOF DISTANCE LINES IN CLONED OVERLAY PANE:
+      // Remove shifted Leaflet SVG polyline paths in clonedDoc and draw pixel-perfect lines
+      // directly on a dedicated, non-transformed Canvas positioned at the exact layer coordinates.
       const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
-      if (clonedOverlayPane) {
+      if (clonedOverlayPane && mapInstance) {
         clonedOverlayPane.style.zIndex = '350';
-        const clonedSvg = clonedOverlayPane.querySelector('svg');
-        if (clonedSvg) {
-          if (!clonedSvg.querySelector('#report-arrow-red')) {
-            let defs = clonedSvg.querySelector('defs');
-            if (!defs) {
-              defs = clonedDoc.createElementNS('http://www.w3.org/2000/svg', 'defs');
-              clonedSvg.prepend(defs);
+
+        // Hide any Leaflet SVG polylines that suffer from the html2canvas viewBox double-transform shift
+        const polylines = clonedOverlayPane.querySelectorAll('path.report-release-polyline, path.report-camp-polyline');
+        polylines.forEach(p => {
+          (p as HTMLElement).style.display = 'none';
+          p.remove();
+        });
+
+        try {
+          const rPt = mapInstance.latLngToLayerPoint([metrics.rLat, metrics.rLon]);
+          const lPt = mapInstance.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
+          const cPt = mapInstance.latLngToLayerPoint([metrics.cLat, metrics.cLon]);
+          const mapSize = mapInstance.getSize();
+
+          // Calculate bounding box that comfortably encloses all layer points
+          const minX = Math.floor(Math.min(0, rPt.x, lPt.x, cPt.x) - 150);
+          const minY = Math.floor(Math.min(0, rPt.y, lPt.y, cPt.y) - 150);
+          const maxX = Math.ceil(Math.max(mapSize.x, rPt.x, lPt.x, cPt.x) + 150);
+          const maxY = Math.ceil(Math.max(mapSize.y, rPt.y, lPt.y, cPt.y) + 150);
+          const canvasW = maxX - minX;
+          const canvasH = maxY - minY;
+
+          const exportLinesCanvas = clonedDoc.createElement('canvas');
+          exportLinesCanvas.width = canvasW;
+          exportLinesCanvas.height = canvasH;
+          exportLinesCanvas.style.position = 'absolute';
+          exportLinesCanvas.style.left = `${minX}px`;
+          exportLinesCanvas.style.top = `${minY}px`;
+          exportLinesCanvas.style.width = `${canvasW}px`;
+          exportLinesCanvas.style.height = `${canvasH}px`;
+          exportLinesCanvas.style.zIndex = '350';
+          exportLinesCanvas.style.pointerEvents = 'none';
+
+          const ctx = exportLinesCanvas.getContext('2d');
+          if (ctx) {
+            ctx.translate(-minX, -minY);
+
+            // Red dashed line: Release Location -> Last GPS Position
+            if (metrics.rLat !== 0 && metrics.lLat !== 0) {
+              ctx.beginPath();
+              ctx.strokeStyle = '#dc2626';
+              ctx.lineWidth = 3;
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.setLineDash([8, 6]);
+              ctx.moveTo(rPt.x, rPt.y);
+              ctx.lineTo(lPt.x, lPt.y);
+              ctx.stroke();
+
+              // Red Arrowhead at Last GPS point pointing along trajectory
+              const angle = Math.atan2(lPt.y - rPt.y, lPt.x - rPt.x);
+              const arrowLen = 14;
+              const arrowWidth = 7;
+              ctx.setLineDash([]);
+              ctx.fillStyle = '#dc2626';
+              ctx.strokeStyle = '#ffffff';
+              ctx.lineWidth = 1.2;
+              ctx.beginPath();
+              ctx.moveTo(lPt.x, lPt.y);
+              ctx.lineTo(
+                lPt.x - arrowLen * Math.cos(angle) + arrowWidth * Math.sin(angle),
+                lPt.y - arrowLen * Math.sin(angle) - arrowWidth * Math.cos(angle)
+              );
+              ctx.lineTo(
+                lPt.x - (arrowLen - 4) * Math.cos(angle),
+                lPt.y - (arrowLen - 4) * Math.sin(angle)
+              );
+              ctx.lineTo(
+                lPt.x - arrowLen * Math.cos(angle) - arrowWidth * Math.sin(angle),
+                lPt.y - arrowLen * Math.sin(angle) + arrowWidth * Math.cos(angle)
+              );
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
             }
-            defs.innerHTML = `
-              <marker id="report-arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-                <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#dc2626" />
-              </marker>
-            `;
+
+            // Amber dashed line: Last GPS Position -> Field Camp
+            if (metrics.lLat !== 0 && metrics.cLat !== 0) {
+              ctx.beginPath();
+              ctx.strokeStyle = '#f59e0b';
+              ctx.lineWidth = 3;
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.setLineDash([8, 6]);
+              ctx.moveTo(lPt.x, lPt.y);
+              ctx.lineTo(cPt.x, cPt.y);
+              ctx.stroke();
+            }
           }
-          const redPath = clonedOverlayPane.querySelector('path.report-release-polyline');
-          if (redPath) {
-            redPath.setAttribute('marker-end', 'url(#report-arrow-red)');
-          }
+
+          clonedOverlayPane.appendChild(exportLinesCanvas);
+        } catch (e) {
+          console.warn('Could not draw custom export lines canvas:', e);
         }
       }
 
@@ -1140,6 +1235,16 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
             >
               <Download size={16} />
               <span>{isExportingPng ? 'جارِ التحميل...' : 'تصدير صورة PNG'}</span>
+            </button>
+
+            {/* Fullscreen Report Button */}
+            <button
+              onClick={() => setIsReportFullscreen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors"
+              title="عرض التقرير بالكامل بملء الشاشة"
+            >
+              <Maximize2 size={16} />
+              <span>ملء الشاشة</span>
             </button>
 
             <button
@@ -1381,7 +1486,48 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       </div>
 
       {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE: LTR FRAME, RTL CONTENT) ─── */}
-      <div className="overflow-x-auto pb-6 flex justify-center">
+      <div className={
+        isReportFullscreen
+          ? "fixed inset-0 z-[99999] bg-slate-950/95 backdrop-blur-md overflow-y-auto overflow-x-auto p-6 flex flex-col items-center"
+          : "overflow-x-auto pb-6 flex justify-center"
+      }>
+        {isReportFullscreen && (
+          <div className="no-print w-[1080px] max-w-full flex items-center justify-between mb-4 bg-slate-900/95 border border-slate-700 px-4 py-2.5 rounded-xl text-white select-none shadow-2xl sticky top-0 z-50" style={{ direction: 'rtl' }}>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsReportFullscreen(false)}
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+              >
+                <Minimize2 size={14} />
+                <span>إغلاق ملء الشاشة (Esc)</span>
+              </button>
+              <span className="text-xs font-bold text-gray-300">
+                معاينة التقرير بملء الشاشة الكامل (نفس مظهر الملف المصدر)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                disabled={isExportingPdf}
+                className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+              >
+                <FileDown size={14} />
+                <span>{isExportingPdf ? 'جارِ التحميل...' : 'تصدير PDF'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPng}
+                disabled={isExportingPng}
+                className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+              >
+                <Download size={14} />
+                <span>{isExportingPng ? 'جارِ التحميل...' : 'تصدير PNG'}</span>
+              </button>
+            </div>
+          </div>
+        )}
         
         <div 
           id="map-production-print-area"
@@ -1551,6 +1697,16 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     />
                   ))}
 
+                                    {/* Red Arrowhead pointing along release-to-last trajectory */}
+                  {metrics.rLat !== 0 && metrics.lLat !== 0 && (
+                    <Marker
+                      position={[metrics.lLat, metrics.lLon]}
+                      icon={createArrowHeadIcon((metrics as any).bearingDegrees || 0)}
+                      zIndexOffset={1900}
+                      interactive={false}
+                    />
+                  )}
+
                   {/* QGIS WMS Layers from Store */}
                   {qgisLayers && qgisLayers.filter(l => l.visible && l.type === 'wms' && l.sourceUrl).map(layer => (
                     <TileLayer
@@ -1626,19 +1782,17 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   className="no-print absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
                   style={{ direction: 'rtl' }}
                 >
-                  {/* Fullscreen Map Toggle */}
+                  {/* Fullscreen Toggle */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsMapFullscreen(prev => !prev);
+                      setIsReportFullscreen(true);
                     }}
-                    className={`p-1 rounded transition-colors text-white ${
-                      isMapFullscreen ? 'bg-brand-600 text-white' : 'hover:bg-white/20'
-                    }`}
-                    title={isMapFullscreen ? 'إلغاء ملء الشاشة (Esc)' : 'عرض الخريطة بملء الشاشة'}
+                    className="p-1 rounded transition-colors text-white hover:bg-white/20"
+                    title="عرض التقرير بالكامل بملء الشاشة"
                   >
-                    {isMapFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                    <Maximize2 size={14} />
                   </button>
                   <div className="w-px h-3.5 bg-white/25 mx-0.5" />
 
