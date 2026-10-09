@@ -1,5 +1,5 @@
 import React, { Component, useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal, Tent } from 'lucide-react';
+import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, Maximize, Minimize, Battery, Clock, Map as MapIcon, Wind, History, GripHorizontal, Cloud, X, Satellite, Calendar, ThermometerSun, Radio, Navigation, Globe, MapPin, ExternalLink, Loader2, Sparkles, BrainCircuit, Crosshair, Languages, Ruler, Trash2, PieChart as PieChartIcon, Droplets, SlidersHorizontal, Tent, Compass, FileSpreadsheet } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker, GeoJSON } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
@@ -1160,7 +1160,10 @@ const LiveTrackingInner = () => {
       qgisLayers,
       setQGISLayers,
       qgisGeoJSONCache,
-      cacheQGISGeoJSON
+      cacheQGISGeoJSON,
+      setExportedMapView,
+      setQgisConnectActiveTab,
+      setActiveTab
   } = useAppStore();
   
   const [confirmDeadTransmitter, setConfirmDeadTransmitter] = useState<Transmitter | null>(null);
@@ -1805,6 +1808,35 @@ const LiveTrackingInner = () => {
       const newSelection = Array.from(new Set([...selectedTransmitterIds, ...ids]));
       setSelectedTransmitterIds(newSelection);
       setShowHistory(true);
+  };
+
+  const handleExportViewToReport = () => {
+    let targetTransmitterId = '';
+    if (selectedTransmitterIds && selectedTransmitterIds.length > 0) {
+      targetTransmitterId = String(selectedTransmitterIds[0]);
+    } else {
+      const activeTransmitter = transmitters.find(t => t.status === 'active' || (t as any).derived_status === 'active');
+      targetTransmitterId = activeTransmitter?.platform_id || (transmitters[0]?.platform_id) || '244276';
+    }
+
+    const loadedHistory = rawHistoryCache.current || [];
+
+    setExportedMapView({
+      center: sharedMapCenter || [47.05, 67.32],
+      zoom: sharedMapZoom || 9,
+      baseLayer: activeLayer || 'google_hybrid',
+      transmitterId: targetTransmitterId,
+      transmitterIds: selectedTransmitterIds.length > 0 ? selectedTransmitterIds : [targetTransmitterId],
+      historyPositions: loadedHistory.length > 0 ? loadedHistory : undefined,
+      capturedAt: new Date().toISOString()
+    });
+
+    if (setQgisConnectActiveTab) {
+      setQgisConnectActiveTab('custom-report');
+    }
+    if (setActiveTab) {
+      setActiveTab('QGIS Connect');
+    }
   };
 
   const handleGeoSearch = async (e?: React.FormEvent) => {
@@ -3410,6 +3442,21 @@ const LiveTrackingInner = () => {
                 </button>
             </div>
 
+            {/* Export View to Report Button */}
+            <div className="relative">
+                <button 
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        closeAllDropdowns();
+                        handleExportViewToReport();
+                    }}
+                    className="p-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-md transition-colors flex items-center justify-center"
+                    title="تصدير العرض إلى التقرير (Export View to Report)"
+                >
+                    <Compass size={20} />
+                </button>
+            </div>
+
             <button 
                 onClick={toggleFullscreen}
                 onTouchEnd={(e) => {
@@ -3922,8 +3969,9 @@ const LiveTrackingInner = () => {
 
   return (
     <div className="flex flex-col h-full space-y-4">
-        {/* Tab Switcher */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap flex-shrink-0">
+        {/* Top Header / Switcher & Export to Report Button */}
+        <div className="flex items-center justify-between gap-2 flex-wrap flex-shrink-0">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap flex-shrink-0">
             <button
                 onClick={() => setViewMode('tracking')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-md text-xs sm:text-sm font-semibold transition-all ${
@@ -3957,6 +4005,22 @@ const LiveTrackingInner = () => {
                 <Satellite size={14} className={viewMode === 'weather2' ? 'text-brand-500' : 'text-gray-400'} />
                 <span className="hidden sm:inline">Weather</span> Meteoblue
             </button>
+          </div>
+
+          {/* Export View to Report Button */}
+          <button
+            onClick={handleExportViewToReport}
+            className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg transition-all active:scale-95"
+            title="تصدير المنظور الجغرافي الحالي للخريطة وجهاز التتبع المختار إلى تقرير المتابعة الرسمي المخصص"
+          >
+            <Compass size={16} className="text-white flex-shrink-0" />
+            <span>تصدير العرض إلى التقرير (Export View to Report)</span>
+            {selectedTransmitterIds.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-emerald-800 text-[10px] font-mono font-normal">
+                {selectedTransmitterIds[0]}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Main Map Area */}

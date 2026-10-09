@@ -14,9 +14,10 @@ import {
   fetchWMSCapabilities, exportTrackingDataAsGeoJSON,
   getLayerGeoJSON
 } from '../services/qgisLayerService';
-import { getHistoricalPositions } from '../services/firestoreService';
 import { QGISMapProductionReport } from '../components/reports/QGISMapProductionReport';
+import { CustomMapProductionReport } from '../components/reports/CustomMapProductionReport';
 import { saveAs } from 'file-saver';
+import { Sparkles } from 'lucide-react';
 import type { QGISLayer, QGISLayerStyle } from '../types';
 
 export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initialTab?: string }) => {
@@ -31,7 +32,9 @@ export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initi
     setQGISLayers,
     setSharedMapCenter,
     setSharedMapZoom,
-    setActiveTab: setGlobalActiveTab
+    setActiveTab: setGlobalActiveTab,
+    qgisConnectActiveTab,
+    setQgisConnectActiveTab
   } = useAppStore();
 
   useEffect(() => {
@@ -44,9 +47,20 @@ export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initi
       .catch(err => console.warn('Could not load QGIS layers from Firestore:', err));
   }, [setQGISLayers]);
 
-  const [activeTab, setActiveTab] = useState<'map-production' | 'import-layers' | 'wms-wfs' | 'export-data' | 'layer-manager'>(
-    (initialTab as any) || 'map-production'
+  const [activeTab, setActiveTabState] = useState<string>(
+    (initialTab as any) || qgisConnectActiveTab || 'map-production'
   );
+
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab);
+    if (setQgisConnectActiveTab) setQgisConnectActiveTab(tab);
+  };
+
+  useEffect(() => {
+    if (qgisConnectActiveTab && qgisConnectActiveTab !== activeTab) {
+      setActiveTabState(qgisConnectActiveTab);
+    }
+  }, [qgisConnectActiveTab]);
 
   // --- Tab 1: Import Layers State ---
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -347,6 +361,7 @@ export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initi
   // --- UI Components ---
   const tabs = [
     { id: 'map-production', label: 'إنتاج الخرائط والتقارير (Map Production)', icon: Compass },
+    { id: 'custom-report', label: 'تقرير الخريطة المخصص (Custom Map Report)', icon: Sparkles },
     { id: 'import-layers', label: 'Import Vector Layer', icon: FileUp },
     { id: 'wms-wfs', label: 'Connect WMS/WFS', icon: Globe },
     { id: 'export-data', label: 'Export Tracks', icon: Download },
@@ -404,6 +419,11 @@ export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initi
         {/* TAB 0: MAP PRODUCTION & REPORTS */}
         {activeTab === 'map-production' && (
           <QGISMapProductionReport />
+        )}
+
+        {/* TAB 0B: CUSTOM MAP PRODUCTION REPORT (IMPORTED FROM LIVE TRACKING) */}
+        {activeTab === 'custom-report' && (
+          <CustomMapProductionReport onBack={() => setActiveTab('map-production')} />
         )}
 
         {/* TAB 1: IMPORT LAYERS */}

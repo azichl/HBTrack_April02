@@ -112,6 +112,31 @@ interface AppState {
   setSharedMapCenter: (center: [number, number]) => void;
   setSharedMapZoom: (zoom: number) => void;
   setActiveBaseLayer: (layer: string) => void;
+
+  // Exported Map View for Custom Report (from Live Tracking → Custom Report)
+  exportedMapView: {
+    center: [number, number];
+    zoom: number;
+    baseLayer: string;
+    transmitterId: string;
+    transmitterIds: string[];
+    historyPositions?: any[];
+    capturedAt: string;
+  } | null;
+  setExportedMapView: (view: {
+    center: [number, number];
+    zoom: number;
+    baseLayer: string;
+    transmitterId: string;
+    transmitterIds: string[];
+    historyPositions?: any[];
+    capturedAt: string;
+  } | null) => void;
+  clearExportedMapView: () => void;
+
+  // QGIS Connect Active Tab
+  qgisConnectActiveTab: string;
+  setQgisConnectActiveTab: (tab: string) => void;
   
   // System State
   lastSaved: string;
@@ -707,6 +732,13 @@ export const useAppStore = create<AppState>()(
       setSharedMapCenter: (center) => set({ sharedMapCenter: center }),
       setSharedMapZoom: (zoom) => set({ sharedMapZoom: zoom }),
       setActiveBaseLayer: (layer) => set({ activeBaseLayer: layer }),
+
+      exportedMapView: null,
+      setExportedMapView: (view) => set({ exportedMapView: view }),
+      clearExportedMapView: () => set({ exportedMapView: null }),
+
+      qgisConnectActiveTab: 'map-production',
+      setQgisConnectActiveTab: (tab) => set({ qgisConnectActiveTab: tab }),
       
       qgisLayers: [],
       qgisGeoJSONCache: {},
