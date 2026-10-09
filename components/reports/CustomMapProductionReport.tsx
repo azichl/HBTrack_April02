@@ -924,72 +924,72 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Action Buttons - Shortened to fit comfortably on a single line */}
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto py-0.5">
             {/* Upload from History */}
             <button
               onClick={() => handleUploadFromHistory()}
               disabled={isLoadingTelemetry}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
               title="جلب إحداثيات ومسار الجهاز من السجل التاريخي لقاعدة البيانات"
             >
-              <History size={16} className={isLoadingTelemetry ? 'animate-spin' : ''} />
-              <span>تحميل من سجل الجهاز</span>
+              <History size={14} className={isLoadingTelemetry ? 'animate-spin' : ''} />
+              <span>{isLoadingTelemetry ? '...' : 'السجل'}</span>
             </button>
 
             {/* Toggle Table Edit Mode */}
             <button
               onClick={() => setIsTableEditing(!isTableEditing)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
                 isTableEditing 
                   ? 'bg-amber-600 hover:bg-amber-700 text-white' 
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-slate-700 dark:text-white'
               }`}
               title="تعديل نصوص التقرير، التذييل، وجداول الإحداثيات مباشرة"
             >
-              <Edit3 size={15} />
-              <span>{isTableEditing ? 'حفظ التعديل' : 'تعديل النصوص والجداول'}</span>
+              <Edit3 size={14} />
+              <span>{isTableEditing ? 'حفظ' : 'تعديل'}</span>
             </button>
 
             {/* Drag & Drop Toggle */}
             <button
               onClick={() => setIsDragEnabled(!isDragEnabled)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
                 isDragEnabled 
                   ? 'bg-purple-600 hover:bg-purple-700 text-white' 
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-slate-700 dark:text-white'
               }`}
               title="تفعيل/تعطيل إمكانية سحب وتحريك عناصر التقرير (Drag & Drop)"
             >
-              <Move size={15} />
-              <span>{isDragEnabled ? 'تثبيت الأماكن' : 'سحب وتحريك العناصر'}</span>
+              <Move size={14} />
+              <span>{isDragEnabled ? 'تثبيت' : 'تحريك'}</span>
             </button>
 
             {isDragEnabled && (
               <button
                 onClick={() => setDragResetKey(k => k + 1)}
-                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-xl"
+                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-lg whitespace-nowrap"
                 title="إعادة تعيين أماكن العناصر للوضع الافتراضي"
               >
-                <RotateCcw size={15} />
+                <RotateCcw size={14} />
               </button>
             )}
 
-            {/* Distance Measurement Ruler (Live Tracking feature on map) */}
+            {/* Distance Measurement Ruler */}
             <button
               onClick={() => setIsMeasuring(!isMeasuring)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
                 isMeasuring 
                   ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300' 
                   : 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60'
               }`}
               title="أداة قياس المسافة برسم خطوط على الخريطة وتصديرها مع الـ PNG و PDF"
             >
-              <Ruler size={15} className={isMeasuring ? 'animate-pulse' : ''} />
-              <span>{isMeasuring ? 'إنهاء القياس' : 'قياس المسافة (مسطرة)'}</span>
+              <Ruler size={14} className={isMeasuring ? 'animate-pulse' : ''} />
+              <span>{isMeasuring ? 'إنهاء' : 'قياس'}</span>
               {measurePoints.length > 1 && (
-                <span className="bg-amber-700 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
-                  {totalMeasureDistanceKm} km
+                <span className="bg-amber-700 text-white text-[10px] px-1 py-0.2 rounded font-mono">
+                  {totalMeasureDistanceKm}k
                 </span>
               )}
             </button>
@@ -997,10 +997,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             {measurePoints.length > 0 && (
               <button
                 onClick={() => setMeasurePoints([])}
-                className="p-2 bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 dark:bg-slate-700 dark:text-gray-300 rounded-xl"
+                className="p-1.5 bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 dark:bg-slate-700 dark:text-gray-300 rounded-lg whitespace-nowrap"
                 title="مسح خط القياس من على الخريطة"
               >
-                <Trash2 size={15} />
+                <Trash2 size={14} />
               </button>
             )}
 
@@ -1008,43 +1008,45 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             <button
               onClick={handleExportPdf}
               disabled={isExportingPdf}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title="تصدير التقرير كملف PDF"
             >
-              <FileDown size={16} />
-              <span>{isExportingPdf ? 'جارِ التحميل...' : 'تصدير PDF'}</span>
+              <FileDown size={14} />
+              <span>{isExportingPdf ? '...' : 'PDF'}</span>
             </button>
 
             {/* Export PNG */}
             <button
               onClick={handleExportPng}
               disabled={isExportingPng}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title="تصدير التقرير كصورة PNG"
             >
-              <Download size={16} />
-              <span>{isExportingPng ? 'جارِ التحميل...' : 'تصدير صورة'}</span>
+              <Download size={14} />
+              <span>{isExportingPng ? '...' : 'صورة'}</span>
             </button>
 
             {/* Fullscreen */}
             <button
               onClick={() => setIsReportFullscreen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
               title="معاينة التقرير بملء الشاشة"
             >
-              <Maximize2 size={16} />
+              <Maximize2 size={14} />
               <span>ملء الشاشة</span>
             </button>
 
-            {/* Filter & Customizer Toggle (Photo Attached Feature) */}
+            {/* Filter & Customizer Toggle */}
             <button
               onClick={() => setShowCustomizer(!showCustomizer)}
-              className={`p-2.5 rounded-xl border text-sm font-medium transition-colors ${
+              className={`p-1.5 rounded-lg border text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1 ${
                 showCustomizer 
-                  ? 'bg-brand-50 text-brand-600 border-brand-200 ring-2 ring-brand-500/30 dark:bg-brand-900/30' 
-                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-300'
+                  ? 'bg-brand-50 text-brand-600 border-brand-300 ring-2 ring-brand-500/30 dark:bg-brand-900/30' 
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-300'
               }`}
               title="خيارات الفلاتر والمسافات وعناصر الخريطة المتقدمة"
             >
-              <SlidersHorizontal size={18} />
+              <SlidersHorizontal size={15} />
             </button>
           </div>
         </div>
@@ -1388,7 +1390,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </div>
                   </label>
                   <div className="text-[10px] font-mono text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    {metrics.rLat.toFixed(4)}, {metrics.rLon.toFixed(4)}
+                    {metrics.rLat ? metrics.rLat.toFixed(4) : '0.0000'}, {metrics.rLon ? metrics.rLon.toFixed(4) : '0.0000'}
                   </div>
                 </div>
 
@@ -1416,7 +1418,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </div>
                   </label>
                   <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    الاتجاه: {metrics.bearingArabic} ({metrics.bearingDegrees.toFixed(0)}°)
+                    الاتجاه: {metrics.bearingArabic?.text || ''} ({metrics.bearingDegrees ? metrics.bearingDegrees.toFixed(0) : 0}°)
                   </div>
                 </div>
 
