@@ -5,7 +5,7 @@ import {
   Layers, Info, FileDown, CheckCircle2,
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
-  Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2
+  Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -423,6 +423,53 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // ─── CUSTOM LOGOS & QGIS MAP UPLOAD (USER REQUESTED) ────────────────────────
+  const [logoLeftUrl, setLogoLeftUrl] = useState<string>('/qatar-houbara-center-logo.png');
+  const [logoRightUrl, setLogoRightUrl] = useState<string>('/external-reserves-office-logo.png');
+  const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('contain');
+
+  const mapImageInputRef = useRef<HTMLInputElement>(null);
+  const logoLeftInputRef = useRef<HTMLInputElement>(null);
+  const logoRightInputRef = useRef<HTMLInputElement>(null);
+
+  const handleMapImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setMapSnapshotUrl(result);
+        setMapDisplayMode('snapshot');
+        setHistoryUploadNotice(`تم بنجاح تحميل خريطة QGIS (${file.name}) وتثبيتها في نافذة الخريطة.`);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'left' | 'right') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        if (side === 'left') {
+          setLogoLeftUrl(result);
+          setHistoryUploadNotice(`تم بنجاح تحديث الشعار الأيسر (${file.name}).`);
+        } else {
+          setLogoRightUrl(result);
+          setHistoryUploadNotice(`تم بنجاح تحديث الشعار الأيمن (${file.name}).`);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Check if transmitter ID is NA -> Fallback to Ring ID
   const isPttNA = useMemo(() => {
@@ -883,6 +930,29 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         }
       `}</style>
 
+      {/* Hidden File Inputs for QGIS Map & Custom Logos */}
+      <input
+        ref={mapImageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/jpg,image/webp"
+        className="hidden"
+        onChange={handleMapImageUpload}
+      />
+      <input
+        ref={logoLeftInputRef}
+        type="file"
+        accept="image/png,image/svg+xml,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => handleLogoUpload(e, 'left')}
+      />
+      <input
+        ref={logoRightInputRef}
+        type="file"
+        accept="image/png,image/svg+xml,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => handleLogoUpload(e, 'right')}
+      />
+
       {/* ─── CONTROL TOOLBAR (RTL) ────────────────────────────────────────── */}
       <div className="no-print bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4" dir="rtl">
         
@@ -1003,6 +1073,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <Trash2 size={14} />
               </button>
             )}
+
+            {/* Upload QGIS Map Image */}
+            <button
+              onClick={() => mapImageInputRef.current?.click()}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title="رفع خريطة بصيغة PNG أو JPG مُعدلة في برنامج QGIS وعرضها بالتقرير"
+            >
+              <Upload size={14} />
+              <span>خريطة QGIS</span>
+            </button>
 
             {/* Export PDF */}
             <button
@@ -1542,6 +1622,165 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </div>
             </div>
 
+            {/* Section C: Upload & Customize Logos and QGIS Map (USER REQUESTED) */}
+            <div className="bg-sky-50/70 dark:bg-sky-950/30 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/60 space-y-3">
+              <h4 className="text-xs font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
+                <Upload size={14} className="text-sky-600 dark:text-sky-400" />
+                <span>رفع وتخصيص الشعارات وخريطة QGIS (Logos & QGIS Map Upload):</span>
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* 1. Left Logo (Qatar Houbara Center) */}
+                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                      الشعار الأيسر (المركز القطري)
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">PNG / SVG</span>
+                  </div>
+                  
+                  <div className="h-14 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center p-1">
+                    <img
+                      src={logoLeftUrl}
+                      alt="الشعار الأيسر"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => logoLeftInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-xs"
+                    >
+                      <Upload size={12} />
+                      <span>رفع شعار</span>
+                    </button>
+                    {logoLeftUrl !== '/qatar-houbara-center-logo.png' && (
+                      <button
+                        type="button"
+                        onClick={() => setLogoLeftUrl('/qatar-houbara-center-logo.png')}
+                        className="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-lg text-xs font-bold transition-colors"
+                        title="استعادة الشعار الافتراضي"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Right Logo (External Reserves Office) */}
+                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                      الشعار الأيمن (محميات الدولة)
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">PNG / SVG</span>
+                  </div>
+
+                  <div className="h-14 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center p-1">
+                    <img
+                      src={logoRightUrl}
+                      alt="الشعار الأيمن"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => logoRightInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-xs"
+                    >
+                      <Upload size={12} />
+                      <span>رفع شعار</span>
+                    </button>
+                    {logoRightUrl !== '/external-reserves-office-logo.png' && (
+                      <button
+                        type="button"
+                        onClick={() => setLogoRightUrl('/external-reserves-office-logo.png')}
+                        className="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-lg text-xs font-bold transition-colors"
+                        title="استعادة الشعار الافتراضي"
+                      >
+                        <RotateCcw size={12} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. QGIS Map Upload & Fit Controls */}
+                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                      خريطة معدّلة في QGIS
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-mono">PNG / JPG</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => mapImageInputRef.current?.click()}
+                      className="w-full py-2 px-3 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                    >
+                      <Upload size={14} />
+                      <span>رفع صورة خريطة QGIS جديدة</span>
+                    </button>
+
+                    <div className="flex items-center justify-between gap-1 text-[11px] pt-1">
+                      <span className="text-gray-500 font-semibold">ملاءمة العرض:</span>
+                      <div className="flex gap-1 bg-gray-100 dark:bg-slate-900 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setMapImageFit('contain')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'contain' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
+                          title="احتواء كامل للخريطة دون اقتصاص الحواف"
+                        >
+                          احتواء (Contain)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMapImageFit('cover')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'cover' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
+                          title="تغطية كامل نافذة الخريطة"
+                        >
+                          تغطية (Cover)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMapImageFit('fill')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'fill' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
+                          title="ملء الإطار بالكامل"
+                        >
+                          ملء (Fill)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {mapSnapshotUrl && mapDisplayMode === 'snapshot' && (
+                    <div className="pt-1 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
+                      <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                        <CheckCircle2 size={12} />
+                        معروضة حالياً بالتقرير
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMapDisplayMode('interactive');
+                          setFitKey(k => k + 1);
+                        }}
+                        className="text-brand-600 font-bold hover:underline"
+                      >
+                        العودة للتفاعلية
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -1606,15 +1845,36 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
             
             {/* Top-Left Header Logo */}
-            <div className="flex items-center justify-start w-[240px]">
+            <div className="flex items-center justify-start w-[240px] relative group">
               <img 
-                src="/qatar-houbara-center-logo.png" 
+                src={logoLeftUrl} 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
                 className="h-[100px] w-auto object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
+              <div className="no-export-snapshot no-print absolute -bottom-1 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => logoLeftInputRef.current?.click()}
+                  className="hover:underline flex items-center gap-0.5"
+                  title="رفع شعار جديد (PNG أو SVG)"
+                >
+                  <Upload size={10} />
+                  <span>تغيير</span>
+                </button>
+                {logoLeftUrl !== '/qatar-houbara-center-logo.png' && (
+                  <button
+                    type="button"
+                    onClick={() => setLogoLeftUrl('/qatar-houbara-center-logo.png')}
+                    className="hover:text-amber-300 ml-1 font-bold"
+                    title="استعادة الشعار الافتراضي"
+                  >
+                    ↺
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Center Header: Title & Subtitle */}
@@ -1650,15 +1910,36 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
 
             {/* Top-Right Header Logo */}
-            <div className="flex items-center justify-end w-[350px]">
+            <div className="flex items-center justify-end w-[350px] relative group">
               <img 
-                src="/external-reserves-office-logo.png" 
+                src={logoRightUrl} 
                 alt="مكتب محميات الدولة الخارجية" 
                 className="h-[48px] w-auto max-w-[270px] object-contain"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
+              <div className="no-export-snapshot no-print absolute -bottom-1 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 shadow-md">
+                <button
+                  type="button"
+                  onClick={() => logoRightInputRef.current?.click()}
+                  className="hover:underline flex items-center gap-0.5"
+                  title="رفع شعار جديد (PNG أو SVG)"
+                >
+                  <Upload size={10} />
+                  <span>تغيير</span>
+                </button>
+                {logoRightUrl !== '/external-reserves-office-logo.png' && (
+                  <button
+                    type="button"
+                    onClick={() => setLogoRightUrl('/external-reserves-office-logo.png')}
+                    className="hover:text-amber-300 mr-1 font-bold"
+                    title="استعادة الشعار الافتراضي"
+                  >
+                    ↺
+                  </button>
+                )}
+              </div>
             </div>
 
           </div>
@@ -1676,19 +1957,69 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 style={{ direction: 'ltr', textAlign: 'left' }}
               >
                 
-                {/* 1. SCREENED PHOTO FROM LIVE TRACK */}
+                {/* 1. SCREENED PHOTO FROM LIVE TRACK OR UPLOADED QGIS MAP */}
                 {mapDisplayMode === 'snapshot' && mapSnapshotUrl ? (
-                  <div className="relative w-full h-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                  <div className="relative w-full h-full overflow-hidden bg-slate-950 flex items-center justify-center group">
                     <img 
                       src={mapSnapshotUrl} 
-                      alt="منظور التتبع المباشر" 
-                      className="w-full h-full object-cover select-none pointer-events-none"
-                      style={{ display: 'block', width: '100%', height: '100%' }}
+                      alt="خريطة التقرير (QGIS أو لقطة مباشرة)" 
+                      className="w-full h-full select-none"
+                      style={{ 
+                        display: 'block', 
+                        width: '100%', 
+                        height: '100%',
+                        objectFit: mapImageFit 
+                      }}
                     />
+                    {/* Floating Controls for Uploaded/Captured Map (Excluded during PDF/PNG export) */}
+                    <div className="no-export-snapshot no-print absolute top-2 right-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-xs shadow-lg opacity-85 hover:opacity-100 transition-opacity">
+                      <span className="text-[10px] text-sky-400 font-bold pl-1 border-l border-white/20">خريطة QGIS / صورة</span>
+                      <button
+                        type="button"
+                        onClick={() => mapImageInputRef.current?.click()}
+                        className="hover:text-sky-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
+                        title="استبدال بصورة خريطة QGIS أخرى"
+                      >
+                        <Upload size={11} />
+                        <span>استبدال</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMapImageFit(prev => prev === 'contain' ? 'cover' : prev === 'cover' ? 'fill' : 'contain')}
+                        className="hover:text-sky-300 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-mono"
+                        title="تبديل وضع ملاءمة العرض: احتواء (contain) / تغطية (cover) / ملء (fill)"
+                      >
+                        {mapImageFit}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMapDisplayMode('interactive');
+                          setFitKey(k => k + 1);
+                        }}
+                        className="hover:text-amber-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
+                        title="العودة للخريطة التفاعلية"
+                      >
+                        <Layers size={11} />
+                        <span>تفاعلية</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS */
                   <div className="relative w-full h-full">
+                    {/* Quick Button to Upload QGIS Map right from the interactive map view */}
+                    <div className="no-export-snapshot no-print absolute top-2 left-2 z-[400]">
+                      <button
+                        type="button"
+                        onClick={() => mapImageInputRef.current?.click()}
+                        className="px-2.5 py-1 bg-white/95 dark:bg-slate-800/95 hover:bg-white text-gray-800 dark:text-gray-200 rounded-md shadow-md border border-gray-300 dark:border-slate-600 text-xs font-bold flex items-center gap-1.5 transition-all backdrop-blur-xs"
+                        title="رفع خريطة PNG معدلة ببرنامج QGIS وتثبيتها مكان الخريطة التفاعلية"
+                      >
+                        <Upload size={12} className="text-sky-600" />
+                        <span>رفع خريطة QGIS</span>
+                      </button>
+                    </div>
                     <MapContainer
                       center={mapCenter}
                       zoom={mapZoom}
