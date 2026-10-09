@@ -2,11 +2,11 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { 
   Download, RefreshCw, Compass, MapPin, 
   Calendar, ChevronDown, Check, Search, SlidersHorizontal, 
-  Layers, Info, ArrowRight, Share2, FileDown, CheckCircle2,
-  AlertCircle, Plus, Minus, Crosshair, Maximize2, Minimize2,
-  Edit3, Trash2, Eye, Table as TableIcon, History, ArrowUpDown, Sparkles
+  Layers, Info, FileDown, CheckCircle2,
+  Plus, Minus, Crosshair, Maximize2, Minimize2,
+  Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap, GeoJSON, ScaleControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import html2canvas from 'html2canvas';
@@ -17,8 +17,7 @@ import { FIXED_FIELD_CAMPS, FieldCampPoint } from '../../constants';
 import { 
   safeParseTimestamp, 
   classifyLocationType, 
-  findBirdForTransmitter, 
-  formatCoordinateSystems 
+  findBirdForTransmitter 
 } from '../../utils/formatting';
 import {
   calculateDistanceKm,
@@ -27,15 +26,11 @@ import {
   formatDMM,
   formatDateDDMMYYYY,
   formatDateYYYYMMDD,
-  parseAnyDateToMs,
   calculateDurationFromReleaseToToday,
-  calculateDurationDays,
-  buildCountrySvgData,
-  getProductionTileLayer,
-  CountrySvgResult
+  getProductionTileLayer
 } from './QGISMapProductionReport';
 
-// ─── LEAFLET ICONS ────────────────────────────────────────────────────────────
+// ─── LEAFLET ICONS (MATCHING LIVE TRACKING EXACTLY) ─────────────────────────
 
 const createLiveTrackingMarkerIcon = ({
   number,
@@ -137,7 +132,7 @@ const createLiveTrackingCampIcon = (campName: string) => {
           ${campName}
         </text>
         <g transform="translate(${(totalW - badgeSize) / 2}, 20)">
-          <circle cx="${badgeSize / 2}" cy="${badgeSize / 2}" r="${badgeSize / 2 - 1}" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="${badgeSize / 2}" cy="${badgeSize / 2}" r="${badgeSize / 2 - 1}" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
           <g transform="translate(6, 6) scale(0.75)">
             <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
             <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
@@ -151,59 +146,14 @@ const createLiveTrackingCampIcon = (campName: string) => {
   });
 };
 
-const createDistancePillIcon = (
-  text: string, 
-  borderColor: string, 
-  anchorOffset: [number, number] = [37, 12]
-) => {
-  const pillW = 74;
-  const pillH = 24;
-
-  return L.divIcon({
-    className: 'bg-transparent',
-    html: `
-      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
-        <rect 
-          x="1" 
-          y="1" 
-          width="${pillW - 2}" 
-          height="${pillH - 2}" 
-          rx="10" 
-          fill="#ffffff" 
-          stroke="${borderColor}" 
-          stroke-width="1.8"
-        />
-        <text 
-          x="${pillW / 2}" 
-          y="${pillH / 2 + 0.5}" 
-          text-anchor="middle" 
-          dominant-baseline="middle"
-          font-family="monospace, Arial, sans-serif" 
-          font-size="11" 
-          font-weight="800" 
-          fill="${borderColor}"
-        >
-          ${text}
-        </text>
-      </svg>
-    `,
-    iconSize: [pillW, pillH],
-    iconAnchor: anchorOffset
-  });
-};
-
-/** Map controller that applies the imported live view or fits bounds */
+/** Controller that sets map center and zoom level */
 const CustomReportMapViewController = ({
   center,
   zoom,
-  useImportedView,
-  autoPoints,
   fitKey
 }: {
   center: [number, number];
   zoom: number;
-  useImportedView: boolean;
-  autoPoints: Array<[number, number]>;
   fitKey: number;
 }) => {
   const map = useMap();
@@ -211,17 +161,10 @@ const CustomReportMapViewController = ({
   useEffect(() => {
     if (!map) return;
     map.invalidateSize();
-
-    if (useImportedView && center && !isNaN(center[0]) && !isNaN(center[1])) {
-      map.setView(center, zoom, { animate: true });
-    } else if (autoPoints && autoPoints.length > 0) {
-      const validPoints = autoPoints.filter(p => !isNaN(p[0]) && !isNaN(p[1]) && p[0] !== 0 && p[1] !== 0);
-      if (validPoints.length > 0) {
-        const bounds = L.latLngBounds(validPoints.map(p => L.latLng(p[0], p[1])));
-        map.fitBounds(bounds, { padding: [45, 45] });
-      }
+    if (center && !isNaN(center[0]) && !isNaN(center[1])) {
+      map.setView(center, zoom, { animate: false });
     }
-  }, [map, center, zoom, useImportedView, fitKey]);
+  }, [map, center, zoom, fitKey]);
 
   return null;
 };
@@ -258,22 +201,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     transmitters = [], 
     birds = [], 
     positions = [],
-    qgisLayers = [],
-    qgisGeoJSONCache = {},
     exportedMapView,
     sharedMapCenter,
-    sharedMapZoom,
-    activeBaseLayer: globalBaseLayer
+    sharedMapZoom
   } = useAppStore();
 
-  // Initial selected transmitter priority: exportedMapView -> first active -> default '244276'
+  // Selected Transmitter
   const initialPtt = useMemo(() => {
     if (exportedMapView?.transmitterId) return exportedMapView.transmitterId;
     if (transmitters.length > 0) {
       const activeT = transmitters.find(t => t.status === 'active');
-      return activeT?.platform_id || transmitters[0]?.platform_id || '244276';
+      return activeT?.platform_id || transmitters[0]?.platform_id || '244289';
     }
-    return '244276';
+    return '244289';
   }, [exportedMapView, transmitters]);
 
   const [selectedPttId, setSelectedPttId] = useState<string>(initialPtt);
@@ -281,33 +221,43 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [selectedCampId, setSelectedCampId] = useState<string>('auto');
 
-  // Base Map Layer (Default: imported base layer or google_hybrid)
+  // Base Map Layer
   const initialBaseLayer = useMemo(() => {
     const imported = exportedMapView?.baseLayer;
     if (imported && ['google_hybrid', 'google_roadmap', 'google_satellite', 'scienceterrain', 'roadmap'].includes(imported)) {
       return imported as any;
     }
-    return 'google_hybrid';
+    return 'google_roadmap';
   }, [exportedMapView]);
 
   const [activeBaseLayer, setActiveBaseLayer] = useState<'google_hybrid' | 'google_roadmap' | 'google_satellite' | 'scienceterrain' | 'roadmap'>(initialBaseLayer);
   const [fitKey, setFitKey] = useState<number>(0);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
-  const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
 
-  // Map View Mode: Imported vs Auto-Fit
-  const [useImportedView, setUseImportedView] = useState<boolean>(Boolean(exportedMapView));
-  const [mapCenter, setMapCenter] = useState<[number, number]>(exportedMapView?.center || sharedMapCenter || [47.05, 67.32]);
-  const [mapZoom, setMapZoom] = useState<number>(exportedMapView?.zoom || sharedMapZoom || 9);
+  // Map Display Mode:
+  // 'snapshot': exact photo screened from live track (as requested by user)
+  // 'interactive': dynamic Leaflet map without the old rules (clean, matching live track)
+  const [mapDisplayMode, setMapDisplayMode] = useState<'snapshot' | 'interactive'>(
+    exportedMapView?.mapSnapshotImage ? 'snapshot' : 'interactive'
+  );
+  const [mapSnapshotUrl, setMapSnapshotUrl] = useState<string | null>(
+    exportedMapView?.mapSnapshotImage || null
+  );
 
-  // Sync with exportedMapView if it updates
+  const [mapCenter, setMapCenter] = useState<[number, number]>(exportedMapView?.center || sharedMapCenter || [36.0, 42.0]);
+  const [mapZoom, setMapZoom] = useState<number>(exportedMapView?.zoom || sharedMapZoom || 4);
+
+  // Sync with exportedMapView
   useEffect(() => {
     if (exportedMapView) {
       if (exportedMapView.transmitterId) setSelectedPttId(exportedMapView.transmitterId);
       if (exportedMapView.center) setMapCenter(exportedMapView.center);
       if (exportedMapView.zoom) setMapZoom(exportedMapView.zoom);
       if (exportedMapView.baseLayer) setActiveBaseLayer(exportedMapView.baseLayer as any);
-      setUseImportedView(true);
+      if (exportedMapView.mapSnapshotImage) {
+        setMapSnapshotUrl(exportedMapView.mapSnapshotImage);
+        setMapDisplayMode('snapshot');
+      }
       setFitKey(k => k + 1);
     }
   }, [exportedMapView]);
@@ -320,10 +270,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
 
   // ─── CHANGEABLE TABLE STATE ────────────────────────────────────────────────
-  // Table Mode: 'standard' (Dual Table) | 'history_list' (History Trajectory) | 'both'
   const [tableMode, setTableMode] = useState<'standard' | 'history_list' | 'both'>('standard');
   const [isTableEditing, setIsTableEditing] = useState<boolean>(false);
-  const [historyRowCount, setHistoryRowCount] = useState<number>(8); // Number of rows to show in print/view
+  const [historyRowCount, setHistoryRowCount] = useState<number>(8);
 
   // Editable Bird & Header Metadata
   const [customMetadata, setCustomMetadata] = useState<{
@@ -359,9 +308,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // History Trajectory Records Table (changeable & uploaded from transmitter history)
   const [historyRows, setHistoryRows] = useState<HistoryTableRow[]>([]);
+  const [allHistoryPoints, setAllHistoryPoints] = useState<Array<[number, number]>>([]);
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
+  const mapViewportRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ─── UPLOAD FROM HISTORY FUNCTION ──────────────────────────────────────────
@@ -385,14 +336,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         pttIdsToQuery.push(currentTransmitter.platform_id);
       }
 
-      const now = new Date();
-      const tenYearsAgo = new Date(now.getTime() - 10 * 365 * 24 * 60 * 60 * 1000);
-
-      let fetchedPositions: any[] = [];
-      try {
-        fetchedPositions = await getHistoricalPositions(pttIdsToQuery, tenYearsAgo, now);
-      } catch (e) {
-        console.warn('Historical query error, checking store positions:', e);
+      // Check if we already received history positions from Live Tracking export
+      let rawPositions: any[] = [];
+      if (exportedMapView?.historyPositions && exportedMapView.historyPositions.length > 0 && exportedMapView.transmitterId === pttId) {
+        rawPositions = exportedMapView.historyPositions;
+      } else {
+        const now = new Date();
+        const tenYearsAgo = new Date(now.getTime() - 10 * 365 * 24 * 60 * 60 * 1000);
+        try {
+          rawPositions = await getHistoricalPositions(pttIdsToQuery, tenYearsAgo, now);
+        } catch (e) {
+          console.warn('Historical query error, checking store positions:', e);
+        }
       }
 
       const storePositions = positions.filter(p => {
@@ -400,15 +355,26 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         return pttIdsToQuery.includes(pid);
       });
 
-      const allPositions = [...fetchedPositions, ...storePositions];
+      const allPositions = [...rawPositions, ...storePositions];
 
-      // Filter GPS and Doppler coordinates
+      // Sort positions chronologically
+      allPositions.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+
+      // Filter GPS and valid coordinates
+      const validPoints: Array<[number, number]> = [];
+      allPositions.forEach(p => {
+        const lat = parseFloat(String(p.lat));
+        const lon = parseFloat(String(p.lon));
+        if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+          validPoints.push([lat, lon]);
+        }
+      });
+      setAllHistoryPoints(validPoints);
+
       const gpsPositions = allPositions.filter(p => {
         const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
         return locType === 'GPS';
       });
-
-      gpsPositions.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
       if (gpsPositions.length > 0) {
         const latestGps = gpsPositions[gpsPositions.length - 1];
@@ -452,7 +418,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           issueDate: formatDateYYYYMMDD(new Date()) || prev.issueDate
         }));
 
-        // Build History Table Rows from latest fixes (in reverse chronological order)
+        // Build History Table Rows from latest fixes (reverse chronological)
         const reversedGps = [...gpsPositions].reverse();
         const generatedRows: HistoryTableRow[] = reversedGps.slice(0, 30).map((pos, idx) => {
           const ts = safeParseTimestamp(pos.timestamp);
@@ -469,15 +435,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             type: classifyLocationType(pos.lc, pos.locationType, (pos as any).satellite) || 'GPS',
             speed: typeof pos.speed_kmh === 'number' ? `${pos.speed_kmh.toFixed(1)} km/h` : '0.0 km/h',
             altitude: (pos as any).altitude ? `${(pos as any).altitude} m` : '-',
-            notes: idx === 0 ? 'آخر موقع GPS تم رصده' : idx === gpsPositions.length - 1 ? 'موقع تركيب الجهاز' : 'نقطة مسار'
+            notes: idx === 0 ? 'آخر موقع تم رصده' : idx === gpsPositions.length - 1 ? 'موقع تركيب الجهاز' : 'نقطة مسار'
           };
         });
 
         setHistoryRows(generatedRows);
-        setHistoryUploadNotice(`تم تحميل ${gpsPositions.length} إحداثية من سجل جهاز ${pttId} بنجاح!`);
+        setHistoryUploadNotice(`تم تحميل ${gpsPositions.length} نقطة من سجل جهاز ${pttId} بنجاح!`);
       } else {
-        // Fallback if no specific GPS positions found
-        setHistoryUploadNotice(`لم يتم العثور على سجل GPS للجهاز ${pttId}، تم تفعيل النموذج القياسي.`);
+        setHistoryUploadNotice(`تم تفعيل النموذج لجهاز ${pttId}.`);
       }
     } catch (err) {
       console.error('Error uploading from history:', err);
@@ -485,9 +450,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     } finally {
       setIsLoadingTelemetry(false);
     }
-  }, [selectedPttId, transmitters, birds, positions]);
+  }, [selectedPttId, transmitters, birds, positions, exportedMapView]);
 
-  // Initial load when selectedPttId changes
+  // Initial load
   useEffect(() => {
     handleUploadFromHistory(selectedPttId);
   }, [selectedPttId, handleUploadFromHistory]);
@@ -540,31 +505,12 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       releaseLatDMM: formatDMM(rLat, true),
       releaseLonDMM: formatDMM(rLon, false),
       lastGpsLatDMM: formatDMM(lLat, true),
-      lastGpsLonDMM: formatDMM(lLon, false),
-      releaseToLastMid: [
-        (rLat + lLat) / 2,
-        (rLon + lLon) / 2
-      ] as [number, number],
-      lastToCampMid: [
-        (lLat + cLat) / 2,
-        (lLon + cLon) / 2
-      ] as [number, number]
+      lastGpsLonDMM: formatDMM(lLon, false)
     };
   }, [telemetryData, activeCamp]);
 
-  const mapPoints = useMemo<Array<[number, number]>>(() => [
-    [metrics.rLat, metrics.rLon],
-    [metrics.lLat, metrics.lLon],
-    [metrics.cLat, metrics.cLon]
-  ], [metrics.rLat, metrics.rLon, metrics.lLat, metrics.lLon, metrics.cLat, metrics.cLon]);
-
-  const insetMapData = useMemo(() => {
-    const { lat, lon } = telemetryData.lastGpsPos;
-    return buildCountrySvgData(lon, lat, 150, 82, 6);
-  }, [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]);
-
   const filteredPtts = useMemo(() => {
-    const list: string[] = ['244276', '244289'];
+    const list: string[] = ['244289', '244276'];
     transmitters.forEach(t => {
       if (t.platform_id && !list.includes(t.platform_id)) list.push(t.platform_id);
       if (t.id && !list.includes(t.id)) list.push(t.id);
@@ -593,96 +539,55 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       type: 'GPS',
       speed: '0.0 km/h',
       altitude: '-',
-      notes: 'نقطة مخصصة جديدة'
+      notes: 'نقطة مسار مخصصة'
     };
     setHistoryRows([newRow, ...historyRows]);
   };
 
-  // ─── EXPORT TO PDF & PNG ───────────────────────────────────────────────────
-  const hideLiveDistanceLinesForExport = () => {
-    const liveOverlayPaths = document.querySelectorAll<SVGPathElement>(
-      '#custom-map-production-print-area .leaflet-overlay-pane path, #custom-map-production-print-area svg path'
-    );
-    const hiddenPaths: SVGPathElement[] = [];
-    liveOverlayPaths.forEach(p => {
-      const stroke = (p.getAttribute('stroke') || p.style.stroke || '').toLowerCase();
-      const dash = p.getAttribute('stroke-dasharray') || p.style.strokeDasharray || '';
-      const cls = (p.getAttribute('class') || '').toLowerCase();
-      if (
-        cls.includes('report-') ||
-        stroke.includes('dc2626') || stroke.includes('220, 38, 38') ||
-        stroke.includes('f59e0b') || stroke.includes('245, 158, 11') ||
-        dash.includes('8') || dash.includes('6')
-      ) {
-        p.style.display = 'none';
-        hiddenPaths.push(p);
-      }
-    });
-    return () => {
-      hiddenPaths.forEach(p => {
-        p.style.display = '';
+  // Re-capture current interactive map view as snapshot photo
+  const handleCaptureInteractiveMap = async () => {
+    if (!mapViewportRef.current) return;
+    try {
+      const canvas = await html2canvas(mapViewportRef.current, {
+        useCORS: true,
+        allowTaint: true,
+        scale: 2,
+        backgroundColor: '#ffffff',
+        logging: false
       });
-    };
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      setMapSnapshotUrl(dataUrl);
+      setMapDisplayMode('snapshot');
+    } catch (e) {
+      console.warn('Could not capture map view:', e);
+    }
   };
 
-  const createExportHtml2CanvasOptions = () => ({
-    scale: 2.5,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    scrollX: 0,
-    scrollY: 0,
-    onclone: (clonedDoc: Document) => {
-      const countryTitle = clonedDoc.getElementById('custom-country-inset-title');
-      if (countryTitle) {
-        countryTitle.style.letterSpacing = '0px';
-        countryTitle.style.direction = 'rtl';
-      }
-
-      const allTableElements = clonedDoc.querySelectorAll(
-        '#custom-bird-data-table td, #custom-bird-data-table th, #custom-table2-coordinates td, #custom-table2-coordinates th, #custom-history-table td, #custom-history-table th'
-      );
-      allTableElements.forEach(cell => {
-        const el = cell as HTMLElement;
-        el.setAttribute('align', 'center');
-        el.style.setProperty('text-align', 'center', 'important');
-        el.style.setProperty('vertical-align', 'middle', 'important');
-      });
-
-      // Canvas copying for background tiles
-      const origCanvases = Array.from(document.querySelectorAll('#custom-map-production-print-area canvas'));
-      const clonedCanvases = Array.from(clonedDoc.querySelectorAll('#custom-map-production-print-area canvas'));
-      clonedCanvases.forEach((clonedC, i) => {
-        const origC = origCanvases[i] as HTMLCanvasElement;
-        if (origC && origC.width && origC.height) {
-          clonedC.width = origC.width;
-          clonedC.height = origC.height;
-          const ctx = clonedC.getContext('2d');
-          if (ctx) ctx.drawImage(origC, 0, 0);
-        }
-      });
-    },
-    ignoreElements: (el: Element) => 
-      el.classList?.contains('no-print') || 
-      el.classList?.contains('leaflet-control-zoom') || 
-      el.classList?.contains('leaflet-control-attribution')
-  });
-
+  // ─── EXPORT TO PDF & PNG ───────────────────────────────────────────────────
   const handleExportPdf = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPdf(true);
-    let restoreLines = () => {};
 
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
 
-      restoreLines = hideLiveDistanceLinesForExport();
-      const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const canvas = await html2canvas(element, {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el: Element) => 
+          el.classList?.contains('no-print') || 
+          el.classList?.contains('leaflet-control-zoom') || 
+          el.classList?.contains('leaflet-control-attribution')
+      });
 
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
         orientation: 'landscape',
         unit: 'mm',
@@ -697,7 +602,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       console.error('Error generating PDF:', error);
       alert('حدث خطأ أثناء تصدير ملف PDF.');
     } finally {
-      restoreLines();
       setIsExportingPdf(false);
     }
   };
@@ -705,15 +609,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const handleExportPng = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPng(true);
-    let restoreLines = () => {};
 
     try {
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
 
-      restoreLines = hideLiveDistanceLinesForExport();
-      const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
+      const canvas = await html2canvas(element, {
+        scale: 2.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (el: Element) => 
+          el.classList?.contains('no-print') || 
+          el.classList?.contains('leaflet-control-zoom') || 
+          el.classList?.contains('leaflet-control-attribution')
+      });
 
       const link = document.createElement('a');
       link.download = `Custom_Report_${selectedPttId}_${customMetadata.issueDate}.png`;
@@ -723,7 +637,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       console.error('Error exporting image:', error);
       alert('حدث خطأ أثناء حفظ الصورة.');
     } finally {
-      restoreLines();
       setIsExportingPng(false);
     }
   };
@@ -770,33 +683,39 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-xl">
+            <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <Compass size={24} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                   إنتاج الخرائط والتقارير المخصصة (Custom Map Report)
                 </h2>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 flex items-center gap-1">
+                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
                   <Sparkles size={12} />
-                  <span>مستورد من التتبع المباشر</span>
+                  <span>منظور طبق الأصل من التتبع المباشر</span>
                 </span>
+                {mapDisplayMode === 'snapshot' && mapSnapshotUrl && (
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 flex items-center gap-1">
+                    <Camera size={12} />
+                    <span>صورة ملتقطة من الخريطة</span>
+                  </span>
+                )}
                 {isTableEditing && (
                   <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 animate-pulse">
-                    وضع التعديل مفعل
+                    وضع تعديل الجدول مفعل
                   </span>
                 )}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                تقرير ذكي مبني على المنظور المخصص من خريطة التتبع المباشر، مع جدول بيانات قابل للتعديل والتحميل المباشر من سجل الجهاز.
+                عرض الخريطة مستورد كصورة ملتقطة طبق الأصل من خريطة التتبع المباشر، والجدول قابل للتعديل والتحميل من سجل الجهاز.
               </p>
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Upload from History Button */}
+            {/* Upload from History */}
             <button
               onClick={() => handleUploadFromHistory()}
               disabled={isLoadingTelemetry}
@@ -815,10 +734,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   ? 'bg-amber-600 hover:bg-amber-700 text-white' 
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-slate-700 dark:text-white'
               }`}
-              title="تفعيل/تعطيل إمكانية تعديل نصوص وخلايا الجدول"
+              title="تعديل نصوص وقيم خلايا الجدول مباشرة"
             >
               <Edit3 size={15} />
-              <span>{isTableEditing ? 'إنهاء التعديل' : 'تعديل الجدول'}</span>
+              <span>{isTableEditing ? 'حفظ التعديل' : 'تعديل محتوى الجدول'}</span>
             </button>
 
             {/* Export PDF */}
@@ -844,14 +763,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             {/* Fullscreen */}
             <button
               onClick={() => setIsReportFullscreen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors"
               title="معاينة التقرير بملء الشاشة"
             >
               <Maximize2 size={16} />
               <span>ملء الشاشة</span>
             </button>
 
-            {/* Customizer Panel Toggle */}
+            {/* Customizer */}
             <button
               onClick={() => setShowCustomizer(!showCustomizer)}
               className={`p-2 rounded-xl border text-sm font-medium transition-colors ${
@@ -866,7 +785,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           </div>
         </div>
 
-        {/* Notice Bar If Uploaded */}
+        {/* Notice Bar */}
         {historyUploadNotice && (
           <div className="flex items-center justify-between p-2.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-xs text-blue-800 dark:text-blue-300">
             <span className="flex items-center gap-2 font-semibold">
@@ -930,46 +849,43 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             )}
           </div>
 
-          {/* 2. Map View Source Toggle */}
+          {/* 2. Map View Mode (Snapshot vs Interactive) */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
-              <span>منظور الخريطة (Map View):</span>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold">
-                {useImportedView ? 'مستورد' : 'تلقائي'}
+              <span>عرض الخريطة (Map Display):</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                {mapDisplayMode === 'snapshot' ? 'صورة ملتقطة' : 'تفاعلية'}
               </span>
             </label>
             <div className="flex bg-gray-100 dark:bg-slate-900 p-1 rounded-xl border border-gray-200 dark:border-slate-700">
               <button
                 type="button"
-                onClick={() => {
-                  setUseImportedView(true);
-                  if (exportedMapView) {
-                    setMapCenter(exportedMapView.center);
-                    setMapZoom(exportedMapView.zoom);
-                  }
-                  setFitKey(k => k + 1);
-                }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  useImportedView 
-                    ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-sm' 
+                onClick={() => setMapDisplayMode('snapshot')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  mapDisplayMode === 'snapshot' 
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
+                title="عرض الصورة الملتقطة طبق الأصل من شاشة التتبع المباشر"
               >
-                منظور التتبع المباشر
+                <Camera size={13} />
+                <span>صورة ملتقطة</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
-                  setUseImportedView(false);
+                  setMapDisplayMode('interactive');
                   setFitKey(k => k + 1);
                 }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  !useImportedView 
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  mapDisplayMode === 'interactive' 
                     ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-sm' 
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
+                title="عرض خريطة تفاعلية نظيفة بدون القواعد القديمة"
               >
-                توسيط تلقائي
+                <Layers size={13} />
+                <span>خريطة تفاعلية</span>
               </button>
             </div>
           </div>
@@ -985,8 +901,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 onChange={(e) => setActiveBaseLayer(e.target.value as any)}
                 className="w-full px-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer font-medium"
               >
-                <option value="google_hybrid">خرائط جوجل هجين – أقمار وشوارع (Google Hybrid)</option>
                 <option value="google_roadmap">خرائط جوجل عادية – شوارع وتضاريس (Google Roadmap)</option>
+                <option value="google_hybrid">خرائط جوجل هجين – أقمار وشوارع (Google Hybrid)</option>
                 <option value="google_satellite">خرائط جوجل – أقمار صناعية (Google Satellite)</option>
                 <option value="scienceterrain">أقمار صناعية Esri (Esri Satellite)</option>
                 <option value="roadmap">خريطة الشوارع (OpenStreetMap)</option>
@@ -1014,11 +930,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
           </div>
 
-          {/* 5. Status / Telemetry Info */}
+          {/* 5. Telemetry Status */}
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-900/60 rounded-xl border border-gray-100 dark:border-slate-700/60">
             <div className="space-y-0.5">
               <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block">
-                حالة الإحداثيات المستوردة:
+                حالة الإحداثيات:
               </span>
               <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
                 {isLoadingTelemetry ? (
@@ -1040,10 +956,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </span>
             </div>
 
-            {exportedMapView && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold">
-                Zoom {exportedMapView.zoom}
-              </span>
+            {mapSnapshotUrl && (
+              <button
+                type="button"
+                onClick={() => setMapDisplayMode(m => m === 'snapshot' ? 'interactive' : 'snapshot')}
+                className="text-[10px] px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold hover:bg-emerald-100 transition-colors"
+                title="التبديل بين صورة الشاشة والخريطة"
+              >
+                {mapDisplayMode === 'snapshot' ? 'عرض كخريطة' : 'عرض كصورة'}
+              </button>
             )}
           </div>
 
@@ -1124,7 +1045,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
       </div>
 
-      {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE: LTR FRAME, RTL CONTENT) ─── */}
+      {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE) ─── */}
       <div className={
         isReportFullscreen
           ? "fixed inset-0 z-[99999] bg-slate-950/95 backdrop-blur-md overflow-y-auto overflow-x-auto p-6 flex flex-col items-center"
@@ -1228,371 +1149,189 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* 2. MAIN REPORT BODY */}
           <div className="flex gap-4 items-start" style={{ direction: 'ltr' }}>
             
-            {/* ─── COLUMN 1 (LEFT): IMPORTED GIS SATELLITE MAP (approx 58% width) ───── */}
+            {/* ─── COLUMN 1 (LEFT): MAP WINDOW (approx 58% width) ───── */}
+            {/* EXACT VIEW FROM LIVE TRACK AS A SCREENED PHOTO OR CLEAN INTERACTIVE MAP */}
             <div className="w-[58%] flex flex-col space-y-2" style={{ direction: 'ltr' }}>
               
-              {/* Map Viewport with GIS Border Frame */}
+              {/* Map Viewport Frame */}
               <div 
-                className="relative border-2 border-gray-800 rounded-sm overflow-hidden bg-stone-900 h-[435px] shadow-sm"
+                ref={mapViewportRef}
+                className="relative border-2 border-gray-800 rounded-sm overflow-hidden bg-stone-900 h-[435px] shadow-sm flex items-center justify-center"
                 style={{ direction: 'ltr', textAlign: 'left' }}
               >
                 
-                <MapContainer
-                  center={mapCenter}
-                  zoom={mapZoom}
-                  scrollWheelZoom={true}
-                  dragging={true}
-                  doubleClickZoom={true}
-                  touchZoom={true}
-                  zoomControl={false}
-                  attributionControl={false}
-                  className="w-full h-full cursor-grab active:cursor-grabbing"
-                  style={{ direction: 'ltr', width: '100%', height: '100%' }}
-                >
-                  <MapInstanceBinder onMapInstance={setMapInstance} />
-
-                  {/* Dynamic Base Tile Layer */}
-                  {getProductionTileLayer(activeBaseLayer)}
-
-                  {/* Map View Controller (Applies imported view or fits bounds) */}
-                  <CustomReportMapViewController 
-                    center={mapCenter}
-                    zoom={mapZoom}
-                    useImportedView={useImportedView}
-                    autoPoints={mapPoints}
-                    fitKey={fitKey}
-                  />
-
-                  {/* GIS Scale Bar */}
-                  <ScaleControl position="bottomright" metric={true} imperial={false} />
-
-                  {/* Red dashed vector line: Release Location -> Last GPS Position */}
-                  {metrics.rLat !== 0 && metrics.lLat !== 0 && (
-                    <Polyline
-                      positions={[
-                        [metrics.rLat, metrics.rLon],
-                        [metrics.lLat, metrics.lLon]
-                      ]}
-                      pathOptions={{
-                        color: '#dc2626',
-                        weight: 3,
-                        dashArray: '8, 6',
-                        opacity: 0.95,
-                        className: 'report-release-polyline'
-                      }}
+                {/* 1. SCREENED PHOTO FROM LIVE TRACK (EXACT VIEW EXPORTED) */}
+                {mapDisplayMode === 'snapshot' && mapSnapshotUrl ? (
+                  <div className="relative w-full h-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                    <img 
+                      src={mapSnapshotUrl} 
+                      alt="منظور التتبع المباشر" 
+                      className="w-full h-full object-cover select-none pointer-events-none"
+                      style={{ display: 'block', width: '100%', height: '100%' }}
                     />
-                  )}
-
-                  {/* Amber dashed vector line: Last GPS Position -> Field Camp */}
-                  {metrics.lLat !== 0 && metrics.cLat !== 0 && (
-                    <Polyline
-                      positions={[
-                        [metrics.lLat, metrics.lLon],
-                        [metrics.cLat, metrics.cLon]
-                      ]}
-                      pathOptions={{
-                        color: '#f59e0b',
-                        weight: 3,
-                        dashArray: '8, 6',
-                        opacity: 0.95,
-                        className: 'report-camp-polyline'
-                      }}
-                    />
-                  )}
-
-                  {/* Optional History Polyline Track if history rows are present */}
-                  {historyRows.length > 1 && (
-                    <Polyline
-                      positions={historyRows.map(r => [r.lat, r.lon])}
-                      pathOptions={{
-                        color: '#2563eb',
-                        weight: 2,
-                        opacity: 0.65,
-                        dashArray: '4, 4'
-                      }}
-                    />
-                  )}
-
-                  {/* Distance badge on Release-to-Last line */}
-                  <Marker
-                    position={metrics.releaseToLastMid}
-                    icon={createDistancePillIcon(`${metrics.distFromReleaseKm} km`, '#dc2626', [-10, 11])}
-                    zIndexOffset={2000}
-                    interactive={false}
-                  />
-
-                  {/* Distance badge on Last-to-Camp line */}
-                  <Marker
-                    position={metrics.lastToCampMid}
-                    icon={createDistancePillIcon(`${metrics.distToCampKm} km`, '#d97706', [36, 32])}
-                    zIndexOffset={2000}
-                    interactive={false}
-                  />
-
-                  {/* 1. Marker: Installation / Release Location */}
-                  <Marker
-                    position={[metrics.rLat, metrics.rLon]}
-                    icon={createLiveTrackingMarkerIcon({
-                      number: String(selectedPttId).replace(/^trans-/, ''),
-                      pinColorHex: '#701a2b',
-                      borderColorHex: '#701a2b',
-                      labelTitle: 'موقع تركيب الجهاز'
-                    })}
-                    zIndexOffset={2000}
-                  />
-
-                  {/* 2. Marker: Last GPS Location */}
-                  <Marker
-                    position={[metrics.lLat, metrics.lLon]}
-                    icon={createLiveTrackingMarkerIcon({
-                      number: String(selectedPttId).replace(/^trans-/, ''),
-                      pinColorHex: '#22c55e',
-                      borderColorHex: '#22c55e',
-                      labelTitle: 'آخر موقع'
-                    })}
-                    zIndexOffset={2000}
-                  />
-
-                  {/* 3. Marker: Field Camp */}
-                  <Marker
-                    position={[metrics.cLat, metrics.cLon]}
-                    icon={createLiveTrackingCampIcon(activeCamp.name || 'المخيم')}
-                    zIndexOffset={2000}
-                  />
-                </MapContainer>
-
-                {/* Floating Interactive Map Controls */}
-                <div 
-                  className="no-print absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
-                  style={{ direction: 'rtl' }}
-                >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsReportFullscreen(true);
-                    }}
-                    className="p-1 rounded transition-colors text-white hover:bg-white/20"
-                    title="ملء الشاشة"
-                  >
-                    <Maximize2 size={14} />
-                  </button>
-                  <div className="w-px h-3.5 bg-white/25 mx-0.5" />
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      mapInstance?.zoomIn();
-                    }}
-                    className="p-1 hover:bg-white/20 rounded transition-colors text-white"
-                    title="تكبير (Zoom In)"
-                  >
-                    <Plus size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      mapInstance?.zoomOut();
-                    }}
-                    className="p-1 hover:bg-white/20 rounded transition-colors text-white"
-                    title="تصغير (Zoom Out)"
-                  >
-                    <Minus size={14} />
-                  </button>
-                  <div className="w-px h-3.5 bg-white/25 mx-0.5" />
-                  
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFitKey(k => k + 1);
-                    }}
-                    className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/20 rounded text-[11px] font-medium transition-colors text-white"
-                    title="إعادة ضبط الموقع"
-                  >
-                    <Crosshair size={13} />
-                    <span>توسيط</span>
-                  </button>
-                </div>
-
-                {/* Top-Left Inset: Country Locator Map */}
-                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-500 rounded-sm p-1 shadow-md w-[150px] pointer-events-none">
-                  <div className="flex items-center justify-between pb-0.5 border-b border-gray-200 mb-0.5 px-1">
-                    <span 
-                      id="custom-country-inset-title"
-                      dir="rtl"
-                      className="text-[10.5px] font-black text-gray-800"
-                      style={{ letterSpacing: '0px' }}
+                  </div>
+                ) : (
+                  /* 2. CLEAN DYNAMIC MAP WITHOUT THE OLD RULES */
+                  <div className="relative w-full h-full">
+                    <MapContainer
+                      center={mapCenter}
+                      zoom={mapZoom}
+                      scrollWheelZoom={true}
+                      dragging={true}
+                      doubleClickZoom={true}
+                      touchZoom={true}
+                      zoomControl={false}
+                      attributionControl={false}
+                      className="w-full h-full cursor-grab active:cursor-grabbing"
+                      style={{ direction: 'ltr', width: '100%', height: '100%' }}
                     >
-                      {insetMapData.countryNameAr || 'كازاخستان'}
-                    </span>
-                    <span className="text-[8px] font-black text-gray-700">▲ N</span>
-                  </div>
-                  <div className="relative w-full h-[82px] flex items-center justify-center bg-stone-50 border border-gray-200 overflow-hidden">
-                    {insetMapData.svgPath ? (
-                      <svg viewBox={insetMapData.viewBox} className="w-full h-full">
-                        <path
-                          d={insetMapData.svgPath}
-                          fill="#fdfbf7"
-                          stroke="#475569"
-                          strokeWidth="1.1"
-                          strokeLinejoin="round"
+                      <MapInstanceBinder onMapInstance={setMapInstance} />
+
+                      {/* Base Tile Layer */}
+                      {getProductionTileLayer(activeBaseLayer)}
+
+                      {/* Map View Controller */}
+                      <CustomReportMapViewController 
+                        center={mapCenter}
+                        zoom={mapZoom}
+                        fitKey={fitKey}
+                      />
+
+                      {/* GIS Scale Bar */}
+                      <ScaleControl position="bottomright" metric={true} imperial={false} />
+
+                      {/* Real History Flight / Migration Trajectory (matching Live Tracking exactly) */}
+                      {allHistoryPoints.length > 1 && (
+                        <Polyline
+                          positions={allHistoryPoints}
+                          pathOptions={{
+                            color: '#6366f1',
+                            weight: 2.8,
+                            opacity: 0.85
+                          }}
                         />
-                        {(() => {
-                          const pttLabel = String(selectedPttId).replace(/^trans-/, '');
-                          const labelW = Math.max(28, pttLabel.length * 5.2 + 6);
-                          const labelH = 10;
-                          const badgeX = Math.max(labelW / 2 + 2, Math.min(150 - labelW / 2 - 2, insetMapData.birdPoint.x));
-                          const isNearTop = insetMapData.birdPoint.y < 16;
-                          const badgeY = isNearTop ? insetMapData.birdPoint.y + 4.5 : insetMapData.birdPoint.y - 12.5;
+                      )}
 
-                          return (
-                            <g>
-                              <polygon 
-                                points={
-                                  isNearTop
-                                    ? `${insetMapData.birdPoint.x - 2},${badgeY} ${insetMapData.birdPoint.x + 2},${badgeY} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y + 1}`
-                                    : `${insetMapData.birdPoint.x - 2},${badgeY + labelH} ${insetMapData.birdPoint.x + 2},${badgeY + labelH} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y - 1}`
-                                } 
-                                fill="#b91c1c" 
-                              />
-                              <rect 
-                                x={badgeX - labelW / 2} 
-                                y={badgeY} 
-                                width={labelW} 
-                                height={labelH} 
-                                rx="2" 
-                                fill="#ffffff" 
-                                stroke="#b91c1c" 
-                                strokeWidth="0.8" 
-                              />
-                              <text 
-                                x={badgeX} 
-                                y={badgeY + labelH / 2 + 0.6} 
-                                textAnchor="middle" 
-                                dominantBaseline="middle" 
-                                fontSize="6.8" 
-                                fontWeight="bold" 
-                                fill="#701a2b"
-                              >
-                                {pttLabel}
-                              </text>
-                              <circle 
-                                cx={insetMapData.birdPoint.x} 
-                                cy={insetMapData.birdPoint.y} 
-                                r="4.2" 
-                                fill="#dc2626" 
-                                opacity="0.35" 
-                              />
-                              <circle 
-                                cx={insetMapData.birdPoint.x} 
-                                cy={insetMapData.birdPoint.y} 
-                                r="2.5" 
-                                fill="#dc2626" 
-                                stroke="#ffffff" 
-                                strokeWidth="0.8" 
-                              />
-                            </g>
-                          );
-                        })()}
+                      {/* Dots on trajectory points (matching Live Tracking) */}
+                      {allHistoryPoints.map((pt, i) => (
+                        <CircleMarker
+                          key={`pt-${i}`}
+                          center={pt}
+                          radius={3}
+                          pathOptions={{
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.95,
+                            color: '#4f46e5',
+                            weight: 1.5
+                          }}
+                        />
+                      ))}
+
+                      {/* Current/Latest Active Transmitter Marker */}
+                      {metrics.lLat !== 0 && metrics.lLon !== 0 && (
+                        <Marker
+                          position={[metrics.lLat, metrics.lLon]}
+                          icon={createLiveTrackingMarkerIcon({
+                            number: String(selectedPttId).replace(/^trans-/, ''),
+                            pinColorHex: '#22c55e',
+                            borderColorHex: '#22c55e'
+                          })}
+                          zIndexOffset={2000}
+                        />
+                      )}
+
+                      {/* Field Camps (Zhezkazgan & Almaty) */}
+                      {FIXED_FIELD_CAMPS.map(camp => (
+                        <Marker
+                          key={camp.id}
+                          position={[camp.lat, camp.lon]}
+                          icon={createLiveTrackingCampIcon(camp.name)}
+                          zIndexOffset={1000}
+                        />
+                      ))}
+
+                    </MapContainer>
+
+                    {/* North Arrow Symbol */}
+                    <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
+                      <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
+                        <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
+                        <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
                       </svg>
-                    ) : (
-                      <div className="text-[9px] text-gray-400 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
-                    )}
+                      <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
+                    </div>
+
+                    {/* Quick Snap Button */}
+                    <div className="no-print absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-2 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none">
+                      <button
+                        type="button"
+                        onClick={handleCaptureInteractiveMap}
+                        className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300"
+                        title="التقاط هذا المنظور وحفظه كصورة في التقرير"
+                      >
+                        <Camera size={13} />
+                        <span>التقاط كصورة</span>
+                      </button>
+                    </div>
+
                   </div>
-                </div>
-
-                {/* Top-Right: North Arrow Symbol */}
-                <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
-                  <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
-                    <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
-                    <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
-                  </svg>
-                  <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
-                </div>
-
-                {/* Graticule Perimeter Labels */}
-                <div className="absolute top-1 left-36 z-[900] pointer-events-none select-none">
-                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      47° 15.0000'N
-                    </text>
-                  </svg>
-                </div>
-                <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] pointer-events-none select-none">
-                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      47° 00.0000'N
-                    </text>
-                  </svg>
-                </div>
-                <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
-                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      46° 45.0000'N
-                    </text>
-                  </svg>
-                </div>
+                )}
 
               </div>
 
-              {/* Map Legend Bar */}
+              {/* Map Legend Bar Under Map (Matching the Real Live Track elements) */}
               <div 
-                className="border border-gray-300 rounded-sm bg-white py-1.5 px-2 shadow-xs select-none"
+                className="border border-gray-300 rounded-sm bg-white py-1.5 px-3 shadow-xs select-none"
                 style={{ direction: 'rtl' }}
               >
                 <table id="custom-map-legend-bar" style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
                   <tbody>
                     <tr>
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                          <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <circle cx="5" cy="5" r="4.2" fill="#701a2b" stroke="#ffffff" strokeWidth="1" />
-                          </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>موقع تركيب الجهاز</span>
-                        </div>
-                      </td>
-
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                      {/* 1. آخر موقع تم رصده */}
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
                           <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
                             <circle cx="5" cy="5" r="4.2" fill="#22c55e" stroke="#ffffff" strokeWidth="1" />
                           </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>آخر موقع ({telemetryData.lastGpsPos.dateStr})</span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
+                            آخر موقع تم رصده ({telemetryData.lastGpsPos.dateStr})
+                          </span>
                         </div>
                       </td>
 
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                      {/* 2. مسار الهجرة والرحلة */}
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                          <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <line x1="0" y1="5" x2="18" y2="5" stroke="#dc2626" strokeWidth="2.5" strokeDasharray="5 3"/>
+                          <svg width="20" height="10" viewBox="0 0 20 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+                            <line x1="0" y1="5" x2="20" y2="5" stroke="#6366f1" strokeWidth="2.5" />
                           </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>المسار المباشر</span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
+                            مسار الرحلة والهجرة (Flight Track)
+                          </span>
                         </div>
                       </td>
 
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
+                      {/* 3. نقاط الرصد والتسجيل */}
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <path d="M19 20 10 4 1 20h18Z" fill="#f59e0b" fillOpacity="0.35"/>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ffffff', border: '1.5px solid #4f46e5' }} />
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
+                            نقاط التسجيل والرصد
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 4. مخيمات الميدان */}
+                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+                            <path d="M19 20 10 4 1 20h18Z" fill="#10b981" fillOpacity="0.35"/>
                             <path d="M10 4 23 20"/>
                             <path d="m10 4 4.5 16"/>
                           </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>{activeCamp.name || 'المخيم'}</span>
-                        </div>
-                      </td>
-
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 4px' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                          <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <line x1="0" y1="5" x2="18" y2="5" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5 3"/>
-                          </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>البعد عن المخيم</span>
+                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
+                            مخيمات الميدان (Field Camps)
+                          </span>
                         </div>
                       </td>
                     </tr>
@@ -1808,7 +1547,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </tr>
 
                       <tr className="bg-white">
-                        <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
                           خط الطول (E)
                         </td>
                         <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
@@ -1843,7 +1582,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 </div>
               )}
 
-              {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE (uploaded from transmitter history) */}
+              {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE */}
               {(tableMode === 'history_list' || tableMode === 'both') && (
                 <div className="border border-gray-300 rounded-sm overflow-hidden shadow-xs">
                   <div className="w-full bg-[#1e293b] text-white py-1.5 px-3 flex items-center justify-between text-[12px] font-bold">
@@ -2025,7 +1764,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           <div className="mt-5 pt-2.5 border-t border-gray-200 text-center text-[11.5px] font-semibold text-gray-500 flex items-center justify-between" style={{ direction: 'rtl' }}>
             <span>المركز القطري لتكاثر الحبارى والصقور – كازاخستان</span>
             <span className="text-[10px] text-gray-400 font-mono">
-              HBTrack Custom Map Report • Generated from Live Tracking
+              HBTrack Custom Map Report • Live Tracking View
             </span>
           </div>
 

@@ -3,6 +3,7 @@ import { Layers, CircleDot, CheckCircle2, Check, ChevronDown, CloudSun, Search, 
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, ScaleControl, useMapEvents, Tooltip, useMap, Polyline, CircleMarker, GeoJSON } from 'react-leaflet';
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import L from 'leaflet';
+import html2canvas from 'html2canvas';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import { FIXED_FIELD_CAMPS } from '../constants';
@@ -1810,32 +1811,64 @@ const LiveTrackingInner = () => {
       setShowHistory(true);
   };
 
-  const handleExportViewToReport = () => {
-    let targetTransmitterId = '';
-    if (selectedTransmitterIds && selectedTransmitterIds.length > 0) {
-      targetTransmitterId = String(selectedTransmitterIds[0]);
-    } else {
-      const activeTransmitter = transmitters.find(t => t.status === 'active' || (t as any).derived_status === 'active');
-      targetTransmitterId = activeTransmitter?.platform_id || (transmitters[0]?.platform_id) || '244276';
-    }
+  const [isExportingView, setIsExportingView] = useState(false);
 
-    const loadedHistory = rawHistoryCache.current || [];
+  const handleExportViewToReport = async () => {
+    setIsExportingView(true);
+    try {
+      let targetTransmitterId = '';
+      if (selectedTransmitterIds && selectedTransmitterIds.length > 0) {
+        targetTransmitterId = String(selectedTransmitterIds[0]);
+      } else {
+        const activeTransmitter = transmitters.find(t => t.status === 'active' || (t as any).derived_status === 'active');
+        targetTransmitterId = activeTransmitter?.platform_id || (transmitters[0]?.platform_id) || '244276';
+      }
 
-    setExportedMapView({
-      center: sharedMapCenter || [47.05, 67.32],
-      zoom: sharedMapZoom || 9,
-      baseLayer: activeLayer || 'google_hybrid',
-      transmitterId: targetTransmitterId,
-      transmitterIds: selectedTransmitterIds.length > 0 ? selectedTransmitterIds : [targetTransmitterId],
-      historyPositions: loadedHistory.length > 0 ? loadedHistory : undefined,
-      capturedAt: new Date().toISOString()
-    });
+      const loadedHistory = rawHistoryCache.current || [];
 
-    if (setQgisConnectActiveTab) {
-      setQgisConnectActiveTab('custom-report');
-    }
-    if (setActiveTab) {
-      setActiveTab('QGIS Connect');
+      // Capture screenshot of the exact live tracking map view
+      let snapshotDataUrl: string | undefined = undefined;
+      const mapContainerEl = containerRef.current?.querySelector('.leaflet-container') as HTMLElement;
+      if (mapContainerEl) {
+        try {
+          const canvas = await html2canvas(mapContainerEl, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2,
+            backgroundColor: '#ffffff',
+            logging: false,
+            ignoreElements: (el) => {
+              return el.classList?.contains('leaflet-control-zoom') ||
+                     el.classList?.contains('leaflet-control-attribution');
+            }
+          });
+          snapshotDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+        } catch (captureErr) {
+          console.warn('Could not take live map screenshot, will use identical vector renderer:', captureErr);
+        }
+      }
+
+      setExportedMapView({
+        center: sharedMapCenter || [47.05, 67.32],
+        zoom: sharedMapZoom || 9,
+        baseLayer: activeLayer || 'google_hybrid',
+        transmitterId: targetTransmitterId,
+        transmitterIds: selectedTransmitterIds.length > 0 ? selectedTransmitterIds : [targetTransmitterId],
+        historyPositions: loadedHistory.length > 0 ? loadedHistory : undefined,
+        capturedAt: new Date().toISOString(),
+        mapSnapshotImage: snapshotDataUrl
+      });
+
+      if (setQgisConnectActiveTab) {
+        setQgisConnectActiveTab('custom-report');
+      }
+      if (setActiveTab) {
+        setActiveTab('QGIS Connect');
+      }
+    } catch (e) {
+      console.error('Error exporting view to report:', e);
+    } finally {
+      setIsExportingView(false);
     }
   };
 
@@ -2189,12 +2222,12 @@ const LiveTrackingInner = () => {
 
   const getTileLayer = (layerId: string) => {
     switch(layerId) {
-      case 'roadmap': return <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />;
-      case 'google_roadmap': return <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
-      case 'google_hybrid': return <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
-      case 'scienceterrain': return <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' />;
-      case 'maptiler_outdoor': return <TileLayer url="https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=wSEj7Jfw4drYYrF3X294" attribution='&copy; MapTiler' />;
-      default: return <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; Google' />;
+      case 'roadmap': return <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' crossOrigin="anonymous" />;
+      case 'google_roadmap': return <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; Google' crossOrigin="anonymous" />;
+      case 'google_hybrid': return <TileLayer url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}" attribution='&copy; Google' crossOrigin="anonymous" />;
+      case 'scienceterrain': return <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution='&copy; Esri' crossOrigin="anonymous" />;
+      case 'maptiler_outdoor': return <TileLayer url="https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=wSEj7Jfw4drYYrF3X294" attribution='&copy; MapTiler' crossOrigin="anonymous" />;
+      default: return <TileLayer url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" attribution='&copy; Google' crossOrigin="anonymous" />;
     }
   };
 
@@ -4010,12 +4043,13 @@ const LiveTrackingInner = () => {
           {/* Export View to Report Button */}
           <button
             onClick={handleExportViewToReport}
-            className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md hover:shadow-lg transition-all active:scale-95"
+            disabled={isExportingView}
+            className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white shadow-md hover:shadow-lg transition-all active:scale-95"
             title="تصدير المنظور الجغرافي الحالي للخريطة وجهاز التتبع المختار إلى تقرير المتابعة الرسمي المخصص"
           >
-            <Compass size={16} className="text-white flex-shrink-0" />
-            <span>تصدير العرض إلى التقرير (Export View to Report)</span>
-            {selectedTransmitterIds.length > 0 && (
+            <Compass size={16} className={`text-white flex-shrink-0 ${isExportingView ? 'animate-spin' : ''}`} />
+            <span>{isExportingView ? 'جارِ التقاط العرض...' : 'تصدير العرض إلى التقرير (Export View to Report)'}</span>
+            {selectedTransmitterIds.length > 0 && !isExportingView && (
               <span className="px-1.5 py-0.5 rounded-full bg-emerald-800 text-[10px] font-mono font-normal">
                 {selectedTransmitterIds[0]}
               </span>

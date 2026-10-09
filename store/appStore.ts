@@ -122,6 +122,7 @@ interface AppState {
     transmitterIds: string[];
     historyPositions?: any[];
     capturedAt: string;
+    mapSnapshotImage?: string;
   } | null;
   setExportedMapView: (view: {
     center: [number, number];
@@ -131,6 +132,7 @@ interface AppState {
     transmitterIds: string[];
     historyPositions?: any[];
     capturedAt: string;
+    mapSnapshotImage?: string;
   } | null) => void;
   clearExportedMapView: () => void;
 
