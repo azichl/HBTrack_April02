@@ -32,8 +32,28 @@ import {
   formatDateDDMMYYYY,
   formatDateYYYYMMDD,
   calculateDurationFromReleaseToToday,
-  getProductionTileLayer
+  getProductionTileLayer,
+  buildCountrySvgData
 } from './QGISMapProductionReport';
+
+/** Formats coordinate to degree and minute format without dir suffix for coordinates comparison table (e.g. 46° 56.6490′ and 066° 49.4520′) */
+export const formatTableDMM = (val: number, isLat: boolean): string => {
+  const num = Number(val);
+  if (isNaN(num) || num === 0) {
+    return isLat ? `00° 00.0000′` : `000° 00.0000′`;
+  }
+  const abs = Math.abs(num);
+  let deg = Math.floor(abs);
+  let min = (abs - deg) * 60;
+  if (min >= 59.99995) {
+    deg += 1;
+    min = 0;
+  }
+  const [minWhole, minFraction] = min.toFixed(4).split('.');
+  const minStr = `${minWhole.padStart(2, '0')}.${minFraction}`;
+  const degStr = isLat ? String(deg) : String(deg).padStart(3, '0');
+  return `${degStr}° ${minStr}′`;
+};
 
 // ─── LEAFLET ICONS ────────────────────────────────────────────────────────────
 
@@ -69,8 +89,8 @@ const createLiveTrackingMarkerIcon = ({
             y="12" 
             text-anchor="middle" 
             dominant-baseline="middle"
-            font-family="'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" 
-            font-size="11" 
+            font-family="'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" 
+            font-size="12" 
             font-weight="800" 
             fill="#ffffff" 
             stroke="#000000" 
@@ -96,7 +116,7 @@ const createLiveTrackingMarkerIcon = ({
           y="${hasTitle ? 30.5 : 12.5}" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          font-family="monospace, 'Segoe UI', Arial" 
+          font-family="monospace, 'Sakkal Majalla', Arial" 
           font-size="11.5" 
           font-weight="800" 
           fill="#0f172a"
@@ -129,8 +149,8 @@ const createLiveTrackingCampIcon = (campName: string) => {
           y="12" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          font-family="'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" 
-          font-size="11.5" 
+          font-family="'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" 
+          font-size="12" 
           font-weight="800" 
           fill="#ffffff" 
           stroke="#000000" 
@@ -141,7 +161,7 @@ const createLiveTrackingCampIcon = (campName: string) => {
           ${campName}
         </text>
         <g transform="translate(${(totalW - badgeSize) / 2}, 20)">
-          <circle cx="${badgeSize / 2}" cy="${badgeSize / 2}" r="${badgeSize / 2 - 1}" fill="#10b981" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="${badgeSize / 2}" cy="${badgeSize / 2}" r="${badgeSize / 2 - 1}" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
           <g transform="translate(6, 6) scale(0.75)">
             <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
             <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
@@ -622,31 +642,45 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── CUSTOMIZABLE MAP LEGEND ITEMS (ITEM BY ITEM) ───────────────────────────
   const [legendItems, setLegendItems] = useState<CustomLegendItem[]>([
     {
-      id: 'last_pos',
-      label: 'آخر موقع (2026-10-02)',
-      color: '#22c55e',
-      symbol: 'circle',
-      visible: true
-    },
-    {
       id: 'release_pos',
-      label: 'موقع التركيب',
+      label: 'موقع تركيب الجهاز',
       color: '#701a2b',
       symbol: 'circle',
       visible: true
     },
     {
-      id: 'flight_path',
-      label: 'مسار الرحلة',
-      color: '#6366f1',
-      symbol: 'line',
+      id: 'last_pos',
+      label: 'آخر موقع (01-10-2026)',
+      color: '#22c55e',
+      symbol: 'circle',
       visible: true
     },
     {
       id: 'camps',
-      label: 'مخيم',
-      color: '#10b981',
+      label: 'المخيم',
+      color: '#f59e0b',
       symbol: 'tent',
+      visible: true
+    },
+    {
+      id: 'camp_dist',
+      label: 'البعد عنه',
+      color: '#d97706',
+      symbol: 'dashed-line',
+      visible: true
+    },
+    {
+      id: 'main_road',
+      label: 'طريق رئيسي',
+      color: '#dc2626',
+      symbol: 'line',
+      visible: true
+    },
+    {
+      id: 'cities',
+      label: 'مدن وقرى',
+      color: '#1e293b',
+      symbol: 'square',
       visible: true
     }
   ]);
@@ -692,8 +726,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   const handleResetLegendItems = useCallback(() => {
     setIsLegendCustomizedByUser(false);
-    const dateStr = telemetryData.lastGpsPos?.dateStr || '2026-10-02';
+    const dateStr = telemetryData.lastGpsPos?.dateStr || '01-10-2026';
+    const campLabel = getCampLegendLabel(visibleCampIds);
     const items: CustomLegendItem[] = [
+      {
+        id: 'release_pos',
+        label: 'موقع تركيب الجهاز',
+        color: '#701a2b',
+        symbol: 'circle',
+        visible: showReleaseMarker
+      },
       {
         id: 'last_pos',
         label: `آخر موقع (${dateStr})`,
@@ -702,25 +744,32 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         visible: true
       },
       {
-        id: 'release_pos',
-        label: 'موقع التركيب',
-        color: '#701a2b',
-        symbol: 'circle',
-        visible: showReleaseMarker
+        id: 'camps',
+        label: campLabel,
+        color: '#f59e0b',
+        symbol: 'tent',
+        visible: visibleCampIds.length > 0
       },
       {
-        id: 'flight_path',
-        label: 'مسار الرحلة',
-        color: '#6366f1',
+        id: 'camp_dist',
+        label: 'البعد عنه',
+        color: '#d97706',
+        symbol: 'dashed-line',
+        visible: true
+      },
+      {
+        id: 'main_road',
+        label: 'طريق رئيسي',
+        color: '#dc2626',
         symbol: 'line',
         visible: true
       },
       {
-        id: 'camps',
-        label: getCampLegendLabel(visibleCampIds),
-        color: '#10b981',
-        symbol: 'tent',
-        visible: visibleCampIds.length > 0
+        id: 'cities',
+        label: 'مدن وقرى',
+        color: '#1e293b',
+        symbol: 'square',
+        visible: true
       }
     ];
     if (showCampDistance && visibleCampIds.length >= 2) {
@@ -977,12 +1026,23 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       releaseLonDMM: formatDMM(rLon, false),
       lastGpsLatDMM: formatDMM(lLat, true),
       lastGpsLonDMM: formatDMM(lLon, false),
+      releaseLatTableDMM: formatTableDMM(rLat, true),
+      releaseLonTableDMM: formatTableDMM(rLon, false),
+      lastGpsLatTableDMM: formatTableDMM(lLat, true),
+      lastGpsLonTableDMM: formatTableDMM(lLon, false),
       releaseToLastMid: [
         (rLat + lLat) / 2,
         (rLon + lLon) / 2
       ] as [number, number]
     };
   }, [telemetryData, activeCamp]);
+
+  // Dynamic Kazakhstan country silhouette & bird location for the top-left locator map
+  const insetMapData = useMemo(() => {
+    const lat = metrics.lLat || 46.9965;
+    const lon = metrics.lLon || 67.0222;
+    return buildCountrySvgData(lon, lat, 140, 78, 5);
+  }, [metrics.lLat, metrics.lLon]);
 
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289', '244276'];
@@ -1052,35 +1112,41 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           }
         });
 
-        // 2. Format Scale Control on dark pill background with crisp border
+        // 2. Format Scale Control on white card background with crisp border (matching reference design)
         const clonedScaleControls = clonedDoc.querySelectorAll('.leaflet-control-scale');
         clonedScaleControls.forEach(sc => {
           const el = sc as HTMLElement;
-          el.style.setProperty('background', '#1e293b', 'important');
-          el.style.setProperty('background-color', '#1e293b', 'important');
-          el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.4)', 'important');
+          el.style.setProperty('background', '#ffffff', 'important');
+          el.style.setProperty('background-color', '#ffffff', 'important');
+          el.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.35)', 'important');
           el.style.setProperty('border-radius', '4px', 'important');
-          el.style.setProperty('padding', '2px 5px 3px 5px', 'important');
-          el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.6)', 'important');
+          el.style.setProperty('padding', '2px 6px 3px 6px', 'important');
+          el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.25)', 'important');
           el.style.setProperty('display', 'inline-block', 'important');
         });
         const clonedScaleLines = clonedDoc.querySelectorAll('.leaflet-control-scale-line');
         clonedScaleLines.forEach(sl => {
           const el = sl as HTMLElement;
-          el.style.setProperty('background', '#1e293b', 'important');
-          el.style.setProperty('background-color', '#1e293b', 'important');
-          el.style.setProperty('border', '2px solid #ffffff', 'important');
+          el.style.setProperty('background', '#ffffff', 'important');
+          el.style.setProperty('background-color', '#ffffff', 'important');
+          el.style.setProperty('border', '2px solid #000000', 'important');
           el.style.setProperty('border-top', 'none', 'important');
-          el.style.setProperty('color', '#ffffff', 'important');
+          el.style.setProperty('color', '#000000', 'important');
           el.style.setProperty('font-weight', '800', 'important');
-          el.style.setProperty('font-family', "monospace, 'Segoe UI', Arial, sans-serif", 'important');
+          el.style.setProperty('font-family', "monospace, 'Sakkal Majalla', Arial, sans-serif", 'important');
           el.style.setProperty('font-size', '10px', 'important');
           el.style.setProperty('line-height', '1.1', 'important');
-          el.style.setProperty('padding', '2px 6px 1px 6px', 'important');
+          el.style.setProperty('padding', '1px 5px', 'important');
           el.style.setProperty('border-radius', '2px', 'important');
-          el.style.setProperty('text-shadow', '0 1px 2px rgba(0, 0, 0, 0.9)', 'important');
+          el.style.setProperty('text-shadow', 'none', 'important');
           el.style.setProperty('display', 'block', 'important');
         });
+
+        // Set Sakkal Majalla font on the cloned print container
+        const clonedPrintArea = clonedDoc.getElementById('custom-map-production-print-area');
+        if (clonedPrintArea) {
+          clonedPrintArea.style.setProperty('font-family', "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif", 'important');
+        }
 
         // 3. Fix Leaflet Vector Shift Bug:
         // Leaflet renders SVG paths inside .leaflet-overlay-pane with CSS transforms that
@@ -1420,8 +1486,55 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   return (
     <div className="space-y-6">
       
-      {/* ─── PRINT STYLES ─────────────────────────────────────────────────── */}
+      {/* ─── PRINT & REPORT STYLES ────────────────────────────────────────── */}
       <style>{`
+        @font-face {
+          font-family: 'Sakkal Majalla';
+          src: url('/fonts/majalla.ttf') format('truetype');
+          font-weight: normal;
+          font-style: normal;
+          font-display: swap;
+        }
+
+        #custom-map-production-print-area,
+        #custom-map-production-print-area * {
+          font-family: 'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif;
+        }
+
+        #custom-map-production-print-area .font-mono,
+        #custom-map-production-print-area .font-mono * {
+          font-family: monospace, 'Sakkal Majalla', Arial, sans-serif !important;
+        }
+
+        #custom-map-production-print-area .leaflet-control-scale {
+          background: rgba(255, 255, 255, 0.95) !important;
+          background-color: rgba(255, 255, 255, 0.95) !important;
+          border: 1px solid rgba(0, 0, 0, 0.35) !important;
+          border-radius: 4px !important;
+          padding: 2px 6px 3px 6px !important;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25) !important;
+          margin-right: 8px !important;
+          margin-bottom: 8px !important;
+          display: inline-block !important;
+        }
+
+        #custom-map-production-print-area .leaflet-control-scale-line {
+          background: #ffffff !important;
+          background-color: #ffffff !important;
+          border: 2px solid #000000 !important;
+          border-top: none !important;
+          color: #000000 !important;
+          font-weight: 800 !important;
+          font-family: monospace, 'Sakkal Majalla', Arial, sans-serif !important;
+          font-size: 10px !important;
+          line-height: 1.1 !important;
+          padding: 1px 5px !important;
+          border-radius: 2px !important;
+          text-shadow: none !important;
+          box-sizing: border-box !important;
+          display: block !important;
+        }
+
         @media print {
           @page {
             size: A4 landscape;
@@ -2609,7 +2722,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           className="bg-white text-gray-900 w-[1080px] min-w-[1080px] p-7 shadow-2xl rounded-sm border border-gray-300 relative select-none"
           style={{
             direction: 'ltr',
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif",
+            fontFamily: "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif",
             letterSpacing: 'normal'
           }}
         >
@@ -2837,18 +2950,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   type="text"
                   value={customMetadata.reportTitle}
                   onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
-                  className="w-full text-center text-[21px] font-black text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-1"
+                  className="w-full text-center text-[22px] font-black text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-1"
                 />
               ) : (
                 <h1 
-                  className="text-[21px] font-black text-gray-900 leading-tight mb-1"
+                  className="text-[22px] font-black text-gray-900 leading-tight mb-1"
                   style={{ letterSpacing: 'normal', fontFeatureSettings: '"liga" 1' }}
                 >
                   {customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع'}
                 </h1>
               )}
 
-              <div className="text-[12.5px] font-bold text-gray-700 flex items-center justify-center gap-2">
+              <div className="text-[13px] font-bold text-gray-700 flex items-center justify-center gap-2">
                 <span>
                   {isPttNA ? 'رقم الحجل ' : 'جهاز التتبع '}
                   <span className="font-mono text-[#701a2b] font-black">
@@ -2856,9 +2969,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </span>
                 </span>
                 <span>•</span>
-                <span>منطقة {activeCamp.name.replace('مخيم ', '')} – {customMetadata.regionName || 'كازاخستان'}</span>
+                <span>منطقة {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '') : 'جيزقازغان'} – {customMetadata.regionName || 'كازاخستان'}</span>
                 <span>•</span>
-                <span>تاريخ الإصدار {formatDateDDMMYYYY(customMetadata.issueDate) || customMetadata.issueDate}</span>
+                <span>تاريخ الإصدار {customMetadata.issueDate}</span>
               </div>
             </div>
 
@@ -3309,7 +3422,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             ringId: customMetadata.birdRing,
                             pinColorHex: '#701a2b',
                             borderColorHex: '#701a2b',
-                            labelTitle: 'موقع التركيب'
+                            labelTitle: 'موقع تركيب الجهاز'
                           })}
                           zIndexOffset={1800}
                         />
@@ -3323,7 +3436,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             number: displayTransmitterLabel,
                             ringId: customMetadata.birdRing,
                             pinColorHex: '#22c55e',
-                            borderColorHex: '#22c55e'
+                            borderColorHex: '#22c55e',
+                            labelTitle: 'آخر موقع'
                           })}
                           zIndexOffset={2000}
                         />
@@ -3425,17 +3539,81 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </div>
                     )}
 
-                    {/* North Arrow Symbol */}
-                    <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
-                      <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
-                        <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
-                        <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
-                      </svg>
-                      <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
                     </div>
+                  )}
 
+                {/* ─── MAP OVERLAYS (MATCHING REFERENCE DESIGN) ──────────────────── */}
+
+                {/* Top-Left Inset: Kazakhstan Country Silhouette Locator Map & Exact Bird Position */}
+                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-400 rounded-md p-1 shadow-md w-[138px] pointer-events-none select-none">
+                  <div className="relative w-full h-[76px] flex items-center justify-center bg-stone-50 border border-gray-200 rounded overflow-hidden">
+                    {insetMapData.svgPath ? (
+                      <svg viewBox={insetMapData.viewBox} className="w-full h-full">
+                        {/* Kazakhstan Country Silhouette Border */}
+                        <path
+                          d={insetMapData.svgPath}
+                          fill="#fdfbf7"
+                          stroke="#881337"
+                          strokeWidth="1.1"
+                          strokeLinejoin="round"
+                        />
+                        {/* Red Bird Location Point */}
+                        <circle 
+                          cx={insetMapData.birdPoint.x} 
+                          cy={insetMapData.birdPoint.y} 
+                          r="4" 
+                          fill="#dc2626" 
+                          opacity="0.35" 
+                        />
+                        <circle 
+                          cx={insetMapData.birdPoint.x} 
+                          cy={insetMapData.birdPoint.y} 
+                          r="2.5" 
+                          fill="#dc2626" 
+                          stroke="#ffffff" 
+                          strokeWidth="0.8" 
+                        />
+                      </svg>
+                    ) : (
+                      <div className="text-[10px] text-gray-500 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* Top-Right: GIS North Arrow Symbol */}
+                <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
+                  <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
+                    <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
+                    <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
+                  </svg>
+                  <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
+                </div>
+
+                {/* Graticule Perimeter Labels (Ticks) */}
+                <div className="absolute top-1 left-38 z-[900] pointer-events-none select-none">
+                  <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      {metrics.lLat ? `${Math.floor(metrics.lLat)}° 15.0000'N` : "47° 15.0000'N"}
+                    </text>
+                  </svg>
+                </div>
+                <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] pointer-events-none select-none">
+                  <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      {metrics.lLat ? `${Math.floor(metrics.lLat)}° 00.0000'N` : "47° 00.0000'N"}
+                    </text>
+                  </svg>
+                </div>
+                <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
+                  <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      {metrics.lLat ? `${Math.floor(metrics.lLat) - 1}° 45.0000'N` : "46° 45.0000'N"}
+                    </text>
+                  </svg>
+                </div>
 
               </div>
 
@@ -3742,12 +3920,12 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   >
                     <thead>
                       <tr>
-                        <th style={{ width: '22%', backgroundColor: '#f9fafb', borderBottom: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center' }}>
+                        <th style={{ width: '24%', backgroundColor: '#701a2b', color: '#ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center' }}>
                         </th>
-                        <th style={{ width: '39%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                        <th style={{ width: '38%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, textAlign: 'center' }}>
                           تركيب الجهاز
                         </th>
-                        <th style={{ width: '39%', backgroundColor: '#0f766e', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12px', fontWeight: 700, textAlign: 'center' }}>
+                        <th style={{ width: '38%', backgroundColor: '#047857', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, textAlign: 'center' }}>
                           آخر موقع
                         </th>
                       </tr>
@@ -3757,7 +3935,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
                           التاريخ
                         </td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                           {isTableEditing ? (
                             <input
                               type="text"
@@ -3769,7 +3947,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
                           )}
                         </td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '11.5px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                           {isTableEditing ? (
                             <input
                               type="text"
@@ -3787,7 +3965,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
                           خط العرض (N)
                         </td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                           {isTableEditing ? (
                             <input
                               type="number"
@@ -3797,10 +3975,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <span dir="ltr">{metrics.releaseLatDMM}</span>
+                            <span dir="ltr">{metrics.releaseLatTableDMM}</span>
                           )}
                         </td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                           {isTableEditing ? (
                             <input
                               type="number"
@@ -3810,7 +3988,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <span dir="ltr">{metrics.lastGpsLatDMM}</span>
+                            <span dir="ltr">{metrics.lastGpsLatTableDMM}</span>
                           )}
                         </td>
                       </tr>
@@ -3819,7 +3997,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', textAlign: 'center' }}>
                           خط الطول (E)
                         </td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                           {isTableEditing ? (
                             <input
                               type="number"
@@ -3829,10 +4007,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <span dir="ltr">{metrics.releaseLonDMM}</span>
+                            <span dir="ltr">{metrics.releaseLonTableDMM}</span>
                           )}
                         </td>
-                        <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
                           {isTableEditing ? (
                             <input
                               type="number"
@@ -3842,7 +4020,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <span dir="ltr">{metrics.lastGpsLonDMM}</span>
+                            <span dir="ltr">{metrics.lastGpsLonTableDMM}</span>
                           )}
                         </td>
                       </tr>
@@ -4002,38 +4180,42 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
                 )}
 
-                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-[#991b1b] font-mono leading-tight mb-0.5" dir="ltr">
+                {/* Card 1: Distance from Release */}
+                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
+                  <div className="text-[14.5px] font-black text-[#dc2626] font-mono leading-tight mb-1" dir="ltr">
                     {metrics.distFromReleaseKm} km
                   </div>
-                  <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
+                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
                     المسافة من موقع التركيب
                   </div>
                 </div>
 
-                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[13.5px] font-black text-gray-900 leading-tight mb-0.5">
+                {/* Card 2: Bearing Direction & Degrees */}
+                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
+                  <div className="text-[14.5px] font-black text-gray-900 leading-tight mb-1">
                     {metrics.bearingArabic.text}
                   </div>
-                  <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
+                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
                     الاتجاه ({metrics.bearingArabic.degrees}°)
                   </div>
                 </div>
 
-                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 font-mono leading-tight mb-0.5" dir="ltr">
+                {/* Card 3: Distance from Camp */}
+                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
+                  <div className="text-[14.5px] font-black text-gray-900 font-mono leading-tight mb-1" dir="ltr">
                     {metrics.distToCampKm} km
                   </div>
-                  <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
+                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
                     البعد عن المخيم
                   </div>
                 </div>
 
-                <div className="border border-gray-300 rounded-sm bg-gray-50/70 p-2 text-center shadow-xs">
-                  <div className="text-[14px] font-black text-gray-900 leading-tight mb-0.5" dir="rtl">
+                {/* Card 4: Tracking Duration */}
+                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
+                  <div className="text-[14.5px] font-black text-gray-900 leading-tight mb-1" dir="rtl">
                     <span className="font-mono">{metrics.durationDays}</span> يوم
                   </div>
-                  <div className="text-[9.5px] font-bold text-gray-600 leading-tight">
+                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
                     مدة المتابعة
                   </div>
                 </div>
@@ -4044,7 +4226,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           </div>
 
           {/* 3. REPORT FOOTER (MODIFIABLE AND PERSONALIZED) */}
-          <div className="mt-5 pt-2.5 border-t border-gray-200 text-center text-[11.5px] font-semibold text-gray-500 flex items-center justify-between" style={{ direction: 'rtl' }}>
+          <div className="mt-4 pt-2 border-t border-gray-200 text-center text-[11px] font-bold text-gray-500 flex items-center justify-between" style={{ direction: 'rtl' }}>
             {/* Right Footer Text */}
             {isTableEditing ? (
               <input

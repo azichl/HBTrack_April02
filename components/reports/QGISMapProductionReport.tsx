@@ -191,8 +191,8 @@ const createLiveTrackingMarkerIcon = ({
             y="12" 
             text-anchor="middle" 
             dominant-baseline="middle"
-            font-family="'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" 
-            font-size="11" 
+            font-family="'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" 
+            font-size="12" 
             font-weight="800" 
             fill="#ffffff" 
             stroke="#000000" 
@@ -220,7 +220,7 @@ const createLiveTrackingMarkerIcon = ({
           y="${hasTitle ? 30.5 : 12.5}" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          font-family="monospace, 'Segoe UI', Arial" 
+          font-family="monospace, 'Sakkal Majalla', Arial" 
           font-size="11.5" 
           font-weight="800" 
           fill="#0f172a"
@@ -259,8 +259,8 @@ const createLiveTrackingCampIcon = (campName: string) => {
           y="12" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          font-family="'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" 
-          font-size="11.5" 
+          font-family="'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" 
+          font-size="12" 
           font-weight="800" 
           fill="#ffffff" 
           stroke="#000000" 
@@ -1621,7 +1621,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
           className="bg-white text-gray-900 w-[1080px] min-w-[1080px] p-7 shadow-2xl rounded-sm border border-gray-300 relative select-none"
           style={{
             direction: 'ltr',
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif",
+            fontFamily: "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif",
             letterSpacing: 'normal'
           }}
         >
@@ -2001,7 +2001,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                       id="country-inset-title"
                       dir="rtl"
                       className="text-[10.5px] font-black text-gray-800"
-                      style={{ letterSpacing: '0px', fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif" }}
+                      style={{ letterSpacing: '0px', fontFamily: "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" }}
                     >
                       {insetMapData.countryNameAr || 'كازاخستان'}
                     </span>
@@ -2282,7 +2282,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                     borderCollapse: 'separate', 
                     borderSpacing: 0,
                     direction: 'rtl',
-                    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, 'Noto Kufi Arabic', sans-serif"
+                    fontFamily: "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif"
                   }}
                 >
                   <thead>
