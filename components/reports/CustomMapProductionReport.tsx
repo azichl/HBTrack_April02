@@ -5,9 +5,9 @@ import {
   Layers, Info, FileDown, CheckCircle2,
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
-  Move, RotateCcw, GripHorizontal, Eye, EyeOff
+  Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2
 } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, ScaleControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import html2canvas from 'html2canvas';
@@ -226,6 +226,41 @@ const MapInstanceBinder = ({ onMapInstance }: { onMapInstance: (map: L.Map) => v
   return null;
 };
 
+// Map click listener for distance measurement
+const MeasureMapEvents = ({
+  isMeasuring,
+  onMapClick
+}: {
+  isMeasuring: boolean;
+  onMapClick: (lat: number, lon: number) => void;
+}) => {
+  useMapEvents({
+    click: (e) => {
+      if (isMeasuring) {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      }
+    }
+  });
+  return null;
+};
+
+// Distance Measurement Tool Icons
+const measureDotIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: `<div style="width: 12px; height: 12px; background-color: #ffffff; border-radius: 9999px; border: 2.5px solid #f59e0b; box-shadow: 0 1px 4px rgba(0,0,0,0.5);"></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6]
+});
+
+const measureEndIcon = L.divIcon({
+  className: 'bg-transparent',
+  html: `<div style="width: 18px; height: 18px; background-color: #f59e0b; border-radius: 9999px; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
+    <div style="width: 5px; height: 5px; background-color: #ffffff; border-radius: 9999px;"></div>
+  </div>`,
+  iconSize: [18, 18],
+  iconAnchor: [9, 9]
+});
+
 // ─── INTERFACES ─────────────────────────────────────────────────────────────
 
 export interface HistoryTableRow {
@@ -296,9 +331,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [mapCenter, setMapCenter] = useState<[number, number]>(exportedMapView?.center || sharedMapCenter || [36.0, 42.0]);
   const [mapZoom, setMapZoom] = useState<number>(exportedMapView?.zoom || sharedMapZoom || 4);
 
-  // ─── FILTER & MAP ELEMENTS TOGGLES (AS REQUESTED) ──────────────────────────
-  const [showCamps, setShowCamps] = useState<boolean>(true);
+  // ─── FIELD CAMPS FILTER & DISTANCES (AS REQUESTED) ──────────────────────────
+  // Choose camps one by one (check case for every camp)
+  const [visibleCampIds, setVisibleCampIds] = useState<string[]>(['zhezkazgan_camp', 'almaty_camp']);
+  // Distance between each chosen camp and last position
+  const [campDistToLastEnabled, setCampDistToLastEnabled] = useState<{ [campId: string]: boolean }>({});
+  // Distance between camps
   const [showCampDistance, setShowCampDistance] = useState<boolean>(false);
+
+  // ─── DISTANCE MEASUREMENT TOOL ON MAP (AS REQUESTED) ──────────────────────
+  const [isMeasuring, setIsMeasuring] = useState<boolean>(false);
+  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
+
+  // ─── RELEASE & TRACK TOGGLES ──────────────────────────────────────────────
   const [showReleaseMarker, setShowReleaseMarker] = useState<boolean>(true);
   const [showDistanceToRelease, setShowDistanceToRelease] = useState<boolean>(false);
   const [showFlightTrack, setShowFlightTrack] = useState<boolean>(true);
@@ -411,6 +456,34 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     }
     return [45.2, 72.1];
   }, []);
+
+  // Distance Measurement Tool Calculations (Live Tracking Ruler Feature)
+  const totalMeasureDistanceKm = useMemo(() => {
+    if (measurePoints.length < 2) return '0.00';
+    let total = 0;
+    for (let i = 0; i < measurePoints.length - 1; i++) {
+      total += calculateDistanceKm(
+        measurePoints[i][0], measurePoints[i][1],
+        measurePoints[i+1][0], measurePoints[i+1][1]
+      );
+    }
+    return total.toFixed(2);
+  }, [measurePoints]);
+
+  const segmentDistances = useMemo(() => {
+    if (measurePoints.length < 2) return [];
+    const list: { midpoint: [number, number]; distKm: string }[] = [];
+    for (let i = 0; i < measurePoints.length - 1; i++) {
+      const p1 = measurePoints[i];
+      const p2 = measurePoints[i+1];
+      const d = calculateDistanceKm(p1[0], p1[1], p2[0], p2[1]);
+      list.push({
+        midpoint: [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2],
+        distKm: d.toFixed(2)
+      });
+    }
+    return list;
+  }, [measurePoints]);
 
   // ─── UPLOAD FROM HISTORY FUNCTION ──────────────────────────────────────────
   const handleUploadFromHistory = useCallback(async (targetPttId?: string) => {
@@ -556,13 +629,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // Active Field Camp
   const activeCamp: FieldCampPoint = useMemo(() => {
+    const visibleCamps = FIXED_FIELD_CAMPS.filter(c => visibleCampIds.includes(c.id));
+    if (visibleCamps.length === 1) return visibleCamps[0];
     if (selectedCampId === 'zhezkazgan_camp') return FIXED_FIELD_CAMPS[0];
     if (selectedCampId === 'almaty_camp') return FIXED_FIELD_CAMPS[1];
+    
+    const candidates = visibleCamps.length > 0 ? visibleCamps : FIXED_FIELD_CAMPS;
     const lat = parseFloat(String(telemetryData.lastGpsPos.lat)) || 46.9965;
     const lon = parseFloat(String(telemetryData.lastGpsPos.lon)) || 67.0222;
-    let nearest = FIXED_FIELD_CAMPS[0];
+    let nearest = candidates[0];
     let minDist = Infinity;
-    for (const c of FIXED_FIELD_CAMPS) {
+    for (const c of candidates) {
       const d = calculateDistanceKm(lat, lon, c.lat, c.lon);
       if (d < minDist) {
         minDist = d;
@@ -570,7 +647,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       }
     }
     return nearest;
-  }, [selectedCampId, telemetryData.lastGpsPos]);
+  }, [selectedCampId, visibleCampIds, telemetryData.lastGpsPos]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -898,6 +975,35 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </button>
             )}
 
+            {/* Distance Measurement Ruler (Live Tracking feature on map) */}
+            <button
+              onClick={() => setIsMeasuring(!isMeasuring)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors ${
+                isMeasuring 
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300' 
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60'
+              }`}
+              title="أداة قياس المسافة برسم خطوط على الخريطة وتصديرها مع الـ PNG و PDF"
+            >
+              <Ruler size={15} className={isMeasuring ? 'animate-pulse' : ''} />
+              <span>{isMeasuring ? 'إنهاء القياس' : 'قياس المسافة (مسطرة)'}</span>
+              {measurePoints.length > 1 && (
+                <span className="bg-amber-700 text-white text-[10px] px-1.5 py-0.2 rounded-full font-mono">
+                  {totalMeasureDistanceKm} km
+                </span>
+              )}
+            </button>
+
+            {measurePoints.length > 0 && (
+              <button
+                onClick={() => setMeasurePoints([])}
+                className="p-2 bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 dark:bg-slate-700 dark:text-gray-300 rounded-xl"
+                title="مسح خط القياس من على الخريطة"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+
             {/* Export PDF */}
             <button
               onClick={handleExportPdf}
@@ -1134,73 +1240,233 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           <div className="pt-4 border-t border-gray-200 dark:border-slate-700/70 space-y-4 animate-in fade-in slide-in-from-top-2">
             
             {/* Section A: Map Feature Filters & Distance Checkboxes (USER SPECIFIC REQUESTS) */}
-            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-gray-200 dark:border-slate-700">
-              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2.5 flex items-center gap-1.5">
-                <SlidersHorizontal size={14} className="text-brand-500" />
-                <span>خيارات الخريطة والمسافات والعلامات (Map Filters & Elements):</span>
-              </h4>
+            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-gray-200 dark:border-slate-700 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                  <SlidersHorizontal size={14} className="text-brand-500" />
+                  <span>فلاتر المخيمات، المسافات، وأداة القياس على الخريطة:</span>
+                </h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (visibleCampIds.length === FIXED_FIELD_CAMPS.length) {
+                        setVisibleCampIds([]);
+                      } else {
+                        setVisibleCampIds(FIXED_FIELD_CAMPS.map(c => c.id));
+                      }
+                    }}
+                    className="text-[10px] text-brand-600 dark:text-brand-400 font-bold hover:underline"
+                  >
+                    {visibleCampIds.length === FIXED_FIELD_CAMPS.length ? 'إلغاء تحديد كل المخيمات' : 'تحديد كل المخيمات'}
+                  </button>
+                </div>
+              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                
-                {/* 1. Show / Hide Camps Checkbox */}
-                <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 cursor-pointer hover:border-brand-400 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={showCamps}
-                    onChange={(e) => setShowCamps(e.target.checked)}
-                    className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 cursor-pointer"
-                  />
-                  <div className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                    <span>إظهار مخيمات الميدان</span>
-                    <span className="block text-[10px] text-gray-500 font-normal">عرض أو إخفاء علامات المخيمات</span>
-                  </div>
-                </label>
+              {/* 1. Field Camps Filter (Choose one by one with distance to last pos check case) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {FIXED_FIELD_CAMPS.map(camp => {
+                  const isVisible = visibleCampIds.includes(camp.id);
+                  const isDistToLastActive = campDistToLastEnabled[camp.id] || false;
+                  const distToLast = metrics.lLat && metrics.lLon 
+                    ? calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(1) 
+                    : '0.0';
 
-                {/* 2. Distance Between Camps Checkbox */}
-                <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 cursor-pointer hover:border-emerald-400 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={showCampDistance}
-                    onChange={(e) => setShowCampDistance(e.target.checked)}
-                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                  />
-                  <div className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                    <span>المسافة بين المخيمات</span>
-                    <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
-                      حساب وعرض المسافة ({campDistanceKm} km)
-                    </span>
-                  </div>
-                </label>
+                  return (
+                    <div 
+                      key={camp.id}
+                      className={`p-2.5 rounded-xl border transition-all ${
+                        isVisible 
+                          ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700/60 shadow-xs' 
+                          : 'bg-gray-100/60 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-75'
+                      }`}
+                    >
+                      {/* Checkbox: Camp Show/Hide */}
+                      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isVisible}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setVisibleCampIds(prev => [...prev, camp.id]);
+                            } else {
+                              setVisibleCampIds(prev => prev.filter(id => id !== camp.id));
+                              // Also disable distance if camp hidden
+                              setCampDistToLastEnabled(prev => ({ ...prev, [camp.id]: false }));
+                            }
+                          }}
+                          className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-gray-900 dark:text-white">
+                              {camp.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
+                              {camp.region || 'كازاخستان'}
+                            </span>
+                          </div>
+                          <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
+                            {camp.nameEn} ({camp.lat.toFixed(2)}, {camp.lon.toFixed(2)})
+                          </span>
+                        </div>
+                      </label>
 
-                {/* 3. Show / Hide Release Marker Checkbox */}
-                <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 cursor-pointer hover:border-red-400 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={showReleaseMarker}
-                    onChange={(e) => setShowReleaseMarker(e.target.checked)}
-                    className="w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
-                  />
-                  <div className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                    <span>علامة "موقع التركيب"</span>
-                    <span className="block text-[10px] text-gray-500 font-normal">إظهار أو إخفاء نقطة التركيب</span>
-                  </div>
-                </label>
+                      {/* Checkbox: Distance between chosen camp and last position (Requested Feature) */}
+                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                        <label className={`flex items-center gap-2 cursor-pointer select-none ${!isVisible ? 'opacity-40 pointer-events-none' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={isDistToLastActive}
+                            disabled={!isVisible}
+                            onChange={(e) => {
+                              setCampDistToLastEnabled(prev => ({
+                                ...prev,
+                                [camp.id]: e.target.checked
+                              }));
+                            }}
+                            className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <div className="flex items-center justify-between flex-1">
+                            <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+                              المسافة إلى آخر موقع
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
+                              {distToLast} km
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
 
-                {/* 4. Distance between Last Position & Release Location */}
-                <label className="flex items-center gap-2.5 p-2 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 cursor-pointer hover:border-red-400 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={showDistanceToRelease}
-                    onChange={(e) => setShowDistanceToRelease(e.target.checked)}
-                    className="w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
-                  />
-                  <div className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                    <span>المسافة إلى موقع التركيب</span>
-                    <span className="block text-[10px] text-red-600 dark:text-red-400 font-normal">
-                      حساب المسار ({metrics.distFromReleaseKm} km)
-                    </span>
+                {/* Distance Between Camps Checkbox */}
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex flex-col justify-between">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showCampDistance}
+                      onChange={(e) => setShowCampDistance(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          المسافة بين المخيمات
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                          {campDistanceKm} km
+                        </span>
+                      </div>
+                      <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
+                        رسم خط مباشر وبطاقة مسافة بين مخيمات الميدان
+                      </span>
+                    </div>
+                  </label>
+                  <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                    {visibleCampIds.length >= 2 ? 'مفعل بين المخيمات المعروضة' : 'يتطلب اختيار مخيمين على الأقل'}
                   </div>
-                </label>
+                </div>
+
+                {/* Show / Hide Release Marker Checkbox */}
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex flex-col justify-between">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showReleaseMarker}
+                      onChange={(e) => setShowReleaseMarker(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-xs font-bold text-gray-900 dark:text-white block">
+                        علامة "موقع التركيب"
+                      </span>
+                      <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
+                        إظهار أو إخفاء علامة نقطة إطلاق/تركيب الطائر
+                      </span>
+                    </div>
+                  </label>
+                  <div className="text-[10px] font-mono text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                    {metrics.rLat.toFixed(4)}, {metrics.rLon.toFixed(4)}
+                  </div>
+                </div>
+
+                {/* Distance between Last Position & Release Location */}
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex flex-col justify-between">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showDistanceToRelease}
+                      onChange={(e) => setShowDistanceToRelease(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          المسافة إلى موقع التركيب
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded">
+                          {metrics.distFromReleaseKm} km
+                        </span>
+                      </div>
+                      <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
+                        خط متقطع بين آخر إحداثية ونقطة التركيب
+                      </span>
+                    </div>
+                  </label>
+                  <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                    الاتجاه: {metrics.bearingArabic} ({metrics.bearingDegrees.toFixed(0)}°)
+                  </div>
+                </div>
+
+                {/* Map Distance Measurement Tool (Requested Feature) */}
+                <div className="p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 flex flex-col justify-between">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-amber-500 text-white rounded-lg">
+                        <Ruler size={16} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-amber-900 dark:text-amber-200 block">
+                          أداة قياس المسافة على الخريطة
+                        </span>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
+                          {isMeasuring ? 'انقر على الخريطة لرسم النقاط' : 'رسم خطوط قياس وتصديرها'}
+                        </span>
+                      </div>
+                    </div>
+                    {measurePoints.length > 1 && (
+                      <span className="text-xs font-mono font-bold text-amber-900 dark:text-amber-200 bg-amber-200 dark:bg-amber-800/60 px-2 py-0.5 rounded-md">
+                        {totalMeasureDistanceKm} km
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/60">
+                    <button
+                      type="button"
+                      onClick={() => setIsMeasuring(!isMeasuring)}
+                      className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all ${
+                        isMeasuring 
+                          ? 'bg-amber-600 text-white' 
+                          : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 border border-amber-300 hover:bg-amber-100'
+                      }`}
+                    >
+                      {isMeasuring ? 'إنهاء الرسم' : 'بدء القياس بالمسطرة'}
+                    </button>
+                    {measurePoints.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMeasurePoints([])}
+                        className="py-1 px-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-red-600 border border-red-200 hover:bg-red-50"
+                        title="مسح نقاط القياس"
+                      >
+                        مسح ({measurePoints.length})
+                      </button>
+                    )}
+                  </div>
+                </div>
 
               </div>
             </div>
@@ -1430,10 +1696,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       touchZoom={true}
                       zoomControl={false}
                       attributionControl={false}
-                      className="w-full h-full cursor-grab active:cursor-grabbing"
+                      className={`w-full h-full ${isMeasuring ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
                       style={{ direction: 'ltr', width: '100%', height: '100%' }}
                     >
                       <MapInstanceBinder onMapInstance={setMapInstance} />
+
+                      {/* Measure Map Click Events Listener */}
+                      <MeasureMapEvents
+                        isMeasuring={isMeasuring}
+                        onMapClick={(lat, lon) => {
+                          setMeasurePoints(prev => [...prev, [lat, lon]]);
+                        }}
+                      />
 
                       {/* Base Tile Layer */}
                       {getProductionTileLayer(activeBaseLayer)}
@@ -1476,28 +1750,68 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       ))}
 
                       {/* Distance line between Camps (Requested Filter) */}
-                      {showCampDistance && FIXED_FIELD_CAMPS.length >= 2 && (
-                        <>
-                          <Polyline
-                            positions={[
-                              [FIXED_FIELD_CAMPS[0].lat, FIXED_FIELD_CAMPS[0].lon],
-                              [FIXED_FIELD_CAMPS[1].lat, FIXED_FIELD_CAMPS[1].lon]
-                            ]}
-                            pathOptions={{
-                              color: '#059669',
-                              weight: 2.5,
-                              dashArray: '6, 6',
-                              opacity: 0.95
-                            }}
-                          />
-                          <Marker
-                            position={campsMidpoint}
-                            icon={createDistancePillIcon(`${campDistanceKm} km`, '#059669')}
-                            zIndexOffset={1500}
-                            interactive={false}
-                          />
-                        </>
-                      )}
+                      {showCampDistance && visibleCampIds.length >= 2 && (() => {
+                        const c1 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[0]) || FIXED_FIELD_CAMPS[0];
+                        const c2 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[1]) || FIXED_FIELD_CAMPS[1];
+                        const dKm = calculateDistanceKm(c1.lat, c1.lon, c2.lat, c2.lon).toFixed(1);
+                        const mid: [number, number] = [(c1.lat + c2.lat) / 2, (c1.lon + c2.lon) / 2];
+                        return (
+                          <>
+                            <Polyline
+                              positions={[
+                                [c1.lat, c1.lon],
+                                [c2.lat, c2.lon]
+                              ]}
+                              pathOptions={{
+                                color: '#059669',
+                                weight: 2.5,
+                                dashArray: '6, 6',
+                                opacity: 0.95
+                              }}
+                            />
+                            <Marker
+                              position={mid}
+                              icon={createDistancePillIcon(`${dKm} km`, '#059669')}
+                              zIndexOffset={1500}
+                              interactive={false}
+                            />
+                          </>
+                        );
+                      })()}
+
+                      {/* Distance line between Chosen Camp(s) and Last Position (Requested Feature) */}
+                      {visibleCampIds.map(campId => {
+                        if (!campDistToLastEnabled[campId]) return null;
+                        const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
+                        if (!camp || metrics.lLat === 0 || metrics.lLon === 0) return null;
+
+                        const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(1);
+                        const midLat = (camp.lat + metrics.lLat) / 2;
+                        const midLon = (camp.lon + metrics.lLon) / 2;
+
+                        return (
+                          <React.Fragment key={`camp-dist-to-last-${campId}`}>
+                            <Polyline
+                              positions={[
+                                [camp.lat, camp.lon],
+                                [metrics.lLat, metrics.lLon]
+                              ]}
+                              pathOptions={{
+                                color: '#d97706',
+                                weight: 2.5,
+                                dashArray: '6, 6',
+                                opacity: 0.95
+                              }}
+                            />
+                            <Marker
+                              position={[midLat, midLon]}
+                              icon={createDistancePillIcon(`${distKm} km`, '#d97706')}
+                              zIndexOffset={1600}
+                              interactive={false}
+                            />
+                          </React.Fragment>
+                        );
+                      })}
 
                       {/* Distance line: Last Position to Release Location (Requested Filter) */}
                       {showDistanceToRelease && metrics.lLat !== 0 && metrics.rLat !== 0 && (
@@ -1552,8 +1866,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         />
                       )}
 
-                      {/* Field Camps (Zhezkazgan & Almaty) (Requested Filter) */}
-                      {showCamps && FIXED_FIELD_CAMPS.map(camp => (
+                      {/* Field Camps - Filtered one by one (Requested Filter) */}
+                      {FIXED_FIELD_CAMPS.filter(camp => visibleCampIds.includes(camp.id)).map(camp => (
                         <Marker
                           key={camp.id}
                           position={[camp.lat, camp.lon]}
@@ -1562,7 +1876,108 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         />
                       ))}
 
+                      {/* Interactive Distance Measurement Tool Drawing (EXPORTED WITH PNG & PDF) */}
+                      {measurePoints.length > 0 && (
+                        <>
+                          <Polyline
+                            positions={measurePoints}
+                            pathOptions={{
+                              color: '#eab308',
+                              weight: 3.5,
+                              dashArray: '7, 7',
+                              opacity: 0.95
+                            }}
+                          />
+                          {measurePoints.map((point, idx) => (
+                            <Marker
+                              key={`custom-measure-point-${idx}`}
+                              position={point}
+                              icon={idx === measurePoints.length - 1 ? measureEndIcon : measureDotIcon}
+                              zIndexOffset={2200}
+                              interactive={false}
+                            />
+                          ))}
+                          {segmentDistances.map((seg, idx) => (
+                            <Marker
+                              key={`custom-measure-seg-${idx}`}
+                              position={seg.midpoint}
+                              icon={createDistancePillIcon(`${seg.distKm} km`, '#d97706', [32, 26])}
+                              zIndexOffset={2300}
+                              interactive={false}
+                            />
+                          ))}
+                          {measurePoints.length > 2 && (
+                            <Marker
+                              position={measurePoints[measurePoints.length - 1]}
+                              icon={createDistancePillIcon(`المجموع: ${totalMeasureDistanceKm} km`, '#b45309', [42, 30])}
+                              zIndexOffset={2400}
+                              interactive={false}
+                            />
+                          )}
+                        </>
+                      )}
+
                     </MapContainer>
+
+                    {/* Quick Floating Ruler Activation Button in Map Top-Left */}
+                    <div className="absolute top-2.5 left-2.5 z-[1000] no-export-snapshot no-print flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsMeasuring(!isMeasuring)}
+                        className={`p-1.5 rounded-lg shadow-md transition-all flex items-center gap-1 text-[11px] font-bold ${
+                          isMeasuring 
+                            ? 'bg-amber-500 text-white ring-2 ring-amber-300 shadow-amber-500/20' 
+                            : 'bg-white/95 text-gray-700 hover:bg-gray-100 hover:text-amber-600 border border-gray-200'
+                        }`}
+                        title="أداة قياس المسافة على الخريطة"
+                      >
+                        <Ruler size={14} className={isMeasuring ? 'animate-pulse' : ''} />
+                        <span>{isMeasuring ? 'إنهاء القياس' : 'مسطرة'}</span>
+                      </button>
+                    </div>
+
+                    {/* Floating Measurement Tool Controls (Like Live Tracking Overlay) */}
+                    {(isMeasuring || measurePoints.length > 0) && (
+                      <div 
+                        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] no-export-snapshot no-print flex items-center gap-2 bg-slate-900/95 backdrop-blur text-white px-3.5 py-1.5 rounded-full shadow-2xl border border-slate-700 text-xs select-none animate-in fade-in slide-in-from-bottom-2"
+                      >
+                        <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+                          <Ruler size={14} />
+                          <span>{isMeasuring ? 'وضع القياس (انقر للإضافة):' : 'المسافة المقاسة:'}</span>
+                        </div>
+                        
+                        <div className="h-3.5 w-px bg-slate-700"></div>
+                        
+                        <div className="font-mono font-bold text-amber-300 text-xs">
+                          {totalMeasureDistanceKm} km
+                        </div>
+                        
+                        <div className="text-[10px] text-gray-400 font-normal">
+                          ({measurePoints.length} نقاط)
+                        </div>
+                        
+                        <div className="h-3.5 w-px bg-slate-700"></div>
+                        
+                        <button
+                          type="button"
+                          onClick={() => setMeasurePoints([])}
+                          className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-red-400 transition-colors"
+                          title="مسح نقاط القياس"
+                          disabled={measurePoints.length === 0}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={() => setIsMeasuring(false)}
+                          className="p-1 hover:bg-emerald-800/60 rounded-full text-emerald-400 hover:text-emerald-300 transition-colors"
+                          title="إنهاء الرسم والاحتفاظ بالخط على الخريطة لتصديره"
+                        >
+                          <Check size={14} />
+                        </button>
+                      </div>
+                    )}
 
                     {/* North Arrow Symbol */}
                     <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
@@ -1625,7 +2040,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </td>
 
                       {/* 4. مخيمات الميدان (إذا كانت مفعلة) */}
-                      {showCamps && (
+                      {visibleCampIds.length > 0 && (
                         <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
@@ -1634,18 +2049,32 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               <path d="m10 4 4.5 16"/>
                             </svg>
                             <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
-                              مخيمات الميدان
+                              مخيمات الميدان ({visibleCampIds.length})
                             </span>
                           </div>
                         </td>
                       )}
 
                       {/* 5. المسافة بين المخيمات */}
-                      {showCampDistance && (
+                      {showCampDistance && visibleCampIds.length >= 2 && (
                         <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
                           <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
                             بين المخيمات: {campDistanceKm} km
                           </span>
+                        </td>
+                      )}
+
+                      {/* 6. خط قياس المسافة المرسوم (إن وجد) */}
+                      {measurePoints.length > 1 && (
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', verticalAlign: 'middle', height: '18px' }}>
+                            <svg width="14" height="8" viewBox="0 0 14 8">
+                              <line x1="0" y1="4" x2="14" y2="4" stroke="#eab308" strokeWidth="2.5" strokeDasharray="3,2" />
+                            </svg>
+                            <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#b45309', whiteSpace: 'nowrap' }}>
+                              مسافة مقاسة: {totalMeasureDistanceKm} km
+                            </span>
+                          </div>
                         </td>
                       )}
                     </tr>
