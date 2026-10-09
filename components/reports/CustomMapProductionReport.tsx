@@ -6,7 +6,7 @@ import {
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
   Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload,
-  ChevronLeft, ChevronRight, Palette
+  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -487,6 +487,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [logoRightUrl, setLogoRightUrl] = useState<string>('/external-reserves-office-logo.png');
   const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('contain');
 
+  // Logo Dimensions Management (User requested: click and adjust dimensions)
+  const [logoLeftHeight, setLogoLeftHeight] = useState<number>(100);
+  const [logoLeftWidth, setLogoLeftWidth] = useState<number>(240);
+  const [logoRightHeight, setLogoRightHeight] = useState<number>(60);
+  const [logoRightWidth, setLogoRightWidth] = useState<number>(300);
+  const [activeResizingLogo, setActiveResizingLogo] = useState<'left' | 'right' | null>(null);
+
   const mapImageInputRef = useRef<HTMLInputElement>(null);
   const logoLeftInputRef = useRef<HTMLInputElement>(null);
   const logoRightInputRef = useRef<HTMLInputElement>(null);
@@ -528,6 +535,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     reader.readAsDataURL(file);
     e.target.value = '';
   };
+
+  // Close logo resizing popover when clicking outside
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('.logo-control-popover') && 
+          !(e.target as HTMLElement).closest('.logo-clickable-container')) {
+        setActiveResizingLogo(null);
+      }
+    };
+    if (activeResizingLogo) {
+      document.addEventListener('mousedown', handleGlobalClick);
+      return () => document.removeEventListener('mousedown', handleGlobalClick);
+    }
+  }, [activeResizingLogo]);
 
   // Check if transmitter ID is NA -> Fallback to Ring ID
   const isPttNA = useMemo(() => {
@@ -1888,6 +1909,62 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </button>
                     )}
                   </div>
+
+                  {/* Left Logo Dimension Sliders */}
+                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500 font-semibold">الارتفاع:</span>
+                      <span className="font-mono font-bold text-brand-600">{logoLeftHeight} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={30}
+                      max={200}
+                      step={5}
+                      value={logoLeftHeight}
+                      onChange={(e) => setLogoLeftHeight(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500 font-semibold">أقصى عرض:</span>
+                      <span className="font-mono font-bold text-brand-600">{logoLeftWidth} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={60}
+                      max={450}
+                      step={10}
+                      value={logoLeftWidth}
+                      onChange={(e) => setLogoLeftWidth(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+
+                    <div className="flex items-center justify-between gap-1 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogoLeftHeight(h => Math.max(30, h - 10));
+                          setLogoLeftWidth(w => Math.max(60, w - 20));
+                        }}
+                        className="flex-1 py-1 px-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
+                      >
+                        <Minus size={10} />
+                        <span>تصغير</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogoLeftHeight(h => Math.min(220, h + 10));
+                          setLogoLeftWidth(w => Math.min(480, w + 20));
+                        }}
+                        className="flex-1 py-1 px-1.5 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
+                      >
+                        <Plus size={10} />
+                        <span>تكبير</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 2. Right Logo (External Reserves Office) */}
@@ -1926,6 +2003,62 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <RotateCcw size={12} />
                       </button>
                     )}
+                  </div>
+
+                  {/* Right Logo Dimension Sliders */}
+                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/60">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500 font-semibold">الارتفاع:</span>
+                      <span className="font-mono font-bold text-brand-600">{logoRightHeight} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={30}
+                      max={200}
+                      step={5}
+                      value={logoRightHeight}
+                      onChange={(e) => setLogoRightHeight(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-500 font-semibold">أقصى عرض:</span>
+                      <span className="font-mono font-bold text-brand-600">{logoRightWidth} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={60}
+                      max={450}
+                      step={10}
+                      value={logoRightWidth}
+                      onChange={(e) => setLogoRightWidth(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+
+                    <div className="flex items-center justify-between gap-1 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogoRightHeight(h => Math.max(30, h - 10));
+                          setLogoRightWidth(w => Math.max(60, w - 20));
+                        }}
+                        className="flex-1 py-1 px-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
+                      >
+                        <Minus size={10} />
+                        <span>تصغير</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogoRightHeight(h => Math.min(220, h + 10));
+                          setLogoRightWidth(w => Math.min(480, w + 20));
+                        }}
+                        className="flex-1 py-1 px-1.5 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
+                      >
+                        <Plus size={10} />
+                        <span>تكبير</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -2203,36 +2336,213 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
             
             {/* Top-Left Header Logo */}
-            <div className="flex items-center justify-start w-[240px] relative group">
+            <div 
+              className={`logo-clickable-container flex items-center justify-start relative group transition-all select-none ${
+                activeResizingLogo === 'left' 
+                  ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
+                  : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
+              }`}
+              style={{ minWidth: '120px' }}
+            >
               <img 
                 src={logoLeftUrl} 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="h-[100px] w-auto object-contain"
+                className="object-contain cursor-pointer transition-all"
+                style={{
+                  height: `${logoLeftHeight}px`,
+                  maxWidth: `${logoLeftWidth}px`,
+                  width: 'auto',
+                  display: 'block'
+                }}
+                onClick={() => setActiveResizingLogo(activeResizingLogo === 'left' ? null : 'left')}
+                title="انقر على الشعار لتكبيره أو تصغيره وتعديل أبعاده"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
-              <div className="no-export-snapshot no-print absolute -bottom-1 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 shadow-md">
+
+              {/* Hover Quick Edit Badge */}
+              <div className="no-export-snapshot no-print absolute -bottom-2 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
                 <button
                   type="button"
-                  onClick={() => logoLeftInputRef.current?.click()}
-                  className="hover:underline flex items-center gap-0.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveResizingLogo(activeResizingLogo === 'left' ? null : 'left');
+                  }}
+                  className="hover:text-amber-300 flex items-center gap-0.5 font-bold"
+                  title="تعديل الأبعاد وتكبير أو تصغير الحجم"
+                >
+                  <Maximize2 size={10} />
+                  <span>تعديل الحجم ({logoLeftHeight}px)</span>
+                </button>
+                <span className="text-gray-500">•</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    logoLeftInputRef.current?.click();
+                  }}
+                  className="hover:underline flex items-center gap-0.5 text-sky-300"
                   title="رفع شعار جديد (PNG أو SVG)"
                 >
                   <Upload size={10} />
-                  <span>تغيير</span>
+                  <span>استبدال</span>
                 </button>
                 {logoLeftUrl !== '/qatar-houbara-center-logo.png' && (
                   <button
                     type="button"
-                    onClick={() => setLogoLeftUrl('/qatar-houbara-center-logo.png')}
-                    className="hover:text-amber-300 ml-1 font-bold"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLogoLeftUrl('/qatar-houbara-center-logo.png');
+                    }}
+                    className="hover:text-amber-300 font-bold ml-0.5"
                     title="استعادة الشعار الافتراضي"
                   >
                     ↺
                   </button>
                 )}
               </div>
+
+              {/* Floating Dimension Controller Popover (Appears when clicked!) */}
+              {activeResizingLogo === 'left' && (
+                <div 
+                  className="logo-control-popover no-export-snapshot no-print absolute top-full left-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                  style={{ direction: 'rtl' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                      <Maximize2 size={13} className="text-brand-500" />
+                      <span>تعديل حجم الشعار الأيسر</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveResizingLogo(null)}
+                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-md"
+                      title="إغلاق"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  {/* Quick Scale Buttons */}
+                  <div className="flex items-center justify-between gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLogoLeftHeight(h => Math.max(30, h - 10));
+                        setLogoLeftWidth(w => Math.max(60, w - 20));
+                      }}
+                      className="flex-1 py-1 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded text-xs font-bold flex items-center justify-center gap-1"
+                      title="تصغير الشعار بمقدار 10 بكسل"
+                    >
+                      <Minus size={12} />
+                      <span>تصغير</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLogoLeftHeight(h => Math.min(220, h + 10));
+                        setLogoLeftWidth(w => Math.min(480, w + 20));
+                      }}
+                      className="flex-1 py-1 px-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold flex items-center justify-center gap-1 shadow-xs"
+                      title="تكبير الشعار بمقدار 10 بكسل"
+                    >
+                      <Plus size={12} />
+                      <span>تكبير</span>
+                    </button>
+                  </div>
+
+                  {/* Height Slider */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                      <span>الارتفاع (Height):</span>
+                      <span className="font-mono font-bold text-brand-600">{logoLeftHeight} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={30}
+                      max={200}
+                      step={5}
+                      value={logoLeftHeight}
+                      onChange={(e) => setLogoLeftHeight(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+                  </div>
+
+                  {/* Width Slider */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                      <span>العرض (Max Width):</span>
+                      <span className="font-mono font-bold text-brand-600">{logoLeftWidth} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={60}
+                      max={450}
+                      step={10}
+                      value={logoLeftWidth}
+                      onChange={(e) => setLogoLeftWidth(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+                  </div>
+
+                  {/* Size Presets */}
+                  <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-100 dark:border-slate-800">
+                    <span className="text-[10px] text-gray-500">حجم سريع:</span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => { setLogoLeftHeight(60); setLogoLeftWidth(160); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        صغير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoLeftHeight(100); setLogoLeftWidth(240); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        متوسط
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoLeftHeight(135); setLogoLeftWidth(320); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        كبير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoLeftHeight(165); setLogoLeftWidth(400); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        كبير جداً
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions: Replace Logo or Reset Size */}
+                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-800 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => logoLeftInputRef.current?.click()}
+                      className="text-sky-600 dark:text-sky-400 hover:underline font-bold flex items-center gap-1"
+                    >
+                      <Upload size={11} />
+                      <span>استبدال الصورة</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setLogoLeftHeight(100); setLogoLeftWidth(240); }}
+                      className="text-gray-500 hover:text-gray-800 dark:hover:text-white flex items-center gap-0.5"
+                    >
+                      <RotateCcw size={11} />
+                      <span>الحجم الافتراضي</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Center Header: Title & Subtitle */}
@@ -2268,36 +2578,213 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
 
             {/* Top-Right Header Logo */}
-            <div className="flex items-center justify-end w-[350px] relative group">
+            <div 
+              className={`logo-clickable-container flex items-center justify-end relative group transition-all select-none ${
+                activeResizingLogo === 'right' 
+                  ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
+                  : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
+              }`}
+              style={{ minWidth: '120px' }}
+            >
               <img 
                 src={logoRightUrl} 
                 alt="مكتب محميات الدولة الخارجية" 
-                className="h-[48px] w-auto max-w-[270px] object-contain"
+                className="object-contain cursor-pointer transition-all"
+                style={{
+                  height: `${logoRightHeight}px`,
+                  maxWidth: `${logoRightWidth}px`,
+                  width: 'auto',
+                  display: 'block'
+                }}
+                onClick={() => setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right')}
+                title="انقر على الشعار لتكبيره أو تصغيره وتعديل أبعاده"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
-              <div className="no-export-snapshot no-print absolute -bottom-1 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/75 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 shadow-md">
+
+              {/* Hover Quick Edit Badge */}
+              <div className="no-export-snapshot no-print absolute -bottom-2 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
                 <button
                   type="button"
-                  onClick={() => logoRightInputRef.current?.click()}
-                  className="hover:underline flex items-center gap-0.5"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right');
+                  }}
+                  className="hover:text-amber-300 flex items-center gap-0.5 font-bold"
+                  title="تعديل الأبعاد وتكبير أو تصغير الحجم"
+                >
+                  <Maximize2 size={10} />
+                  <span>تعديل الحجم ({logoRightHeight}px)</span>
+                </button>
+                <span className="text-gray-500">•</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    logoRightInputRef.current?.click();
+                  }}
+                  className="hover:underline flex items-center gap-0.5 text-sky-300"
                   title="رفع شعار جديد (PNG أو SVG)"
                 >
                   <Upload size={10} />
-                  <span>تغيير</span>
+                  <span>استبدال</span>
                 </button>
                 {logoRightUrl !== '/external-reserves-office-logo.png' && (
                   <button
                     type="button"
-                    onClick={() => setLogoRightUrl('/external-reserves-office-logo.png')}
-                    className="hover:text-amber-300 mr-1 font-bold"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setLogoRightUrl('/external-reserves-office-logo.png');
+                    }}
+                    className="hover:text-amber-300 font-bold mr-0.5"
                     title="استعادة الشعار الافتراضي"
                   >
                     ↺
                   </button>
                 )}
               </div>
+
+              {/* Floating Dimension Controller Popover (Appears when clicked!) */}
+              {activeResizingLogo === 'right' && (
+                <div 
+                  className="logo-control-popover no-export-snapshot no-print absolute top-full right-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                  style={{ direction: 'rtl' }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
+                    <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                      <Maximize2 size={13} className="text-brand-500" />
+                      <span>تعديل حجم الشعار الأيمن</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveResizingLogo(null)}
+                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-md"
+                      title="إغلاق"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+
+                  {/* Quick Scale Buttons */}
+                  <div className="flex items-center justify-between gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLogoRightHeight(h => Math.max(30, h - 10));
+                        setLogoRightWidth(w => Math.max(60, w - 20));
+                      }}
+                      className="flex-1 py-1 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded text-xs font-bold flex items-center justify-center gap-1"
+                      title="تصغير الشعار بمقدار 10 بكسل"
+                    >
+                      <Minus size={12} />
+                      <span>تصغير</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLogoRightHeight(h => Math.min(220, h + 10));
+                        setLogoRightWidth(w => Math.min(480, w + 20));
+                      }}
+                      className="flex-1 py-1 px-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold flex items-center justify-center gap-1 shadow-xs"
+                      title="تكبير الشعار بمقدار 10 بكسل"
+                    >
+                      <Plus size={12} />
+                      <span>تكبير</span>
+                    </button>
+                  </div>
+
+                  {/* Height Slider */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                      <span>الارتفاع (Height):</span>
+                      <span className="font-mono font-bold text-brand-600">{logoRightHeight} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={30}
+                      max={200}
+                      step={5}
+                      value={logoRightHeight}
+                      onChange={(e) => setLogoRightHeight(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+                  </div>
+
+                  {/* Width Slider */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                      <span>العرض (Max Width):</span>
+                      <span className="font-mono font-bold text-brand-600">{logoRightWidth} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={60}
+                      max={450}
+                      step={10}
+                      value={logoRightWidth}
+                      onChange={(e) => setLogoRightWidth(Number(e.target.value))}
+                      className="w-full accent-brand-600 cursor-pointer h-1.5"
+                    />
+                  </div>
+
+                  {/* Size Presets */}
+                  <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-100 dark:border-slate-800">
+                    <span className="text-[10px] text-gray-500">حجم سريع:</span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => { setLogoRightHeight(50); setLogoRightWidth(200); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        صغير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoRightHeight(75); setLogoRightWidth(280); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        متوسط
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoRightHeight(105); setLogoRightWidth(350); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        كبير
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoRightHeight(140); setLogoRightWidth(420); }}
+                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                      >
+                        كبير جداً
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Actions: Replace Logo or Reset Size */}
+                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-800 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => logoRightInputRef.current?.click()}
+                      className="text-sky-600 dark:text-sky-400 hover:underline font-bold flex items-center gap-1"
+                    >
+                      <Upload size={11} />
+                      <span>استبدال الصورة</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setLogoRightHeight(60); setLogoRightWidth(300); }}
+                      className="text-gray-500 hover:text-gray-800 dark:hover:text-white flex items-center gap-0.5"
+                    >
+                      <RotateCcw size={11} />
+                      <span>الحجم الافتراضي</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>
