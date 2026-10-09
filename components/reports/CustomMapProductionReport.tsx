@@ -334,6 +334,14 @@ export const renderLegendSymbol = (symbol: string, color: string) => {
   }
 };
 
+export const getCampLegendLabel = (campIds: string[]): string => {
+  if (campIds.length === 1) {
+    const singleCamp = FIXED_FIELD_CAMPS.find(c => c.id === campIds[0]);
+    return singleCamp?.name || 'مخيم';
+  }
+  return 'مخيم';
+};
+
 export interface CustomMapProductionReportProps {
   onBack?: () => void;
 }
@@ -457,7 +465,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     reportTitle: 'تقرير متابعة طائر حبارى مزود بجهاز تتبع',
     regionName: 'كازاخستان',
     footerRight: 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان',
-    footerLeft: 'HBTrack Custom Map Report • Live Tracking View'
+    footerLeft: ''
   });
 
   // Editable Telemetry Values
@@ -636,7 +644,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     },
     {
       id: 'camps',
-      label: 'مخيمات الميدان (2)',
+      label: 'مخيم',
       color: '#10b981',
       symbol: 'tent',
       visible: true
@@ -709,7 +717,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       },
       {
         id: 'camps',
-        label: `مخيمات الميدان (${visibleCampIds.length})`,
+        label: getCampLegendLabel(visibleCampIds),
         color: '#10b981',
         symbol: 'tent',
         visible: visibleCampIds.length > 0
@@ -734,7 +742,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       });
     }
     setLegendItems(items);
-  }, [telemetryData.lastGpsPos?.dateStr, showReleaseMarker, visibleCampIds.length, showCampDistance, campDistanceKm, measurePoints.length, totalMeasureDistanceKm]);
+  }, [telemetryData.lastGpsPos?.dateStr, showReleaseMarker, visibleCampIds, showCampDistance, campDistanceKm, measurePoints.length, totalMeasureDistanceKm]);
 
   // Keep legend items smoothly in sync with telemetry date & filters if not manually customized
   useEffect(() => {
@@ -754,14 +762,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (item.id === 'camps') {
           return {
             ...item,
-            label: `مخيمات الميدان (${visibleCampIds.length})`,
+            label: getCampLegendLabel(visibleCampIds),
             visible: visibleCampIds.length > 0
           };
         }
         return item;
       }));
     }
-  }, [visibleCampIds.length, isLegendCustomizedByUser]);
+  }, [visibleCampIds, isLegendCustomizedByUser]);
 
   useEffect(() => {
     if (!isLegendCustomizedByUser) {
@@ -4074,12 +4082,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 className="text-left font-mono border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-500 text-[10px] w-[40%]"
                 dir="ltr"
                 title="تعديل نص التذييل الأيسر"
+                placeholder="تذييل اختياري..."
               />
-            ) : (
+            ) : customMetadata.footerLeft ? (
               <span className="text-[10px] text-gray-400 font-mono" dir="ltr">
-                {customMetadata.footerLeft || 'HBTrack Custom Map Report • Live Tracking View'}
+                {customMetadata.footerLeft}
               </span>
-            )}
+            ) : null}
           </div>
 
         </div>
