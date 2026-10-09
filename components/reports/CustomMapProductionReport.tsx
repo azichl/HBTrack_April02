@@ -1011,33 +1011,327 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setHistoryRows([newRow, ...historyRows]);
   };
 
+  // Helper to ensure pixel-perfect, completely stable canvas rendering during html2canvas export / snapshot
+  const buildHtml2CanvasMapExportOptions = useCallback((targetElement: HTMLElement, isSnapshotOnly: boolean) => {
+    return {
+      scale: isSnapshotOnly ? 2 : 2.5,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      ignoreElements: (el: Element) => 
+        el.id === 'custom-map-quick-snap-btn' ||
+        el.classList?.contains('no-export-snapshot') ||
+        el.classList?.contains('no-print') || 
+        el.classList?.contains('drag-handle') ||
+        el.classList?.contains('leaflet-control-zoom') || 
+        el.classList?.contains('leaflet-control-attribution'),
+      onclone: (clonedDoc: Document) => {
+        // 1. Copy all live canvas layers (Google Maps tiles, satellite, base layers)
+        const origCanvases = Array.from(targetElement.querySelectorAll('canvas'));
+        const clonedCanvases = Array.from(clonedDoc.querySelectorAll('canvas'));
+        clonedCanvases.forEach((clonedC, i) => {
+          const origC = origCanvases[i] as HTMLCanvasElement;
+          if (origC && origC.width && origC.height) {
+            clonedC.width = origC.width;
+            clonedC.height = origC.height;
+            const ctx = clonedC.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(origC, 0, 0);
+            }
+          }
+        });
+
+        // 2. Format Scale Control on dark pill background with crisp border
+        const clonedScaleControls = clonedDoc.querySelectorAll('.leaflet-control-scale');
+        clonedScaleControls.forEach(sc => {
+          const el = sc as HTMLElement;
+          el.style.setProperty('background', '#1e293b', 'important');
+          el.style.setProperty('background-color', '#1e293b', 'important');
+          el.style.setProperty('border', '1px solid rgba(255, 255, 255, 0.4)', 'important');
+          el.style.setProperty('border-radius', '4px', 'important');
+          el.style.setProperty('padding', '2px 5px 3px 5px', 'important');
+          el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.6)', 'important');
+          el.style.setProperty('display', 'inline-block', 'important');
+        });
+        const clonedScaleLines = clonedDoc.querySelectorAll('.leaflet-control-scale-line');
+        clonedScaleLines.forEach(sl => {
+          const el = sl as HTMLElement;
+          el.style.setProperty('background', '#1e293b', 'important');
+          el.style.setProperty('background-color', '#1e293b', 'important');
+          el.style.setProperty('border', '2px solid #ffffff', 'important');
+          el.style.setProperty('border-top', 'none', 'important');
+          el.style.setProperty('color', '#ffffff', 'important');
+          el.style.setProperty('font-weight', '800', 'important');
+          el.style.setProperty('font-family', "monospace, 'Segoe UI', Arial, sans-serif", 'important');
+          el.style.setProperty('font-size', '10px', 'important');
+          el.style.setProperty('line-height', '1.1', 'important');
+          el.style.setProperty('padding', '2px 6px 1px 6px', 'important');
+          el.style.setProperty('border-radius', '2px', 'important');
+          el.style.setProperty('text-shadow', '0 1px 2px rgba(0, 0, 0, 0.9)', 'important');
+          el.style.setProperty('display', 'block', 'important');
+        });
+
+        // 3. Fix Leaflet Vector Shift Bug:
+        // Leaflet renders SVG paths inside .leaflet-overlay-pane with CSS transforms that
+        // html2canvas incorrectly double-translates, shifting polylines and tracks off-center.
+        // We eliminate the shifted SVGs from the clone and render pixel-perfect canvas lines
+        // positioned at the exact layer coordinates.
+        const activeMap = mapInstance || (targetElement.querySelector('.leaflet-container') as any)?._leaflet_map;
+        const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
+
+        if (clonedOverlayPane && activeMap) {
+          // Wipe out shifted SVGs from the cloned overlay pane
+          const overlaySvgs = clonedOverlayPane.querySelectorAll('svg');
+          overlaySvgs.forEach(svg => {
+            svg.innerHTML = '';
+            (svg as HTMLElement).style.display = 'none';
+          });
+
+          try {
+            // Collect all points to determine bounding box
+            const allPts: L.Point[] = [];
+
+            if (showFlightTrack && allHistoryPoints.length > 0) {
+              allHistoryPoints.forEach(pos => {
+                try { allPts.push(activeMap.latLngToLayerPoint(pos)); } catch (e) {}
+              });
+            }
+
+            if (metrics.rLat !== 0 && metrics.rLon !== 0) {
+              try { allPts.push(activeMap.latLngToLayerPoint([metrics.rLat, metrics.rLon])); } catch (e) {}
+            }
+
+            if (metrics.lLat !== 0 && metrics.lLon !== 0) {
+              try { allPts.push(activeMap.latLngToLayerPoint([metrics.lLat, metrics.lLon])); } catch (e) {}
+            }
+
+            FIXED_FIELD_CAMPS.forEach(c => {
+              try { allPts.push(activeMap.latLngToLayerPoint([c.lat, c.lon])); } catch (e) {}
+            });
+
+            if (measurePoints.length > 0) {
+              measurePoints.forEach(pos => {
+                try { allPts.push(activeMap.latLngToLayerPoint(pos)); } catch (e) {}
+              });
+            }
+
+            const mapSize = activeMap.getSize();
+            let minX = 0;
+            let minY = 0;
+            let maxX = mapSize.x || 800;
+            let maxY = mapSize.y || 450;
+
+            allPts.forEach(pt => {
+              if (pt.x < minX) minX = pt.x;
+              if (pt.y < minY) minY = pt.y;
+              if (pt.x > maxX) maxX = pt.x;
+              if (pt.y > maxY) maxY = pt.y;
+            });
+
+            minX = Math.floor(minX - 300);
+            minY = Math.floor(minY - 300);
+            maxX = Math.ceil(maxX + 300);
+            maxY = Math.ceil(maxY + 300);
+
+            const canvasW = maxX - minX;
+            const canvasH = maxY - minY;
+
+            const exportLinesCanvas = clonedDoc.createElement('canvas');
+            exportLinesCanvas.width = canvasW;
+            exportLinesCanvas.height = canvasH;
+            exportLinesCanvas.style.position = 'absolute';
+            exportLinesCanvas.style.left = `${minX}px`;
+            exportLinesCanvas.style.top = `${minY}px`;
+            exportLinesCanvas.style.width = `${canvasW}px`;
+            exportLinesCanvas.style.height = `${canvasH}px`;
+            exportLinesCanvas.style.zIndex = '350';
+            exportLinesCanvas.style.pointerEvents = 'none';
+
+            const ctx = exportLinesCanvas.getContext('2d');
+            if (ctx) {
+              ctx.translate(-minX, -minY);
+
+              // ─── A. Real Flight Trajectory Line & Fix Dots ───
+              if (showFlightTrack && allHistoryPoints.length > 1) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = '#6366f1';
+                ctx.lineWidth = 2.8;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.globalAlpha = 0.85;
+
+                allHistoryPoints.forEach((pos, idx) => {
+                  const pt = activeMap.latLngToLayerPoint(pos);
+                  if (idx === 0) ctx.moveTo(pt.x, pt.y);
+                  else ctx.lineTo(pt.x, pt.y);
+                });
+                ctx.stroke();
+                ctx.restore();
+
+                // Telemetry fix dots
+                allHistoryPoints.forEach((pos) => {
+                  const pt = activeMap.latLngToLayerPoint(pos);
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+                  ctx.fillStyle = '#ffffff';
+                  ctx.globalAlpha = 0.95;
+                  ctx.fill();
+                  ctx.lineWidth = 1.5;
+                  ctx.strokeStyle = '#4f46e5';
+                  ctx.stroke();
+                  ctx.restore();
+                });
+              }
+
+              // ─── B. Distance line between Chosen Camp(s) and Last Position ───
+              visibleCampIds.forEach(campId => {
+                if (!campDistToLastEnabled[campId]) return;
+                const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
+                if (!camp || metrics.lLat === 0 || metrics.lLon === 0) return;
+
+                const campPt = activeMap.latLngToLayerPoint([camp.lat, camp.lon]);
+                const lastPt = activeMap.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = '#d97706';
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.setLineDash([6, 6]);
+                ctx.moveTo(campPt.x, campPt.y);
+                ctx.lineTo(lastPt.x, lastPt.y);
+                ctx.stroke();
+                ctx.restore();
+              });
+
+              // ─── C. Distance line between Camps ───
+              if (showCampDistance && visibleCampIds.length >= 2) {
+                const c1 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[0]) || FIXED_FIELD_CAMPS[0];
+                const c2 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[1]) || FIXED_FIELD_CAMPS[1];
+                const pt1 = activeMap.latLngToLayerPoint([c1.lat, c1.lon]);
+                const pt2 = activeMap.latLngToLayerPoint([c2.lat, c2.lon]);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = '#059669';
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.setLineDash([6, 6]);
+                ctx.moveTo(pt1.x, pt1.y);
+                ctx.lineTo(pt2.x, pt2.y);
+                ctx.stroke();
+                ctx.restore();
+              }
+
+              // ─── D. Distance line: Release Position to Last Position ───
+              if (showDistanceToRelease && metrics.rLat !== 0 && metrics.lLat !== 0) {
+                const relPt = activeMap.latLngToLayerPoint([metrics.rLat, metrics.rLon]);
+                const lastPt = activeMap.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = '#dc2626';
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.setLineDash([6, 6]);
+                ctx.moveTo(relPt.x, relPt.y);
+                ctx.lineTo(lastPt.x, lastPt.y);
+                ctx.stroke();
+                ctx.restore();
+              }
+
+              // ─── E. Distance Measurement Tool Drawing (Ruler) ───
+              if (measurePoints.length > 1) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = '#eab308';
+                ctx.lineWidth = 3.5;
+                ctx.lineCap = 'round';
+                ctx.setLineDash([7, 7]);
+
+                measurePoints.forEach((pos, idx) => {
+                  const pt = activeMap.latLngToLayerPoint(pos);
+                  if (idx === 0) ctx.moveTo(pt.x, pt.y);
+                  else ctx.lineTo(pt.x, pt.y);
+                });
+                ctx.stroke();
+                ctx.restore();
+
+                // Measure dots
+                measurePoints.forEach((pos, idx) => {
+                  const pt = activeMap.latLngToLayerPoint(pos);
+                  const isEnd = idx === measurePoints.length - 1;
+                  ctx.save();
+                  ctx.beginPath();
+                  ctx.arc(pt.x, pt.y, isEnd ? 7 : 5, 0, Math.PI * 2);
+                  ctx.fillStyle = isEnd ? '#f59e0b' : '#ffffff';
+                  ctx.fill();
+                  ctx.lineWidth = 2.5;
+                  ctx.strokeStyle = isEnd ? '#ffffff' : '#f59e0b';
+                  ctx.stroke();
+                  ctx.restore();
+                });
+              }
+            }
+
+            clonedOverlayPane.appendChild(exportLinesCanvas);
+          } catch (err) {
+            console.warn('Error rendering custom export lines canvas in clone:', err);
+          }
+
+          // Raise marker pane so marker icons and distance pills sit cleanly on top of canvas lines
+          const clonedMarkerPane = clonedDoc.querySelector('.leaflet-marker-pane') as HTMLElement;
+          if (clonedMarkerPane) {
+            clonedMarkerPane.style.zIndex = '800';
+          }
+        }
+      }
+    };
+  }, [
+    mapInstance,
+    showFlightTrack,
+    allHistoryPoints,
+    metrics,
+    visibleCampIds,
+    campDistToLastEnabled,
+    showCampDistance,
+    showDistanceToRelease,
+    measurePoints
+  ]);
+
   // Re-capture current interactive map view as snapshot photo
   // IMPORTANT: Hide any "التقاط كصورة" button or controls so it NEVER appears in the snapshot!
   const handleCaptureInteractiveMap = async () => {
+    if (mapDisplayMode === 'snapshot') {
+      setHistoryUploadNotice('الخريطة حالياً في وضع الصورة الثابتة. تم التبديل إلى "تفاعلية" لتتمكن من ضبط المنظور ثم النقر على التقاط كصورة.');
+      setMapDisplayMode('interactive');
+      setFitKey(k => k + 1);
+      return;
+    }
     if (!mapViewportRef.current) return;
     const snapBtn = document.getElementById('custom-map-quick-snap-btn');
     if (snapBtn) snapBtn.style.display = 'none';
 
     try {
-      const canvas = await html2canvas(mapViewportRef.current, {
-        useCORS: true,
-        allowTaint: true,
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        ignoreElements: (el: Element) => {
-          return el.id === 'custom-map-quick-snap-btn' ||
-                 el.classList?.contains('no-export-snapshot') ||
-                 el.classList?.contains('no-print') ||
-                 el.classList?.contains('leaflet-control-zoom') ||
-                 el.classList?.contains('leaflet-control-attribution');
-        }
-      });
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      if (mapInstance) mapInstance.invalidateSize();
+      await new Promise(r => setTimeout(r, 200));
+
+      const canvas = await html2canvas(
+        mapViewportRef.current, 
+        buildHtml2CanvasMapExportOptions(mapViewportRef.current, true)
+      );
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.96);
       setMapSnapshotUrl(dataUrl);
       setMapDisplayMode('snapshot');
+      setHistoryUploadNotice('تم التقاط منظور الخريطة بنجاح وتثبيت المسارات وخطوط المسافات بدقة 100%!');
     } catch (e) {
       console.warn('Could not capture map view:', e);
+      alert('حدث خطأ أثناء التقاط الخريطة كصورة.');
     } finally {
       if (snapBtn) snapBtn.style.display = '';
     }
@@ -1052,26 +1346,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     if (snapBtn) snapBtn.style.display = 'none';
 
     try {
+      if (mapInstance) mapInstance.invalidateSize();
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
 
-      const canvas = await html2canvas(element, {
-        scale: 2.5,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        ignoreElements: (el: Element) => 
-          el.id === 'custom-map-quick-snap-btn' ||
-          el.classList?.contains('no-export-snapshot') ||
-          el.classList?.contains('no-print') || 
-          el.classList?.contains('drag-handle') ||
-          el.classList?.contains('leaflet-control-zoom') || 
-          el.classList?.contains('leaflet-control-attribution')
-      });
+      const canvas = await html2canvas(
+        element, 
+        buildHtml2CanvasMapExportOptions(element, false)
+      );
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
@@ -1101,26 +1384,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     if (snapBtn) snapBtn.style.display = 'none';
 
     try {
+      if (mapInstance) mapInstance.invalidateSize();
       await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
 
-      const canvas = await html2canvas(element, {
-        scale: 2.5,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        ignoreElements: (el: Element) => 
-          el.id === 'custom-map-quick-snap-btn' ||
-          el.classList?.contains('no-export-snapshot') ||
-          el.classList?.contains('no-print') || 
-          el.classList?.contains('drag-handle') ||
-          el.classList?.contains('leaflet-control-zoom') || 
-          el.classList?.contains('leaflet-control-attribution')
-      });
+      const canvas = await html2canvas(
+        element, 
+        buildHtml2CanvasMapExportOptions(element, false)
+      );
 
       const link = document.createElement('a');
       link.download = `Custom_Report_${displayTransmitterLabel}_${customMetadata.issueDate}.png`;

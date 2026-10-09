@@ -1840,6 +1840,22 @@ const LiveTrackingInner = () => {
             ignoreElements: (el) => {
               return el.classList?.contains('leaflet-control-zoom') ||
                      el.classList?.contains('leaflet-control-attribution');
+            },
+            onclone: (clonedDoc) => {
+              // Copy all live canvas layers (Google tiles, Leaflet vector canvas) so paths and tiles are never lost or blank
+              const origCanvases = Array.from(mapContainerEl.querySelectorAll('canvas'));
+              const clonedCanvases = Array.from(clonedDoc.querySelectorAll('canvas'));
+              clonedCanvases.forEach((clonedC, i) => {
+                const origC = origCanvases[i] as HTMLCanvasElement;
+                if (origC && origC.width && origC.height) {
+                  clonedC.width = origC.width;
+                  clonedC.height = origC.height;
+                  const ctx = clonedC.getContext('2d');
+                  if (ctx) {
+                    ctx.drawImage(origC, 0, 0);
+                  }
+                }
+              });
             }
           });
           snapshotDataUrl = canvas.toDataURL('image/jpeg', 0.95);
