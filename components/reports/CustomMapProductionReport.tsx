@@ -5,7 +5,8 @@ import {
   Layers, Info, FileDown, CheckCircle2,
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
-  Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload
+  Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload,
+  ChevronLeft, ChevronRight, Palette
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -276,6 +277,63 @@ export interface HistoryTableRow {
   notes: string;
 }
 
+export interface CustomLegendItem {
+  id: string;
+  label: string;
+  color: string;
+  symbol: 'circle' | 'line' | 'dashed-line' | 'tent' | 'square' | 'star';
+  visible: boolean;
+}
+
+export const renderLegendSymbol = (symbol: string, color: string) => {
+  switch (symbol) {
+    case 'circle':
+      return (
+        <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <circle cx="5" cy="5" r="4.2" fill={color} stroke="#ffffff" strokeWidth="1" />
+        </svg>
+      );
+    case 'line':
+      return (
+        <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <line x1="0" y1="5" x2="18" y2="5" stroke={color} strokeWidth="2.5" />
+        </svg>
+      );
+    case 'dashed-line':
+      return (
+        <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <line x1="0" y1="5" x2="18" y2="5" stroke={color} strokeWidth="2.5" strokeDasharray="3,2" />
+        </svg>
+      );
+    case 'tent':
+      return (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <path d="M19 20 10 4 1 20h18Z" fill={color} fillOpacity="0.35"/>
+          <path d="M10 4 23 20"/>
+          <path d="m10 4 4.5 16"/>
+        </svg>
+      );
+    case 'square':
+      return (
+        <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <rect x="1" y="1" width="8" height="8" rx="1.5" fill={color} stroke="#ffffff" strokeWidth="1" />
+        </svg>
+      );
+    case 'star':
+      return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill={color} stroke="#ffffff" strokeWidth="1" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9" />
+        </svg>
+      );
+    default:
+      return (
+        <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
+          <circle cx="5" cy="5" r="4.2" fill={color} stroke="#ffffff" strokeWidth="1" />
+        </svg>
+      );
+  }
+};
+
 export interface CustomMapProductionReportProps {
   onBack?: () => void;
 }
@@ -531,6 +589,169 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     }
     return list;
   }, [measurePoints]);
+
+  // ─── CUSTOMIZABLE MAP LEGEND ITEMS (ITEM BY ITEM) ───────────────────────────
+  const [legendItems, setLegendItems] = useState<CustomLegendItem[]>([
+    {
+      id: 'last_pos',
+      label: 'آخر موقع (2026-10-02)',
+      color: '#22c55e',
+      symbol: 'circle',
+      visible: true
+    },
+    {
+      id: 'release_pos',
+      label: 'موقع التركيب',
+      color: '#701a2b',
+      symbol: 'circle',
+      visible: true
+    },
+    {
+      id: 'flight_path',
+      label: 'مسار الرحلة',
+      color: '#6366f1',
+      symbol: 'line',
+      visible: true
+    },
+    {
+      id: 'camps',
+      label: 'مخيمات الميدان (2)',
+      color: '#10b981',
+      symbol: 'tent',
+      visible: true
+    }
+  ]);
+  const [isLegendCustomizedByUser, setIsLegendCustomizedByUser] = useState<boolean>(false);
+
+  const handleUpdateLegendItem = useCallback((id: string, updates: Partial<CustomLegendItem>) => {
+    setIsLegendCustomizedByUser(true);
+    setLegendItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  }, []);
+
+  const handleAddLegendItem = useCallback(() => {
+    setIsLegendCustomizedByUser(true);
+    const id = 'custom_' + Date.now();
+    setLegendItems(prev => [
+      ...prev,
+      {
+        id,
+        label: 'عنصر جديد',
+        color: '#0284c7',
+        symbol: 'circle',
+        visible: true
+      }
+    ]);
+  }, []);
+
+  const handleDeleteLegendItem = useCallback((id: string) => {
+    setIsLegendCustomizedByUser(true);
+    setLegendItems(prev => prev.filter(item => item.id !== id));
+  }, []);
+
+  const handleMoveLegendItem = useCallback((index: number, direction: 'left' | 'right') => {
+    setIsLegendCustomizedByUser(true);
+    setLegendItems(prev => {
+      const targetIndex = direction === 'left' ? index + 1 : index - 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const copy = [...prev];
+      const temp = copy[index];
+      copy[index] = copy[targetIndex];
+      copy[targetIndex] = temp;
+      return copy;
+    });
+  }, []);
+
+  const handleResetLegendItems = useCallback(() => {
+    setIsLegendCustomizedByUser(false);
+    const dateStr = telemetryData.lastGpsPos?.dateStr || '2026-10-02';
+    const items: CustomLegendItem[] = [
+      {
+        id: 'last_pos',
+        label: `آخر موقع (${dateStr})`,
+        color: '#22c55e',
+        symbol: 'circle',
+        visible: true
+      },
+      {
+        id: 'release_pos',
+        label: 'موقع التركيب',
+        color: '#701a2b',
+        symbol: 'circle',
+        visible: showReleaseMarker
+      },
+      {
+        id: 'flight_path',
+        label: 'مسار الرحلة',
+        color: '#6366f1',
+        symbol: 'line',
+        visible: true
+      },
+      {
+        id: 'camps',
+        label: `مخيمات الميدان (${visibleCampIds.length})`,
+        color: '#10b981',
+        symbol: 'tent',
+        visible: visibleCampIds.length > 0
+      }
+    ];
+    if (showCampDistance && visibleCampIds.length >= 2) {
+      items.push({
+        id: 'camp_distance',
+        label: `بين المخيمات: ${campDistanceKm} km`,
+        color: '#059669',
+        symbol: 'dashed-line',
+        visible: true
+      });
+    }
+    if (measurePoints.length > 1) {
+      items.push({
+        id: 'measure_distance',
+        label: `مسافة مقاسة: ${totalMeasureDistanceKm} km`,
+        color: '#eab308',
+        symbol: 'dashed-line',
+        visible: true
+      });
+    }
+    setLegendItems(items);
+  }, [telemetryData.lastGpsPos?.dateStr, showReleaseMarker, visibleCampIds.length, showCampDistance, campDistanceKm, measurePoints.length, totalMeasureDistanceKm]);
+
+  // Keep legend items smoothly in sync with telemetry date & filters if not manually customized
+  useEffect(() => {
+    if (!isLegendCustomizedByUser && telemetryData.lastGpsPos?.dateStr) {
+      setLegendItems(prev => prev.map(item => {
+        if (item.id === 'last_pos') {
+          return { ...item, label: `آخر موقع (${telemetryData.lastGpsPos.dateStr})` };
+        }
+        return item;
+      }));
+    }
+  }, [telemetryData.lastGpsPos?.dateStr, isLegendCustomizedByUser]);
+
+  useEffect(() => {
+    if (!isLegendCustomizedByUser) {
+      setLegendItems(prev => prev.map(item => {
+        if (item.id === 'camps') {
+          return {
+            ...item,
+            label: `مخيمات الميدان (${visibleCampIds.length})`,
+            visible: visibleCampIds.length > 0
+          };
+        }
+        return item;
+      }));
+    }
+  }, [visibleCampIds.length, isLegendCustomizedByUser]);
+
+  useEffect(() => {
+    if (!isLegendCustomizedByUser) {
+      setLegendItems(prev => prev.map(item => {
+        if (item.id === 'release_pos') {
+          return { ...item, visible: showReleaseMarker };
+        }
+        return item;
+      }));
+    }
+  }, [showReleaseMarker, isLegendCustomizedByUser]);
 
   // ─── UPLOAD FROM HISTORY FUNCTION ──────────────────────────────────────────
   const handleUploadFromHistory = useCallback(async (targetPttId?: string) => {
@@ -1781,6 +2002,143 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </div>
             </div>
 
+            {/* Section D: Map Legend Customization Item-by-Item (USER REQUESTED) */}
+            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                  <Palette size={14} className="text-emerald-600 dark:text-emerald-400" />
+                  <span>تخصيص مفتاح الخريطة عنصراً بعنصر (Map Legend Items):</span>
+                </h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAddLegendItem}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
+                  >
+                    <Plus size={12} />
+                    <span>إضافة عنصر جديد</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetLegendItems}
+                    className="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold border border-gray-200 dark:border-slate-700 transition-colors flex items-center gap-1"
+                    title="استعادة عناصر المفتاح الافتراضية للتقرير"
+                  >
+                    <RotateCcw size={12} />
+                    <span>استعادة الافتراضي</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid of legend items */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {legendItems.map((item, index) => (
+                  <div
+                    key={item.id}
+                    className={`p-2.5 rounded-xl border transition-all ${
+                      item.visible
+                        ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700/60 shadow-xs'
+                        : 'bg-gray-100/60 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60'
+                    }`}
+                  >
+                    {/* Top Row: Visibility checkbox & delete */}
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={item.visible}
+                          onChange={(e) => handleUpdateLegendItem(item.id, { visible: e.target.checked })}
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                          {item.visible ? 'ظاهر بالمفتاح' : 'مخفي من المفتاح'}
+                        </span>
+                      </label>
+
+                      <div className="flex items-center gap-1">
+                        {/* Move Buttons */}
+                        <button
+                          type="button"
+                          onClick={() => handleMoveLegendItem(index, 'left')}
+                          disabled={index === 0}
+                          className="p-1 text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                          title="تحريك للأمام (اليمين)"
+                        >
+                          <ChevronRight size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveLegendItem(index, 'right')}
+                          disabled={index === legendItems.length - 1}
+                          className="p-1 text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
+                          title="تحريك للخلف (اليسار)"
+                        >
+                          <ChevronLeft size={13} />
+                        </button>
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLegendItem(item.id)}
+                          className="p-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/40"
+                          title="حذف العنصر"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Text input */}
+                    <div className="mb-2">
+                      <label className="block text-[10px] text-gray-500 mb-0.5">نص العنصر (Label):</label>
+                      <input
+                        type="text"
+                        value={item.label}
+                        onChange={(e) => handleUpdateLegendItem(item.id, { label: e.target.value })}
+                        className="w-full px-2.5 py-1 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none font-bold text-gray-900 dark:text-white"
+                        placeholder="نص المفتاح..."
+                      />
+                    </div>
+
+                    {/* Bottom Row: Color picker & Symbol selector */}
+                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-500">الرمز:</span>
+                        <select
+                          value={item.symbol}
+                          onChange={(e) => handleUpdateLegendItem(item.id, { symbol: e.target.value as any })}
+                          className="text-[11px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 outline-none cursor-pointer text-gray-800 dark:text-gray-200 font-medium"
+                        >
+                          <option value="circle">دائرة (Circle)</option>
+                          <option value="line">خط (Line)</option>
+                          <option value="dashed-line">متقطع (Dashed)</option>
+                          <option value="tent">خيمة (Tent)</option>
+                          <option value="square">مربع (Square)</option>
+                          <option value="star">نجمة (Star)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-500">اللون:</span>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="color"
+                            value={item.color}
+                            onChange={(e) => handleUpdateLegendItem(item.id, { color: e.target.value })}
+                            className="w-6 h-6 rounded cursor-pointer border border-gray-300 dark:border-slate-600 p-0"
+                            title="تغيير لون الرمز"
+                          />
+                          <div className="p-1 rounded bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 flex items-center justify-center">
+                            {renderLegendSymbol(item.symbol, item.color)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -2328,91 +2686,156 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
               {/* Map Legend Bar */}
               <div 
-                className="border border-gray-300 rounded-sm bg-white py-1.5 px-3 shadow-xs select-none"
+                className="relative group border border-gray-300 rounded-sm bg-white py-1.5 px-3 shadow-xs select-none transition-all"
                 style={{ direction: 'rtl' }}
               >
-                <table id="custom-map-legend-bar" style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
-                  <tbody>
-                    <tr>
-                      {/* 1. آخر موقع تم رصده */}
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                          <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <circle cx="5" cy="5" r="4.2" fill="#22c55e" stroke="#ffffff" strokeWidth="1" />
-                          </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
-                            آخر موقع ({telemetryData.lastGpsPos.dateStr})
-                          </span>
-                        </div>
-                      </td>
+                {/* Hover Quick Edit Button (when not in table edit mode) */}
+                {!isTableEditing && (
+                  <div className="no-export-snapshot no-print absolute -top-3 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      type="button"
+                      onClick={() => setIsTableEditing(true)}
+                      className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold flex items-center gap-1 shadow-md"
+                      title="تعديل نصوص وألوان ورموز مفتاح الخريطة عنصراً بعنصر"
+                    >
+                      <Edit3 size={10} />
+                      <span>تعديل المفتاح</span>
+                    </button>
+                  </div>
+                )}
 
-                      {/* 2. موقع التركيب (إذا كان مفعلاً) */}
-                      {showReleaseMarker && (
-                        <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                            <svg width="10" height="10" viewBox="0 0 10 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                              <circle cx="5" cy="5" r="4.2" fill="#701a2b" stroke="#ffffff" strokeWidth="1" />
-                            </svg>
-                            <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
-                              موقع التركيب
-                            </span>
-                          </div>
-                        </td>
-                      )}
+                {/* Edit Mode Top Toolbar */}
+                {isTableEditing && (
+                  <div className="no-export-snapshot no-print mb-2 pb-1.5 border-b border-gray-200 flex items-center justify-between text-xs">
+                    <span className="font-bold text-gray-800 flex items-center gap-1">
+                      <Edit3 size={12} className="text-brand-500" />
+                      <span>تعديل مفتاح الخريطة (عنصراً بعنصر):</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAddLegendItem}
+                        className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold flex items-center gap-1 shadow-xs"
+                      >
+                        <Plus size={11} />
+                        <span>إضافة عنصر</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetLegendItems}
+                        className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[11px] font-bold flex items-center gap-1"
+                        title="إعادة تعيين مفتاح الخريطة للوضع الافتراضي"
+                      >
+                        <RotateCcw size={11} />
+                        <span>استعادة الافتراضي</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-                      {/* 3. مسار الهجرة */}
-                      <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                          <svg width="18" height="10" viewBox="0 0 18 10" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                            <line x1="0" y1="5" x2="18" y2="5" stroke="#6366f1" strokeWidth="2.5" />
-                          </svg>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
-                            مسار الرحلة
-                          </span>
-                        </div>
-                      </td>
+                {/* Content: Edit View vs Clean Official Report View */}
+                {isTableEditing ? (
+                  <div className="flex flex-wrap items-center gap-2 py-1">
+                    {legendItems.map((item, index) => (
+                      <div 
+                        key={item.id} 
+                        className={`flex items-center gap-1.5 p-1 rounded-md border text-xs transition-colors ${
+                          item.visible ? 'bg-amber-50/80 border-amber-300 shadow-xs' : 'bg-gray-100/60 border-gray-200 opacity-60'
+                        }`}
+                      >
+                        {/* Visibility Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateLegendItem(item.id, { visible: !item.visible })}
+                          className={`p-0.5 rounded hover:bg-white/80 ${item.visible ? 'text-emerald-700' : 'text-gray-400'}`}
+                          title={item.visible ? 'إخفاء هذا العنصر من التقرير' : 'إظهار هذا العنصر في التقرير'}
+                        >
+                          {item.visible ? <Eye size={13} /> : <EyeOff size={13} />}
+                        </button>
 
-                      {/* 4. مخيمات الميدان (إذا كانت مفعلة) */}
-                      {visibleCampIds.length > 0 && (
-                        <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0 }}>
-                              <path d="M19 20 10 4 1 20h18Z" fill="#10b981" fillOpacity="0.35"/>
-                              <path d="M10 4 23 20"/>
-                              <path d="m10 4 4.5 16"/>
-                            </svg>
-                            <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
-                              مخيمات الميدان ({visibleCampIds.length})
-                            </span>
-                          </div>
-                        </td>
-                      )}
+                        {/* Color Picker */}
+                        <input
+                          type="color"
+                          value={item.color}
+                          onChange={(e) => handleUpdateLegendItem(item.id, { color: e.target.value })}
+                          className="w-5 h-5 rounded cursor-pointer border border-gray-300 p-0"
+                          title="تغيير اللون"
+                        />
 
-                      {/* 5. المسافة بين المخيمات */}
-                      {showCampDistance && visibleCampIds.length >= 2 && (
-                        <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
-                          <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#059669', whiteSpace: 'nowrap' }}>
-                            بين المخيمات: {campDistanceKm} km
-                          </span>
-                        </td>
-                      )}
+                        {/* Symbol Selector */}
+                        <select
+                          value={item.symbol}
+                          onChange={(e) => handleUpdateLegendItem(item.id, { symbol: e.target.value as any })}
+                          className="text-[10.5px] bg-white border border-gray-200 rounded px-1 py-0.5 font-sans cursor-pointer outline-none"
+                          title="نوع الرمز"
+                        >
+                          <option value="circle">دائرة</option>
+                          <option value="line">خط</option>
+                          <option value="dashed-line">متقطع</option>
+                          <option value="tent">خيمة</option>
+                          <option value="square">مربع</option>
+                          <option value="star">نجمة</option>
+                        </select>
 
-                      {/* 6. خط قياس المسافة المرسوم (إن وجد) */}
-                      {measurePoints.length > 1 && (
-                        <td style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 5px' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', verticalAlign: 'middle', height: '18px' }}>
-                            <svg width="14" height="8" viewBox="0 0 14 8">
-                              <line x1="0" y1="4" x2="14" y2="4" stroke="#eab308" strokeWidth="2.5" strokeDasharray="3,2" />
-                            </svg>
-                            <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10px', fontWeight: 700, color: '#b45309', whiteSpace: 'nowrap' }}>
-                              مسافة مقاسة: {totalMeasureDistanceKm} km
-                            </span>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  </tbody>
-                </table>
+                        {/* Editable Label */}
+                        <input
+                          type="text"
+                          value={item.label}
+                          onChange={(e) => handleUpdateLegendItem(item.id, { label: e.target.value })}
+                          className="px-1.5 py-0.5 text-[11px] font-bold text-gray-900 border border-gray-300 rounded bg-white w-28 md:w-36 outline-none focus:ring-1 focus:ring-amber-500 font-sans"
+                          placeholder="نص العنصر..."
+                        />
+
+                        {/* Reorder: Move Left / Right */}
+                        <button
+                          type="button"
+                          onClick={() => handleMoveLegendItem(index, 'left')}
+                          disabled={index === 0}
+                          className="p-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
+                          title="تحريك للأمام (اليمين)"
+                        >
+                          <ChevronRight size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveLegendItem(index, 'right')}
+                          disabled={index === legendItems.length - 1}
+                          className="p-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
+                          title="تحريك للخلف (اليسار)"
+                        >
+                          <ChevronLeft size={13} />
+                        </button>
+
+                        {/* Delete Item */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLegendItem(item.id)}
+                          className="p-0.5 text-red-500 hover:text-red-700"
+                          title="حذف هذا العنصر من المفتاح"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <table id="custom-map-legend-bar" style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
+                    <tbody>
+                      <tr>
+                        {legendItems.filter(item => item.visible).map(item => (
+                          <td key={item.id} style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
+                              {renderLegendSymbol(item.symbol, item.color)}
+                              <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
+                                {item.label}
+                              </span>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
               </div>
 
             </div>
