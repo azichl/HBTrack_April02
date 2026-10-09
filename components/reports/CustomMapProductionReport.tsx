@@ -2333,7 +2333,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         >
 
           {/* 1. REPORT HEADER */}
-          <div className="flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" style={{ direction: 'ltr' }}>
+          <div 
+            className="relative flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" 
+            style={{ direction: 'ltr', position: 'relative', zIndex: 2000 }}
+          >
             
             {/* Top-Left Header Logo */}
             <div 
@@ -2342,7 +2345,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
                   : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
               }`}
-              style={{ minWidth: '120px' }}
+              style={{ minWidth: '120px', position: 'relative', zIndex: activeResizingLogo === 'left' ? 3000 : 20 }}
             >
               <img 
                 src={logoLeftUrl} 
@@ -2406,8 +2409,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {/* Floating Dimension Controller Popover (Appears when clicked!) */}
               {activeResizingLogo === 'left' && (
                 <div 
-                  className="logo-control-popover no-export-snapshot no-print absolute top-full left-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
-                  style={{ direction: 'rtl' }}
+                  className="logo-control-popover no-export-snapshot no-print absolute top-full left-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                  style={{ direction: 'rtl', zIndex: 9999, position: 'absolute' }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
@@ -2584,7 +2587,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
                   : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
               }`}
-              style={{ minWidth: '120px' }}
+              style={{ minWidth: '120px', position: 'relative', zIndex: activeResizingLogo === 'right' ? 3000 : 20 }}
             >
               <img 
                 src={logoRightUrl} 
@@ -2648,8 +2651,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {/* Floating Dimension Controller Popover (Appears when clicked!) */}
               {activeResizingLogo === 'right' && (
                 <div 
-                  className="logo-control-popover no-export-snapshot no-print absolute top-full right-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
-                  style={{ direction: 'rtl' }}
+                  className="logo-control-popover no-export-snapshot no-print absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                  style={{ direction: 'rtl', zIndex: 9999, position: 'absolute' }}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
