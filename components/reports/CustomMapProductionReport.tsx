@@ -1374,7 +1374,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
-      pdf.save(`Custom_Report_${displayTransmitterLabel}_${customMetadata.issueDate}.pdf`);
+      const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
+      pdf.save(`${exportFileName}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('حدث خطأ أثناء تصدير ملف PDF.');
@@ -1402,8 +1403,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         buildHtml2CanvasMapExportOptions(element, false)
       );
 
+      const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
       const link = document.createElement('a');
-      link.download = `Custom_Report_${displayTransmitterLabel}_${customMetadata.issueDate}.png`;
+      link.download = `${exportFileName}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (error) {
@@ -3379,23 +3381,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
 
                     </MapContainer>
-
-                    {/* Quick Floating Ruler Activation Button in Map Top-Left */}
-                    <div className="absolute top-2.5 left-2.5 z-[1000] no-export-snapshot no-print flex flex-col gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setIsMeasuring(!isMeasuring)}
-                        className={`p-1.5 rounded-lg shadow-md transition-all flex items-center gap-1 text-[11px] font-bold ${
-                          isMeasuring 
-                            ? 'bg-amber-500 text-white ring-2 ring-amber-300 shadow-amber-500/20' 
-                            : 'bg-white/95 text-gray-700 hover:bg-gray-100 hover:text-amber-600 border border-gray-200'
-                        }`}
-                        title="أداة قياس المسافة على الخريطة"
-                      >
-                        <Ruler size={14} className={isMeasuring ? 'animate-pulse' : ''} />
-                        <span>{isMeasuring ? 'إنهاء القياس' : 'مسطرة'}</span>
-                      </button>
-                    </div>
 
                     {/* Floating Measurement Tool Controls (Like Live Tracking Overlay) */}
                     {(isMeasuring || measurePoints.length > 0) && (
