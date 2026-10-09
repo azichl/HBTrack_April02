@@ -1108,12 +1108,22 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
 // Coordinate formatting helper
 const formatCoordinateSystems = (lat: number, lon: number) => {
     const formatDM = (val: number, isLat: boolean) => {
-        const abs = Math.abs(val || 0);
-        const deg = Math.floor(abs);
-        const min = (abs - deg) * 60;
-        const minStr = min < 10 ? `0${min.toFixed(3)}` : min.toFixed(3);
-        const dir = isLat ? (val >= 0 ? "N" : "S") : (val >= 0 ? "E" : "W");
-        return `${deg}° ${minStr}' ${dir}`;
+        const num = Number(val);
+        if (isNaN(num) || num === 0) {
+            return `000° 00.0000′ ${isLat ? 'N' : 'E'}`;
+        }
+        const abs = Math.abs(num);
+        let deg = Math.floor(abs);
+        let min = (abs - deg) * 60;
+        if (min >= 59.99995) {
+            deg += 1;
+            min = 0;
+        }
+        const [minWhole, minFraction] = min.toFixed(4).split('.');
+        const minStr = `${minWhole.padStart(2, '0')}.${minFraction}`;
+        const degStr = String(deg).padStart(3, '0');
+        const dir = isLat ? (num >= 0 ? "N" : "S") : (num >= 0 ? "E" : "W");
+        return `${degStr}° ${minStr}′ ${dir}`;
     };
 
     const formatDMS = (val: number, isLat: boolean) => {

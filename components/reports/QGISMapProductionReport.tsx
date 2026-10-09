@@ -79,14 +79,24 @@ export const formatArabicBearing = (bearing: number): { text: string; degrees: n
   };
 };
 
-/** Formats decimal coordinate to DMM with 4 decimals for minutes: "46° 56.6490'" */
+/** Formats decimal coordinate to Hddmm format with 4 decimals for minutes: "XXX° XX.XXXX′ N" / "XXX° XX.XXXX′ E" */
 export const formatDMM = (val: number, isLat: boolean): string => {
-  const abs = Math.abs(val || 0);
-  const deg = Math.floor(abs);
-  const min = (abs - deg) * 60;
-  const minStr = min.toFixed(4);
-  const degStr = isLat ? `${deg}` : String(deg).padStart(3, '0');
-  return `${degStr}° ${minStr}'`;
+  const num = Number(val);
+  if (isNaN(num) || num === 0) {
+    return `000° 00.0000′ ${isLat ? 'N' : 'E'}`;
+  }
+  const abs = Math.abs(num);
+  let deg = Math.floor(abs);
+  let min = (abs - deg) * 60;
+  if (min >= 59.99995) {
+    deg += 1;
+    min = 0;
+  }
+  const [minWhole, minFraction] = min.toFixed(4).split('.');
+  const minStr = `${minWhole.padStart(2, '0')}.${minFraction}`;
+  const degStr = String(deg).padStart(3, '0');
+  const dir = isLat ? (num >= 0 ? 'N' : 'S') : (num >= 0 ? 'E' : 'W');
+  return `${degStr}° ${minStr}′ ${dir}`;
 };
 
 /** Formats timestamp into DD-MM-YYYY */
