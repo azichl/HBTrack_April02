@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
-  Printer, Download, RefreshCw, Compass, MapPin, 
+  Download, RefreshCw, Compass, MapPin, 
   Calendar, ChevronDown, Check, Search, SlidersHorizontal, 
   Layers, Info, ArrowRight, Share2, FileDown, CheckCircle2,
   AlertCircle, Plus, Minus, Crosshair, Maximize2, Minimize2
@@ -934,10 +934,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
   // ─── EXPORT HANDLERS ────────────────────────────────────────────────────────
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   const hideLiveDistanceLinesForExport = () => {
     const liveOverlayPaths = document.querySelectorAll<SVGPathElement>(
       '#map-production-print-area .leaflet-overlay-pane path, #map-production-print-area svg path'
@@ -1206,7 +1202,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       pdf.save(`Houbara_Report_${selectedPttId}_${customMetadata.issueDate}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('حدث خطأ أثناء تصدير ملف PDF. يمكنك استخدام زر الطباعة للحفظ كـ PDF مباشرة.');
+      alert('حدث خطأ أثناء تصدير ملف PDF. يرجى المحاولة مرة أخرى.');
     } finally {
       restoreLiveLines();
       setIsExportingPdf(false);
@@ -1299,15 +1295,6 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handlePrint}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors"
-              title="طباعة التقرير أو الحفظ كـ PDF"
-            >
-              <Printer size={16} />
-              <span>طباعة / حفظ A4</span>
-            </button>
-
             <button
               onClick={handleExportPdf}
               disabled={isExportingPdf}
