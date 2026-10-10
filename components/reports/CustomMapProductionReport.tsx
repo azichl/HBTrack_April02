@@ -89,7 +89,7 @@ const createLiveTrackingMarkerIcon = ({
             y="12" 
             text-anchor="middle" 
             dominant-baseline="middle"
-            font-family="'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" 
+            font-family="'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" 
             font-size="12" 
             font-weight="800" 
             fill="#ffffff" 
@@ -116,7 +116,7 @@ const createLiveTrackingMarkerIcon = ({
           y="${hasTitle ? 30.5 : 12.5}" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          font-family="monospace, 'Sakkal Majalla', Arial" 
+          font-family="'Cairo', monospace, Arial" 
           font-size="11.5" 
           font-weight="800" 
           fill="#0f172a"
@@ -149,7 +149,7 @@ const createLiveTrackingCampIcon = (campName: string) => {
           y="12" 
           text-anchor="middle" 
           dominant-baseline="middle"
-          font-family="'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif" 
+          font-family="'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" 
           font-size="12" 
           font-weight="800" 
           fill="#ffffff" 
@@ -516,10 +516,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('contain');
 
   // Logo Dimensions Management (User requested: click and adjust dimensions)
-  const [logoLeftHeight, setLogoLeftHeight] = useState<number>(100);
-  const [logoLeftWidth, setLogoLeftWidth] = useState<number>(240);
-  const [logoRightHeight, setLogoRightHeight] = useState<number>(60);
-  const [logoRightWidth, setLogoRightWidth] = useState<number>(300);
+  const [logoLeftHeight, setLogoLeftHeight] = useState<number>(65);
+  const [logoLeftWidth, setLogoLeftWidth] = useState<number>(220);
+  const [logoRightHeight, setLogoRightHeight] = useState<number>(55);
+  const [logoRightWidth, setLogoRightWidth] = useState<number>(280);
   const [activeResizingLogo, setActiveResizingLogo] = useState<'left' | 'right' | null>(null);
 
   const mapImageInputRef = useRef<HTMLInputElement>(null);
@@ -1133,7 +1133,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('border-top', 'none', 'important');
           el.style.setProperty('color', '#000000', 'important');
           el.style.setProperty('font-weight', '800', 'important');
-          el.style.setProperty('font-family', "monospace, 'Sakkal Majalla', Arial, sans-serif", 'important');
+          el.style.setProperty('font-family', "'Cairo', monospace, Arial, sans-serif", 'important');
           el.style.setProperty('font-size', '10px', 'important');
           el.style.setProperty('line-height', '1.1', 'important');
           el.style.setProperty('padding', '1px 5px', 'important');
@@ -1142,10 +1142,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('display', 'block', 'important');
         });
 
-        // Set Sakkal Majalla font on the cloned print container
+        // Set Cairo font on the cloned print container
         const clonedPrintArea = clonedDoc.getElementById('custom-map-production-print-area');
         if (clonedPrintArea) {
-          clonedPrintArea.style.setProperty('font-family', "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif", 'important');
+          clonedPrintArea.style.setProperty('font-family', "'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Arial, sans-serif", 'important');
         }
 
         // 3. Fix Leaflet Vector Shift Bug:
@@ -1488,22 +1488,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       
       {/* ─── PRINT & REPORT STYLES ────────────────────────────────────────── */}
       <style>{`
-        @font-face {
-          font-family: 'Sakkal Majalla';
-          src: url('/fonts/majalla.ttf') format('truetype');
-          font-weight: normal;
-          font-style: normal;
-          font-display: swap;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
 
         #custom-map-production-print-area,
         #custom-map-production-print-area * {
-          font-family: 'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif;
+          font-family: 'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Tahoma, Arial, sans-serif !important;
         }
 
         #custom-map-production-print-area .font-mono,
         #custom-map-production-print-area .font-mono * {
-          font-family: monospace, 'Sakkal Majalla', Arial, sans-serif !important;
+          font-family: 'Cairo', monospace, sans-serif !important;
         }
 
         #custom-map-production-print-area .leaflet-control-scale {
@@ -1525,7 +1519,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           border-top: none !important;
           color: #000000 !important;
           font-weight: 800 !important;
-          font-family: monospace, 'Sakkal Majalla', Arial, sans-serif !important;
+          font-family: 'Cairo', monospace, Arial, sans-serif !important;
           font-size: 10px !important;
           line-height: 1.1 !important;
           padding: 1px 5px !important;
@@ -2722,16 +2716,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           className="bg-white text-gray-900 w-[1080px] min-w-[1080px] p-7 shadow-2xl rounded-sm border border-gray-300 relative select-none"
           style={{
             direction: 'ltr',
-            fontFamily: "'Sakkal Majalla', 'Traditional Arabic', 'Segoe UI', Arial, sans-serif",
+            fontFamily: "'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Tahoma, Arial, sans-serif",
             letterSpacing: 'normal'
           }}
         >
 
           {/* 1. REPORT HEADER */}
           <div 
-            className="relative flex items-center justify-between pb-3.5 border-b border-gray-200 mb-4" 
+            className="relative mb-3.5" 
             style={{ direction: 'ltr', position: 'relative', zIndex: 2000 }}
           >
+            {/* Top Logos Row */}
+            <div className="flex items-center justify-between pb-1">
             
             {/* Top-Left Header Logo */}
             <div 
@@ -2943,38 +2939,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               )}
             </div>
 
-            {/* Center Header: Title & Subtitle */}
-            <div className="text-center flex-1 px-2" style={{ direction: 'rtl' }}>
-              {isTableEditing ? (
-                <input
-                  type="text"
-                  value={customMetadata.reportTitle}
-                  onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
-                  className="w-full text-center text-[22px] font-black text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-1"
-                />
-              ) : (
-                <h1 
-                  className="text-[22px] font-black text-gray-900 leading-tight mb-1"
-                  style={{ letterSpacing: 'normal', fontFeatureSettings: '"liga" 1' }}
-                >
-                  {customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع'}
-                </h1>
-              )}
-
-              <div className="text-[13px] font-bold text-gray-700 flex items-center justify-center gap-2">
-                <span>
-                  {isPttNA ? 'رقم الحجل ' : 'جهاز التتبع '}
-                  <span className="font-mono text-[#701a2b] font-black">
-                    {displayTransmitterLabel}
-                  </span>
-                </span>
-                <span>•</span>
-                <span>منطقة {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '') : 'جيزقازغان'} – {customMetadata.regionName || 'كازاخستان'}</span>
-                <span>•</span>
-                <span>تاريخ الإصدار {customMetadata.issueDate}</span>
-              </div>
-            </div>
-
             {/* Top-Right Header Logo */}
             <div 
               className={`logo-clickable-container flex items-center justify-end relative group transition-all select-none ${
@@ -3183,6 +3147,44 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* End of Top Logos Row */}
+            </div>
+
+            {/* 1.2 SOLID MAROON DIVIDER LINE (Exact same maroon #701a2b matching screenshot) */}
+            <div className="w-full h-[2.5px] bg-[#701a2b] my-2.5" />
+
+            {/* 1.3 CENTERED TITLE & SUBTITLE BLOCK (Positioned below the maroon line) */}
+            <div className="text-center pt-0.5" style={{ direction: 'rtl' }}>
+              {isTableEditing ? (
+                <input
+                  type="text"
+                  value={customMetadata.reportTitle}
+                  onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
+                  className="w-full text-center text-[23px] font-black text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-1"
+                />
+              ) : (
+                <h1 
+                  className="text-[23px] font-black text-gray-900 leading-tight mb-1"
+                  style={{ letterSpacing: 'normal' }}
+                >
+                  {customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع'}
+                </h1>
+              )}
+
+              <div className="text-[13.5px] font-bold text-gray-700 flex items-center justify-center gap-2">
+                <span>
+                  {isPttNA ? 'رقم الحجل ' : 'جهاز التتبع '}
+                  <span className="text-[#701a2b] font-black">
+                    {displayTransmitterLabel}
+                  </span>
+                </span>
+                <span>•</span>
+                <span>منطقة {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '') : 'جيزقازغان'} – {customMetadata.regionName || 'كازاخستان'}</span>
+                <span>•</span>
+                <span>تاريخ الإصدار {customMetadata.issueDate}</span>
+              </div>
             </div>
 
           </div>
@@ -3619,7 +3621,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
               {/* Map Legend Bar */}
               <div 
-                className="relative group border border-gray-300 rounded-sm bg-white py-1.5 px-3 shadow-xs select-none transition-all"
+                className="relative group border border-gray-300 rounded-xl bg-white py-1.5 px-3 shadow-xs select-none transition-all"
                 style={{ direction: 'rtl' }}
               >
                 {/* Hover Quick Edit Button (when not in table edit mode) */}
@@ -3778,7 +3780,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
               {(tableMode === 'standard' || tableMode === 'both') && (
-                <div className={`border border-gray-300 rounded-sm overflow-hidden shadow-xs relative ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
+                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول بيانات الطائر</span>
@@ -3787,32 +3789,32 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   )}
 
                   <div 
-                    className="w-full bg-[#701a2b] text-white py-1.5 px-3 text-center text-[13.5px] font-bold flex items-center justify-between"
+                    className="w-full bg-[#701a2b] text-white py-2 px-4 flex items-center justify-between"
                     style={{ lineHeight: '22px' }}
                   >
-                    <span className="flex-1 text-center font-bold">بيانات الطائر</span>
+                    <span className="font-extrabold text-[15px] text-right">بيانات الطائر</span>
                     {isTableEditing && (
-                      <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded text-white font-normal">
+                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-white font-normal">
                         تعديل مباشر
                       </span>
                     )}
                   </div>
-                  <table id="custom-bird-data-table" className="w-full text-[12px] text-center border-collapse">
+                  <table id="custom-bird-data-table" className="w-full text-[13px] border-collapse bg-white">
                     <tbody>
-                      <tr className="border-b border-gray-200 bg-white">
-                        <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center">
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
                           رقم جهاز التتبع
                         </td>
-                        <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                        <td className="py-2 px-4 text-center w-1/2 border-r border-gray-200">
                           {isTableEditing ? (
                             <input
                               type="text"
                               value={selectedPttId}
                               onChange={(e) => setSelectedPttId(e.target.value)}
-                              className="w-full text-center font-mono font-black text-[#701a2b] text-[13px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[#701a2b] text-[15px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <span className="font-mono font-black text-[#701a2b] text-[13px]">
+                            <span className="font-black text-[#701a2b] text-[15px]">
                               {displayTransmitterLabel}
                               {isPttNA && <span className="text-[10px] text-gray-400 font-sans mr-1">(حجل)</span>}
                             </span>
@@ -3820,37 +3822,37 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </td>
                       </tr>
 
-                      <tr className="border-b border-gray-200 bg-white">
-                        <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center">
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
                           رقم الحجل
                         </td>
-                        <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                        <td className="py-2 px-4 text-center w-1/2 border-r border-gray-200">
                           {isTableEditing ? (
                             <input
                               type="text"
                               value={customMetadata.birdRing}
                               onChange={(e) => setCustomMetadata({ ...customMetadata, birdRing: e.target.value })}
-                              className="w-full text-center font-mono font-bold text-gray-800 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-gray-800 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <div className="inline-block px-3 py-0.5 bg-gray-100 rounded-full font-mono font-bold text-gray-700 text-[11.5px]">
+                            <div className="inline-block px-3.5 py-0.5 bg-[#f1f5f9] rounded-full font-bold text-[#64748b] text-[11.5px]">
                               {customMetadata.birdRing || 'NA'}
                             </div>
                           )}
                         </td>
                       </tr>
 
-                      <tr className="border-b border-gray-200 bg-white">
-                        <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center">
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
                           النوعية
                         </td>
-                        <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-800 text-center w-1/2 border-r border-gray-200">
                           {isTableEditing ? (
                             <input
                               type="text"
                               value={customMetadata.species}
                               onChange={(e) => setCustomMetadata({ ...customMetadata, species: e.target.value })}
-                              className="w-full text-center font-semibold text-gray-800 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span>{customMetadata.species || 'وحش'}</span>
@@ -3858,16 +3860,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </td>
                       </tr>
 
-                      <tr className="border-b border-gray-200 bg-white">
-                        <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center">
+                      <tr className="border-b border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
                           الجنس
                         </td>
-                        <td className="py-1.5 px-3 font-semibold text-gray-800 text-center w-1/2 border-r border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-800 text-center w-1/2 border-r border-gray-200">
                           {isTableEditing ? (
                             <select
                               value={customMetadata.gender}
                               onChange={(e) => setCustomMetadata({ ...customMetadata, gender: e.target.value })}
-                              className="w-full text-center font-semibold text-gray-800 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             >
                               <option value="ذكر">ذكر</option>
                               <option value="أنثى">أنثى</option>
@@ -3879,11 +3881,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </td>
                       </tr>
 
-                      <tr className="bg-white">
-                        <td className="py-1.5 px-3 font-bold text-gray-700 w-1/2 bg-gray-50/70 text-center">
+                      <tr>
+                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
                           حالة الطائر
                         </td>
-                        <td className="py-1.5 px-3 text-center w-1/2 border-r border-gray-200">
+                        <td className="py-2 px-4 text-center w-1/2 border-r border-gray-200">
                           {isTableEditing ? (
                             <input
                               type="text"
@@ -3892,7 +3894,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               className="w-full text-center font-bold text-emerald-700 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
-                            <div className="inline-block px-3 py-0.5 bg-emerald-50 rounded-full font-bold text-emerald-700 text-[11.5px]">
+                            <div className="inline-block px-4 py-0.5 bg-[#ecfdf5] rounded-full font-bold text-[#047857] text-[12px]">
                               {customMetadata.birdStatus || 'حي'}
                             </div>
                           )}
@@ -3905,7 +3907,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
               {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
               {(tableMode === 'standard' || tableMode === 'both') && (
-                <div className={`border border-gray-300 rounded-sm overflow-hidden shadow-xs relative ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
+                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white mt-3 ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول مقارنة الإحداثيات</span>
@@ -3915,45 +3917,45 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                   <table 
                     id="custom-table2-coordinates"
-                    className="w-full text-[12px] text-center"
-                    style={{ borderCollapse: 'separate', borderSpacing: 0, direction: 'rtl' }}
+                    className="w-full text-[12.5px] border-collapse bg-white"
+                    style={{ direction: 'rtl' }}
                   >
                     <thead>
                       <tr>
-                        <th style={{ width: '24%', backgroundColor: '#701a2b', color: '#ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', textAlign: 'center' }}>
+                        <th style={{ width: '28%', backgroundColor: '#701a2b', padding: '7px 10px', textAlign: 'center' }}>
                         </th>
-                        <th style={{ width: '38%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, textAlign: 'center' }}>
+                        <th style={{ width: '36%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.25)', padding: '7px 8px', fontSize: '13px', fontWeight: 800, textAlign: 'center' }}>
                           تركيب الجهاز
                         </th>
-                        <th style={{ width: '38%', backgroundColor: '#047857', color: '#ffffff', borderRight: '1px solid #ffffff', borderBottom: '1px solid #d1d5db', padding: '6px 8px', fontSize: '12.5px', fontWeight: 700, textAlign: 'center' }}>
+                        <th style={{ width: '36%', backgroundColor: '#047857', color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.25)', padding: '7px 8px', fontSize: '13px', fontWeight: 800, textAlign: 'center' }}>
                           آخر موقع
                         </th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr className="bg-white">
-                        <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
+                      <tr className="border-t border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 text-right text-[13px]">
                           التاريخ
                         </td>
-                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
                           {isTableEditing ? (
                             <input
                               type="text"
                               value={telemetryData.releasePos.dateStr}
                               onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, dateStr: e.target.value } })}
-                              className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
                           )}
                         </td>
-                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
                           {isTableEditing ? (
                             <input
                               type="text"
                               value={telemetryData.lastGpsPos.dateStr}
                               onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, dateStr: e.target.value } })}
-                              className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span>
@@ -3961,31 +3963,31 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </td>
                       </tr>
 
-                      <tr className="bg-white">
-                        <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', borderBottom: '1px solid #e5e7eb', textAlign: 'center' }}>
+                      <tr className="border-t border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 text-right text-[12.5px]">
                           خط العرض (N)
                         </td>
-                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
                           {isTableEditing ? (
                             <input
                               type="number"
                               step="0.0001"
                               value={telemetryData.releasePos.lat}
                               onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lat: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span dir="ltr">{metrics.releaseLatTableDMM}</span>
                           )}
                         </td>
-                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
                           {isTableEditing ? (
                             <input
                               type="number"
                               step="0.0001"
                               value={telemetryData.lastGpsPos.lat}
                               onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lat: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span dir="ltr">{metrics.lastGpsLatTableDMM}</span>
@@ -3993,31 +3995,31 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </td>
                       </tr>
 
-                      <tr className="bg-white">
-                        <td style={{ backgroundColor: '#f9fafb', color: '#374151', fontWeight: 700, fontSize: '11px', padding: '6px 8px', textAlign: 'center' }}>
+                      <tr className="border-t border-gray-200">
+                        <td className="py-2 px-4 font-bold text-gray-700 text-right text-[12.5px]">
                           خط الطول (E)
                         </td>
-                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
                           {isTableEditing ? (
                             <input
                               type="number"
                               step="0.0001"
                               value={telemetryData.releasePos.lon}
                               onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lon: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span dir="ltr">{metrics.releaseLonTableDMM}</span>
                           )}
                         </td>
-                        <td style={{ fontFamily: "monospace, 'Sakkal Majalla', Arial", fontWeight: 700, color: '#111827', fontSize: '12px', borderRight: '1px solid #e5e7eb', padding: '6px 8px', textAlign: 'center' }}>
+                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
                           {isTableEditing ? (
                             <input
                               type="number"
                               step="0.0001"
                               value={telemetryData.lastGpsPos.lon}
                               onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lon: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-mono font-bold text-[11px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
                             />
                           ) : (
                             <span dir="ltr">{metrics.lastGpsLonTableDMM}</span>
@@ -4031,7 +4033,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
               {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE */}
               {(tableMode === 'history_list' || tableMode === 'both') && (
-                <div className={`border border-gray-300 rounded-sm overflow-hidden shadow-xs relative ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
+                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white mt-3 ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول سجل المسار</span>
@@ -4172,50 +4174,50 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               )}
 
               {/* 4 KPI METRIC CARDS */}
-              <div className={`grid grid-cols-4 gap-2 pt-1 relative ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded' : ''}`} style={{ direction: 'rtl' }}>
+              <div className={`grid grid-cols-4 gap-2.5 mt-3 relative ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl' : ''}`} style={{ direction: 'rtl' }}>
                 {isDragEnabled && (
-                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print rounded-t">
+                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print rounded-t-lg">
                     <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
                     <span>⋮⋮</span>
                   </div>
                 )}
 
-                {/* Card 1: Distance from Release */}
-                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
-                  <div className="text-[14.5px] font-black text-[#dc2626] font-mono leading-tight mb-1" dir="ltr">
+                {/* Card 1: Distance from Release (Rightmost in RTL) */}
+                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
+                  <div className="text-[15px] font-black text-[#dc2626] leading-tight mb-1" dir="ltr">
                     {metrics.distFromReleaseKm} km
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
-                    المسافة من موقع التركيب
+                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
+                    المسافة من<br />موقع التركيب
                   </div>
                 </div>
 
                 {/* Card 2: Bearing Direction & Degrees */}
-                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
-                  <div className="text-[14.5px] font-black text-gray-900 leading-tight mb-1">
+                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
+                  <div className="text-[15px] font-black text-gray-900 leading-tight mb-1">
                     {metrics.bearingArabic.text}
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
+                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
                     الاتجاه ({metrics.bearingArabic.degrees}°)
                   </div>
                 </div>
 
                 {/* Card 3: Distance from Camp */}
-                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
-                  <div className="text-[14.5px] font-black text-gray-900 font-mono leading-tight mb-1" dir="ltr">
+                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
+                  <div className="text-[15px] font-black text-gray-900 leading-tight mb-1" dir="ltr">
                     {metrics.distToCampKm} km
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
+                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
                     البعد عن المخيم
                   </div>
                 </div>
 
-                {/* Card 4: Tracking Duration */}
-                <div className="border border-gray-200 rounded-lg bg-white p-2.5 text-center shadow-xs">
-                  <div className="text-[14.5px] font-black text-gray-900 leading-tight mb-1" dir="rtl">
-                    <span className="font-mono">{metrics.durationDays}</span> يوم
+                {/* Card 4: Tracking Duration (Leftmost in RTL) */}
+                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
+                  <div className="text-[15px] font-black text-gray-900 leading-tight mb-1" dir="rtl">
+                    <span>{metrics.durationDays}</span> يوم
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500 leading-tight">
+                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
                     مدة المتابعة
                   </div>
                 </div>

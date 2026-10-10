@@ -15,7 +15,7 @@
     <link href="https://cdn.maptiler.com/maptiler-sdk-js/v3.9.0/maptiler-sdk.css" rel="stylesheet" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style id="app-font-style">
       @font-face {
         font-family: 'Sakkal Majalla';
@@ -28,6 +28,12 @@
       /* Default Web Font (Sakkal Majalla) for Web App */
       * { 
         font-family: 'Sakkal Majalla', 'Inter', sans-serif !important; 
+      }
+
+      /* Custom Map Production Report uses modern Cairo font per user specification */
+      #custom-map-production-print-area,
+      #custom-map-production-print-area * {
+        font-family: 'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Tahoma, Arial, sans-serif !important;
       }
 
       /* Fix for massive password dots on iOS Safari caused by custom font */
