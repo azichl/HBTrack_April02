@@ -418,6 +418,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   const [activeBaseLayer, setActiveBaseLayer] = useState<'google_hybrid' | 'google_roadmap' | 'google_satellite' | 'scienceterrain' | 'roadmap'>(initialBaseLayer);
   const [showGoogleLabels, setShowGoogleLabels] = useState<boolean>(true);
+  const [reportLanguage, setReportLanguage] = useState<'ar' | 'en'>('ar');
   const [fitKey, setFitKey] = useState<number>(0);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
@@ -499,6 +500,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.showGoogleLabels !== undefined) setShowGoogleLabels(parsed.showGoogleLabels);
         if (parsed.activeBaseLayer) setActiveBaseLayer(parsed.activeBaseLayer);
         if (parsed.tableMode) setTableMode(parsed.tableMode);
+        if (parsed.reportLanguage) setReportLanguage(parsed.reportLanguage);
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
       } catch (e) {
         console.error('Failed to parse saved report settings', e);
@@ -519,6 +521,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       showGoogleLabels,
       activeBaseLayer,
       tableMode,
+      reportLanguage,
       mapImageFit
     };
     localStorage.setItem('hbtrack_report_settings', JSON.stringify(settings));
@@ -571,6 +574,50 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [historyRows, setHistoryRows] = useState<HistoryTableRow[]>([]);
   const [allHistoryPoints, setAllHistoryPoints] = useState<Array<[number, number]>>([]);
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
+
+  const T = {
+    reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle === 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' ? 'Tracking Follow-up Report for Houbara with PTT' : customMetadata.reportTitle,
+    issueDateLabel: reportLanguage === 'ar' ? 'تاريخ الإصدار' : 'Issue Date',
+    transmitterLabel: reportLanguage === 'ar' ? 'جهاز التتبع' : 'Transmitter',
+    regionLabel: reportLanguage === 'ar' ? 'منطقة' : 'Region',
+    campLabel: reportLanguage === 'ar' ? 'مخيم' : 'Camp',
+    birdData: reportLanguage === 'ar' ? 'بيانات الطائر' : 'Bird Data',
+    txId: reportLanguage === 'ar' ? 'رقم جهاز التتبع' : 'Transmitter ID',
+    ringId: reportLanguage === 'ar' ? 'رقم الحجل' : 'Ring Number',
+    species: reportLanguage === 'ar' ? 'النوعية' : 'Species',
+    gender: reportLanguage === 'ar' ? 'الجنس' : 'Gender',
+    status: reportLanguage === 'ar' ? 'حالة الطائر' : 'Bird Status',
+    installHead: reportLanguage === 'ar' ? 'تركيب الجهاز' : 'Release',
+    lastHead: reportLanguage === 'ar' ? 'آخر موقع' : 'Latest Location',
+    dateHeader: reportLanguage === 'ar' ? 'التاريخ' : 'Date',
+    latHeader: reportLanguage === 'ar' ? 'خط العرض (N)' : 'Latitude (N)',
+    lonHeader: reportLanguage === 'ar' ? 'خط الطول (E)' : 'Longitude (E)',
+    followUp: reportLanguage === 'ar' ? 'مدة المتابعة' : 'Follow-up Duration',
+    days: reportLanguage === 'ar' ? 'يوم' : 'Days',
+    distToCamp: reportLanguage === 'ar' ? 'البعد عن المخيم' : 'Distance to Camp',
+    direction: reportLanguage === 'ar' ? 'الاتجاه' : 'Direction',
+    distFromRelease: reportLanguage === 'ar' ? 'المسافة من موقع التركيب' : 'Distance from Release',
+    agencyAr: reportLanguage === 'ar' ? customMetadata.agencyNameAr : customMetadata.agencyNameEn,
+    agencyEn: reportLanguage === 'ar' ? customMetadata.agencyNameEn : customMetadata.agencyNameAr,
+    footerLeft: customMetadata.footerLeft,
+    footerRight: reportLanguage === 'ar' ? customMetadata.footerRight : customMetadata.footerRight === 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان' ? 'Qatar Center for Houbara Breeding - Kazakhstan' : customMetadata.footerRight
+  };
+
+  const translateValue = (val: string) => {
+    if (reportLanguage === 'ar') return val;
+    const dict: any = { 
+      'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
+      'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp'
+    };
+    return dict[val] || val;
+  };
+
+  const getBearingLabel = (deg: number) => {
+    if (reportLanguage === 'ar') return formatArabicBearing(deg);
+    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    return dirs[Math.round(deg / 45) % 8];
+  };
+
 
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const mapViewportRef = useRef<HTMLDivElement>(null);
@@ -1073,6 +1120,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const distFromRelease = calculateDistanceKm(rLat, rLon, lLat, lLon);
     const bearing = calculateBearingDegrees(rLat, rLon, lLat, lLon);
     const bearingArabic = formatArabicBearing(bearing);
+    const bearingEng = {
+      text: getBearingLabel(bearing),
+      degrees: Math.round(bearing)
+    };
+    const activeBearing = reportLanguage === 'ar' ? bearingArabic : bearingEng;
     const distToCamp = calculateDistanceKm(lLat, lLon, cLat, cLon);
     const durationDays = calculateDurationFromReleaseToToday(telemetryData.releasePos.dateStr);
 
@@ -1085,7 +1137,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       cLon,
       bearingDegrees: bearing,
       distFromReleaseKm: distFromRelease.toFixed(2),
-      bearingArabic,
+      bearingArabic: activeBearing,
       distToCampKm: distToCamp.toFixed(2),
       durationDays: durationDays > 0 ? durationDays : 0,
       releaseLatDMM: formatDMM(rLat, true),
@@ -1884,6 +1936,22 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               <Maximize2 size={14} />
               <span>ملء الشاشة</span>
             </button>
+
+            {/* Language Toggle */}
+            <div className="flex bg-gray-100 dark:bg-slate-800 rounded-lg p-0.5 shadow-inner">
+              <button
+                onClick={() => setReportLanguage('ar')}
+                className={`px-2 py-1 text-xs font-bold rounded-md transition-colors ${reportLanguage === 'ar' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'}`}
+              >
+                العربية
+              </button>
+              <button
+                onClick={() => setReportLanguage('en')}
+                className={`px-2 py-1 text-xs font-bold rounded-md transition-colors ${reportLanguage === 'en' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'}`}
+              >
+                English
+              </button>
+            </div>
 
             {/* Save Settings */}
             <button
@@ -2874,9 +2942,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           id="custom-map-production-print-area"
           ref={reportContainerRef}
           className="trk-page bg-white text-gray-900 w-[1123px] min-w-[1123px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none"
-          dir="rtl"
+          dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}
           style={{
-            direction: 'rtl',
+            direction: reportLanguage === 'ar' ? 'rtl' : 'ltr',
             fontFamily: "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif",
             letterSpacing: 'normal'
           }}
@@ -3303,11 +3371,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
           {/* Subtitle */}
           <p className="trk-sub">
-            جهاز التتبع <b>{displayTransmitterLabel}</b> • منطقة {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '') : 'جيزقازغان'} – {customMetadata.regionName || 'كازاخستان'} • تاريخ الإصدار <b dir="ltr">{customMetadata.issueDate}</b>
+            {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {T.regionLabel} {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '').replace(/^Camp\s*/i, '') : 'جيزقازغان'} – {translateValue(customMetadata.regionName || 'كازاخستان')} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
           </p>
 
           {/* 2. MAIN REPORT BODY */}
-          <div className="trk-grid" dir="rtl">
+          <div className="trk-grid" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
 
             {/* ─── COLUMN 1 (RIGHT in RTL): SIDE PANEL (440px) ───── */}
             <aside className="trk-side" key={dragResetKey}>
@@ -3323,7 +3391,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   )}
 
                   <div className="trk-card__head flex items-center justify-between">
-                    <span>بيانات الطائر</span>
+                    <span>{T.birdData}</span>
                     {isTableEditing && (
                       <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-white font-normal">
                         تعديل مباشر
@@ -3361,7 +3429,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
-                        <span className="pill pill--grey">{customMetadata.birdRing || 'NA'}</span>
+                        <span className="pill pill--grey">{translateValue(customMetadata.birdRing || 'NA')}</span>
                       )}
                     </span>
                   </div>
@@ -3377,7 +3445,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           className="w-full text-center font-bold text-gray-800 text-[14px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
-                        <span>{customMetadata.species || 'وحش'}</span>
+                        <span>{translateValue(customMetadata.species || 'وحش')}</span>
                       )}
                     </span>
                   </div>
@@ -3396,7 +3464,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <option value="غير محدد">غير محدد</option>
                         </select>
                       ) : (
-                        <span>{customMetadata.gender || 'ذكر'}</span>
+                        <span>{translateValue(customMetadata.gender || 'ذكر')}</span>
                       )}
                     </span>
                   </div>
@@ -3417,7 +3485,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           customMetadata.birdStatus === 'غير نشط' || customMetadata.birdStatus === 'inactive' ? 'pill--warn' :
                           'pill--ok'
                         }`}>
-                          {customMetadata.birdStatus || 'حي'}
+                          {translateValue(customMetadata.birdStatus || 'حي')}
                         </span>
                       )}
                     </span>
@@ -3436,11 +3504,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   )}
 
                   <div className="trk-twohead">
-                    <div className="trk-twohead__install">تركيب الجهاز</div>
-                    <div className="trk-twohead__last">آخر موقع</div>
+                    <div className="trk-twohead__install">{T.installHead}</div>
+                    <div className="trk-twohead__last">{T.lastHead}</div>
                   </div>
                   <div className="trk-table">
-                    <span className="lbl">التاريخ</span>
+                    <span className="lbl">{T.dateHeader}</span>
                     <span dir="ltr">
                       {isTableEditing ? (
                         <input
@@ -3466,7 +3534,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
                     </span>
 
-                    <span className="lbl">خط العرض (N)</span>
+                    <span className="lbl">{T.latHeader}</span>
                     <span dir="ltr">
                       {isTableEditing ? (
                         <input
@@ -3494,7 +3562,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
                     </span>
 
-                    <span className="lbl">خط الطول (E)</span>
+                    <span className="lbl">{T.lonHeader}</span>
                     <span dir="ltr">
                       {isTableEditing ? (
                         <input
@@ -3682,7 +3750,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {metrics.distFromReleaseKm} km
                   </div>
                   <div className="lab">
-                    المسافة من موقع التركيب
+                    {T.distFromRelease}
                   </div>
                 </div>
 
@@ -3692,7 +3760,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {metrics.bearingArabic.text}
                   </div>
                   <div className="lab">
-                    الاتجاه ({metrics.bearingArabic.degrees}°)
+                    {T.direction} ({metrics.bearingArabic.degrees}°)
                   </div>
                 </div>
 
@@ -3702,7 +3770,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {metrics.distToCampKm} km
                   </div>
                   <div className="lab">
-                    البعد عن المخيم
+                    {T.distToCamp}
                   </div>
                 </div>
 
@@ -3712,7 +3780,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     <span>{metrics.durationDays}</span> يوم
                   </div>
                   <div className="lab">
-                    مدة المتابعة
+                    {T.followUp}
                   </div>
                 </div>
               </div>
@@ -3969,7 +4037,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
                               borderColorHex: '#701a2b',
-                              labelTitle: 'موقع تركيب الجهاز'
+                              labelTitle: T.installHead
                             })}
                             zIndexOffset={1801}
                             draggable={true}
@@ -3992,7 +4060,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
                               borderColorHex: '#22c55e',
-                              labelTitle: 'آخر موقع'
+                              labelTitle: T.lastHead
                             })}
                             zIndexOffset={2001}
                             draggable={true}
@@ -4011,7 +4079,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           />
                           <Marker
                             position={[camp.lat, camp.lon]}
-                            icon={createLiveTrackingCampLabelIcon(camp.name)}
+                            icon={createLiveTrackingCampLabelIcon(reportLanguage === 'ar' ? camp.name : camp.name.replace('مخيم ', '').replace('مخيم', '') + ' Camp')}
                             zIndexOffset={1001}
                             draggable={true}
                           />
@@ -4323,7 +4391,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {legendItems.filter(item => item.visible).map(item => (
                       <span key={item.id} className="inline-flex items-center gap-1.5 text-[12px] font-bold text-gray-800 whitespace-nowrap">
                         {renderLegendSymbol(item.symbol, item.color)}
-                        <span>{item.label}</span>
+                        <span>{translateValue(item.label)}</span>
                       </span>
                     ))}
                   </div>
