@@ -579,7 +579,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
 
   const T = {
-    reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle.includes('تقرير') ? 'Tracking Follow-up Report for Houbara with PTT' : customMetadata.reportTitle,
+    reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle.includes('تقرير') ? 'Houbara Bustard Tracking Report' : customMetadata.reportTitle,
     issueDateLabel: reportLanguage === 'ar' ? 'تاريخ الإصدار' : 'Issue Date',
     transmitterLabel: reportLanguage === 'ar' ? 'جهاز التتبع' : 'Transmitter',
     regionLabel: reportLanguage === 'ar' ? 'منطقة' : 'Region',
