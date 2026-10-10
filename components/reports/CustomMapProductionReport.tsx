@@ -3403,7 +3403,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             />
           ) : (
             <h1 className="trk-title">
-              {customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع'}
+              {T.reportTitle}
             </h1>
           )}
 
@@ -3815,7 +3815,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 {/* Card 4: Tracking Duration (Leftmost in RTL) */}
                 <div className="trk-stat">
                   <div className="val" dir="rtl">
-                    <span>{metrics.durationDays}</span> يوم
+                    <span>{metrics.durationDays}</span> {T.days}
                   </div>
                   <div className="lab">
                     {T.followUp}
