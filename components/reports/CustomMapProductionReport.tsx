@@ -6,7 +6,7 @@ import {
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
   Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload,
-  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X
+  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X, Save
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -481,6 +481,51 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [tableMode, setTableMode] = useState<'standard' | 'history_list' | 'both'>('standard');
   const [isTableEditing, setIsTableEditing] = useState<boolean>(false);
   const [historyRowCount, setHistoryRowCount] = useState<number>(8);
+
+  // ─── PERSISTENT SETTINGS SAVE/LOAD ──────────────────────────────────────────
+  useEffect(() => {
+    const saved = localStorage.getItem('hbtrack_report_settings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.customMetadata) setCustomMetadata(parsed.customMetadata);
+        if (parsed.logoLeftUrl) setLogoLeftUrl(parsed.logoLeftUrl);
+        if (parsed.logoLeftHeight) setLogoLeftHeight(parsed.logoLeftHeight);
+        if (parsed.logoLeftWidth) setLogoLeftWidth(parsed.logoLeftWidth);
+        if (parsed.logoRightUrl) setLogoRightUrl(parsed.logoRightUrl);
+        if (parsed.logoRightHeight) setLogoRightHeight(parsed.logoRightHeight);
+        if (parsed.logoRightWidth) setLogoRightWidth(parsed.logoRightWidth);
+        if (parsed.legendItems) setLegendItems(parsed.legendItems);
+        if (parsed.showGoogleLabels !== undefined) setShowGoogleLabels(parsed.showGoogleLabels);
+        if (parsed.activeBaseLayer) setActiveBaseLayer(parsed.activeBaseLayer);
+        if (parsed.tableMode) setTableMode(parsed.tableMode);
+        if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
+      } catch (e) {
+        console.error('Failed to parse saved report settings', e);
+      }
+    }
+  }, []);
+
+  const saveSettings = () => {
+    const settings = {
+      customMetadata,
+      logoLeftUrl,
+      logoLeftHeight,
+      logoLeftWidth,
+      logoRightUrl,
+      logoRightHeight,
+      logoRightWidth,
+      legendItems,
+      showGoogleLabels,
+      activeBaseLayer,
+      tableMode,
+      mapImageFit
+    };
+    localStorage.setItem('hbtrack_report_settings', JSON.stringify(settings));
+    setHistoryUploadNotice('تم بنجاح حفظ الإعدادات الافتراضية للتقرير.');
+    setTimeout(() => setHistoryUploadNotice(null), 3000);
+  };
+
 
   // Editable Bird & Header & Footer Metadata
   const [customMetadata, setCustomMetadata] = useState<{
@@ -1838,6 +1883,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             >
               <Maximize2 size={14} />
               <span>ملء الشاشة</span>
+            </button>
+
+            {/* Save Settings */}
+            <button
+              onClick={saveSettings}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title="حفظ الشعارات والتنسيقات للتقارير القادمة"
+            >
+              <Save size={14} />
+              <span>حفظ الإعدادات</span>
             </button>
 
             {/* Filter & Customizer Toggle */}
