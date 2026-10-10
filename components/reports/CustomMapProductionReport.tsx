@@ -417,6 +417,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [exportedMapView]);
 
   const [activeBaseLayer, setActiveBaseLayer] = useState<'google_hybrid' | 'google_roadmap' | 'google_satellite' | 'scienceterrain' | 'roadmap'>(initialBaseLayer);
+  const [showGoogleLabels, setShowGoogleLabels] = useState<boolean>(true);
   const [fitKey, setFitKey] = useState<number>(0);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
@@ -1978,6 +1979,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <option value="roadmap">خريطة الشوارع (OpenStreetMap)</option>
               </select>
               <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+            <div className="mt-2.5 flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="showGoogleLabels"
+                checked={showGoogleLabels}
+                onChange={(e) => setShowGoogleLabels(e.target.checked)}
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <label htmlFor="showGoogleLabels" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                إضافة مسميات جوجل (المدن والطرق) على الخريطة
+              </label>
             </div>
           </div>
 
@@ -3748,6 +3761,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                       {/* Base Tile Layer */}
                       {getProductionTileLayer(activeBaseLayer)}
+
+                      {/* Optional Google Labels Overlay (Roads & Cities) */}
+                      {showGoogleLabels && (
+                        <TileLayer
+                          url="https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}"
+                          attribution="&copy; Google"
+                          maxZoom={20}
+                          zIndex={400}
+                          crossOrigin="anonymous"
+                        />
+                      )}
 
                       {/* Map View Controller */}
                       <CustomReportMapViewController 
