@@ -1337,7 +1337,7 @@ const LiveTrackingInner = () => {
   // History State
   const [showHistory, setShowHistory] = useState(false);
   const [historyMode, setHistoryMode] = useState<'preset' | 'custom'>('preset');
-  const [historyPreset, setHistoryPreset] = useState<'24h' | '7d' | '30d' | '1y' | '2y'>('24h');
+  const [historyPreset, setHistoryPreset] = useState<'last_pos' | '24h' | '7d' | '30d' | '1y' | '2y'>('24h');
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyFixType, setHistoryFixType] = useState<'All' | 'GPS' | 'Doppler'>('All');
   const [customDates, setCustomDates] = useState({
@@ -1680,6 +1680,13 @@ const LiveTrackingInner = () => {
     const now = new Date();
 
     if (historyMode === 'preset') {
+        if (historyPreset === 'last_pos') {
+            setHistoryLines([]);
+            setRawHistoryCache([]);
+            rawHistoryCacheKey.current = '';
+            setIsHistoryLoading(false);
+            return;
+        }
         if (historyPreset === '24h') startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         else if (historyPreset === '7d') startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         else if (historyPreset === '30d') startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -3122,7 +3129,7 @@ const LiveTrackingInner = () => {
 
                             {historyMode === 'preset' ? (
                               <div className="space-y-1">
-                                {['24h', '7d', '30d', '1y', '2y'].map(range => (
+                                {['last_pos', '24h', '7d', '30d', '1y', '2y'].map(range => (
                                   <button
                                     key={range}
                                     onClick={() => setHistoryPreset(range as any)}
@@ -3132,7 +3139,7 @@ const LiveTrackingInner = () => {
                                         : 'text-gray-600 hover:bg-gray-50'
                                     }`}
                                   >
-                                    {range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
+                                    {range === 'last_pos' ? 'Last Position' : range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
                                     {historyPreset === range && <CheckCircle2 size={14} className="text-brand-500" />}
                                   </button>
                                 ))}
@@ -3381,7 +3388,7 @@ const LiveTrackingInner = () => {
 
                                         {historyMode === 'preset' ? (
                                             <div className="space-y-1">
-                                                {['24h', '7d', '30d', '1y', '2y'].map(range => (
+                                                {['last_pos', '24h', '7d', '30d', '1y', '2y'].map(range => (
                                                     <button
                                                         key={range}
                                                         onClick={() => setHistoryPreset(range as any)}
@@ -3391,7 +3398,7 @@ const LiveTrackingInner = () => {
                                                                 : 'text-gray-600 hover:bg-gray-50'
                                                         }`}
                                                     >
-                                                        {range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
+                                                        {range === 'last_pos' ? 'Last Position' : range === '24h' ? 'Last 24 Hours' : range === '7d' ? 'Last 7 Days' : range === '30d' ? 'Last 30 Days' : range === '1y' ? 'Last 1 Year' : 'Last 2 Years'}
                                                         {historyPreset === range && <CheckCircle2 size={14} className="text-brand-500" />}
                                                     </button>
                                                 ))}

@@ -501,6 +501,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.showGoogleLabels !== undefined) setShowGoogleLabels(parsed.showGoogleLabels);
         if (parsed.activeBaseLayer) setActiveBaseLayer(parsed.activeBaseLayer);
         if (parsed.showFooter !== undefined) setShowFooter(parsed.showFooter);
+        if (parsed.showFlightTrack !== undefined) setShowFlightTrack(parsed.showFlightTrack);
         if (parsed.tableMode) setTableMode(parsed.tableMode);
         if (parsed.reportLanguage) setReportLanguage(parsed.reportLanguage);
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
@@ -523,6 +524,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       showGoogleLabels,
       activeBaseLayer,
       showFooter,
+      showFlightTrack,
       tableMode,
       reportLanguage,
       mapImageFit
@@ -2146,6 +2148,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               />
               <label htmlFor="showGoogleLabels" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
                 إضافة مسميات جوجل (المدن والطرق) على الخريطة
+              </label>
+            </div>
+            <div className="mt-2.5 flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="showFlightTrack"
+                checked={showFlightTrack}
+                onChange={(e) => setShowFlightTrack(e.target.checked)}
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <label htmlFor="showFlightTrack" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                إظهار مسار التتبع (Flight Track)
               </label>
             </div>
           </div>
