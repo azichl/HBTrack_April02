@@ -57,16 +57,28 @@ export const formatTableDMM = (val: number, isLat: boolean): string => {
 
 // ─── LEAFLET ICONS ────────────────────────────────────────────────────────────
 
-const createLiveTrackingMarkerIcon = ({
+const createLiveTrackingPinIcon = (pinColorHex: string) => {
+  return L.divIcon({
+    className: 'bg-transparent',
+    html: `
+      <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+        <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
+        <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
+      </svg>
+    `,
+    iconSize: [25, 41],
+    iconAnchor: [12.5, 41],
+  });
+};
+
+const createLiveTrackingLabelIcon = ({
   number,
   ringId,
-  pinColorHex,
   borderColorHex,
   labelTitle
 }: {
   number: string;
   ringId?: string;
-  pinColorHex: string;
   borderColorHex: string;
   labelTitle?: string;
 }) => {
@@ -75,14 +87,13 @@ const createLiveTrackingMarkerIcon = ({
   const cleanId = isNA ? (String(ringId || 'NA').trim() || 'NA') : rawId;
   const hasTitle = Boolean(labelTitle);
   const totalW = 160;
-  const totalH = hasTitle ? 78 : 60;
+  const totalH = hasTitle ? 45 : 25;
   const pillW = Math.max(54, cleanId.length * 7.5 + 16);
-  const pinW = 21;
 
   return L.divIcon({
-    className: 'bg-transparent',
+    className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
-      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
+      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
         ${hasTitle ? `
           <text 
             x="${totalW / 2}" 
@@ -123,27 +134,39 @@ const createLiveTrackingMarkerIcon = ({
         >
           ${cleanId}
         </text>
-        <g transform="translate(${(totalW - pinW) / 2}, ${hasTitle ? 43 : 25}) scale(0.84)">
-          <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
-          <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
-        </g>
       </svg>
     `,
     iconSize: [totalW, totalH],
-    iconAnchor: [totalW / 2, totalH],
-    popupAnchor: [0, -totalH + 12]
+    iconAnchor: [totalW / 2, totalH + 35],
   });
 };
 
-const createLiveTrackingCampIcon = (campName: string) => {
-  const totalW = 140;
-  const totalH = 54;
-  const badgeSize = 30;
-
+const createLiveTrackingCampPinIcon = () => {
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
+      <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+        <circle cx="15" cy="15" r="14" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+        <g transform="translate(6, 6) scale(0.75)">
+          <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
+          <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+          <path d="m10 4 4.5 16" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+        </g>
+      </svg>
+    `,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+  });
+};
+
+const createLiveTrackingCampLabelIcon = (campName: string) => {
+  const totalW = 140;
+  const totalH = 20;
+
+  return L.divIcon({
+    className: 'bg-transparent cursor-grab active:cursor-grabbing',
+    html: `
+      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
         <text 
           x="${totalW / 2}" 
           y="12" 
@@ -157,21 +180,14 @@ const createLiveTrackingCampIcon = (campName: string) => {
           stroke-width="2.6" 
           stroke-linejoin="round" 
           paint-order="stroke fill"
+          style="pointer-events: auto;"
         >
           ${campName}
         </text>
-        <g transform="translate(${(totalW - badgeSize) / 2}, 20)">
-          <circle cx="${badgeSize / 2}" cy="${badgeSize / 2}" r="${badgeSize / 2 - 1}" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
-          <g transform="translate(6, 6) scale(0.75)">
-            <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
-            <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
-            <path d="m10 4 4.5 16" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
-          </g>
-        </g>
       </svg>
     `,
     iconSize: [totalW, totalH],
-    iconAnchor: [totalW / 2, 20 + badgeSize / 2 + 5]
+    iconAnchor: [totalW / 2, totalH + 20]
   });
 };
 
@@ -184,9 +200,9 @@ const createDistancePillIcon = (
   const pillH = 24;
 
   return L.divIcon({
-    className: 'bg-transparent',
+    className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
-      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; pointer-events: none; display: block;">
+      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
         <rect 
           x="1" 
           y="1" 
@@ -267,14 +283,14 @@ const MeasureMapEvents = ({
 
 // Distance Measurement Tool Icons
 const measureDotIcon = L.divIcon({
-  className: 'bg-transparent',
+  className: 'bg-transparent cursor-grab active:cursor-grabbing',
   html: `<div style="width: 12px; height: 12px; background-color: #ffffff; border-radius: 9999px; border: 2.5px solid #f59e0b; box-shadow: 0 1px 4px rgba(0,0,0,0.5);"></div>`,
   iconSize: [12, 12],
   iconAnchor: [6, 6]
 });
 
 const measureEndIcon = L.divIcon({
-  className: 'bg-transparent',
+  className: 'bg-transparent cursor-grab active:cursor-grabbing',
   html: `<div style="width: 18px; height: 18px; background-color: #f59e0b; border-radius: 9999px; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
     <div style="width: 5px; height: 5px; background-color: #ffffff; border-radius: 9999px;"></div>
   </div>`,
@@ -1165,7 +1181,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           const overlaySvgs = clonedOverlayPane.querySelectorAll('svg');
           overlaySvgs.forEach(svg => {
             svg.innerHTML = '';
-            (svg as HTMLElement).style.display = 'none';
+            (svg as unknown as HTMLElement).style.display = 'none';
           });
 
           try {
@@ -1556,15 +1572,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-table .lbl { background: #f6f7f9; font-weight: 600; text-align: right; order: 0; color: #374151; }
 
         .trk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .trk-stat { border: 1px solid #d9dbe1; border-radius: 8px; padding: 10px 6px; text-align: center; background: #fff; }
-        .trk-stat .val { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+        .trk-stat { border: 1px solid #d9dbe1; border-radius: 8px; padding: 8px 4px; text-align: center; background: #fff; }
+        .trk-stat .val { font-size: 14.5px; font-weight: 700; margin-bottom: 2px; }
         .trk-stat .val.red { color: #d9263a; }
         .trk-stat .val.brown { color: #7a4a12; }
-        .trk-stat .lab { font-size: 11.5px; color: #6b7280; line-height: 1.35; }
+        .trk-stat .lab { font-size: 10px; color: #6b7280; line-height: 1.3; }
 
         .trk-legend {
-          display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: center;
-          border: 1px solid #d9dbe1; border-radius: 8px; padding: 8px 14px; margin-top: 10px; font-size: 12.5px; background: #fff;
+          display: flex; flex-wrap: nowrap; gap: 12px; justify-content: center; align-items: center;
+          border: 1px solid #d9dbe1; border-radius: 8px; padding: 6px 10px; margin-top: 10px; font-size: 11px; background: #fff; white-space: nowrap;
         }
         .trk-legend span { display: inline-flex; align-items: center; gap: 6px; }
         .trk-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
@@ -3853,49 +3869,74 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             position={metrics.releaseToLastMid}
                             icon={createDistancePillIcon(`${metrics.distFromReleaseKm} km`, '#dc2626')}
                             zIndexOffset={1500}
-                            interactive={false}
+                            interactive={true}
+                            draggable={true}
                           />
                         </>
                       )}
 
                       {/* Release Location Marker (Requested Filter) */}
                       {showReleaseMarker && metrics.rLat !== 0 && metrics.rLon !== 0 && (
-                        <Marker
-                          position={[metrics.rLat, metrics.rLon]}
-                          icon={createLiveTrackingMarkerIcon({
-                            number: displayTransmitterLabel,
-                            ringId: customMetadata.birdRing,
-                            pinColorHex: '#701a2b',
-                            borderColorHex: '#701a2b',
-                            labelTitle: 'موقع تركيب الجهاز'
-                          })}
-                          zIndexOffset={1800}
-                        />
+                        <>
+                          <Marker
+                            position={[metrics.rLat, metrics.rLon]}
+                            icon={createLiveTrackingPinIcon('#701a2b')}
+                            zIndexOffset={1800}
+                            interactive={false}
+                          />
+                          <Marker
+                            position={[metrics.rLat, metrics.rLon]}
+                            icon={createLiveTrackingLabelIcon({
+                              number: displayTransmitterLabel,
+                              ringId: customMetadata.birdRing,
+                              borderColorHex: '#701a2b',
+                              labelTitle: 'موقع تركيب الجهاز'
+                            })}
+                            zIndexOffset={1801}
+                            draggable={true}
+                          />
+                        </>
                       )}
 
                       {/* Current/Latest Active Transmitter Marker (With Ring fallback if NA) */}
                       {metrics.lLat !== 0 && metrics.lLon !== 0 && (
-                        <Marker
-                          position={[metrics.lLat, metrics.lLon]}
-                          icon={createLiveTrackingMarkerIcon({
-                            number: displayTransmitterLabel,
-                            ringId: customMetadata.birdRing,
-                            pinColorHex: '#22c55e',
-                            borderColorHex: '#22c55e',
-                            labelTitle: 'آخر موقع'
-                          })}
-                          zIndexOffset={2000}
-                        />
+                        <>
+                          <Marker
+                            position={[metrics.lLat, metrics.lLon]}
+                            icon={createLiveTrackingPinIcon('#22c55e')}
+                            zIndexOffset={2000}
+                            interactive={false}
+                          />
+                          <Marker
+                            position={[metrics.lLat, metrics.lLon]}
+                            icon={createLiveTrackingLabelIcon({
+                              number: displayTransmitterLabel,
+                              ringId: customMetadata.birdRing,
+                              borderColorHex: '#22c55e',
+                              labelTitle: 'آخر موقع'
+                            })}
+                            zIndexOffset={2001}
+                            draggable={true}
+                          />
+                        </>
                       )}
 
                       {/* Field Camps - Filtered one by one (Requested Filter) */}
                       {FIXED_FIELD_CAMPS.filter(camp => visibleCampIds.includes(camp.id)).map(camp => (
-                        <Marker
-                          key={camp.id}
-                          position={[camp.lat, camp.lon]}
-                          icon={createLiveTrackingCampIcon(camp.name)}
-                          zIndexOffset={1000}
-                        />
+                        <React.Fragment key={camp.id}>
+                          <Marker
+                            position={[camp.lat, camp.lon]}
+                            icon={createLiveTrackingCampPinIcon()}
+                            zIndexOffset={1000}
+                            interactive={false}
+                          />
+                          <Marker
+                            position={[camp.lat, camp.lon]}
+                            icon={createLiveTrackingCampLabelIcon(camp.name)}
+                            zIndexOffset={1001}
+                            draggable={true}
+                          />
+                        </React.Fragment>
                       ))}
 
                       {/* Interactive Distance Measurement Tool Drawing (EXPORTED WITH PNG & PDF) */}
@@ -3925,7 +3966,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               position={seg.midpoint}
                               icon={createDistancePillIcon(`${seg.distKm} km`, '#d97706', [32, 26])}
                               zIndexOffset={2300}
-                              interactive={false}
+                              interactive={true}
+                              draggable={true}
                             />
                           ))}
                           {measurePoints.length > 2 && (
