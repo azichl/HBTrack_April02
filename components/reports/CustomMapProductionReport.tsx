@@ -576,7 +576,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
 
   const T = {
-    reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle === 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' ? 'Tracking Follow-up Report for Houbara with PTT' : customMetadata.reportTitle,
+    reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle.includes('تقرير') ? 'Tracking Follow-up Report for Houbara with PTT' : customMetadata.reportTitle,
     issueDateLabel: reportLanguage === 'ar' ? 'تاريخ الإصدار' : 'Issue Date',
     transmitterLabel: reportLanguage === 'ar' ? 'جهاز التتبع' : 'Transmitter',
     regionLabel: reportLanguage === 'ar' ? 'منطقة' : 'Region',
@@ -607,9 +607,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     if (reportLanguage === 'ar') return val;
     const dict: any = { 
       'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
-      'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp'
+      'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp', 'البعد عن المخيم': 'Distance to Camp',
+      'جيزقازغان': 'Zhezkazgan', 'ألماتي': 'Almaty'
     };
-    return dict[val] || val;
+    let res = val;
+    if (dict[res]) return dict[res];
+    if (res.includes('آخر موقع')) {
+      res = res.replace('آخر موقع', 'Latest Location');
+    }
+    return res;
   };
 
   const getBearingLabel = (deg: number) => {
@@ -3371,7 +3377,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
           {/* Subtitle */}
           <p className="trk-sub">
-            {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {T.regionLabel} {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '').replace(/^Camp\s*/i, '') : 'جيزقازغان'} – {translateValue(customMetadata.regionName || 'كازاخستان')} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
+            {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {T.regionLabel} {translateValue(activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '').replace(/^Camp\s*/i, '') : 'جيزقازغان')} – {translateValue(customMetadata.regionName || 'كازاخستان')} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
           </p>
 
           {/* 2. MAIN REPORT BODY */}
@@ -3400,7 +3406,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">رقم جهاز التتبع</span>
+                    <span className="k">{T.txId}</span>
                     <span className="v">
                       {isTableEditing ? (
                         <input
@@ -3419,7 +3425,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">رقم الحجل</span>
+                    <span className="k">{T.ringId}</span>
                     <span className="v">
                       {isTableEditing ? (
                         <input
@@ -3435,7 +3441,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">النوعية</span>
+                    <span className="k">{T.species}</span>
                     <span className="v">
                       {isTableEditing ? (
                         <input
@@ -3451,7 +3457,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">الجنس</span>
+                    <span className="k">{T.gender}</span>
                     <span className="v">
                       {isTableEditing ? (
                         <select
@@ -3470,7 +3476,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">حالة الطائر</span>
+                    <span className="k">{T.status}</span>
                     <span className="v">
                       {isTableEditing ? (
                         <input
