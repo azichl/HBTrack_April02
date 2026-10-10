@@ -474,6 +474,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     issueDate: string;
     reportTitle: string;
     regionName: string;
+    agencyNameAr: string;
+    agencyNameEn: string;
     footerRight: string;
     footerLeft: string;
   }>({
@@ -484,6 +486,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     issueDate: formatDateYYYYMMDD(new Date()) || '2026-10-09',
     reportTitle: 'تقرير متابعة طائر حبارى مزود بجهاز تتبع',
     regionName: 'كازاخستان',
+    agencyNameAr: 'مكتب محميات الدولة الخارجية',
+    agencyNameEn: 'External Reserves Office of The State',
     footerRight: 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان',
     footerLeft: ''
   });
@@ -512,14 +516,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // ─── CUSTOM LOGOS & QGIS MAP UPLOAD (USER REQUESTED) ────────────────────────
   const [logoLeftUrl, setLogoLeftUrl] = useState<string>('/qatar-houbara-center-logo.png');
-  const [logoRightUrl, setLogoRightUrl] = useState<string>('/external-reserves-office-logo.png');
+  const [logoRightUrl, setLogoRightUrl] = useState<string>('/qatar-emblem.png');
   const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('contain');
 
   // Logo Dimensions Management (User requested: click and adjust dimensions)
-  const [logoLeftHeight, setLogoLeftHeight] = useState<number>(65);
-  const [logoLeftWidth, setLogoLeftWidth] = useState<number>(220);
-  const [logoRightHeight, setLogoRightHeight] = useState<number>(55);
-  const [logoRightWidth, setLogoRightWidth] = useState<number>(280);
+  const [logoLeftHeight, setLogoLeftHeight] = useState<number>(78);
+  const [logoLeftWidth, setLogoLeftWidth] = useState<number>(260);
+  const [logoRightHeight, setLogoRightHeight] = useState<number>(64);
+  const [logoRightWidth, setLogoRightWidth] = useState<number>(240);
   const [activeResizingLogo, setActiveResizingLogo] = useState<'left' | 'right' | null>(null);
 
   const mapImageInputRef = useRef<HTMLInputElement>(null);
@@ -1133,7 +1137,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('border-top', 'none', 'important');
           el.style.setProperty('color', '#000000', 'important');
           el.style.setProperty('font-weight', '800', 'important');
-          el.style.setProperty('font-family', "'Cairo', monospace, Arial, sans-serif", 'important');
+          el.style.setProperty('font-family', "'IBM Plex Sans Arabic', monospace, Arial, sans-serif", 'important');
           el.style.setProperty('font-size', '10px', 'important');
           el.style.setProperty('line-height', '1.1', 'important');
           el.style.setProperty('padding', '1px 5px', 'important');
@@ -1142,10 +1146,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('display', 'block', 'important');
         });
 
-        // Set Cairo font on the cloned print container
+        // Set IBM Plex Sans Arabic font on the cloned print container
         const clonedPrintArea = clonedDoc.getElementById('custom-map-production-print-area');
         if (clonedPrintArea) {
-          clonedPrintArea.style.setProperty('font-family', "'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Arial, sans-serif", 'important');
+          clonedPrintArea.style.setProperty('font-family', "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif", 'important');
         }
 
         // 3. Fix Leaflet Vector Shift Bug:
@@ -1488,17 +1492,89 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       
       {/* ─── PRINT & REPORT STYLES ────────────────────────────────────────── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+
+        #custom-map-production-print-area {
+          --maroon: #7a1c32;
+          --green: #128a5b;
+          --amber: #f5a623;
+          --brown: #7a4a12;
+          --red: #d9263a;
+          --ink: #1f2937;
+          --muted: #6b7280;
+          --line: #d9dbe1;
+          --bg: #f3f4f6;
+          font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif !important;
+          color: var(--ink);
+        }
 
         #custom-map-production-print-area,
         #custom-map-production-print-area * {
-          font-family: 'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Tahoma, Arial, sans-serif !important;
+          font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif !important;
         }
 
-        #custom-map-production-print-area .font-mono,
-        #custom-map-production-print-area .font-mono * {
-          font-family: 'Cairo', monospace, sans-serif !important;
+        /* Header UI (From Reference Design) */
+        .trk-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .trk-header__agency { display: flex; align-items: center; gap: 14px; }
+        .trk-header__agency img { height: 64px; }
+        .trk-header__rule { width: 1px; height: 52px; background: #7a1c32; }
+        .trk-header__names { text-align: right; }
+        .trk-header__names .ar { font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: #1b2433; line-height: 1.25; }
+        .trk-header__names .en { font-size: 19px; font-weight: 500; color: #1b2433; line-height: 1.2; font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; }
+        .trk-header__center { height: 78px; }
+        .trk-hr { height: 2px; background: #7a1c32; margin: 12px 0 18px; width: 100%; display: block; }
+
+        .trk-title { text-align: center; font-size: 28px; font-weight: 700; margin: 0 0 8px; color: #1b2433; }
+        .trk-sub { text-align: center; color: #6b7280; font-size: 15px; margin: 0 0 16px; }
+        .trk-sub b { color: #7a1c32; font-weight: 700; }
+
+        /* Two columns: side panel (440px on right in RTL) and map (left) */
+        .trk-grid { display: grid; grid-template-columns: 440px 1fr; gap: 24px; flex: 1; min-height: 520px; width: 100%; }
+        .trk-side { display: flex; flex-direction: column; gap: 12px; }
+
+        .trk-card { border: 1px solid #d9dbe1; border-radius: 8px; overflow: hidden; background: #fff; }
+        .trk-card__head { background: #7a1c32; color: #fff; font-weight: 700; font-size: 17px; padding: 12px 16px; text-align: right; }
+        .trk-row { display: grid; grid-template-columns: 1fr 1fr; align-items: center; border-top: 1px solid #eceef2; }
+        .trk-row:first-of-type { border-top: 0; }
+        .trk-row .k { background: #f6f7f9; padding: 9px 16px; font-weight: 600; font-size: 15px; text-align: right; color: #374151; }
+        .trk-row .v { padding: 9px 16px; font-size: 15px; text-align: center; }
+        .trk-row .v .maroon, .maroon { color: #7a1c32; font-weight: 700; }
+
+        .pill { display: inline-block; padding: 2px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+        .pill--grey { background: #e8eaee; color: #6b7280; }
+        .pill--ok { background: #e3f4ea; color: #15803d; }
+        .pill--warn { background: #fdf0d5; color: #a16207; }
+        .pill--bad { background: #fde4e4; color: #b91c1c; }
+
+        .trk-card--table { border-color: #d9dbe1; }
+        .trk-twohead { display: grid; grid-template-columns: 1fr 1fr 1fr; color: #fff; font-weight: 700; font-size: 16px; }
+        .trk-twohead::before { content: ''; background: #fff; }
+        .trk-twohead__install { background: #7a1c32; padding: 12px; text-align: center; }
+        .trk-twohead__last { background: #128a5b; padding: 12px; text-align: center; }
+        .trk-table { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+        .trk-table > span { padding: 9px 12px; text-align: center; font-size: 14px; border-top: 1px solid #eceef2; font-variant-numeric: tabular-nums; }
+        .trk-table .lbl { background: #f6f7f9; font-weight: 600; text-align: right; order: 0; color: #374151; }
+
+        .trk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .trk-stat { border: 1px solid #d9dbe1; border-radius: 8px; padding: 10px 6px; text-align: center; background: #fff; }
+        .trk-stat .val { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+        .trk-stat .val.red { color: #d9263a; }
+        .trk-stat .val.brown { color: #7a4a12; }
+        .trk-stat .lab { font-size: 11.5px; color: #6b7280; line-height: 1.35; }
+
+        .trk-legend {
+          display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; align-items: center;
+          border: 1px solid #d9dbe1; border-radius: 8px; padding: 8px 14px; margin-top: 10px; font-size: 12.5px; background: #fff;
         }
+        .trk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .trk-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+        .trk-legend .dot.maroon { background: #7a1c32; }
+        .trk-legend .dot.green { background: #128a5b; }
+        .trk-legend .tri { width: 0; height: 0; border-inline: 6px solid transparent; border-bottom: 11px solid #f5a623; }
+        .trk-legend .line { width: 22px; height: 0; border-top: 3px solid #d9263a; display: inline-block; }
+        .trk-legend .line.dotted { border-top: 2px dotted #f5a623; }
+        .trk-legend .sq { width: 10px; height: 10px; background: #1c2430; display: inline-block; }
+        .trk-footer { margin-top: 12px; border-top: 1px solid #d9dbe1; padding-top: 8px; color: #6b7280; font-size: 12px; text-align: left; }
 
         #custom-map-production-print-area .leaflet-control-scale {
           background: rgba(255, 255, 255, 0.95) !important;
@@ -1519,7 +1595,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           border-top: none !important;
           color: #000000 !important;
           font-weight: 800 !important;
-          font-family: 'Cairo', monospace, Arial, sans-serif !important;
+          font-family: 'IBM Plex Sans Arabic', monospace, Arial, sans-serif !important;
           font-size: 10px !important;
           line-height: 1.1 !important;
           padding: 1px 5px !important;
@@ -2713,35 +2789,261 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         <div 
           id="custom-map-production-print-area"
           ref={reportContainerRef}
-          className="bg-white text-gray-900 w-[1080px] min-w-[1080px] p-7 shadow-2xl rounded-sm border border-gray-300 relative select-none"
+          className="trk-page bg-white text-gray-900 w-[1123px] min-w-[1123px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none"
+          dir="rtl"
           style={{
-            direction: 'ltr',
-            fontFamily: "'Cairo', 'Tajawal', 'Noto Kufi Arabic', 'Segoe UI', Tahoma, Arial, sans-serif",
+            direction: 'rtl',
+            fontFamily: "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif",
             letterSpacing: 'normal'
           }}
         >
 
-          {/* 1. REPORT HEADER */}
-          <div 
-            className="relative mb-3.5" 
-            style={{ direction: 'ltr', position: 'relative', zIndex: 2000 }}
-          >
-            {/* Top Logos Row */}
-            <div className="flex items-center justify-between pb-1">
+          {/* 1. REPORT HEADER (Pixel-faithful to reference design) */}
+          <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2000 }}>
             
-            {/* Top-Left Header Logo */}
+            {/* Agency Info: Emblem + Rule + Names (On Right in RTL) */}
+            <div className="trk-header__agency relative">
+              {/* Emblem Logo */}
+              <div 
+                className={`logo-clickable-container flex items-center justify-center relative group transition-all select-none ${
+                  activeResizingLogo === 'right' 
+                    ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
+                    : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
+                }`}
+                style={{ position: 'relative', zIndex: activeResizingLogo === 'right' ? 3000 : 20 }}
+              >
+                <img 
+                  src={logoRightUrl === '/external-reserves-office-logo.png' ? '/qatar-emblem.png' : logoRightUrl} 
+                  alt="شعار الدولة" 
+                  className="object-contain cursor-pointer transition-all"
+                  style={{
+                    height: `${logoRightHeight}px`,
+                    maxWidth: `${logoRightWidth}px`,
+                    width: 'auto',
+                    display: 'block'
+                  }}
+                  onClick={() => setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right')}
+                  title="انقر على الشعار لتكبيره أو تصغيره وتعديل أبعاده"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/external-reserves-office-logo.png';
+                  }}
+                />
+
+                {/* Hover Quick Edit Badge */}
+                <div className="no-export-snapshot no-print absolute -bottom-2 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right');
+                    }}
+                    className="hover:text-amber-300 flex items-center gap-0.5 font-bold"
+                    title="تعديل الأبعاد وتكبير أو تصغير الحجم"
+                  >
+                    <Maximize2 size={10} />
+                    <span>تعديل الحجم ({logoRightHeight}px)</span>
+                  </button>
+                  <span className="text-gray-500">•</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      logoRightInputRef.current?.click();
+                    }}
+                    className="hover:underline flex items-center gap-0.5 text-sky-300"
+                    title="رفع شعار جديد (PNG أو SVG)"
+                  >
+                    <Upload size={10} />
+                    <span>استبدال</span>
+                  </button>
+                  {logoRightUrl !== '/qatar-emblem.png' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLogoRightUrl('/qatar-emblem.png');
+                      }}
+                      className="hover:text-amber-300 font-bold mr-0.5"
+                      title="استعادة الشعار الافتراضي"
+                    >
+                      ↺
+                    </button>
+                  )}
+                </div>
+
+                {/* Floating Dimension Controller Popover */}
+                {activeResizingLogo === 'right' && (
+                  <div 
+                    className="logo-control-popover no-export-snapshot no-print absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                    style={{ direction: 'rtl', zIndex: 9999, position: 'absolute' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
+                      <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1">
+                        <Maximize2 size={13} className="text-brand-500" />
+                        <span>تعديل حجم الشعار الأيمن</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveResizingLogo(null)}
+                        className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-md"
+                        title="إغلاق"
+                      >
+                        <X size={13} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogoRightHeight(h => Math.max(30, h - 10));
+                          setLogoRightWidth(w => Math.max(60, w - 20));
+                        }}
+                        className="flex-1 py-1 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded text-xs font-bold flex items-center justify-center gap-1"
+                      >
+                        <Minus size={12} />
+                        <span>تصغير</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLogoRightHeight(h => Math.min(220, h + 10));
+                          setLogoRightWidth(w => Math.min(480, w + 20));
+                        }}
+                        className="flex-1 py-1 px-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold flex items-center justify-center gap-1 shadow-xs"
+                      >
+                        <Plus size={12} />
+                        <span>تكبير</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                        <span>الارتفاع:</span>
+                        <span className="font-mono font-bold text-brand-600">{logoRightHeight} px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={30}
+                        max={200}
+                        step={5}
+                        value={logoRightHeight}
+                        onChange={(e) => setLogoRightHeight(Number(e.target.value))}
+                        className="w-full accent-brand-600 cursor-pointer h-1.5"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
+                        <span>العرض الأقصى:</span>
+                        <span className="font-mono font-bold text-brand-600">{logoRightWidth} px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={60}
+                        max={450}
+                        step={10}
+                        value={logoRightWidth}
+                        onChange={(e) => setLogoRightWidth(Number(e.target.value))}
+                        className="w-full accent-brand-600 cursor-pointer h-1.5"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-100 dark:border-slate-800">
+                      <span className="text-[10px] text-gray-500">حجم سريع:</span>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => { setLogoRightHeight(50); setLogoRightWidth(200); }}
+                          className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                        >
+                          صغير
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setLogoRightHeight(64); setLogoRightWidth(240); }}
+                          className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                        >
+                          افتراضي
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setLogoRightHeight(85); setLogoRightWidth(320); }}
+                          className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
+                        >
+                          كبير
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-800 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => logoRightInputRef.current?.click()}
+                        className="text-sky-600 dark:text-sky-400 hover:underline font-bold flex items-center gap-1"
+                      >
+                        <Upload size={11} />
+                        <span>استبدال الصورة</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setLogoRightHeight(64); setLogoRightWidth(240); }}
+                        className="text-gray-500 hover:text-gray-800 dark:hover:text-white flex items-center gap-0.5"
+                      >
+                        <RotateCcw size={11} />
+                        <span>الافتراضي</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Vertical Rule */}
+              <span className="trk-header__rule" />
+
+              {/* Agency Names */}
+              <div className="trk-header__names">
+                {isTableEditing ? (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      value={customMetadata.agencyNameAr || 'مكتب محميات الدولة الخارجية'}
+                      onChange={(e) => setCustomMetadata({ ...customMetadata, agencyNameAr: e.target.value })}
+                      className="border border-amber-300 rounded px-1.5 py-0.5 text-xs font-bold w-48 text-right bg-amber-50/50 block"
+                      placeholder="اسم الجهة بالعربية"
+                    />
+                    <input
+                      type="text"
+                      value={customMetadata.agencyNameEn || 'External Reserves Office of The State'}
+                      onChange={(e) => setCustomMetadata({ ...customMetadata, agencyNameEn: e.target.value })}
+                      className="border border-amber-300 rounded px-1.5 py-0.5 text-[11px] font-medium w-48 text-left bg-amber-50/50 block"
+                      placeholder="Agency Name (EN)"
+                      dir="ltr"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="ar">{customMetadata.agencyNameAr || 'مكتب محميات الدولة الخارجية'}</div>
+                    <div className="en" dir="ltr">{customMetadata.agencyNameEn || 'External Reserves Office of The State'}</div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Center Logo (On Left in RTL) */}
             <div 
               className={`logo-clickable-container flex items-center justify-start relative group transition-all select-none ${
                 activeResizingLogo === 'left' 
                   ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
                   : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
               }`}
-              style={{ minWidth: '120px', position: 'relative', zIndex: activeResizingLogo === 'left' ? 3000 : 20 }}
+              style={{ position: 'relative', zIndex: activeResizingLogo === 'left' ? 3000 : 20 }}
             >
               <img 
                 src={logoLeftUrl} 
                 alt="المركز القطري لتكاثر الحبارى والصقور" 
-                className="object-contain cursor-pointer transition-all"
+                className="trk-header__center object-contain cursor-pointer transition-all"
                 style={{
                   height: `${logoLeftHeight}px`,
                   maxWidth: `${logoLeftWidth}px`,
@@ -2797,7 +3099,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 )}
               </div>
 
-              {/* Floating Dimension Controller Popover (Appears when clicked!) */}
+              {/* Floating Dimension Controller Popover */}
               {activeResizingLogo === 'left' && (
                 <div 
                   className="logo-control-popover no-export-snapshot no-print absolute top-full left-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
@@ -2819,7 +3121,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </button>
                   </div>
 
-                  {/* Quick Scale Buttons */}
                   <div className="flex items-center justify-between gap-1">
                     <button
                       type="button"
@@ -2828,7 +3129,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         setLogoLeftWidth(w => Math.max(60, w - 20));
                       }}
                       className="flex-1 py-1 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded text-xs font-bold flex items-center justify-center gap-1"
-                      title="تصغير الشعار بمقدار 10 بكسل"
                     >
                       <Minus size={12} />
                       <span>تصغير</span>
@@ -2840,17 +3140,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         setLogoLeftWidth(w => Math.min(480, w + 20));
                       }}
                       className="flex-1 py-1 px-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold flex items-center justify-center gap-1 shadow-xs"
-                      title="تكبير الشعار بمقدار 10 بكسل"
                     >
                       <Plus size={12} />
                       <span>تكبير</span>
                     </button>
                   </div>
 
-                  {/* Height Slider */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                      <span>الارتفاع (Height):</span>
+                      <span>الارتفاع:</span>
                       <span className="font-mono font-bold text-brand-600">{logoLeftHeight} px</span>
                     </div>
                     <input
@@ -2864,10 +3162,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     />
                   </div>
 
-                  {/* Width Slider */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                      <span>العرض (Max Width):</span>
+                      <span>العرض الأقصى:</span>
                       <span className="font-mono font-bold text-brand-600">{logoLeftWidth} px</span>
                     </div>
                     <input
@@ -2881,42 +3178,33 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     />
                   </div>
 
-                  {/* Size Presets */}
                   <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-100 dark:border-slate-800">
                     <span className="text-[10px] text-gray-500">حجم سريع:</span>
                     <div className="flex gap-1">
                       <button
                         type="button"
-                        onClick={() => { setLogoLeftHeight(60); setLogoLeftWidth(160); }}
+                        onClick={() => { setLogoLeftHeight(50); setLogoLeftWidth(160); }}
                         className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
                       >
                         صغير
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setLogoLeftHeight(100); setLogoLeftWidth(240); }}
+                        onClick={() => { setLogoLeftHeight(78); setLogoLeftWidth(260); }}
                         className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
                       >
-                        متوسط
+                        افتراضي
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setLogoLeftHeight(135); setLogoLeftWidth(320); }}
+                        onClick={() => { setLogoLeftHeight(105); setLogoLeftWidth(340); }}
                         className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
                       >
                         كبير
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { setLogoLeftHeight(165); setLogoLeftWidth(400); }}
-                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
-                      >
-                        كبير جداً
-                      </button>
                     </div>
                   </div>
 
-                  {/* Actions: Replace Logo or Reset Size */}
                   <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-800 text-[11px]">
                     <button
                       type="button"
@@ -2928,277 +3216,461 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setLogoLeftHeight(100); setLogoLeftWidth(240); }}
+                      onClick={() => { setLogoLeftHeight(78); setLogoLeftWidth(260); }}
                       className="text-gray-500 hover:text-gray-800 dark:hover:text-white flex items-center gap-0.5"
                     >
                       <RotateCcw size={11} />
-                      <span>الحجم الافتراضي</span>
+                      <span>الافتراضي</span>
                     </button>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Top-Right Header Logo */}
-            <div 
-              className={`logo-clickable-container flex items-center justify-end relative group transition-all select-none ${
-                activeResizingLogo === 'right' 
-                  ? 'ring-2 ring-brand-500 rounded p-1 bg-brand-50/20' 
-                  : 'hover:ring-1 hover:ring-brand-300 rounded p-0.5'
-              }`}
-              style={{ minWidth: '120px', position: 'relative', zIndex: activeResizingLogo === 'right' ? 3000 : 20 }}
-            >
-              <img 
-                src={logoRightUrl} 
-                alt="مكتب محميات الدولة الخارجية" 
-                className="object-contain cursor-pointer transition-all"
-                style={{
-                  height: `${logoRightHeight}px`,
-                  maxWidth: `${logoRightWidth}px`,
-                  width: 'auto',
-                  display: 'block'
-                }}
-                onClick={() => setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right')}
-                title="انقر على الشعار لتكبيره أو تصغيره وتعديل أبعاده"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
+          </header>
 
-              {/* Hover Quick Edit Badge */}
-              <div className="no-export-snapshot no-print absolute -bottom-2 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right');
-                  }}
-                  className="hover:text-amber-300 flex items-center gap-0.5 font-bold"
-                  title="تعديل الأبعاد وتكبير أو تصغير الحجم"
-                >
-                  <Maximize2 size={10} />
-                  <span>تعديل الحجم ({logoRightHeight}px)</span>
-                </button>
-                <span className="text-gray-500">•</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    logoRightInputRef.current?.click();
-                  }}
-                  className="hover:underline flex items-center gap-0.5 text-sky-300"
-                  title="رفع شعار جديد (PNG أو SVG)"
-                >
-                  <Upload size={10} />
-                  <span>استبدال</span>
-                </button>
-                {logoRightUrl !== '/external-reserves-office-logo.png' && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLogoRightUrl('/external-reserves-office-logo.png');
-                    }}
-                    className="hover:text-amber-300 font-bold mr-0.5"
-                    title="استعادة الشعار الافتراضي"
-                  >
-                    ↺
-                  </button>
-                )}
-              </div>
+          {/* 2px Solid Maroon Rule */}
+          <div className="trk-hr" />
 
-              {/* Floating Dimension Controller Popover (Appears when clicked!) */}
-              {activeResizingLogo === 'right' && (
-                <div 
-                  className="logo-control-popover no-export-snapshot no-print absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
-                  style={{ direction: 'rtl', zIndex: 9999, position: 'absolute' }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-1.5">
-                    <span className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1">
-                      <Maximize2 size={13} className="text-brand-500" />
-                      <span>تعديل حجم الشعار الأيمن</span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveResizingLogo(null)}
-                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-white rounded-md"
-                      title="إغلاق"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
+          {/* Centered Title */}
+          {isTableEditing ? (
+            <input
+              type="text"
+              value={customMetadata.reportTitle}
+              onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
+              className="w-full text-center text-[28px] font-bold text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-2"
+            />
+          ) : (
+            <h1 className="trk-title">
+              {customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع'}
+            </h1>
+          )}
 
-                  {/* Quick Scale Buttons */}
-                  <div className="flex items-center justify-between gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLogoRightHeight(h => Math.max(30, h - 10));
-                        setLogoRightWidth(w => Math.max(60, w - 20));
-                      }}
-                      className="flex-1 py-1 px-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-200 rounded text-xs font-bold flex items-center justify-center gap-1"
-                      title="تصغير الشعار بمقدار 10 بكسل"
-                    >
-                      <Minus size={12} />
-                      <span>تصغير</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLogoRightHeight(h => Math.min(220, h + 10));
-                        setLogoRightWidth(w => Math.min(480, w + 20));
-                      }}
-                      className="flex-1 py-1 px-2 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold flex items-center justify-center gap-1 shadow-xs"
-                      title="تكبير الشعار بمقدار 10 بكسل"
-                    >
-                      <Plus size={12} />
-                      <span>تكبير</span>
-                    </button>
-                  </div>
-
-                  {/* Height Slider */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                      <span>الارتفاع (Height):</span>
-                      <span className="font-mono font-bold text-brand-600">{logoRightHeight} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={30}
-                      max={200}
-                      step={5}
-                      value={logoRightHeight}
-                      onChange={(e) => setLogoRightHeight(Number(e.target.value))}
-                      className="w-full accent-brand-600 cursor-pointer h-1.5"
-                    />
-                  </div>
-
-                  {/* Width Slider */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                      <span>العرض (Max Width):</span>
-                      <span className="font-mono font-bold text-brand-600">{logoRightWidth} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={60}
-                      max={450}
-                      step={10}
-                      value={logoRightWidth}
-                      onChange={(e) => setLogoRightWidth(Number(e.target.value))}
-                      className="w-full accent-brand-600 cursor-pointer h-1.5"
-                    />
-                  </div>
-
-                  {/* Size Presets */}
-                  <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-100 dark:border-slate-800">
-                    <span className="text-[10px] text-gray-500">حجم سريع:</span>
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => { setLogoRightHeight(50); setLogoRightWidth(200); }}
-                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
-                      >
-                        صغير
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setLogoRightHeight(75); setLogoRightWidth(280); }}
-                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
-                      >
-                        متوسط
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setLogoRightHeight(105); setLogoRightWidth(350); }}
-                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
-                      >
-                        كبير
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setLogoRightHeight(140); setLogoRightWidth(420); }}
-                        className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
-                      >
-                        كبير جداً
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Actions: Replace Logo or Reset Size */}
-                  <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-800 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => logoRightInputRef.current?.click()}
-                      className="text-sky-600 dark:text-sky-400 hover:underline font-bold flex items-center gap-1"
-                    >
-                      <Upload size={11} />
-                      <span>استبدال الصورة</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setLogoRightHeight(60); setLogoRightWidth(300); }}
-                      className="text-gray-500 hover:text-gray-800 dark:hover:text-white flex items-center gap-0.5"
-                    >
-                      <RotateCcw size={11} />
-                      <span>الحجم الافتراضي</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* End of Top Logos Row */}
-            </div>
-
-            {/* 1.2 SOLID MAROON DIVIDER LINE (Exact same maroon #701a2b matching screenshot) */}
-            <div className="w-full h-[2.5px] bg-[#701a2b] my-2.5" />
-
-            {/* 1.3 CENTERED TITLE & SUBTITLE BLOCK (Positioned below the maroon line) */}
-            <div className="text-center pt-0.5" style={{ direction: 'rtl' }}>
-              {isTableEditing ? (
-                <input
-                  type="text"
-                  value={customMetadata.reportTitle}
-                  onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
-                  className="w-full text-center text-[23px] font-black text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-1"
-                />
-              ) : (
-                <h1 
-                  className="text-[23px] font-black text-gray-900 leading-tight mb-1"
-                  style={{ letterSpacing: 'normal' }}
-                >
-                  {customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع'}
-                </h1>
-              )}
-
-              <div className="text-[13.5px] font-bold text-gray-700 flex items-center justify-center gap-2">
-                <span>
-                  {isPttNA ? 'رقم الحجل ' : 'جهاز التتبع '}
-                  <span className="text-[#701a2b] font-black">
-                    {displayTransmitterLabel}
-                  </span>
-                </span>
-                <span>•</span>
-                <span>منطقة {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '') : 'جيزقازغان'} – {customMetadata.regionName || 'كازاخستان'}</span>
-                <span>•</span>
-                <span>تاريخ الإصدار {customMetadata.issueDate}</span>
-              </div>
-            </div>
-
-          </div>
+          {/* Subtitle */}
+          <p className="trk-sub">
+            جهاز التتبع <b>{displayTransmitterLabel}</b> • منطقة {activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '') : 'جيزقازغان'} – {customMetadata.regionName || 'كازاخستان'} • تاريخ الإصدار <b dir="ltr">{customMetadata.issueDate}</b>
+          </p>
 
           {/* 2. MAIN REPORT BODY */}
-          <div className="flex gap-4 items-start" style={{ direction: 'ltr' }}>
-            
-            {/* ─── COLUMN 1 (LEFT): MAP WINDOW (approx 58% width) ───── */}
-            <div className="w-[58%] flex flex-col space-y-2" style={{ direction: 'ltr' }}>
+          <div className="trk-grid" dir="rtl">
+
+            {/* ─── COLUMN 1 (RIGHT in RTL): SIDE PANEL (440px) ───── */}
+            <aside className="trk-side" key={dragResetKey}>
+              
+              {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
+              {(tableMode === 'standard' || tableMode === 'both') && (
+                <section id="custom-bird-data-table" className={`trk-card ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
+                  {isDragEnabled && (
+                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
+                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول بيانات الطائر</span>
+                      <span>⋮⋮</span>
+                    </div>
+                  )}
+
+                  <div className="trk-card__head flex items-center justify-between">
+                    <span>بيانات الطائر</span>
+                    {isTableEditing && (
+                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-white font-normal">
+                        تعديل مباشر
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="trk-row">
+                    <span className="k">رقم جهاز التتبع</span>
+                    <span className="v">
+                      {isTableEditing ? (
+                        <input
+                          type="text"
+                          value={selectedPttId}
+                          onChange={(e) => setSelectedPttId(e.target.value)}
+                          className="w-full text-center font-bold text-[#7a1c32] text-[15px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        <b className="maroon">
+                          {displayTransmitterLabel}
+                          {isPttNA && <span className="text-[10px] text-gray-400 font-sans mr-1">(حجل)</span>}
+                        </b>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="trk-row">
+                    <span className="k">رقم الحجل</span>
+                    <span className="v">
+                      {isTableEditing ? (
+                        <input
+                          type="text"
+                          value={customMetadata.birdRing}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, birdRing: e.target.value })}
+                          className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        <span className="pill pill--grey">{customMetadata.birdRing || 'NA'}</span>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="trk-row">
+                    <span className="k">النوعية</span>
+                    <span className="v">
+                      {isTableEditing ? (
+                        <input
+                          type="text"
+                          value={customMetadata.species}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, species: e.target.value })}
+                          className="w-full text-center font-bold text-gray-800 text-[14px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        <span>{customMetadata.species || 'وحش'}</span>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="trk-row">
+                    <span className="k">الجنس</span>
+                    <span className="v">
+                      {isTableEditing ? (
+                        <select
+                          value={customMetadata.gender}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, gender: e.target.value })}
+                          className="w-full text-center font-bold text-gray-800 text-[14px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                        >
+                          <option value="ذكر">ذكر</option>
+                          <option value="أنثى">أنثى</option>
+                          <option value="غير محدد">غير محدد</option>
+                        </select>
+                      ) : (
+                        <span>{customMetadata.gender || 'ذكر'}</span>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="trk-row">
+                    <span className="k">حالة الطائر</span>
+                    <span className="v">
+                      {isTableEditing ? (
+                        <input
+                          type="text"
+                          value={customMetadata.birdStatus}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, birdStatus: e.target.value })}
+                          className="w-full text-center font-bold text-emerald-700 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        <span className={`pill ${
+                          customMetadata.birdStatus === 'نافق' || customMetadata.birdStatus === 'dead' ? 'pill--bad' :
+                          customMetadata.birdStatus === 'غير نشط' || customMetadata.birdStatus === 'inactive' ? 'pill--warn' :
+                          'pill--ok'
+                        }`}>
+                          {customMetadata.birdStatus || 'حي'}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </section>
+              )}
+
+              {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
+              {(tableMode === 'standard' || tableMode === 'both') && (
+                <section id="custom-table2-coordinates" className={`trk-card trk-card--table ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
+                  {isDragEnabled && (
+                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
+                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول مقارنة الإحداثيات</span>
+                      <span>⋮⋮</span>
+                    </div>
+                  )}
+
+                  <div className="trk-twohead">
+                    <div className="trk-twohead__install">تركيب الجهاز</div>
+                    <div className="trk-twohead__last">آخر موقع</div>
+                  </div>
+                  <div className="trk-table">
+                    <span className="lbl">التاريخ</span>
+                    <span dir="ltr">
+                      {isTableEditing ? (
+                        <input
+                          type="text"
+                          value={telemetryData.releasePos.dateStr}
+                          onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, dateStr: e.target.value } })}
+                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        telemetryData.releasePos.dateStr
+                      )}
+                    </span>
+                    <span dir="ltr">
+                      {isTableEditing ? (
+                        <input
+                          type="text"
+                          value={telemetryData.lastGpsPos.dateStr}
+                          onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, dateStr: e.target.value } })}
+                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        telemetryData.lastGpsPos.dateStr
+                      )}
+                    </span>
+
+                    <span className="lbl">خط العرض (N)</span>
+                    <span dir="ltr">
+                      {isTableEditing ? (
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={telemetryData.releasePos.lat}
+                          onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lat: parseFloat(e.target.value) || 0 } })}
+                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        metrics.releaseLatTableDMM
+                      )}
+                    </span>
+                    <span dir="ltr">
+                      {isTableEditing ? (
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={telemetryData.lastGpsPos.lat}
+                          onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lat: parseFloat(e.target.value) || 0 } })}
+                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        metrics.lastGpsLatTableDMM
+                      )}
+                    </span>
+
+                    <span className="lbl">خط الطول (E)</span>
+                    <span dir="ltr">
+                      {isTableEditing ? (
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={telemetryData.releasePos.lon}
+                          onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lon: parseFloat(e.target.value) || 0 } })}
+                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        metrics.releaseLonTableDMM
+                      )}
+                    </span>
+                    <span dir="ltr">
+                      {isTableEditing ? (
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={telemetryData.lastGpsPos.lon}
+                          onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lon: parseFloat(e.target.value) || 0 } })}
+                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                        />
+                      ) : (
+                        metrics.lastGpsLonTableDMM
+                      )}
+                    </span>
+                  </div>
+                </section>
+              )}
+
+              {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE */}
+              {(tableMode === 'history_list' || tableMode === 'both') && (
+                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
+                  {isDragEnabled && (
+                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
+                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول سجل المسار</span>
+                      <span>⋮⋮</span>
+                    </div>
+                  )}
+
+                  <div className="w-full bg-[#1e293b] text-white py-1.5 px-3 flex items-center justify-between text-[12px] font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <History size={14} className="text-amber-400" />
+                      <span>سجل مسار وإحداثيات الطائر التاريخي</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-300">
+                        ({historyRows.length} نقاط)
+                      </span>
+                      {isTableEditing && (
+                        <button
+                          onClick={handleAddCustomHistoryRow}
+                          className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold flex items-center gap-1"
+                        >
+                          <Plus size={11} />
+                          <span>إضافة نقطة</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-[220px] overflow-y-auto">
+                    <table id="custom-history-table" className="w-full text-[11px] text-center border-collapse">
+                      <thead className="bg-gray-100 text-gray-700 sticky top-0 font-bold border-b border-gray-200">
+                        <tr>
+                          <th className="py-1 px-1.5 text-center">#</th>
+                          <th className="py-1 px-1.5 text-center">التاريخ</th>
+                          <th className="py-1 px-1.5 text-center">الوقت</th>
+                          <th className="py-1 px-1.5 text-center">خط العرض</th>
+                          <th className="py-1 px-1.5 text-center">خط الطول</th>
+                          <th className="py-1 px-1.5 text-center">النوع</th>
+                          <th className="py-1 px-1.5 text-center">ملاحظات</th>
+                          {isTableEditing && <th className="py-1 px-1.5 text-center">إجراء</th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {historyRows.slice(0, historyRowCount).map((row, idx) => (
+                          <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'}>
+                            <td className="py-1 px-1.5 font-mono text-[10px] text-gray-500">{idx + 1}</td>
+                            <td className="py-1 px-1.5 font-mono text-[10.5px]">
+                              {isTableEditing ? (
+                                <input
+                                  type="text"
+                                  value={row.dateStr}
+                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'dateStr', e.target.value)}
+                                  className="w-20 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
+                                />
+                              ) : (
+                                row.dateStr
+                              )}
+                            </td>
+                            <td className="py-1 px-1.5 font-mono text-[10px] text-gray-600">
+                              {isTableEditing ? (
+                                <input
+                                  type="text"
+                                  value={row.timeStr}
+                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'timeStr', e.target.value)}
+                                  className="w-16 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
+                                />
+                              ) : (
+                                row.timeStr
+                              )}
+                            </td>
+                            <td className="py-1 px-1.5 font-mono text-[11px] font-bold text-gray-800">
+                              {isTableEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={row.lat}
+                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'lat', parseFloat(e.target.value) || 0)}
+                                  className="w-16 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
+                                />
+                              ) : (
+                                row.lat.toFixed(4)
+                              )}
+                            </td>
+                            <td className="py-1 px-1.5 font-mono text-[11px] font-bold text-gray-800">
+                              {isTableEditing ? (
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={row.lon}
+                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'lon', parseFloat(e.target.value) || 0)}
+                                  className="w-16 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
+                                />
+                              ) : (
+                                row.lon.toFixed(4)
+                              )}
+                            </td>
+                            <td className="py-1 px-1.5">
+                              <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${row.type === 'GPS' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
+                                {row.type}
+                              </span>
+                            </td>
+                            <td className="py-1 px-1.5 text-[10px] text-gray-600 truncate max-w-[100px]">
+                              {isTableEditing ? (
+                                <input
+                                  type="text"
+                                  value={row.notes}
+                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'notes', e.target.value)}
+                                  className="w-full border rounded px-0.5 py-0.2 bg-white text-[10px]"
+                                />
+                              ) : (
+                                row.notes
+                              )}
+                            </td>
+                            {isTableEditing && (
+                              <td className="py-1 px-1 text-center">
+                                <button
+                                  onClick={() => handleDeleteHistoryRow(row.id)}
+                                  className="text-red-500 hover:text-red-700 p-0.5"
+                                  title="حذف هذا الصف"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                        {historyRows.length === 0 && (
+                          <tr>
+                            <td colSpan={isTableEditing ? 8 : 7} className="py-4 text-center text-xs text-gray-400 italic">
+                              لا توجد إحداثيات مسجلة. اضغط على زر "تحميل من سجل الجهاز" أعلاه لجلب البيانات.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 4 KPI METRIC TILES */}
+              <div className={`trk-stats ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl relative' : ''}`}>
+                {isDragEnabled && (
+                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print rounded-t-lg">
+                    <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
+                    <span>⋮⋮</span>
+                  </div>
+                )}
+
+                {/* Card 1: Distance from Release (Rightmost in RTL) */}
+                <div className="trk-stat">
+                  <div className="val red" dir="ltr">
+                    {metrics.distFromReleaseKm} km
+                  </div>
+                  <div className="lab">
+                    المسافة من موقع التركيب
+                  </div>
+                </div>
+
+                {/* Card 2: Bearing Direction & Degrees */}
+                <div className="trk-stat">
+                  <div className="val">
+                    {metrics.bearingArabic.text}
+                  </div>
+                  <div className="lab">
+                    الاتجاه ({metrics.bearingArabic.degrees}°)
+                  </div>
+                </div>
+
+                {/* Card 3: Distance from Camp */}
+                <div className="trk-stat">
+                  <div className="val brown" dir="ltr">
+                    {metrics.distToCampKm} km
+                  </div>
+                  <div className="lab">
+                    البعد عن المخيم
+                  </div>
+                </div>
+
+                {/* Card 4: Tracking Duration (Leftmost in RTL) */}
+                <div className="trk-stat">
+                  <div className="val" dir="rtl">
+                    <span>{metrics.durationDays}</span> يوم
+                  </div>
+                  <div className="lab">
+                    مدة المتابعة
+                  </div>
+                </div>
+              </div>
+
+            </aside>
+
+            {/* ─── COLUMN 2 (LEFT in RTL): MAP WINDOW & LEGEND (1fr) ───── */}
+            <div className="flex flex-col space-y-2.5" style={{ direction: 'ltr', minWidth: 0 }}>
               
               {/* Map Viewport Frame */}
               <div 
                 ref={mapViewportRef}
-                className="relative border-2 border-gray-800 rounded-sm overflow-hidden bg-stone-900 h-[435px] shadow-sm flex items-center justify-center"
+                className="relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-stone-900 h-[465px] shadow-xs flex items-center justify-center"
                 style={{ direction: 'ltr', textAlign: 'left' }}
               >
                 
@@ -3541,8 +4013,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </div>
                     )}
 
-                    </div>
-                  )}
+                  </div>
+                )}
 
                 {/* ─── MAP OVERLAYS (MATCHING REFERENCE DESIGN) ──────────────────── */}
 
@@ -3621,8 +4093,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
               {/* Map Legend Bar */}
               <div 
-                className="relative group border border-gray-300 rounded-xl bg-white py-1.5 px-3 shadow-xs select-none transition-all"
-                style={{ direction: 'rtl' }}
+                id="custom-map-legend-bar"
+                className="trk-legend relative group select-none transition-all"
+                style={{ direction: 'rtl', margin: '4px 0 0 0' }}
               >
                 {/* Hover Quick Edit Button (when not in table edit mode) */}
                 {!isTableEditing && (
@@ -3641,7 +4114,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                 {/* Edit Mode Top Toolbar */}
                 {isTableEditing && (
-                  <div className="no-export-snapshot no-print mb-2 pb-1.5 border-b border-gray-200 flex items-center justify-between text-xs">
+                  <div className="no-export-snapshot no-print mb-2 pb-1.5 border-b border-gray-200 flex items-center justify-between text-xs w-full">
                     <span className="font-bold text-gray-800 flex items-center gap-1">
                       <Edit3 size={12} className="text-brand-500" />
                       <span>تعديل مفتاح الخريطة (عنصراً بعنصر):</span>
@@ -3670,7 +4143,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                 {/* Content: Edit View vs Clean Official Report View */}
                 {isTableEditing ? (
-                  <div className="flex flex-wrap items-center gap-2 py-1">
+                  <div className="flex flex-wrap items-center gap-2 py-1 w-full">
                     {legendItems.map((item, index) => (
                       <div 
                         key={item.id} 
@@ -3754,473 +4227,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     ))}
                   </div>
                 ) : (
-                  <table id="custom-map-legend-bar" style={{ width: '100%', borderCollapse: 'collapse', direction: 'rtl', margin: 0, padding: 0 }}>
-                    <tbody>
-                      <tr>
-                        {legendItems.filter(item => item.visible).map(item => (
-                          <td key={item.id} style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0 6px' }}>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', verticalAlign: 'middle', height: '18px' }}>
-                              {renderLegendSymbol(item.symbol, item.color)}
-                              <span style={{ display: 'inline-block', verticalAlign: 'middle', fontSize: '10.5px', fontWeight: 700, color: '#1f2937', whiteSpace: 'nowrap' }}>
-                                {item.label}
-                              </span>
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
-                    </tbody>
-                  </table>
-                )}
-              </div>
-
-            </div>
-
-            {/* ─── COLUMN 2 (RIGHT): CHANGEABLE DATA TABLES (approx 42% width) ── */}
-            <div className="w-[42%] flex flex-col space-y-3" style={{ direction: 'rtl' }} key={dragResetKey}>
-              
-              {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
-              {(tableMode === 'standard' || tableMode === 'both') && (
-                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
-                  {isDragEnabled && (
-                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
-                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول بيانات الطائر</span>
-                      <span>⋮⋮</span>
-                    </div>
-                  )}
-
-                  <div 
-                    className="w-full bg-[#701a2b] text-white py-2 px-4 flex items-center justify-between"
-                    style={{ lineHeight: '22px' }}
-                  >
-                    <span className="font-extrabold text-[15px] text-right">بيانات الطائر</span>
-                    {isTableEditing && (
-                      <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded text-white font-normal">
-                        تعديل مباشر
+                  <div className="flex flex-wrap items-center justify-center gap-5 w-full">
+                    {legendItems.filter(item => item.visible).map(item => (
+                      <span key={item.id} className="inline-flex items-center gap-1.5 text-[12px] font-bold text-gray-800 whitespace-nowrap">
+                        {renderLegendSymbol(item.symbol, item.color)}
+                        <span>{item.label}</span>
                       </span>
-                    )}
-                  </div>
-                  <table id="custom-bird-data-table" className="w-full text-[13px] border-collapse bg-white">
-                    <tbody>
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
-                          رقم جهاز التتبع
-                        </td>
-                        <td className="py-2 px-4 text-center w-1/2 border-r border-gray-200">
-                          {isTableEditing ? (
-                            <input
-                              type="text"
-                              value={selectedPttId}
-                              onChange={(e) => setSelectedPttId(e.target.value)}
-                              className="w-full text-center font-bold text-[#701a2b] text-[15px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span className="font-black text-[#701a2b] text-[15px]">
-                              {displayTransmitterLabel}
-                              {isPttNA && <span className="text-[10px] text-gray-400 font-sans mr-1">(حجل)</span>}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
-                          رقم الحجل
-                        </td>
-                        <td className="py-2 px-4 text-center w-1/2 border-r border-gray-200">
-                          {isTableEditing ? (
-                            <input
-                              type="text"
-                              value={customMetadata.birdRing}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, birdRing: e.target.value })}
-                              className="w-full text-center font-bold text-gray-800 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <div className="inline-block px-3.5 py-0.5 bg-[#f1f5f9] rounded-full font-bold text-[#64748b] text-[11.5px]">
-                              {customMetadata.birdRing || 'NA'}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
-                          النوعية
-                        </td>
-                        <td className="py-2 px-4 font-bold text-gray-800 text-center w-1/2 border-r border-gray-200">
-                          {isTableEditing ? (
-                            <input
-                              type="text"
-                              value={customMetadata.species}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, species: e.target.value })}
-                              className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span>{customMetadata.species || 'وحش'}</span>
-                          )}
-                        </td>
-                      </tr>
-
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
-                          الجنس
-                        </td>
-                        <td className="py-2 px-4 font-bold text-gray-800 text-center w-1/2 border-r border-gray-200">
-                          {isTableEditing ? (
-                            <select
-                              value={customMetadata.gender}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, gender: e.target.value })}
-                              className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            >
-                              <option value="ذكر">ذكر</option>
-                              <option value="أنثى">أنثى</option>
-                              <option value="غير محدد">غير محدد</option>
-                            </select>
-                          ) : (
-                            <span>{customMetadata.gender || 'ذكر'}</span>
-                          )}
-                        </td>
-                      </tr>
-
-                      <tr>
-                        <td className="py-2 px-4 font-bold text-gray-700 w-1/2 text-right">
-                          حالة الطائر
-                        </td>
-                        <td className="py-2 px-4 text-center w-1/2 border-r border-gray-200">
-                          {isTableEditing ? (
-                            <input
-                              type="text"
-                              value={customMetadata.birdStatus}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, birdStatus: e.target.value })}
-                              className="w-full text-center font-bold text-emerald-700 text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <div className="inline-block px-4 py-0.5 bg-[#ecfdf5] rounded-full font-bold text-[#047857] text-[12px]">
-                              {customMetadata.birdStatus || 'حي'}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
-              {(tableMode === 'standard' || tableMode === 'both') && (
-                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white mt-3 ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
-                  {isDragEnabled && (
-                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
-                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول مقارنة الإحداثيات</span>
-                      <span>⋮⋮</span>
-                    </div>
-                  )}
-
-                  <table 
-                    id="custom-table2-coordinates"
-                    className="w-full text-[12.5px] border-collapse bg-white"
-                    style={{ direction: 'rtl' }}
-                  >
-                    <thead>
-                      <tr>
-                        <th style={{ width: '28%', backgroundColor: '#701a2b', padding: '7px 10px', textAlign: 'center' }}>
-                        </th>
-                        <th style={{ width: '36%', backgroundColor: '#701a2b', color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.25)', padding: '7px 8px', fontSize: '13px', fontWeight: 800, textAlign: 'center' }}>
-                          تركيب الجهاز
-                        </th>
-                        <th style={{ width: '36%', backgroundColor: '#047857', color: '#ffffff', borderRight: '1px solid rgba(255, 255, 255, 0.25)', padding: '7px 8px', fontSize: '13px', fontWeight: 800, textAlign: 'center' }}>
-                          آخر موقع
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-t border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 text-right text-[13px]">
-                          التاريخ
-                        </td>
-                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
-                          {isTableEditing ? (
-                            <input
-                              type="text"
-                              value={telemetryData.releasePos.dateStr}
-                              onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, dateStr: e.target.value } })}
-                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span dir="ltr">{telemetryData.releasePos.dateStr}</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
-                          {isTableEditing ? (
-                            <input
-                              type="text"
-                              value={telemetryData.lastGpsPos.dateStr}
-                              onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, dateStr: e.target.value } })}
-                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span dir="ltr">{telemetryData.lastGpsPos.dateStr}</span>
-                          )}
-                        </td>
-                      </tr>
-
-                      <tr className="border-t border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 text-right text-[12.5px]">
-                          خط العرض (N)
-                        </td>
-                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
-                          {isTableEditing ? (
-                            <input
-                              type="number"
-                              step="0.0001"
-                              value={telemetryData.releasePos.lat}
-                              onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lat: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span dir="ltr">{metrics.releaseLatTableDMM}</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
-                          {isTableEditing ? (
-                            <input
-                              type="number"
-                              step="0.0001"
-                              value={telemetryData.lastGpsPos.lat}
-                              onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lat: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span dir="ltr">{metrics.lastGpsLatTableDMM}</span>
-                          )}
-                        </td>
-                      </tr>
-
-                      <tr className="border-t border-gray-200">
-                        <td className="py-2 px-4 font-bold text-gray-700 text-right text-[12.5px]">
-                          خط الطول (E)
-                        </td>
-                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
-                          {isTableEditing ? (
-                            <input
-                              type="number"
-                              step="0.0001"
-                              value={telemetryData.releasePos.lon}
-                              onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lon: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span dir="ltr">{metrics.releaseLonTableDMM}</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 text-center font-bold text-gray-900 border-r border-gray-200 text-[13px]">
-                          {isTableEditing ? (
-                            <input
-                              type="number"
-                              step="0.0001"
-                              value={telemetryData.lastGpsPos.lon}
-                              onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lon: parseFloat(e.target.value) || 0 } })}
-                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                            />
-                          ) : (
-                            <span dir="ltr">{metrics.lastGpsLonTableDMM}</span>
-                          )}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE */}
-              {(tableMode === 'history_list' || tableMode === 'both') && (
-                <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white mt-3 ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
-                  {isDragEnabled && (
-                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
-                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول سجل المسار</span>
-                      <span>⋮⋮</span>
-                    </div>
-                  )}
-
-                  <div className="w-full bg-[#1e293b] text-white py-1.5 px-3 flex items-center justify-between text-[12px] font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <History size={14} className="text-amber-400" />
-                      <span>سجل مسار وإحداثيات الطائر التاريخي</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-300">
-                        ({historyRows.length} نقاط)
-                      </span>
-                      {isTableEditing && (
-                        <button
-                          onClick={handleAddCustomHistoryRow}
-                          className="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold flex items-center gap-1"
-                        >
-                          <Plus size={11} />
-                          <span>إضافة نقطة</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="max-h-[220px] overflow-y-auto">
-                    <table id="custom-history-table" className="w-full text-[11px] text-center border-collapse">
-                      <thead className="bg-gray-100 text-gray-700 sticky top-0 font-bold border-b border-gray-200">
-                        <tr>
-                          <th className="py-1 px-1.5 text-center">#</th>
-                          <th className="py-1 px-1.5 text-center">التاريخ</th>
-                          <th className="py-1 px-1.5 text-center">الوقت</th>
-                          <th className="py-1 px-1.5 text-center">خط العرض</th>
-                          <th className="py-1 px-1.5 text-center">خط الطول</th>
-                          <th className="py-1 px-1.5 text-center">النوع</th>
-                          <th className="py-1 px-1.5 text-center">ملاحظات</th>
-                          {isTableEditing && <th className="py-1 px-1.5 text-center">إجراء</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {historyRows.slice(0, historyRowCount).map((row, idx) => (
-                          <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'}>
-                            <td className="py-1 px-1.5 font-mono text-[10px] text-gray-500">{idx + 1}</td>
-                            <td className="py-1 px-1.5 font-mono text-[10.5px]">
-                              {isTableEditing ? (
-                                <input
-                                  type="text"
-                                  value={row.dateStr}
-                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'dateStr', e.target.value)}
-                                  className="w-20 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
-                                />
-                              ) : (
-                                row.dateStr
-                              )}
-                            </td>
-                            <td className="py-1 px-1.5 font-mono text-[10px] text-gray-600">
-                              {isTableEditing ? (
-                                <input
-                                  type="text"
-                                  value={row.timeStr}
-                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'timeStr', e.target.value)}
-                                  className="w-16 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
-                                />
-                              ) : (
-                                row.timeStr
-                              )}
-                            </td>
-                            <td className="py-1 px-1.5 font-mono text-[11px] font-bold text-gray-800">
-                              {isTableEditing ? (
-                                <input
-                                  type="number"
-                                  step="0.0001"
-                                  value={row.lat}
-                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'lat', parseFloat(e.target.value) || 0)}
-                                  className="w-16 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
-                                />
-                              ) : (
-                                row.lat.toFixed(4)
-                              )}
-                            </td>
-                            <td className="py-1 px-1.5 font-mono text-[11px] font-bold text-gray-800">
-                              {isTableEditing ? (
-                                <input
-                                  type="number"
-                                  step="0.0001"
-                                  value={row.lon}
-                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'lon', parseFloat(e.target.value) || 0)}
-                                  className="w-16 text-center border rounded px-0.5 py-0.2 bg-white text-[10px]"
-                                />
-                              ) : (
-                                row.lon.toFixed(4)
-                              )}
-                            </td>
-                            <td className="py-1 px-1.5">
-                              <span className={`px-1.5 py-0.2 text-[9px] font-bold rounded-full ${row.type === 'GPS' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`}>
-                                {row.type}
-                              </span>
-                            </td>
-                            <td className="py-1 px-1.5 text-[10px] text-gray-600 truncate max-w-[100px]">
-                              {isTableEditing ? (
-                                <input
-                                  type="text"
-                                  value={row.notes}
-                                  onChange={(e) => handleUpdateHistoryRow(row.id, 'notes', e.target.value)}
-                                  className="w-full border rounded px-0.5 py-0.2 bg-white text-[10px]"
-                                />
-                              ) : (
-                                row.notes
-                              )}
-                            </td>
-                            {isTableEditing && (
-                              <td className="py-1 px-1 text-center">
-                                <button
-                                  onClick={() => handleDeleteHistoryRow(row.id)}
-                                  className="text-red-500 hover:text-red-700 p-0.5"
-                                  title="حذف هذا الصف"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        ))}
-                        {historyRows.length === 0 && (
-                          <tr>
-                            <td colSpan={isTableEditing ? 8 : 7} className="py-4 text-center text-xs text-gray-400 italic">
-                              لا توجد إحداثيات مسجلة. اضغط على زر "تحميل من سجل الجهاز" أعلاه لجلب البيانات.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* 4 KPI METRIC CARDS */}
-              <div className={`grid grid-cols-4 gap-2.5 mt-3 relative ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl' : ''}`} style={{ direction: 'rtl' }}>
-                {isDragEnabled && (
-                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print rounded-t-lg">
-                    <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
-                    <span>⋮⋮</span>
+                    ))}
                   </div>
                 )}
-
-                {/* Card 1: Distance from Release (Rightmost in RTL) */}
-                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
-                  <div className="text-[15px] font-black text-[#dc2626] leading-tight mb-1" dir="ltr">
-                    {metrics.distFromReleaseKm} km
-                  </div>
-                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
-                    المسافة من<br />موقع التركيب
-                  </div>
-                </div>
-
-                {/* Card 2: Bearing Direction & Degrees */}
-                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
-                  <div className="text-[15px] font-black text-gray-900 leading-tight mb-1">
-                    {metrics.bearingArabic.text}
-                  </div>
-                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
-                    الاتجاه ({metrics.bearingArabic.degrees}°)
-                  </div>
-                </div>
-
-                {/* Card 3: Distance from Camp */}
-                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
-                  <div className="text-[15px] font-black text-gray-900 leading-tight mb-1" dir="ltr">
-                    {metrics.distToCampKm} km
-                  </div>
-                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
-                    البعد عن المخيم
-                  </div>
-                </div>
-
-                {/* Card 4: Tracking Duration (Leftmost in RTL) */}
-                <div className="border border-gray-300 rounded-xl bg-white p-2.5 text-center shadow-xs flex flex-col justify-center items-center min-h-[74px]">
-                  <div className="text-[15px] font-black text-gray-900 leading-tight mb-1" dir="rtl">
-                    <span>{metrics.durationDays}</span> يوم
-                  </div>
-                  <div className="text-[11px] font-bold text-gray-600 leading-tight">
-                    مدة المتابعة
-                  </div>
-                </div>
               </div>
 
             </div>
@@ -4228,37 +4243,41 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           </div>
 
           {/* 3. REPORT FOOTER (MODIFIABLE AND PERSONALIZED) */}
-          <div className="mt-4 pt-2 border-t border-gray-200 text-center text-[11px] font-bold text-gray-500 flex items-center justify-between" style={{ direction: 'rtl' }}>
-            {/* Right Footer Text */}
-            {isTableEditing ? (
-              <input
-                type="text"
-                value={customMetadata.footerRight}
-                onChange={(e) => setCustomMetadata({ ...customMetadata, footerRight: e.target.value })}
-                className="text-right border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-700 text-[11.5px] w-[55%]"
-                title="تعديل نص التذييل الأيمن"
-              />
-            ) : (
-              <span>{customMetadata.footerRight || 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان'}</span>
-            )}
+          <footer className="trk-footer">
+            <div className="flex items-center justify-between w-full" style={{ direction: 'rtl' }}>
+              {/* Right Footer Text */}
+              {isTableEditing ? (
+                <input
+                  type="text"
+                  value={customMetadata.footerRight}
+                  onChange={(e) => setCustomMetadata({ ...customMetadata, footerRight: e.target.value })}
+                  className="text-right border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-700 text-[11.5px] w-[55%]"
+                  title="تعديل نص التذييل الأيمن"
+                />
+              ) : (
+                <span className="font-semibold text-[12px] text-gray-600">
+                  {customMetadata.footerRight || 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان'}
+                </span>
+              )}
 
-            {/* Left Footer Text */}
-            {isTableEditing ? (
-              <input
-                type="text"
-                value={customMetadata.footerLeft}
-                onChange={(e) => setCustomMetadata({ ...customMetadata, footerLeft: e.target.value })}
-                className="text-left font-mono border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-500 text-[10px] w-[40%]"
-                dir="ltr"
-                title="تعديل نص التذييل الأيسر"
-                placeholder="تذييل اختياري..."
-              />
-            ) : customMetadata.footerLeft ? (
-              <span className="text-[10px] text-gray-400 font-mono" dir="ltr">
-                {customMetadata.footerLeft}
-              </span>
-            ) : null}
-          </div>
+              {/* Left Footer Text */}
+              {isTableEditing ? (
+                <input
+                  type="text"
+                  value={customMetadata.footerLeft}
+                  onChange={(e) => setCustomMetadata({ ...customMetadata, footerLeft: e.target.value })}
+                  className="text-left font-mono border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-500 text-[10px] w-[40%]"
+                  dir="ltr"
+                  title="تعديل نص التذييل الأيسر"
+                  placeholder="تذييل اختياري..."
+                />
+              ) : customMetadata.footerLeft ? (
+                <span className="text-[11px] text-gray-400 font-mono" dir="ltr">
+                  {customMetadata.footerLeft}
+                </span>
+              ) : null}
+            </div>
+          </footer>
 
         </div>
 
