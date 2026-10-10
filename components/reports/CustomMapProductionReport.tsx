@@ -417,6 +417,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [exportedMapView]);
 
   const [activeBaseLayer, setActiveBaseLayer] = useState<'google_hybrid' | 'google_roadmap' | 'google_satellite' | 'scienceterrain' | 'roadmap'>(initialBaseLayer);
+  const [showFooter, setShowFooter] = useState<boolean>(true);
   const [showGoogleLabels, setShowGoogleLabels] = useState<boolean>(true);
   const [reportLanguage, setReportLanguage] = useState<'ar' | 'en'>('ar');
   const [fitKey, setFitKey] = useState<number>(0);
@@ -499,6 +500,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.legendItems) setLegendItems(parsed.legendItems);
         if (parsed.showGoogleLabels !== undefined) setShowGoogleLabels(parsed.showGoogleLabels);
         if (parsed.activeBaseLayer) setActiveBaseLayer(parsed.activeBaseLayer);
+        if (parsed.showFooter !== undefined) setShowFooter(parsed.showFooter);
         if (parsed.tableMode) setTableMode(parsed.tableMode);
         if (parsed.reportLanguage) setReportLanguage(parsed.reportLanguage);
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
@@ -520,6 +522,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       legendItems,
       showGoogleLabels,
       activeBaseLayer,
+      showFooter,
       tableMode,
       reportLanguage,
       mapImageFit
@@ -593,14 +596,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     latHeader: reportLanguage === 'ar' ? 'خط العرض (N)' : 'Latitude (N)',
     lonHeader: reportLanguage === 'ar' ? 'خط الطول (E)' : 'Longitude (E)',
     followUp: reportLanguage === 'ar' ? 'مدة المتابعة' : 'Follow-up Duration',
-    days: reportLanguage === 'ar' ? 'يوم' : 'Days',
+    days: reportLanguage === 'ar' ? 'يوم' : 'days',
     distToCamp: reportLanguage === 'ar' ? 'البعد عن المخيم' : 'Distance to Camp',
     direction: reportLanguage === 'ar' ? 'الاتجاه' : 'Direction',
     distFromRelease: reportLanguage === 'ar' ? 'المسافة من موقع التركيب' : 'Distance from Release',
     agencyAr: reportLanguage === 'ar' ? customMetadata.agencyNameAr : customMetadata.agencyNameEn,
     agencyEn: reportLanguage === 'ar' ? customMetadata.agencyNameEn : customMetadata.agencyNameAr,
     footerLeft: customMetadata.footerLeft,
-    footerRight: reportLanguage === 'ar' ? customMetadata.footerRight : customMetadata.footerRight === 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان' ? 'Qatar Center for Houbara Breeding - Kazakhstan' : customMetadata.footerRight
+    footerRight: reportLanguage === 'ar' ? customMetadata.footerRight : customMetadata.footerRight.includes('المركز القطري') ? 'Qatar Center for Houbara Breeding - Kazakhstan' : customMetadata.footerRight
   };
 
   const translateValue = (val: string) => {
@@ -608,19 +611,32 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const dict: any = { 
       'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
       'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp', 'البعد عن المخيم': 'Distance to Camp',
-      'جيزقازغان': 'Zhezkazgan', 'ألماتي': 'Almaty'
+      'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty'
     };
-    let res = val;
+    let res = val.trim();
     if (dict[res]) return dict[res];
     if (res.includes('آخر موقع')) {
       res = res.replace('آخر موقع', 'Latest Location');
+    }
+    if (res.includes('البعد') || res.includes('المخيمات')) {
+      res = 'Distance to Camp';
+    }
+    if (res.includes('مخيم جيزقازغان')) {
+      res = 'Zhezqazgan camp';
+    } else if (res.includes('جيزقازغان')) {
+      res = 'Zhezqazgan';
+    }
+    if (res.includes('مخيم ألماتي')) {
+      res = 'Almaty camp';
+    } else if (res.includes('ألماتي')) {
+      res = 'Almaty';
     }
     return res;
   };
 
   const getBearingLabel = (deg: number) => {
     if (reportLanguage === 'ar') return formatArabicBearing(deg);
-    const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const dirs = ['North', 'Northeast', 'East', 'Southeast', 'South', 'Southwest', 'West', 'Northwest'];
     return dirs[Math.round(deg / 45) % 8];
   };
 
@@ -2123,8 +2139,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
           </div>
 
-          {/* 4. Table Display Mode */}
+          {/* 4. Table Display Mode & Footer */}
           <div>
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+              تذييل التقرير (Footer):
+            </label>
+            <div className="flex items-center gap-2 px-1 mb-4">
+              <input
+                type="checkbox"
+                id="showFooter"
+                checked={showFooter}
+                onChange={(e) => setShowFooter(e.target.checked)}
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <label htmlFor="showFooter" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                إظهار تذييل التقرير (نصوص أسفل الصفحة)
+              </label>
+            </div>
+            
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
               نوع الجدول (Table Style):
             </label>
@@ -4085,7 +4117,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           />
                           <Marker
                             position={[camp.lat, camp.lon]}
-                            icon={createLiveTrackingCampLabelIcon(reportLanguage === 'ar' ? camp.name : camp.name.replace('مخيم ', '').replace('مخيم', '') + ' Camp')}
+                            icon={createLiveTrackingCampLabelIcon(translateValue(camp.name))}
                             zIndexOffset={1001}
                             draggable={true}
                           />
