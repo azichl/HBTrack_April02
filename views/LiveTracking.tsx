@@ -1681,8 +1681,8 @@ const LiveTrackingInner = () => {
 
     if (historyMode === 'preset') {
         if (historyPreset === 'last_pos') {
-            setHistoryLines([]);
-            setRawHistoryCache([]);
+            setHistoryPaths([]);
+            rawHistoryCache.current = [];
             rawHistoryCacheKey.current = '';
             setIsHistoryLoading(false);
             return;
