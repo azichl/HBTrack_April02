@@ -1524,8 +1524,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-header__center { height: 78px; }
         .trk-hr { height: 2px; background: #7a1c32; margin: 12px 0 18px; width: 100%; display: block; }
 
-        .trk-title { text-align: center; font-size: 28px; font-weight: 700; margin: 0 0 8px; color: #1b2433; }
-        .trk-sub { text-align: center; color: #6b7280; font-size: 15px; margin: 0 0 16px; }
+        .trk-title { text-align: center; font-size: 23px; font-weight: 700; margin: 0 0 8px; color: #1b2433; }
+        .trk-sub { text-align: center; color: #6b7280; font-size: 13px; margin: 0 0 16px; }
         .trk-sub b { color: #7a1c32; font-weight: 700; }
 
         /* Two columns: side panel (440px on right in RTL) and map (left) */
@@ -1533,21 +1533,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-side { display: flex; flex-direction: column; gap: 12px; }
 
         .trk-card { border: 1px solid #d9dbe1; border-radius: 8px; overflow: hidden; background: #fff; }
-        .trk-card__head { background: #7a1c32; color: #fff; font-weight: 700; font-size: 17px; padding: 12px 16px; text-align: right; }
+        .trk-card__head { background: #7a1c32; color: #fff; font-weight: 700; font-size: 14.5px; padding: 10px 14px; text-align: right; }
         .trk-row { display: grid; grid-template-columns: 1fr 1fr; align-items: center; border-top: 1px solid #eceef2; }
         .trk-row:first-of-type { border-top: 0; }
-        .trk-row .k { background: #f6f7f9; padding: 9px 16px; font-weight: 600; font-size: 15px; text-align: right; color: #374151; }
-        .trk-row .v { padding: 9px 16px; font-size: 15px; text-align: center; }
+        .trk-row .k { background: #f6f7f9; padding: 7px 14px; font-weight: 600; font-size: 13px; text-align: right; color: #374151; }
+        .trk-row .v { padding: 7px 14px; font-size: 13px; text-align: center; }
         .trk-row .v .maroon, .maroon { color: #7a1c32; font-weight: 700; }
 
-        .pill { display: inline-block; padding: 2px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+        .pill { display: inline-block; padding: 1.5px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; }
         .pill--grey { background: #e8eaee; color: #6b7280; }
         .pill--ok { background: #e3f4ea; color: #15803d; }
         .pill--warn { background: #fdf0d5; color: #a16207; }
         .pill--bad { background: #fde4e4; color: #b91c1c; }
 
         .trk-card--table { border-color: #d9dbe1; }
-        .trk-twohead { display: grid; grid-template-columns: 1fr 1fr 1fr; color: #fff; font-weight: 700; font-size: 16px; }
+        .trk-twohead { display: grid; grid-template-columns: 1fr 1fr 1fr; color: #fff; font-weight: 700; font-size: 14px; }
         .trk-twohead::before { content: ''; background: #fff; }
         .trk-twohead__install { background: #7a1c32; padding: 12px; text-align: center; }
         .trk-twohead__last { background: #128a5b; padding: 12px; text-align: center; }
@@ -2813,7 +2813,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 style={{ position: 'relative', zIndex: activeResizingLogo === 'right' ? 3000 : 20 }}
               >
                 <img 
-                  src={logoRightUrl === '/external-reserves-office-logo.png' ? '/qatar-emblem.png' : logoRightUrl} 
+                  src={logoRightUrl} 
                   alt="شعار الدولة" 
                   className="object-contain cursor-pointer transition-all"
                   style={{
@@ -2999,36 +2999,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 )}
               </div>
 
-              {/* Vertical Rule */}
-              <span className="trk-header__rule" />
 
-              {/* Agency Names */}
-              <div className="trk-header__names">
-                {isTableEditing ? (
-                  <div className="space-y-1">
-                    <input
-                      type="text"
-                      value={customMetadata.agencyNameAr || 'مكتب محميات الدولة الخارجية'}
-                      onChange={(e) => setCustomMetadata({ ...customMetadata, agencyNameAr: e.target.value })}
-                      className="border border-amber-300 rounded px-1.5 py-0.5 text-xs font-bold w-48 text-right bg-amber-50/50 block"
-                      placeholder="اسم الجهة بالعربية"
-                    />
-                    <input
-                      type="text"
-                      value={customMetadata.agencyNameEn || 'External Reserves Office of The State'}
-                      onChange={(e) => setCustomMetadata({ ...customMetadata, agencyNameEn: e.target.value })}
-                      className="border border-amber-300 rounded px-1.5 py-0.5 text-[11px] font-medium w-48 text-left bg-amber-50/50 block"
-                      placeholder="Agency Name (EN)"
-                      dir="ltr"
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <div className="ar">{customMetadata.agencyNameAr || 'مكتب محميات الدولة الخارجية'}</div>
-                    <div className="en" dir="ltr">{customMetadata.agencyNameEn || 'External Reserves Office of The State'}</div>
-                  </>
-                )}
-              </div>
             </div>
 
             {/* Center Logo (On Left in RTL) */}
