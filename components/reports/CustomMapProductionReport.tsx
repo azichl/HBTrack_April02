@@ -546,8 +546,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     agencyNameEn: string;
     footerRight: string;
     footerLeft: string;
+    statDistFromRelease: string;
+    statDirection: string;
+    statDirectionDeg: string;
+    statDistToCamp: string;
+    statDuration: string;
   }>({
     birdRing: 'NA',
+    statDistFromRelease: '',
+    statDirection: '',
+    statDirectionDeg: '',
+    statDistToCamp: '',
+    statDuration: '',
+
     species: 'وحش',
     gender: 'ذكر',
     birdStatus: 'حي',
@@ -3785,7 +3796,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 {/* Card 1: Distance from Release (Rightmost in RTL) */}
                 <div className="trk-stat">
                   <div className="val red" dir="ltr">
-                    {metrics.distFromReleaseKm} km
+                    {isTableEditing ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={customMetadata.statDistFromRelease ?? ''}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDistFromRelease: e.target.value })}
+                          className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                          placeholder={metrics.distFromReleaseKm.toString()}
+                        />
+                        <span>km</span>
+                      </div>
+                    ) : (
+                      <>{customMetadata.statDistFromRelease || metrics.distFromReleaseKm} km</>
+                    )}
                   </div>
                   <div className="lab">
                     {T.distFromRelease}
@@ -3795,17 +3819,52 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 {/* Card 2: Bearing Direction & Degrees */}
                 <div className="trk-stat">
                   <div className="val">
-                    {metrics.bearingArabic.text}
+                    {isTableEditing ? (
+                      <input
+                        type="text"
+                        value={customMetadata.statDirection ?? ''}
+                        onChange={(e) => setCustomMetadata({ ...customMetadata, statDirection: e.target.value })}
+                        className="w-full text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                        placeholder={metrics.bearingArabic.text}
+                      />
+                    ) : (
+                      <>{customMetadata.statDirection || metrics.bearingArabic.text}</>
+                    )}
                   </div>
                   <div className="lab">
-                    {T.direction} ({metrics.bearingArabic.degrees}°)
+                    {T.direction} (
+                    {isTableEditing ? (
+                      <input
+                        type="text"
+                        value={customMetadata.statDirectionDeg ?? ''}
+                        onChange={(e) => setCustomMetadata({ ...customMetadata, statDirectionDeg: e.target.value })}
+                        className="w-8 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800"
+                        placeholder={metrics.bearingArabic.degrees.toString()}
+                      />
+                    ) : (
+                      <>{customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}</>
+                    )}
+                    °)
                   </div>
                 </div>
 
                 {/* Card 3: Distance from Camp */}
                 <div className="trk-stat">
                   <div className="val brown" dir="ltr">
-                    {metrics.distToCampKm} km
+                    {isTableEditing ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={customMetadata.statDistToCamp ?? ''}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDistToCamp: e.target.value })}
+                          className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                          placeholder={metrics.distToCampKm.toString()}
+                        />
+                        <span>km</span>
+                      </div>
+                    ) : (
+                      <>{customMetadata.statDistToCamp || metrics.distToCampKm} km</>
+                    )}
                   </div>
                   <div className="lab">
                     {T.distToCamp}
@@ -3814,8 +3873,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                 {/* Card 4: Tracking Duration (Leftmost in RTL) */}
                 <div className="trk-stat">
-                  <div className="val" dir="rtl">
-                    <span>{metrics.durationDays}</span> {T.days}
+                  <div className="val" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
+                    {isTableEditing ? (
+                      <div className="flex items-center gap-1 justify-center">
+                        <input
+                          type="text"
+                          value={customMetadata.statDuration ?? ''}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDuration: e.target.value })}
+                          className="w-12 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                          placeholder={metrics.durationDays.toString()}
+                        />
+                        <span>{T.days}</span>
+                      </div>
+                    ) : (
+                      <><span>{customMetadata.statDuration || metrics.durationDays}</span> {T.days}</>
+                    )}
                   </div>
                   <div className="lab">
                     {T.followUp}
