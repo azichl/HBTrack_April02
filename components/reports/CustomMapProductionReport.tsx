@@ -4315,22 +4315,70 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           strokeWidth="1.1"
                           strokeLinejoin="round"
                         />
-                        {/* Red Bird Location Point */}
-                        <circle 
-                          cx={insetMapData.birdPoint.x} 
-                          cy={insetMapData.birdPoint.y} 
-                          r="4" 
-                          fill="#dc2626" 
-                          opacity="0.35" 
-                        />
-                        <circle 
-                          cx={insetMapData.birdPoint.x} 
-                          cy={insetMapData.birdPoint.y} 
-                          r="2.5" 
-                          fill="#dc2626" 
-                          stroke="#ffffff" 
-                          strokeWidth="0.8" 
-                        />
+                        {/* Red Location Point & Transmitter ID Callout Badge */}
+                        {(() => {
+                          const pttLabel = displayTransmitterLabel || String(selectedPttId).replace(/^trans-/, '');
+                          const labelW = Math.max(28, pttLabel.length * 5.2 + 6);
+                          const labelH = 10;
+                          const badgeX = Math.max(labelW / 2 + 2, Math.min(140 - labelW / 2 - 2, insetMapData.birdPoint.x));
+                          const isNearTop = insetMapData.birdPoint.y < 16;
+                          const badgeY = isNearTop ? insetMapData.birdPoint.y + 4.5 : insetMapData.birdPoint.y - 12.5;
+
+                          return (
+                            <g>
+                              {/* Pointer triangle connecting badge to exact point */}
+                              <polygon 
+                                points={
+                                  isNearTop
+                                    ? `${insetMapData.birdPoint.x - 2},${badgeY} ${insetMapData.birdPoint.x + 2},${badgeY} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y + 1}`
+                                    : `${insetMapData.birdPoint.x - 2},${badgeY + labelH} ${insetMapData.birdPoint.x + 2},${badgeY + labelH} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y - 1}`
+                                } 
+                                fill="#881337" 
+                              />
+
+                              {/* Transmitter ID Badge */}
+                              <rect 
+                                x={badgeX - labelW / 2} 
+                                y={badgeY} 
+                                width={labelW} 
+                                height={labelH} 
+                                rx="2" 
+                                fill="#ffffff" 
+                                stroke="#881337" 
+                                strokeWidth="0.8" 
+                              />
+                              <text 
+                                x={badgeX} 
+                                y={badgeY + labelH / 2 + 0.6} 
+                                textAnchor="middle" 
+                                dominantBaseline="middle" 
+                                fontSize="6.8" 
+                                fontWeight="bold" 
+                                fontFamily="'Segoe UI', Roboto, monospace, sans-serif" 
+                                fill="#881337"
+                              >
+                                {pttLabel}
+                              </text>
+
+                              {/* Red GPS Point with halo */}
+                              <circle 
+                                cx={insetMapData.birdPoint.x} 
+                                cy={insetMapData.birdPoint.y} 
+                                r="4.2" 
+                                fill="#dc2626" 
+                                opacity="0.35" 
+                              />
+                              <circle 
+                                cx={insetMapData.birdPoint.x} 
+                                cy={insetMapData.birdPoint.y} 
+                                r="2.5" 
+                                fill="#dc2626" 
+                                stroke="#ffffff" 
+                                strokeWidth="0.8" 
+                              />
+                            </g>
+                          );
+                        })()}
                       </svg>
                     ) : (
                       <div className="text-[10px] text-gray-500 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
