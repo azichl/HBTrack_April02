@@ -263,6 +263,129 @@ const MapInstanceBinder = ({ onMapInstance }: { onMapInstance: (map: L.Map) => v
   return null;
 };
 
+// ─── DYNAMIC GIS GRATICULE (GRID LINES & PERIMETER TICKS THAT MOVE WITH MAP) ───
+const getGraticuleGridStep = (span: number): number => {
+  const candidates = [5.0, 2.0, 1.0, 0.5, 0.25, 1 / 6, 1 / 12, 1 / 30, 1 / 60];
+  for (const step of candidates) {
+    const count = span / step;
+    if (count >= 1.5 && count <= 5) return step;
+  }
+  if (span > 5) return 2.0;
+  if (span < 0.05) return 1 / 60;
+  return 0.25;
+};
+
+const formatGraticuleLat = (lat: number): string => {
+  const abs = Math.abs(lat);
+  let deg = Math.floor(abs);
+  let min = (abs - deg) * 60;
+  if (min >= 59.9995) {
+    deg += 1;
+    min = 0;
+  }
+  const degStr = String(deg).padStart(2, '0');
+  const minStr = (Math.round(min * 10000) / 10000).toFixed(4).padStart(7, '0');
+  const dir = lat >= 0 ? 'N' : 'S';
+  return `${degStr}° ${minStr}'${dir}`;
+};
+
+const formatGraticuleLon = (lon: number): string => {
+  let normalized = ((lon + 180) % 360 + 360) % 360 - 180;
+  const abs = Math.abs(normalized);
+  let deg = Math.floor(abs);
+  let min = (abs - deg) * 60;
+  if (min >= 59.9995) {
+    deg += 1;
+    min = 0;
+  }
+  const degStr = String(deg).padStart(3, '0');
+  const minStr = (Math.round(min * 10000) / 10000).toFixed(4).padStart(7, '0');
+  const dir = normalized >= 0 ? 'E' : 'W';
+  return `${degStr}° ${minStr}'${dir}`;
+};
+
+interface GraticuleData {
+  latLines: { lat: number; y: number; label: string }[];
+  lonLines: { lon: number; x: number; label: string }[];
+  width: number;
+  height: number;
+}
+
+const MapGraticuleListener = ({
+  onUpdate
+}: {
+  onUpdate: (data: GraticuleData) => void;
+}) => {
+  const map = useMap();
+
+  const calculate = useCallback(() => {
+    if (!map) return;
+    try {
+      const bounds = map.getBounds();
+      const size = map.getSize();
+      if (!size.x || !size.y) return;
+
+      const north = bounds.getNorth();
+      const south = bounds.getSouth();
+      const west = bounds.getWest();
+      const east = bounds.getEast();
+
+      const latSpan = Math.abs(north - south);
+      const lonSpan = Math.abs(east - west);
+      if (!latSpan || !lonSpan || isNaN(latSpan) || isNaN(lonSpan)) return;
+
+      const latStep = getGraticuleGridStep(latSpan);
+      const lonStep = getGraticuleGridStep(lonSpan);
+
+      const latLines: { lat: number; y: number; label: string }[] = [];
+      const startLatIdx = Math.ceil(south / latStep);
+      const endLatIdx = Math.floor(north / latStep);
+      for (let i = startLatIdx; i <= endLatIdx; i++) {
+        const lat = Math.round(i * latStep * 1000000) / 1000000;
+        const pt = map.latLngToContainerPoint([lat, (west + east) / 2]);
+        latLines.push({
+          lat,
+          y: Math.round(pt.y),
+          label: formatGraticuleLat(lat)
+        });
+      }
+
+      const lonLines: { lon: number; x: number; label: string }[] = [];
+      const startLonIdx = Math.ceil(west / lonStep);
+      const endLonIdx = Math.floor(east / lonStep);
+      for (let i = startLonIdx; i <= endLonIdx; i++) {
+        const lon = Math.round(i * lonStep * 1000000) / 1000000;
+        const pt = map.latLngToContainerPoint([(north + south) / 2, lon]);
+        lonLines.push({
+          lon,
+          x: Math.round(pt.x),
+          label: formatGraticuleLon(lon)
+        });
+      }
+
+      onUpdate({ latLines, lonLines, width: size.x, height: size.y });
+    } catch (e) {
+      console.warn('Graticule calculation error:', e);
+    }
+  }, [map, onUpdate]);
+
+  useMapEvents({
+    move: calculate,
+    zoom: calculate,
+    moveend: calculate,
+    zoomend: calculate,
+    resize: calculate
+  });
+
+  useEffect(() => {
+    calculate();
+    const t = setTimeout(calculate, 200);
+    return () => clearTimeout(t);
+  }, [calculate]);
+
+  return null;
+};
+
 // Map click listener for distance measurement
 const MeasureMapEvents = ({
   isMeasuring,
@@ -452,6 +575,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [showReleaseMarker, setShowReleaseMarker] = useState<boolean>(true);
   const [showDistanceToRelease, setShowDistanceToRelease] = useState<boolean>(false);
   const [showFlightTrack, setShowFlightTrack] = useState<boolean>(true);
+  const [showGraticule, setShowGraticule] = useState<boolean>(true);
+  const [graticuleData, setGraticuleData] = useState<GraticuleData>({
+    latLines: [],
+    lonLines: [],
+    width: 800,
+    height: 465
+  });
 
   // ─── DRAG & DROP PERSONALIZATION MODE ──────────────────────────────────────
   const [isDragEnabled, setIsDragEnabled] = useState<boolean>(false);
@@ -502,6 +632,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.activeBaseLayer) setActiveBaseLayer(parsed.activeBaseLayer);
         if (parsed.showFooter !== undefined) setShowFooter(parsed.showFooter);
         if (parsed.showFlightTrack !== undefined) setShowFlightTrack(parsed.showFlightTrack);
+        if (parsed.showGraticule !== undefined) setShowGraticule(parsed.showGraticule);
         if (parsed.tableMode) setTableMode(parsed.tableMode);
         if (parsed.reportLanguage) setReportLanguage(parsed.reportLanguage);
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
@@ -525,6 +656,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       activeBaseLayer,
       showFooter,
       showFlightTrack,
+      showGraticule,
       tableMode,
       reportLanguage,
       mapImageFit
@@ -2177,6 +2309,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               />
               <label htmlFor="showFlightTrack" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
                 إظهار مسار التتبع (Flight Track)
+              </label>
+            </div>
+            <div className="mt-2.5 flex items-center gap-2 px-1">
+              <input
+                type="checkbox"
+                id="showGraticule"
+                checked={showGraticule}
+                onChange={(e) => setShowGraticule(e.target.checked)}
+                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <label htmlFor="showGraticule" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
+                إظهار شبكة ودرجات الإحداثيات المتحركة (Graticule Grid)
               </label>
             </div>
           </div>
@@ -4014,6 +4158,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       style={{ direction: 'ltr', width: '100%', height: '100%' }}
                     >
                       <MapInstanceBinder onMapInstance={setMapInstance} />
+                      <MapGraticuleListener onUpdate={setGraticuleData} />
 
                       {/* Measure Map Click Events Listener */}
                       <MeasureMapEvents
@@ -4412,31 +4557,112 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
                 </div>
 
-                {/* Graticule Perimeter Labels (Ticks) */}
-                <div className="absolute top-1 left-38 z-[900] pointer-events-none select-none">
-                  <svg width="80" height="16" viewBox="0 0 80 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="80" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="40" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      {graticuleLonLabel}
-                    </text>
-                  </svg>
-                </div>
-                <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] pointer-events-none select-none">
-                  <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      {metrics.lLat ? `${Math.floor(metrics.lLat)}° 00.0000'N` : "47° 00.0000'N"}
-                    </text>
-                  </svg>
-                </div>
-                <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
-                  <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      {metrics.lLat ? `${Math.floor(metrics.lLat) - 1}° 45.0000'N` : "46° 45.0000'N"}
-                    </text>
-                  </svg>
-                </div>
+                {/* Dynamic GIS Graticule Grid Lines & Perimeter Coordinate Labels (Move smoothly with map pan/zoom) */}
+                {showGraticule && (
+                  <>
+                    {/* Graticule Grid Lines (Thin, elegant, semi-transparent dashed lines across map) */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none z-[450]" style={{ display: 'block' }}>
+                      {/* Horizontal Latitude Lines */}
+                      {graticuleData.latLines.map(l => (
+                        <line
+                          key={`grat-line-lat-${l.lat}`}
+                          x1="0"
+                          y1={l.y}
+                          x2="100%"
+                          y2={l.y}
+                          stroke="rgba(255, 255, 255, 0.4)"
+                          strokeWidth="1"
+                          strokeDasharray="4 6"
+                        />
+                      ))}
+                      {/* Vertical Longitude Lines */}
+                      {graticuleData.lonLines.map(l => (
+                        <line
+                          key={`grat-line-lon-${l.lon}`}
+                          x1={l.x}
+                          y1="0"
+                          x2={l.x}
+                          y2="100%"
+                          stroke="rgba(255, 255, 255, 0.4)"
+                          strokeWidth="1"
+                          strokeDasharray="4 6"
+                        />
+                      ))}
+                    </svg>
+
+                    {/* Top Longitude Labels (Follow vertical meridian lines across the top frame) */}
+                    {graticuleData.lonLines.length > 0 ? (
+                      graticuleData.lonLines.map(l => {
+                        // Prevent overlap with top-left locator map (w=138px + margin = 145px) and top-right north arrow
+                        if (l.x < 145 || l.x > (graticuleData.width || 750) - 45) return null;
+                        return (
+                          <div
+                            key={`grat-lbl-lon-${l.lon}`}
+                            className="absolute top-1 z-[900] pointer-events-none select-none transition-none"
+                            style={{ left: `${l.x - 40}px` }}
+                          >
+                            <svg width="80" height="16" viewBox="0 0 80 16" style={{ display: 'block' }}>
+                              <rect x="0" y="0" width="80" height="16" rx="4" fill="rgba(0, 0, 0, 0.65)" />
+                              <text x="40" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8" fontWeight="bold" fontFamily="monospace">
+                                {l.label}
+                              </text>
+                            </svg>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="absolute top-1 left-38 z-[900] pointer-events-none select-none">
+                        <svg width="80" height="16" viewBox="0 0 80 16" style={{ display: 'block' }}>
+                          <rect x="0" y="0" width="80" height="16" rx="4" fill="rgba(0, 0, 0, 0.65)" />
+                          <text x="40" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8" fontWeight="bold" fontFamily="monospace">
+                            {graticuleLonLabel}
+                          </text>
+                        </svg>
+                      </div>
+                    )}
+
+                    {/* Left Latitude Labels (Follow horizontal parallel lines down the left frame) */}
+                    {graticuleData.latLines.length > 0 ? (
+                      graticuleData.latLines.map(l => {
+                        // Prevent labels from clipping off top or bottom frame
+                        if (l.y < 22 || l.y > (graticuleData.height || 465) - 22) return null;
+                        return (
+                          <div
+                            key={`grat-lbl-lat-${l.lat}`}
+                            className="absolute left-1 z-[900] pointer-events-none select-none transition-none"
+                            style={{ top: `${l.y - 8}px` }}
+                          >
+                            <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
+                              <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.65)" />
+                              <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                                {l.label}
+                              </text>
+                            </svg>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <>
+                        <div className="absolute top-1/2 -translate-y-1/2 left-1 z-[900] pointer-events-none select-none">
+                          <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
+                            <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.65)" />
+                            <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                              {metrics.lLat ? `${Math.floor(metrics.lLat)}° 00.0000'N` : "47° 00.0000'N"}
+                            </text>
+                          </svg>
+                        </div>
+                        <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
+                          <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
+                            <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.65)" />
+                            <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                              {metrics.lLat ? `${Math.floor(metrics.lLat) - 1}° 45.0000'N` : "46° 45.0000'N"}
+                            </text>
+                          </svg>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
 
               </div>
 
