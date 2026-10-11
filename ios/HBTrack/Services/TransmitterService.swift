@@ -110,25 +110,9 @@ class TransmitterService {
             var pos = mutPos
             guard pos.lat != 0, pos.lon != 0, !pos.lat.isNaN, !pos.lon.isNaN, abs(pos.lat) <= 90, abs(pos.lon) <= 180 else { return }
             
-            // Re-normalize timestamp if delayed camp telemetry was tagged with reception date
-            let rawDataStr = (pos.rawData ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if let known = ArgosAPIService.knownRawLocationDates[rawDataStr] {
-                pos.timestamp = known
-                pos.locationDate = known
-            } else if rawDataStr.contains("398c") || rawDataStr.contains("399") {
-                pos.timestamp = "2026-10-07T07:00:00.000Z"
-                pos.locationDate = "2026-10-07T07:00:00.000Z"
-            } else if rawDataStr.contains("363239") || rawDataStr.contains("32396f") {
-                pos.timestamp = "2026-10-10T05:00:00.000Z"
-                pos.locationDate = "2026-10-10T05:00:00.000Z"
-            }
-            
-            let docTs = DateFormatters.fastParseTimestampMs(pos.timestamp)
-            // Guard: Zhezkazgan camp positions (lat > 46 or lon < 70) occurred on or before Oct 7 2026
-            if (pos.lat > 46 || pos.lon < 70) && !docTs.isNaN && docTs >= 1791417600000 /* Oct 8 2026 */ {
-                pos.timestamp = "2026-10-07T07:00:00.000Z"
-                pos.locationDate = "2026-10-07T07:00:00.000Z"
-            }
+            let trueDate = pos.locationDate ?? pos.timestamp
+            pos.timestamp = trueDate
+            pos.locationDate = trueDate
 
             let keys = [pos.transmitter_id, pos.platformId].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
             for key in keys {
@@ -263,15 +247,11 @@ class TransmitterService {
                 let knownGpsDate = !rawDataStr.isEmpty ? ArgosAPIService.knownRawLocationDates[rawDataStr] : nil
                 
                 // Prioritize actual GPS Location Date over satellite message reception date
-                var rawTs: String? = {
+                let rawTs: String? = {
                     if let s = d["locationDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
                     if let s = d["gpsLocDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
                     if let loc = d["location"] as? [String: Any], let s = loc["locationDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
                     if let known = knownGpsDate { return known }
-                    if !rawDataStr.isEmpty {
-                        if rawDataStr.contains("398c") || rawDataStr.contains("399") { return "2026-10-07T07:00:00.000Z" }
-                        if rawDataStr.contains("363239") || rawDataStr.contains("32396f") { return "2026-10-10T05:00:00.000Z" }
-                    }
                     if let s = d["timestamp"] as? String { return s }
                     if let s = d["date"] as? String { return s }
                     if let s = d["msgDatetime"] as? String { return s }
@@ -285,21 +265,14 @@ class TransmitterService {
                     return nil
                 }()
                 guard let validRawTs = rawTs else { return }
-                var docTs = DateFormatters.fastParseTimestampMs(validRawTs)
+                let docTs = DateFormatters.fastParseTimestampMs(validRawTs)
+                if docTs.isNaN || docTs < startMs || docTs > endMs { return }
                 
                 let rawLat = parseCoord(d["lat"]) ?? parseCoord(d["latitude"])
                 let rawLon = parseCoord(d["lon"]) ?? parseCoord(d["longitude"])
                 guard let lat = rawLat, var lon = rawLon, lat != 0, lon != 0, !lat.isNaN, !lon.isNaN, abs(lat) <= 90, abs(lon) <= 180 else {
                     return
                 }
-
-                // Guard: Zhezkazgan camp positions (lat > 46 or lon < 70) occurred on or before Oct 7 2026
-                if (lat > 46 || lon < 70) && !docTs.isNaN && docTs >= 1791417600000 /* Oct 8 2026 */ {
-                    rawTs = "2026-10-07T07:00:00.000Z"
-                    docTs = DateFormatters.fastParseTimestampMs("2026-10-07T07:00:00.000Z")
-                }
-
-                if docTs.isNaN || docTs < startMs || docTs > endMs { return }
                 
                 // Auto-correct negative longitude for transmitter 242086
                 if pidStr == "242086" && lon < 0 {

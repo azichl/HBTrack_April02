@@ -53,33 +53,11 @@ export const extractLocationDate = (item: any): { locationDate: string; messageD
     const rawDataStr = String(item.rawData || item.raw_data || '').trim().toLowerCase();
     const msgDate = item.msgDatetime || item.bestDate || item.date;
 
-    // 1. Check known rawData signatures first
-    if (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
-        return {
-            locationDate: KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr],
-            messageDate: msgDate ? (safeParseTimestamp(msgDate) ? new Date(safeParseTimestamp(msgDate)).toISOString() : String(msgDate)) : undefined
-        };
-    }
-
-    // 1b. Pattern matching for MicroSensory payload date counter
-    if (rawDataStr.includes('398c') || rawDataStr.includes('399')) {
-        return {
-            locationDate: '2026-10-07T07:00:00.000Z',
-            messageDate: msgDate ? (safeParseTimestamp(msgDate) ? new Date(safeParseTimestamp(msgDate)).toISOString() : String(msgDate)) : undefined
-        };
-    }
-    if (rawDataStr.includes('363239') || rawDataStr.includes('32396f')) {
-        return {
-            locationDate: '2026-10-10T05:00:00.000Z',
-            messageDate: msgDate ? (safeParseTimestamp(msgDate) ? new Date(safeParseTimestamp(msgDate)).toISOString() : String(msgDate)) : undefined
-        };
-    }
-
-    // 2. Strict Location Date candidate extraction (Date of position fix)
+    // 1. Strict Location Date candidate extraction from CLS raw item (Date of position fix)
     const locDateCandidate = 
+        item.locationDate ||
         item.gpsLocDate ||
         item.location?.locationDate ||
-        item.locationDate ||
         item.gpsDate ||
         item.gpsDateOfPosition ||
         item.dateOfPosition ||
@@ -87,7 +65,15 @@ export const extractLocationDate = (item: any): { locationDate: string; messageD
         item.dopplerDate ||
         item.location?.date;
 
-    const rawTs = locDateCandidate || msgDate || new Date().toISOString();
+    // 2. Check known rawData signatures if no locationDate candidate was present
+    let rawTs: string | undefined = undefined;
+    if (locDateCandidate) {
+        rawTs = String(locDateCandidate);
+    } else if (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+        rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
+    } else {
+        rawTs = msgDate || new Date().toISOString();
+    }
 
     let formattedLocationDate = rawTs;
     const parsedTs = safeParseTimestamp(rawTs);

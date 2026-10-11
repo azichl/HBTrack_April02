@@ -1773,12 +1773,6 @@ const LiveTrackingInner = () => {
             const validCoords = isValidCoordinate(numLat, numLon);
             if (!validCoords) return false;
 
-            // Guard: Reject memorized Zhezkazgan camp points (lat > 46 or lon < 70) if timestamp was saved on/after Oct 8
-            const pMs = safeParseTimestamp(p.timestamp);
-            if ((numLat > 46 || numLon < 70) && !isNaN(pMs) && pMs >= 1791417600000 /* Oct 8 2026 */) {
-                return false;
-            }
-
             const fixType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
             p.locationType = fixType;
 
