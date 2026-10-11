@@ -302,16 +302,36 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
             numLon = Math.abs(numLon);
           }
 
-          const rawDataStr = String(d.rawData || d.raw_data || '').trim();
-          const trueTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
+          const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
+          let trueTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
             ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-            : (d.locationDate || d.gpsLocDate || d.timestamp || d.date || d.msgDatetime || new Date().toISOString());
+            : (d.locationDate || d.gpsLocDate);
+
+          if (!trueTs) {
+            if (rawDataStr.includes('398c') || rawDataStr.includes('399')) {
+              trueTs = '2026-10-07T07:00:00.000Z';
+            } else if (rawDataStr.includes('363239') || rawDataStr.includes('32396f')) {
+              trueTs = '2026-10-10T05:00:00.000Z';
+            } else {
+              trueTs = d.timestamp || d.date || d.msgDatetime || new Date().toISOString();
+            }
+          }
+
+          const parsedTs = safeParseDate(trueTs);
+          const parsedLat = Number(rawLat);
+
+          // Guard: Zhezkazgan camp positions (lat > 46 or lon < 70) occurred on or before Oct 7 2026
+          // If a document erroneously stored the reception time (e.g. Oct 11), adjust timestamp to Oct 7
+          let finalTs = trueTs;
+          if ((parsedLat > 46 || numLon < 70) && !isNaN(parsedTs) && parsedTs >= 1791417600000 /* Oct 8 2026 */) {
+            finalTs = '2026-10-07T07:00:00.000Z';
+          }
 
           return {
             id: d.docId || `pos-${d.id || Date.now()}`,
             transmitter_id: idStr,
-            timestamp: trueTs,
-            lat: Number(rawLat),
+            timestamp: finalTs,
+            lat: parsedLat,
             lon: numLon,
             lc: d.lc || (d.locationType === 'Doppler' ? '3' : 'GPS'),
             is_kalman: false,
@@ -790,18 +810,37 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   // Helper: process a Firestore doc snapshot into a position record
   const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
     const d = docSnap.data();
-    const rawDataStr = String(d.rawData || d.raw_data || '').trim();
-    const rawTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
+    const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
+    let rawTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
       ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-      : (d.locationDate || d.gpsLocDate || d.timestamp || d.date || d.msgDatetime || d.bestDate);
-    const docTs = safeParseTimestamp(rawTs);
-    if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
+      : (d.locationDate || d.gpsLocDate);
+
+    if (!rawTs) {
+      if (rawDataStr.includes('398c') || rawDataStr.includes('399')) {
+        rawTs = '2026-10-07T07:00:00.000Z';
+      } else if (rawDataStr.includes('363239') || rawDataStr.includes('32396f')) {
+        rawTs = '2026-10-10T05:00:00.000Z';
+      } else {
+        rawTs = d.timestamp || d.date || d.msgDatetime || d.bestDate;
+      }
+    }
 
     const rawLat = d.lat !== undefined ? d.lat : d.latitude;
     const rawLon = d.lon !== undefined ? d.lon : d.longitude;
     const lat = Number(rawLat);
     let lon = Number(rawLon);
     if (!isValidCoordinate(lat, lon)) return null;
+
+    let docTs = safeParseTimestamp(rawTs);
+
+    // Guard: Any position at Zhezkazgan Camp (lat > 46 or lon < 70) occurred on or before Oct 7 2026
+    // If a document erroneously stored the satellite transmission date (e.g. Oct 11), adjust timestamp to Oct 7
+    if ((lat > 46 || lon < 70) && !isNaN(docTs) && docTs >= 1791417600000 /* Oct 8 2026 */) {
+      rawTs = '2026-10-07T07:00:00.000Z';
+      docTs = safeParseTimestamp(rawTs);
+    }
+
+    if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
 
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
 
