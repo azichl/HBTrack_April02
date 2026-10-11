@@ -53,6 +53,9 @@ export const extractLocationDate = (item: any): { locationDate: string; messageD
     const rawDataStr = String(item.rawData || item.raw_data || '').trim().toLowerCase();
     const msgDate = item.msgDatetime || item.bestDate || item.date;
 
+    const isDoppler = item.locationType === 'Doppler' || 
+        (item.gpsLocLat === undefined && (item.dopplerLocLat !== undefined || item.dopplerLocClass !== undefined));
+
     // 1. Strict Location Date candidate extraction from CLS raw item (Date of position fix)
     const locDateCandidate = 
         item.locationDate ||
@@ -61,15 +64,13 @@ export const extractLocationDate = (item: any): { locationDate: string; messageD
         item.gpsDate ||
         item.gpsDateOfPosition ||
         item.dateOfPosition ||
-        item.dopplerLocDate ||
-        item.dopplerDate ||
-        item.location?.date;
+        (isDoppler ? (item.dopplerLocDate || item.dopplerDate || item.location?.date) : undefined);
 
-    // 2. Check known rawData signatures if no locationDate candidate was present
+    // 2. Check known rawData signatures ONLY for GPS fixes (never overwrite Doppler satellite pass time)
     let rawTs: string | undefined = undefined;
     if (locDateCandidate) {
         rawTs = String(locDateCandidate);
-    } else if (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+    } else if (!isDoppler && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
         rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
     } else {
         rawTs = msgDate || new Date().toISOString();

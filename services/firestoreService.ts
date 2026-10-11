@@ -302,10 +302,11 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
             numLon = Math.abs(numLon);
           }
 
+          const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
           const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
           let trueTs = (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
             ? (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
-            : (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+            : (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
                 ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
                 : (d.timestamp || d.date || d.msgDatetime));
 
@@ -798,10 +799,11 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   // Helper: process a Firestore doc snapshot into a position record
   const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
     const d = docSnap.data();
+    const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
     const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
     let rawTs = (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
       ? (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
-      : (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+      : (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
           ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
           : (d.timestamp || d.date || d.msgDatetime || d.bestDate));
 

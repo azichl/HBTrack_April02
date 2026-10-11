@@ -1216,8 +1216,10 @@ export const useAppStore = create<AppState>()(
 
           // Sort incoming messages chronologically by Location Date (Date of position fix)
           const sortedIncomingMessages = [...incomingMessages].sort((a, b) => {
-              const rawA = (a.rawData && KNOWN_CLS_RAW_LOCATION_DATES[a.rawData]) ? KNOWN_CLS_RAW_LOCATION_DATES[a.rawData] : (a.timestamp || (a as any).locationDate);
-              const rawB = (b.rawData && KNOWN_CLS_RAW_LOCATION_DATES[b.rawData]) ? KNOWN_CLS_RAW_LOCATION_DATES[b.rawData] : (b.timestamp || (b as any).locationDate);
+              const isGpsA = a.locationType === 'GPS' || !a.locationType || a.lc === 'GPS';
+              const rawA = (isGpsA && a.rawData && KNOWN_CLS_RAW_LOCATION_DATES[a.rawData]) ? KNOWN_CLS_RAW_LOCATION_DATES[a.rawData] : (a.timestamp || (a as any).locationDate);
+              const isGpsB = b.locationType === 'GPS' || !b.locationType || b.lc === 'GPS';
+              const rawB = (isGpsB && b.rawData && KNOWN_CLS_RAW_LOCATION_DATES[b.rawData]) ? KNOWN_CLS_RAW_LOCATION_DATES[b.rawData] : (b.timestamp || (b as any).locationDate);
               return safeParseDate(rawA) - safeParseDate(rawB);
           });
 
@@ -1233,7 +1235,8 @@ export const useAppStore = create<AppState>()(
               let tIndex = newTransmitters.findIndex(t => String(t.platform_id || t.id).replace(/^trans-/, '').trim() === pid);
               
               const rawDataStr = String(msg.rawData || '').trim();
-              const trueMsgTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
+              const isGps = msg.locationType === 'GPS' || !msg.locationType || msg.lc === 'GPS';
+              const trueMsgTs = (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
                   ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
                   : (msg.timestamp || (msg as any).locationDate);
               const parsedMsgTs = safeParseDate(trueMsgTs);

@@ -1785,6 +1785,56 @@ const LiveTrackingInner = () => {
         // Sort track points chronologically
         track.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
+        // Deduplicate points sharing the same timestamp window (< 60s), preferring GPS over Doppler
+        const dedupedTrack: typeof track = [];
+        for (const p of track) {
+          const pMs = safeParseTimestamp(p.timestamp);
+          const existingIdx = dedupedTrack.findIndex(existing => {
+            const eMs = safeParseTimestamp(existing.timestamp);
+            return Math.abs(eMs - pMs) < 60000;
+          });
+          if (existingIdx === -1) {
+            dedupedTrack.push(p);
+          } else {
+            const existing = dedupedTrack[existingIdx];
+            if (p.locationType === 'GPS' && existing.locationType !== 'GPS') {
+              dedupedTrack[existingIdx] = p; // replace Doppler with higher quality GPS
+            }
+          }
+        }
+        track = dedupedTrack;
+
+        // Telemetry spike / bounce filter: eliminate impossible teleportation artifacts
+        // (points jumping > 12 km away and bouncing right back to the previous position cluster)
+        if (track.length >= 3) {
+          const calcDistKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+            return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          };
+
+          const filteredTrack: typeof track = [];
+          for (let i = 0; i < track.length; i++) {
+            if (i > 0 && i < track.length - 1) {
+              const prev = filteredTrack[filteredTrack.length - 1] || track[i - 1];
+              const curr = track[i];
+              const next = track[i + 1];
+              const d1 = calcDistKm(Number(prev.lat), Number(prev.lon), Number(curr.lat), Number(curr.lon));
+              const d2 = calcDistKm(Number(curr.lat), Number(curr.lon), Number(next.lat), Number(next.lon));
+              const dBase = calcDistKm(Number(prev.lat), Number(prev.lon), Number(next.lat), Number(next.lon));
+              const dtHours = Math.abs(safeParseTimestamp(next.timestamp) - safeParseTimestamp(prev.timestamp)) / (1000 * 3600);
+
+              if (d1 > 12 && d2 > 12 && dBase < 6 && dtHours < 4) {
+                // False bounce point (teleported away and back), skip it
+                continue;
+              }
+            }
+            filteredTrack.push(track[i]);
+          }
+          track = filteredTrack;
+        }
+
         if (track.length > 0) {
              newPaths.push({
                  id: pttId,

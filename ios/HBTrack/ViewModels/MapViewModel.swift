@@ -576,6 +576,44 @@ class MapViewModel: ObservableObject {
             
             // Sort chronologically
             fixes.sort { $0.timestampMs < $1.timestampMs }
+
+            // Deduplicate points sharing the same timestamp window (< 60s), preferring GPS over Doppler
+            var dedupedFixes: [Position] = []
+            for f in fixes {
+                let fMs = f.timestampMs
+                if let existingIdx = dedupedFixes.firstIndex(where: { abs($0.timestampMs - fMs) < 60000 }) {
+                    let existing = dedupedFixes[existingIdx]
+                    let isNewGps = (f.locationType ?? "").uppercased().contains("GPS") || (f.lc ?? "").uppercased() == "GPS"
+                    let isExistingGps = (existing.locationType ?? "").uppercased().contains("GPS") || (existing.lc ?? "").uppercased() == "GPS"
+                    if isNewGps && !isExistingGps {
+                        dedupedFixes[existingIdx] = f
+                    }
+                } else {
+                    dedupedFixes.append(f)
+                }
+            }
+            fixes = dedupedFixes
+
+            // Telemetry bounce/spike filter: remove impossible teleportation bounces
+            if fixes.count >= 3 {
+                var cleanFixes: [Position] = []
+                for i in 0..<fixes.count {
+                    if i > 0 && i < fixes.count - 1 {
+                        let prev = cleanFixes.last ?? fixes[i - 1]
+                        let curr = fixes[i]
+                        let next = fixes[i + 1]
+                        let d1 = HaversineDistance.distance(from: prev.coordinate, to: curr.coordinate) / 1000.0
+                        let d2 = HaversineDistance.distance(from: curr.coordinate, to: next.coordinate) / 1000.0
+                        let dBase = HaversineDistance.distance(from: prev.coordinate, to: next.coordinate) / 1000.0
+                        let dtHours = abs(next.timestampMs - prev.timestampMs) / (1000.0 * 3600.0)
+                        if d1 > 12.0 && d2 > 12.0 && dBase < 6.0 && dtHours < 4.0 {
+                            continue // Skip impossible bounce artifact
+                        }
+                    }
+                    cleanFixes.append(fixes[i])
+                }
+                fixes = cleanFixes
+            }
             
             // Static Test Rule (mirrors web app):
             // If transmitter is Static test, only positions from current calendar month are shown
