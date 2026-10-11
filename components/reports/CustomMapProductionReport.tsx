@@ -1197,6 +1197,23 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return buildCountrySvgData(lon, lat, 140, 78, 5);
   }, [metrics.lLat, metrics.lLon]);
 
+  // Graticule Top Longitude (Meridian) Line Label (e.g. 067° 00.0000'E or 074° 15.0000'E)
+  const graticuleLonLabel = useMemo(() => {
+    const rawLon = Number(metrics.lLon);
+    if (!rawLon || isNaN(rawLon)) return "067° 00.0000'E";
+    const abs = Math.abs(rawLon);
+    let deg = Math.floor(abs);
+    let min = Math.round(((abs - deg) * 60) / 15) * 15;
+    if (min >= 60) {
+      deg += 1;
+      min = 0;
+    }
+    const degStr = String(deg).padStart(3, '0');
+    const minStr = String(min).padStart(2, '0');
+    const dir = rawLon >= 0 ? 'E' : 'W';
+    return `${degStr}° ${minStr}.0000'${dir}`;
+  }, [metrics.lLon]);
+
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289', '244276'];
     transmitters.forEach(t => {
@@ -4397,10 +4414,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                 {/* Graticule Perimeter Labels (Ticks) */}
                 <div className="absolute top-1 left-38 z-[900] pointer-events-none select-none">
-                  <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      {metrics.lLat ? `${Math.floor(metrics.lLat)}° 15.0000'N` : "47° 15.0000'N"}
+                  <svg width="80" height="16" viewBox="0 0 80 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="80" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="40" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      {graticuleLonLabel}
                     </text>
                   </svg>
                 </div>

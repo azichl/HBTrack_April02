@@ -932,6 +932,23 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     return buildCountrySvgData(lon, lat, 150, 82, 6);
   }, [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]);
 
+  // Graticule Top Longitude (Meridian) Line Label (e.g. 067° 00.0000'E or 074° 15.0000'E)
+  const graticuleLonLabel = useMemo(() => {
+    const rawLon = Number(metrics.lLon || telemetryData.lastGpsPos.lon);
+    if (!rawLon || isNaN(rawLon)) return "067° 00.0000'E";
+    const abs = Math.abs(rawLon);
+    let deg = Math.floor(abs);
+    let min = Math.round(((abs - deg) * 60) / 15) * 15;
+    if (min >= 60) {
+      deg += 1;
+      min = 0;
+    }
+    const degStr = String(deg).padStart(3, '0');
+    const minStr = String(min).padStart(2, '0');
+    const dir = rawLon >= 0 ? 'E' : 'W';
+    return `${degStr}° ${minStr}.0000'${dir}`;
+  }, [metrics.lLon, telemetryData.lastGpsPos.lon]);
+
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289'];
     transmitters.forEach(t => {
@@ -2101,10 +2118,10 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
                 {/* Graticule Perimeter Labels (Ticks) - Vector SVGs ensure coordinate text is permanently centered inside the gray pill on both web and html2canvas exports */}
                 <div className="absolute top-1 left-36 z-[900] pointer-events-none select-none">
-                  <svg width="72" height="16" viewBox="0 0 72 16" style={{ display: 'block' }}>
-                    <rect x="0" y="0" width="72" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
-                    <text x="36" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
-                      47° 15.0000'N
+                  <svg width="80" height="16" viewBox="0 0 80 16" style={{ display: 'block' }}>
+                    <rect x="0" y="0" width="80" height="16" rx="4" fill="rgba(0, 0, 0, 0.55)" />
+                    <text x="40" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
+                      {graticuleLonLabel}
                     </text>
                   </svg>
                 </div>
