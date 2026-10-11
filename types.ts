@@ -96,6 +96,8 @@ export interface Position {
   course: number;
   satellite: string;
   locationType?: 'GPS' | 'Doppler'; // Added field
+  messageDate?: string; // Satellite transmission/reception date
+  locationDate?: string; // Actual location fix date
 }
 
 export interface Alert {
@@ -131,6 +133,8 @@ export interface ArgosMessage {
   rawData?: string;
   locationType?: string;
   dopplerError?: string;
+  messageDate?: string; // Original satellite reception date
+  locationDate?: string; // GPS / Location fix date
 }
 
 // 2. retrieve-device-list

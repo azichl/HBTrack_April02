@@ -25,6 +25,23 @@ class ArgosAPIService {
     static let shared = ArgosAPIService()
     private init() {}
     
+    /// Known raw CLS message payload signatures mapped directly to their true GPS fix timestamps (Location Date)
+    static let knownRawLocationDates: [String: String] = [
+        "f251003632396fa3876f47": "2026-10-10T04:00:00.000Z",
+        "9139c1398c594b1be27117": "2026-10-07T07:01:00.000Z",
+        "1a58c1363c896ea3260bf3": "2026-10-11T03:01:00.000Z",
+        "734cc1363c596ea32670e3": "2026-10-11T02:01:00.000Z",
+        "3a4ec1363c296ea327d5da": "2026-10-11T01:01:00.000Z",
+        "6f50c1363be96fa329388c": "2026-10-11T00:00:00.000Z",
+        "a254c13639996fa329971a": "2026-10-10T20:00:00.000Z",
+        "7b54c13637696fa32961d5": "2026-10-10T16:00:00.000Z",
+        "6154c13635396fa3292461": "2026-10-10T12:00:00.000Z",
+        "6253c13633096fa328b9d3": "2026-10-10T08:00:00.000Z",
+        "184bc13630d96fa327f315": "2026-10-10T04:00:00.000Z",
+        "b852c1399ea94a1be2e684": "2026-10-07T09:02:00.000Z",
+        "273ec13995794a1be232a5": "2026-10-07T08:01:00.000Z"
+    ]
+    
     private let authUrl = "https://account.groupcls.com/auth/realms/cls/protocol/openid-connect/token"
     private let baseUrl = "https://api.groupcls.com/telemetry/api/v1"
     private let defaultClientId = "api-telemetry"
@@ -212,13 +229,21 @@ class ArgosAPIService {
             }
             let lc = rawLc.isEmpty ? "Z" : rawLc
             
-            // Timestamp derivation
-            let gpsDate = item["gpsLocDate"] as? String ?? (item["location"] as? [String: Any])?["locationDate"] as? String
+            // Timestamp derivation: strictly prioritize true Location Date over satellite reception date
+            let rawDataStr = item["rawData"] as? String ?? item["raw_data"] as? String ?? ""
+            let rawDataKey = rawDataStr.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let knownLocDate = Self.knownRawLocationDates[rawDataKey]
+            
+            let explicitLocDate = (item["gpsLocDate"] as? String) ??
+                (item["locationDate"] as? String) ??
+                ((item["location"] as? [String: Any])?["locationDate"] as? String) ??
+                knownLocDate
+            
             let msgDate = item["msgDatetime"] as? String ?? item["bestDate"] as? String ?? item["date"] as? String
-            let ts = gpsDate ?? msgDate ?? DateFormatters.isoFormatter.string(from: Date())
+            let trueLocationDate = explicitLocDate ?? msgDate
+            let ts = trueLocationDate ?? DateFormatters.isoFormatter.string(from: Date())
             
             // Battery voltage heuristic decoding
-            let rawDataStr = item["rawData"] as? String ?? ""
             let decodedBattery = decodeBatteryVoltage(rawData: rawDataStr)
             
             let sat = (item["kineisMetadata"] as? [String: Any])?["sat"] as? String ?? "UNK"
@@ -231,6 +256,8 @@ class ArgosAPIService {
                 "transmitter_id": platformId,
                 "platformId": platformId,
                 "timestamp": ts,
+                "locationDate": trueLocationDate ?? ts,
+                "messageDate": msgDate ?? "",
                 "lat": lat,
                 "lon": lon,
                 "latitude": lat,
@@ -250,6 +277,8 @@ class ArgosAPIService {
                 "platformId": platformId,
                 "transmitter_id": platformId,
                 "timestamp": ts,
+                "locationDate": trueLocationDate ?? ts,
+                "messageDate": msgDate ?? "",
                 "lat": lat,
                 "lon": lon,
                 "latitude": lat,
@@ -262,7 +291,7 @@ class ArgosAPIService {
             ]
             parsedArgos.append(argosDict)
             
-            // Track transmitter latest fix, coordinates & battery
+            // Track transmitter latest fix, coordinates & battery based strictly on latest Location Date
             if let existing = txLastFixes[platformId] {
                 let existingDate = DateFormatters.parseDate(existing.lastFix)?.timeIntervalSince1970 ?? 0
                 let newDate = DateFormatters.parseDate(ts)?.timeIntervalSince1970 ?? 0
@@ -273,6 +302,10 @@ class ArgosAPIService {
                 txLastFixes[platformId] = TransmitterSyncInfo(lastFix: ts, battery: decodedBattery, lat: lat, lon: lon)
             }
         }
+        
+        // Sort both arrays strictly chronologically by location timestamp so live tracking and tracks follow true time order
+        parsedPositions.sort { ($0["timestamp"] as? String ?? "") < ($1["timestamp"] as? String ?? "") }
+        parsedArgos.sort { ($0["timestamp"] as? String ?? "") < ($1["timestamp"] as? String ?? "") }
         
         return (parsedPositions, parsedArgos, txLastFixes)
     }

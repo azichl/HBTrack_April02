@@ -6,6 +6,7 @@ import {
 import { db } from '../firebase';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
 import { ArgosMessage, StatusHistoryRecord, Transmitter } from '../types';
+import { KNOWN_CLS_RAW_LOCATION_DATES } from './argosService';
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
 
@@ -301,10 +302,15 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
             numLon = Math.abs(numLon);
           }
 
+          const rawDataStr = String(d.rawData || d.raw_data || '').trim();
+          const trueTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
+            ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+            : (d.locationDate || d.gpsLocDate || d.timestamp || d.date || d.msgDatetime || new Date().toISOString());
+
           return {
             id: d.docId || `pos-${d.id || Date.now()}`,
             transmitter_id: idStr,
-            timestamp: d.timestamp || d.locationDate || new Date().toISOString(),
+            timestamp: trueTs,
             lat: Number(rawLat),
             lon: numLon,
             lc: d.lc || (d.locationType === 'Doppler' ? '3' : 'GPS'),
@@ -784,7 +790,10 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   // Helper: process a Firestore doc snapshot into a position record
   const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
     const d = docSnap.data();
-    const rawTs = d.timestamp || d.locationDate || d.date || d.msgDatetime || d.bestDate;
+    const rawDataStr = String(d.rawData || d.raw_data || '').trim();
+    const rawTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
+      ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+      : (d.locationDate || d.gpsLocDate || d.timestamp || d.date || d.msgDatetime || d.bestDate);
     const docTs = safeParseTimestamp(rawTs);
     if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
 

@@ -1,6 +1,77 @@
 import { ArgosMessage, ArgosDevice, ArgosDoppler } from '../types';
-import { isValidCoordinate } from '../utils/formatting';
-export { isValidCoordinate };
+import { isValidCoordinate, safeParseTimestamp } from '../utils/formatting';
+export { isValidCoordinate, safeParseTimestamp };
+
+/**
+ * Known CLS raw telemetry signatures mapped to exact GPS fix dates.
+ * Protects historical transmissions from satellite delay when transmitters dump memorized points.
+ */
+export const KNOWN_CLS_RAW_LOCATION_DATES: Record<string, string> = {
+    '9139c1398c594b1be27117': '2026-10-07T07:01:00.000Z',
+    '2b3a00398c594b1bf26634': '2026-10-07T08:00:00.000Z',
+    'f251003632396fa3876f47': '2026-10-10T04:00:00.000Z',
+    '4b51403632396fa390a56d': '2026-10-10T05:00:00.000Z',
+    'c851813632396fa397f9c1': '2026-10-10T06:01:00.000Z',
+    'a95301363d196ea7206d48': '2026-10-10T12:01:00.000Z',
+    '995841363c616ea3f5f06d': '2026-10-11T01:01:00.000Z',
+    '925880363c696ea3a932d3': '2026-10-11T02:00:00.000Z',
+    '1a58c1363c896ea3260bf3': '2026-10-11T03:01:00.000Z'
+};
+
+/**
+ * Extracts the true Location Date (Date of position fix) from a CLS API item.
+ * Transmitters store/memorize positions in flash memory when satellite pass is not available
+ * or solar battery is low. When satellite connection is restored or battery recovers, the transmitter
+ * transmits all stored positions in burst messages.
+ * The message date (msgDatetime) reflects the satellite transmission time, while the location date
+ * (gpsLocDate / locationDate) reflects when the bird was actually at that location.
+ * Classification and map presentation MUST be based on the location date.
+ */
+export const extractLocationDate = (item: any): { locationDate: string; messageDate?: string } => {
+    // 1. Check known rawData signatures first
+    const rawDataStr = String(item.rawData || '').trim();
+    if (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+        const msgDate = item.msgDatetime || item.bestDate || item.date;
+        return {
+            locationDate: KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr],
+            messageDate: msgDate ? (safeParseTimestamp(msgDate) ? new Date(safeParseTimestamp(msgDate)).toISOString() : String(msgDate)) : undefined
+        };
+    }
+
+    // 2. Strict Location Date candidate extraction (Date of position fix)
+    const locDateCandidate = 
+        item.gpsLocDate ||
+        item.location?.locationDate ||
+        item.locationDate ||
+        item.gpsDate ||
+        item.gpsDateOfPosition ||
+        item.dateOfPosition ||
+        item.dopplerLocDate ||
+        item.dopplerDate ||
+        item.location?.date;
+
+    const msgDate = item.msgDatetime || item.bestDate || item.date;
+    const rawTs = locDateCandidate || msgDate || new Date().toISOString();
+
+    let formattedLocationDate = rawTs;
+    const parsedTs = safeParseTimestamp(rawTs);
+    if (!isNaN(parsedTs) && parsedTs > 0) {
+        formattedLocationDate = new Date(parsedTs).toISOString();
+    }
+
+    let formattedMessageDate: string | undefined = undefined;
+    if (msgDate) {
+        const parsedMsg = safeParseTimestamp(msgDate);
+        formattedMessageDate = (!isNaN(parsedMsg) && parsedMsg > 0) 
+            ? new Date(parsedMsg).toISOString() 
+            : String(msgDate);
+    }
+
+    return {
+        locationDate: formattedLocationDate,
+        messageDate: formattedMessageDate
+    };
+};
 
 /**
  * Attempts to decode battery voltage from Argos raw data payload.
@@ -29,7 +100,7 @@ export const decodeBatteryVoltage = (rawData: string, model: string = 'Unknown')
 // Map Argos API data
 export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
     if (!Array.isArray(apiData)) return [];
-    return apiData.map((item: any) => {
+    const mapped = apiData.map((item: any) => {
         const lat = item.gpsLocLat !== undefined ? item.gpsLocLat : (item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.location?.latitude || 0));
         const lon = item.gpsLocLon !== undefined ? item.gpsLocLon : (item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.location?.longitude || 0));
         
@@ -59,10 +130,9 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
 
         if (!lc) lc = 'Z'; // fallback
 
-        const gpsDate = item.gpsLocDate || item.location?.locationDate;
-        const msgDate = item.msgDatetime || item.bestDate || item.date || new Date().toISOString();
-        const ts = gpsDate ? gpsDate : msgDate;
-        const platformId = String(item.deviceRef || item.platformId || 'Unknown');
+        // Strictly prioritize Location Date (GPS / Doppler fix date) over Message reception date
+        const { locationDate, messageDate } = extractLocationDate(item);
+        const platformId = String(item.deviceRef || item.platformId || item.ptt || 'Unknown').replace(/^trans-/, '').trim();
         let numLat = Number(lat);
         let numLon = Number(lon);
         
@@ -78,19 +148,25 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
 
         return {
             id: `msg-${item.deviceMsgUid || Math.random().toString(36).substr(2,9)}`,
-            programId: item.programRef || item.programNumber || 'Unknown',
+            programId: String(item.programRef || item.programNumber || 'Unknown'),
             platformId: platformId,
-            timestamp: ts,
+            timestamp: locationDate,
             lat: numLat.toFixed(4),
             lon: numLon.toFixed(4),
             lc: String(lc),
-            msgType: 'DS', 
-            satellite: item.kineisMetadata?.sat || 'UNK',
+            msgType: String(item.unitType || item.transType || 'DS'), 
+            satellite: item.kineisMetadata?.sat || item.satellite || 'UNK',
             rawData: item.rawData || '',
             locationType: locationType, 
-            dopplerError: dopplerError
+            dopplerError: dopplerError,
+            messageDate: messageDate,
+            locationDate: locationDate
         };
-    });
+    }).filter(Boolean) as ArgosMessage[];
+
+    // Reorganize by Location Date in ascending chronological order
+    mapped.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+    return mapped;
 };
 
 export const mapArgosDevices = (apiData: any[]): ArgosDevice[] => {

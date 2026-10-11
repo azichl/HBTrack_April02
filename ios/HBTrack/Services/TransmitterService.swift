@@ -160,6 +160,31 @@ class TransmitterService {
             let docId = (transmitter.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             
             if let pos = latestPositionsByTx[pid] ?? (docId.isEmpty ? nil : latestPositionsByTx[docId]) {
+                // If transmitter document itself has a last_fix with coordinates that are newer or equal, prefer the transmitter's coordinates
+                if let directCoord = transmitter.directCoordinate, let txLastFix = transmitter.last_fix {
+                    let txDateMs = DateFormatters.fastParseTimestampMs(txLastFix)
+                    let posDateMs = pos.timestampMs > 0 ? pos.timestampMs : DateFormatters.fastParseTimestampMs(pos.timestamp)
+                    if txDateMs >= posDateMs {
+                        let directPos = Position(
+                            id: "tx-direct-\(docId.isEmpty ? pid : docId)",
+                            transmitter_id: pid,
+                            platformId: pid,
+                            timestamp: txLastFix,
+                            lat: directCoord.latitude,
+                            lon: directCoord.longitude,
+                            lc: "3",
+                            is_kalman: false,
+                            speed_kmh: 0,
+                            course: 0,
+                            satellite: "GPS",
+                            locationType: "GPS",
+                            timestampMs: txDateMs,
+                            locationDate: txLastFix
+                        )
+                        resultPositions.append(directPos)
+                        continue
+                    }
+                }
                 resultPositions.append(pos)
             } else if let directCoord = transmitter.directCoordinate {
                 let fallbackPos = Position(
@@ -174,7 +199,8 @@ class TransmitterService {
                     speed_kmh: 0,
                     course: 0,
                     satellite: "GPS",
-                    locationType: "GPS"
+                    locationType: "GPS",
+                    locationDate: transmitter.last_fix
                 )
                 resultPositions.append(fallbackPos)
             }
@@ -211,9 +237,16 @@ class TransmitterService {
             
             // Helper matching processDoc in firestoreService.ts
             let processDoc: ([String: Any], String) -> Void = { d, docId in
+                let rawDataStr = (d["rawData"] as? String ?? d["raw_data"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let knownGpsDate = !rawDataStr.isEmpty ? ArgosAPIService.knownRawLocationDates[rawDataStr] : nil
+                
+                // Prioritize actual GPS Location Date over satellite message reception date
                 let rawTs: String? = {
+                    if let s = d["locationDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
+                    if let s = d["gpsLocDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
+                    if let loc = d["location"] as? [String: Any], let s = loc["locationDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
+                    if let known = knownGpsDate { return known }
                     if let s = d["timestamp"] as? String { return s }
-                    if let s = d["locationDate"] as? String { return s }
                     if let s = d["date"] as? String { return s }
                     if let s = d["msgDatetime"] as? String { return s }
                     if let s = d["bestDate"] as? String { return s }
@@ -271,7 +304,10 @@ class TransmitterService {
                     course: course,
                     satellite: sat.isEmpty ? (locType == "GPS" ? "GPS" : "") : sat,
                     locationType: locType,
-                    timestampMs: docTs
+                    timestampMs: docTs,
+                    locationDate: (d["locationDate"] as? String) ?? (d["gpsLocDate"] as? String) ?? knownGpsDate,
+                    messageDate: d["msgDatetime"] as? String,
+                    rawData: rawDataStr
                 )
                 pttDocs.append(pos)
             }

@@ -5,58 +5,10 @@ import { useAppStore } from '../store/appStore';
 import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird as BirdType } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
-import { formatDateTime, isValidCoordinate } from '../utils/formatting';
+import { formatDateTime, isValidCoordinate, safeParseTimestamp } from '../utils/formatting';
+import { mapArgosApiData, mapArgosDevices, extractLocationDate } from '../services/argosService';
 
 // --- HELPERS ---
-
-// --- MAPPERS ---
-const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
-    if (!Array.isArray(apiData)) return [];
-    return apiData.map((item: any) => {
-        // Handle DATETIME format response structure
-        // Priority: GPS Location -> Doppler Location -> Generic Location
-        const lat = item.gpsLocLat !== undefined ? item.gpsLocLat : (item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.location?.latitude || 0));
-        const lon = item.gpsLocLon !== undefined ? item.gpsLocLon : (item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.location?.longitude || 0));
-        
-        // Determine LC
-        let lc = 'Z';
-        if (item.dopplerLocClass) lc = item.dopplerLocClass;
-        if (item.location?.locationClass) lc = item.location.locationClass;
-        // If GPS exists, we might imply a specific class or leave as is
-        if (item.gpsLocLat !== undefined && !item.dopplerLocClass) lc = 'GPS';
-
-        const ts = item.msgDatetime || item.bestDate || item.date || new Date().toISOString();
-        const platformId = item.deviceRef || item.platformId || 'Unknown';
-        
-        return {
-            id: `msg-${item.deviceMsgUid || Math.random().toString(36).substr(2,9)}`,
-            programId: item.programRef || item.programNumber || 'Unknown',
-            platformId: platformId,
-            timestamp: ts,
-            lat: Number(lat).toFixed(4),
-            lon: Number(lon).toFixed(4),
-            lc: String(lc),
-            msgType: 'DS', 
-            satellite: item.kineisMetadata?.sat || 'UNK',
-            rawData: item.rawData || '',
-            locationType: item.gpsLocLat !== undefined ? 'GPS' : 'Doppler', 
-            dopplerError: item.dopplerLocErrorRadius ? String(item.dopplerLocErrorRadius) : '0'
-        };
-    });
-};
-
-const mapArgosDevices = (apiData: any[]): ArgosDevice[] => {
-    if (!Array.isArray(apiData)) return [];
-    return apiData.map((item: any) => ({
-        deviceRef: item.deviceRef || item.platformId || 'Unknown',
-        programRef: item.programRef || item.programNumber || 'Unknown',
-        manufacturer: item.manufacturer || 'Unknown',
-        model: item.model || 'Unknown',
-        active: item.active !== false,
-        transType: item.transType || 'Argos',
-        deployDate: item.deployDate
-    }));
-};
 
 const mapArgosDoppler = (apiData: any[]): ArgosDoppler[] => {
     if (!Array.isArray(apiData)) return [];
@@ -371,46 +323,82 @@ export const DataUpload = () => {
         else if (uploadType === 'argos_data') {
             // Map raw rows to ArgosMessage structure
             const mappedArgos: ArgosMessage[] = rawData.map((row: any) => {
-                const platformId = row['Device ID'] || row.platformId || row.platform_id || 'Unknown';
-                const lat = row['Latitude'] || row.lat;
-                const lon = row['Longitude'] || row.lon;
+                const platformId = String(row['Device ID'] || row['DeviceRef'] || row['platformId'] || row['platform_id'] || row['ptt'] || 'Unknown').replace(/^trans-/, '').trim();
+                const lat = row['Latitude'] || row['lat'] || row['latitude'] || row['Lat'];
+                const lon = row['Longitude'] || row['lon'] || row['longitude'] || row['Lon'];
                 
+                // Strictly prioritize Location Date (Date of position fix) over satellite reception date
+                const locDateCandidate = 
+                    row['GPS Date of position (UTC)'] ||
+                    row['GPS Date of position'] ||
+                    row['GPS Date of Position (UTC)'] ||
+                    row['GPS Date of Position'] ||
+                    row['Location date (UTC)'] ||
+                    row['Location date'] ||
+                    row['Location Date (UTC)'] ||
+                    row['Location Date'] ||
+                    row['Date of position (UTC)'] ||
+                    row['Date of position'] ||
+                    row['Date of Position'] ||
+                    row['locationDate'] ||
+                    row['gpsLocDate'] ||
+                    row['gpsDate'] ||
+                    row['timestamp'];
+
                 let ts = new Date().toISOString();
-                if (row['Location date (UTC)']) {
-                    const parsed = new Date(row['Location date (UTC)']);
-                    if (!isNaN(parsed.getTime())) ts = parsed.toISOString();
-                } else if (row.timestamp) {
-                    ts = row.timestamp;
+                if (locDateCandidate) {
+                    const parsed = safeParseTimestamp(locDateCandidate);
+                    if (!isNaN(parsed) && parsed > 0) {
+                        ts = new Date(parsed).toISOString();
+                    } else {
+                        const parsedD = new Date(locDateCandidate);
+                        if (!isNaN(parsedD.getTime())) ts = parsedD.toISOString();
+                    }
+                } else {
+                    const msgCandidate = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['Message Date'] || row['msgDatetime'];
+                    if (msgCandidate) {
+                        const parsed = safeParseTimestamp(msgCandidate);
+                        if (!isNaN(parsed) && parsed > 0) ts = new Date(parsed).toISOString();
+                    }
                 }
 
+                const msgDateRaw = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['msgDatetime'];
+                const messageDate = msgDateRaw ? (safeParseTimestamp(msgDateRaw) ? new Date(safeParseTimestamp(msgDateRaw)).toISOString() : String(msgDateRaw)) : undefined;
+
                 const doppler = row['Doppler Error radius (m)'] || row['Doppler Error (m)'] || row['Doppler Error'] || row.dopplerError || '';
+                const rawDataPayload = row['Raw data'] || row['rawData'] || (doppler ? `Doppler: ${doppler}` : '');
 
                 return {
                     id: `msg-${Math.random().toString(36).substr(2,9)}`,
-                    programId: 'Imported',
+                    programId: String(row['Program Ref'] || row['programRef'] || 'Imported'),
                     platformId: platformId,
                     timestamp: ts,
-                    lat: lat,
-                    lon: lon,
-                    lc: row['Location class'] || row.lc || '',
-                    msgType: row['Unit type'] || row.msgType || '',
-                    satellite: row.satellite || 'UNK',
-                    rawData: doppler ? `Doppler: ${doppler}` : '',
-                    locationType: row['Location type'] || '',
-                    dopplerError: doppler
+                    lat: String(lat),
+                    lon: String(lon),
+                    lc: row['Location class'] || row['Location Class'] || row.lc || '',
+                    msgType: row['Unit type'] || row['Unit Type'] || row.msgType || '',
+                    satellite: row.satellite || row['Satellite'] || 'UNK',
+                    rawData: rawDataPayload,
+                    locationType: row['Location type'] || row['Location Type'] || '',
+                    dopplerError: doppler,
+                    messageDate: messageDate,
+                    locationDate: ts
                 };
             }).filter((m: any) => 
                 m.platformId && 
                 m.platformId !== 'Unknown' && 
                 m.lat && m.lon &&
-                isValidCoordinate(m.lat, m.lon) // CLEANING SCRIPT: Filter out (0,0) coordinates
+                isValidCoordinate(Number(m.lat), Number(m.lon)) // Filter out (0,0) coordinates
             );
+
+            // Reorganize chronologically by Location Date
+            mappedArgos.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
             const invalidCount = rawData.length - mappedArgos.length;
             
             await syncArgosToFirebase(mappedArgos, []);
             
-            setUploadMessage(`Imported ${mappedArgos.length} messages (${invalidCount > 0 ? `${invalidCount} invalid rows filtered` : 'all valid'}). Data synced to Firebase.`);
+            setUploadMessage(`Imported ${mappedArgos.length} messages sorted by Location Date (${invalidCount > 0 ? `${invalidCount} invalid rows filtered` : 'all valid'}). Data synced to Firebase.`);
         }
 
         setUploadStatus('success');

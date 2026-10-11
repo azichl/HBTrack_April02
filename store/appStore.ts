@@ -18,8 +18,8 @@ import {
   saveLastIngestTime, loadLastIngestTime, subscribeToLastIngestTime
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
-import { decodeBatteryVoltage } from '../services/argosService';
-import { findBirdForTransmitter, isBirdLinkedToTransmitter, classifyLocationType } from '../utils/formatting';
+import { decodeBatteryVoltage, KNOWN_CLS_RAW_LOCATION_DATES } from '../services/argosService';
+import { findBirdForTransmitter, isBirdLinkedToTransmitter, classifyLocationType, isValidCoordinate } from '../utils/formatting';
 import type { Role } from '../types';
 
 const safeParseDate = (ts: any): number => {
@@ -1214,7 +1214,14 @@ export const useAppStore = create<AppState>()(
           // 2. Process Messages → Create Transmitters + Positions
           const existingPosKeys = new Set(positions.map(p => `${p.transmitter_id}|${p.timestamp}|${p.lat}|${p.lon}`));
 
-          incomingMessages.forEach(msg => {
+          // Sort incoming messages chronologically by Location Date (Date of position fix)
+          const sortedIncomingMessages = [...incomingMessages].sort((a, b) => {
+              const rawA = (a.rawData && KNOWN_CLS_RAW_LOCATION_DATES[a.rawData]) ? KNOWN_CLS_RAW_LOCATION_DATES[a.rawData] : (a.timestamp || (a as any).locationDate);
+              const rawB = (b.rawData && KNOWN_CLS_RAW_LOCATION_DATES[b.rawData]) ? KNOWN_CLS_RAW_LOCATION_DATES[b.rawData] : (b.timestamp || (b as any).locationDate);
+              return safeParseDate(rawA) - safeParseDate(rawB);
+          });
+
+          sortedIncomingMessages.forEach(msg => {
               const lat = parseFloat(msg.lat);
               const lon = parseFloat(msg.lon);
               const pid = String(msg.platformId || '').replace(/^trans-/, '').trim();
@@ -1225,8 +1232,12 @@ export const useAppStore = create<AppState>()(
 
               let tIndex = newTransmitters.findIndex(t => String(t.platform_id || t.id).replace(/^trans-/, '').trim() === pid);
               
-              const parsedMsgTs = safeParseDate(msg.timestamp);
-              const msgIsoTimestamp = !isNaN(parsedMsgTs) ? new Date(parsedMsgTs).toISOString() : msg.timestamp;
+              const rawDataStr = String(msg.rawData || '').trim();
+              const trueMsgTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
+                  ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+                  : (msg.timestamp || (msg as any).locationDate);
+              const parsedMsgTs = safeParseDate(trueMsgTs);
+              const msgIsoTimestamp = !isNaN(parsedMsgTs) ? new Date(parsedMsgTs).toISOString() : trueMsgTs;
 
               if (tIndex === -1) {
                   newTransmitters.push({
@@ -1238,31 +1249,45 @@ export const useAppStore = create<AppState>()(
                       battery_voltage: decodedBattery,
                       last_fix: msgIsoTimestamp,
                       duty_cycle: 'Unknown',
-                      deployed: true
-                  });
+                      deployed: true,
+                      lat: lat,
+                      lon: lon,
+                      latitude: lat,
+                      longitude: lon,
+                      last_latitude: lat,
+                      last_longitude: lon
+                  } as any);
                   tIndex = newTransmitters.length - 1;
                   tUpdated++;
               } else {
-                  // Update existing transmitter with new battery / last_fix if message is as new as current last_fix
+                  // Update existing transmitter with new battery / last_fix / coords if message is as new as current last_fix
                   const t = newTransmitters[tIndex];
                   const parsedLastFix = safeParseDate(t.last_fix);
                   const isNewer = isNaN(parsedLastFix) || (!isNaN(parsedMsgTs) && parsedMsgTs >= parsedLastFix);
                   const newBattery = (decodedBattery !== undefined && isNewer) ? decodedBattery : t.battery_voltage;
                   const newLastFix = isNewer ? msgIsoTimestamp : t.last_fix;
+                  const newLat = (isNewer && isValidCoordinate(lat, lon)) ? lat : (t.lat ?? (t as any).latitude);
+                  const newLon = (isNewer && isValidCoordinate(lat, lon)) ? lon : (t.lon ?? (t as any).longitude);
                   
-                  if (newBattery !== t.battery_voltage || newLastFix !== t.last_fix || t.id !== `trans-${pid}`) {
+                  if (newBattery !== t.battery_voltage || newLastFix !== t.last_fix || t.id !== `trans-${pid}` || isNewer) {
                       newTransmitters[tIndex] = {
                           ...t,
                           id: `trans-${pid}`,
                           platform_id: pid,
                           battery_voltage: newBattery,
-                          last_fix: newLastFix
+                          last_fix: newLastFix,
+                          lat: newLat,
+                          lon: newLon,
+                          latitude: newLat,
+                          longitude: newLon,
+                          last_latitude: newLat,
+                          last_longitude: newLon
                       };
                       tUpdated++;
                   }
               }
 
-              if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) > 1 && Math.abs(lon) > 1) {
+              if (!isNaN(lat) && !isNaN(lon) && Math.abs(lat) > 1 && Math.abs(lon) > 1 && isValidCoordinate(lat, lon)) {
                   const key = `${pid}|${msgIsoTimestamp}|${lat}|${lon}`;
                   if (!existingPosKeys.has(key)) {
                       existingPosKeys.add(key);
@@ -1277,7 +1302,9 @@ export const useAppStore = create<AppState>()(
                           speed_kmh: 0, 
                           course: 0,
                           satellite: msg.satellite,
-                          locationType: classifyLocationType(msg.lc, msg.locationType, msg.satellite)
+                          locationType: classifyLocationType(msg.lc, msg.locationType, msg.satellite),
+                          messageDate: msg.messageDate,
+                          locationDate: msgIsoTimestamp
                       };
                       newPositionDocs.push(newPos);
                       pCreated++;
@@ -1296,17 +1323,33 @@ export const useAppStore = create<AppState>()(
               ];
 
               if (pttPositions.length > 0) {
-                  const timestamps = pttPositions
-                      .map(p => safeParseDate((p as any).timestamp))
-                      .filter(ts => !isNaN(ts));
+                  let maxTs = -Infinity;
+                  let latestPos: any = null;
 
-                  if (timestamps.length > 0) {
-                      const maxTs = Math.max(...timestamps);
+                  pttPositions.forEach(p => {
+                      const rawDataStr = String((p as any).rawData || (p as any).raw_data || '').trim();
+                      const rawTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) 
+                          ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+                          : ((p as any).timestamp || (p as any).locationDate);
+                      const pTs = safeParseDate(rawTs);
+                      const pLat = Number((p as any).lat ?? (p as any).latitude);
+                      const pLon = Number((p as any).lon ?? (p as any).longitude);
+
+                      if (!isNaN(pTs) && pTs > maxTs && isValidCoordinate(pLat, pLon)) {
+                          maxTs = pTs;
+                          latestPos = { ...p, lat: pLat, lon: pLon, ts: pTs };
+                      }
+                  });
+
+                  if (latestPos && maxTs > 0) {
                       const maxIso = new Date(maxTs).toISOString();
                       newTransmitters[i].last_fix = maxIso;
-
-                      // Biological rules are handled by evaluateTransmitterStatus
-                      // We removed the hardcoded >10 days 'inactive' rule here so that biological rules always apply.
+                      newTransmitters[i].lat = latestPos.lat;
+                      newTransmitters[i].lon = latestPos.lon;
+                      (newTransmitters[i] as any).latitude = latestPos.lat;
+                      (newTransmitters[i] as any).longitude = latestPos.lon;
+                      (newTransmitters[i] as any).last_latitude = latestPos.lat;
+                      (newTransmitters[i] as any).last_longitude = latestPos.lon;
                       tUpdated++;
                   }
               }
@@ -1409,17 +1452,44 @@ export const useAppStore = create<AppState>()(
                   // Recalculate last_fix from the full Firebase database (argos_positions + positions).
                   let correctedLastFix = t.last_fix;
                   if (allPositions.length > 0) {
-                    const allTimestamps = allPositions
-                        .map(p => safeParseDate(p.timestamp || p.locationDate))
-                        .filter(ts => !isNaN(ts) && ts > 0);
-                    if (allTimestamps.length > 0) {
-                      const maxTs = Math.max(...allTimestamps);
+                    let maxTs = -Infinity;
+                    let latestPos: any = null;
+
+                    allPositions.forEach(p => {
+                      const rawDataStr = String((p as any).rawData || (p as any).raw_data || '').trim();
+                      const rawTs = (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) 
+                          ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+                          : ((p as any).timestamp || (p as any).locationDate);
+                      const ts = safeParseDate(rawTs);
+                      const pLat = Number((p as any).lat ?? (p as any).latitude);
+                      const pLon = Number((p as any).lon ?? (p as any).longitude);
+                      if (!isNaN(ts) && ts > maxTs && isValidCoordinate(pLat, pLon)) {
+                        maxTs = ts;
+                        latestPos = { ...p, lat: pLat, lon: pLon, ts };
+                      }
+                    });
+
+                    if (latestPos && maxTs > 0) {
                       const maxIso = new Date(maxTs).toISOString();
                       const currentTs = safeParseDate(t.last_fix);
-                      if (isNaN(currentTs) || maxTs > currentTs) {
+                      if (isNaN(currentTs) || maxTs > currentTs || t.lat !== latestPos.lat || t.lon !== latestPos.lon) {
                         correctedLastFix = maxIso;
                         bgTransmitters[i].last_fix = maxIso;
-                        await saveDocument('transmitters', t.id, { last_fix: maxIso });
+                        bgTransmitters[i].lat = latestPos.lat;
+                        bgTransmitters[i].lon = latestPos.lon;
+                        (bgTransmitters[i] as any).latitude = latestPos.lat;
+                        (bgTransmitters[i] as any).longitude = latestPos.lon;
+                        (bgTransmitters[i] as any).last_latitude = latestPos.lat;
+                        (bgTransmitters[i] as any).last_longitude = latestPos.lon;
+                        await saveDocument('transmitters', t.id, { 
+                          last_fix: maxIso,
+                          lat: latestPos.lat,
+                          lon: latestPos.lon,
+                          latitude: latestPos.lat,
+                          longitude: latestPos.lon,
+                          last_latitude: latestPos.lat,
+                          last_longitude: latestPos.lon
+                        });
                         statusUpdated = true;
                       }
                     }

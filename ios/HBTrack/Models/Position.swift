@@ -15,6 +15,9 @@ struct Position: Identifiable, Codable {
     var course: Double?
     var satellite: String?
     var locationType: String?   // "GPS" or "Doppler"
+    var locationDate: String?
+    var messageDate: String?
+    var rawData: String?
     
     var coordinate: CLLocationCoordinate2D {
         var correctedLon = lon
@@ -53,13 +56,22 @@ struct Position: Identifiable, Codable {
         case course
         case satellite
         case locationType
+        case locationDate
+        case messageDate
+        case rawData
+        case raw_data
+        case gpsLocDate
     }
     
-    init(id: String? = nil, transmitter_id: String?, platformId: String?, timestamp: String, lat: Double, lon: Double, lc: String? = nil, is_kalman: Bool? = nil, speed_kmh: Double? = nil, course: Double? = nil, satellite: String? = nil, locationType: String? = nil, timestampMs: Double? = nil) {
+    init(id: String? = nil, transmitter_id: String?, platformId: String?, timestamp: String, lat: Double, lon: Double, lc: String? = nil, is_kalman: Bool? = nil, speed_kmh: Double? = nil, course: Double? = nil, satellite: String? = nil, locationType: String? = nil, timestampMs: Double? = nil, locationDate: String? = nil, messageDate: String? = nil, rawData: String? = nil) {
         self.id = id
         self.transmitter_id = transmitter_id
         self.platformId = platformId
-        self.timestamp = timestamp
+        self.locationDate = locationDate
+        self.messageDate = messageDate
+        self.rawData = rawData
+        let effectiveTs = locationDate ?? timestamp
+        self.timestamp = effectiveTs
         self.lat = lat
         self.lon = lon
         self.lc = lc
@@ -68,7 +80,7 @@ struct Position: Identifiable, Codable {
         self.course = course
         self.satellite = satellite
         self.locationType = locationType
-        self.timestampMs = timestampMs ?? DateFormatters.fastParseTimestampMs(timestamp)
+        self.timestampMs = timestampMs ?? DateFormatters.fastParseTimestampMs(effectiveTs)
     }
     
     init(from decoder: Decoder) throws {
@@ -98,8 +110,25 @@ struct Position: Identifiable, Codable {
         self.transmitter_id = txId
         self.platformId = pfId
         
-        // Timestamp
-        self.timestamp = (try? container.decodeIfPresent(String.self, forKey: .timestamp)) ?? ISO8601DateFormatter().string(from: Date())
+        // Location and Message Dates & Raw Data
+        let locDate = try? container.decodeIfPresent(String.self, forKey: .locationDate)
+        let gpsDate = try? container.decodeIfPresent(String.self, forKey: .gpsLocDate)
+        let msgDate = try? container.decodeIfPresent(String.self, forKey: .messageDate)
+        let rawD = (try? container.decodeIfPresent(String.self, forKey: .rawData)) ?? (try? container.decodeIfPresent(String.self, forKey: .raw_data))
+        
+        self.locationDate = locDate ?? gpsDate
+        self.messageDate = msgDate
+        self.rawData = rawD
+        
+        // Prioritize actual GPS Location Date over satellite message reception timestamp
+        var effectiveTimestamp = (try? container.decodeIfPresent(String.self, forKey: .timestamp)) ?? ISO8601DateFormatter().string(from: Date())
+        if let ld = self.locationDate, !ld.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            effectiveTimestamp = ld
+        } else if let rawClean = rawD?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), let known = ArgosAPIService.knownRawLocationDates[rawClean] {
+            effectiveTimestamp = known
+            self.locationDate = known
+        }
+        self.timestamp = effectiveTimestamp
         
         // Lat: check lat or latitude (Double or String)
         var latitudeVal: Double = 0
@@ -155,6 +184,9 @@ struct Position: Identifiable, Codable {
         try container.encodeIfPresent(transmitter_id, forKey: .transmitter_id)
         try container.encodeIfPresent(platformId, forKey: .platformId)
         try container.encode(timestamp, forKey: .timestamp)
+        try container.encodeIfPresent(locationDate, forKey: .locationDate)
+        try container.encodeIfPresent(messageDate, forKey: .messageDate)
+        try container.encodeIfPresent(rawData, forKey: .rawData)
         try container.encode(lat, forKey: .lat)
         try container.encode(lon, forKey: .lon)
         try container.encodeIfPresent(lc, forKey: .lc)
