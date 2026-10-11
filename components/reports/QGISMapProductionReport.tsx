@@ -520,6 +520,89 @@ export interface CountrySvgResult {
   viewBox: string;
 }
 
+export interface AutoResolvedLocation {
+  countryAr: string;
+  countryEn: string;
+  regionAr: string;
+  regionEn: string;
+}
+
+export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolvedLocation => {
+  if (!lat || !lon || isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) {
+    return {
+      countryAr: 'كازاخستان',
+      countryEn: 'Kazakhstan',
+      regionAr: 'جيزقازغان',
+      regionEn: 'Zhezqazgan'
+    };
+  }
+
+  let feat: any = null;
+  try {
+    feat = (countryCoder as any).feature([lon, lat]);
+  } catch (e) {
+    console.warn('countryCoder.feature([lon, lat]) failed:', e);
+  }
+
+  const countryNameEn = feat?.properties?.nameEn || 'Kazakhstan';
+  let countryNameAr = 'كازاخستان';
+  const iso2 = feat?.properties?.iso1A2;
+  if (iso2) {
+    try {
+      const ar = (countries as any).getName(iso2, 'ar');
+      if (ar) countryNameAr = ar;
+    } catch (_) {}
+  }
+
+  let regionAr = 'جيزقازغان';
+  let regionEn = 'Zhezqazgan';
+
+  if (iso2 === 'KZ') {
+    const dAlmaty = calculateDistanceKm(lat, lon, 43.8, 76.5);
+    const dZhezkazgan = calculateDistanceKm(lat, lon, 47.7, 67.7);
+    if (dAlmaty < dZhezkazgan) {
+      regionAr = 'ألماتي';
+      regionEn = 'Almaty';
+    } else {
+      regionAr = 'جيزقازغان';
+      regionEn = 'Zhezqazgan';
+    }
+  } else if (iso2 === 'UZ') {
+    if (lon < 65.0) {
+      regionAr = 'بخارى';
+      regionEn = 'Bukhara';
+    } else if (lon < 66.0) {
+      regionAr = 'نواوي';
+      regionEn = 'Navoiy';
+    } else {
+      regionAr = 'سمرقند';
+      regionEn = 'Samarkand';
+    }
+  } else if (iso2 === 'DZ') {
+    regionAr = 'البيض';
+    regionEn = 'El Bayadh';
+  } else if (iso2 === 'AE') {
+    regionAr = 'أبوظبي';
+    regionEn = 'Abu Dhabi';
+  } else if (iso2 === 'QA') {
+    regionAr = 'الدوحة';
+    regionEn = 'Doha';
+  } else if (iso2 === 'MA') {
+    regionAr = 'كلميم';
+    regionEn = 'Guelmim';
+  } else {
+    regionAr = countryNameAr;
+    regionEn = countryNameEn;
+  }
+
+  return {
+    countryAr: countryNameAr,
+    countryEn: countryNameEn,
+    regionAr,
+    regionEn
+  };
+};
+
 export function buildCountrySvgData(
   lon: number,
   lat: number,
@@ -931,6 +1014,11 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
     const { lat, lon } = telemetryData.lastGpsPos;
     return buildCountrySvgData(lon, lat, 150, 82, 6);
   }, [telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon]);
+
+  // Dynamic resolved location (Country & Region) based on latest GPS coords
+  const autoLoc = useMemo(() => {
+    return resolveLocationFromCoords(metrics.lLat, metrics.lLon);
+  }, [metrics.lLat, metrics.lLon]);
 
   // Graticule Top Longitude (Meridian) Line Label (e.g. 067° 00.0000'E or 074° 15.0000'E)
   const graticuleLonLabel = useMemo(() => {
@@ -1669,7 +1757,7 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
               <div className="text-[12.5px] font-bold text-gray-700 flex items-center justify-center gap-2">
                 <span>جهاز التتبع <span className="font-mono text-[#701a2b] font-black">{selectedPttId}</span></span>
                 <span>•</span>
-                <span>منطقة {activeCamp.name.replace('مخيم ', '')} – كازاخستان</span>
+                <span>منطقة {autoLoc.regionAr} – {autoLoc.countryAr}</span>
                 <span>•</span>
                 <span>تاريخ الإصدار {formatDateDDMMYYYY(customMetadata.issueDate) || customMetadata.issueDate}</span>
               </div>

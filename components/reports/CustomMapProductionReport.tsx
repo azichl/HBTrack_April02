@@ -33,7 +33,9 @@ import {
   formatDateYYYYMMDD,
   calculateDurationFromReleaseToToday,
   getProductionTileLayer,
-  buildCountrySvgData
+  buildCountrySvgData,
+  resolveLocationFromCoords,
+  AutoResolvedLocation
 } from './QGISMapProductionReport';
 
 /** Formats coordinate to degree and minute format without dir suffix for coordinates comparison table (e.g. 46° 56.6490′ and 066° 49.4520′) */
@@ -698,7 +700,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     birdStatus: 'حي',
     issueDate: formatDateYYYYMMDD(new Date()) || '2026-10-09',
     reportTitle: 'تقرير متابعة طائر حبارى مزود بجهاز تتبع',
-    regionName: 'كازاخستان',
+    regionName: '',
     agencyNameAr: 'مكتب محميات الدولة الخارجية',
     agencyNameEn: 'External Reserves Office of The State',
     footerRight: 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان',
@@ -1211,7 +1213,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           species: currentBird?.species === 'Asian Houbara' ? 'وحش' : (currentBird?.species || 'وحش'),
           gender: currentBird?.sex === 'M' ? 'ذكر' : currentBird?.sex === 'F' ? 'أنثى' : prev.gender,
           birdStatus: currentTransmitter?.status === 'active' ? 'حي' : (currentTransmitter?.status || 'حي'),
-          issueDate: formatDateYYYYMMDD(new Date()) || prev.issueDate
+          issueDate: formatDateYYYYMMDD(new Date()) || prev.issueDate,
+          regionName: ''
         }));
 
         // Build History Table Rows from latest fixes (reverse chronological)
@@ -1327,6 +1330,74 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const lat = metrics.lLat || 46.9965;
     const lon = metrics.lLon || 67.0222;
     return buildCountrySvgData(lon, lat, 140, 78, 5);
+  }, [metrics.lLat, metrics.lLon]);
+
+  // Automatic Country & Region Detection based on Transmitter's Last GPS Location
+  const [autoLocation, setAutoLocation] = useState<AutoResolvedLocation>(() => {
+    return resolveLocationFromCoords(metrics.lLat || 46.9965, metrics.lLon || 67.0222);
+  });
+
+  useEffect(() => {
+    const lLat = Number(metrics.lLat);
+    const lLon = Number(metrics.lLon);
+    if (!lLat || !lLon || isNaN(lLat) || isNaN(lLon) || (lLat === 0 && lLon === 0)) return;
+
+    // 1. Instant offline resolution (Uzbekistan, Kazakhstan, Algeria, etc.)
+    const initial = resolveLocationFromCoords(lLat, lLon);
+    setAutoLocation(initial);
+
+    // 2. Async OpenStreetMap reverse geocoding to refine region
+    const cacheKey = `${lLat.toFixed(2)},${lLon.toFixed(2)}`;
+    try {
+      const cached = sessionStorage.getItem(`hb_geo_${cacheKey}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.regionAr && parsed?.countryAr) {
+          setAutoLocation(parsed);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    let isMounted = true;
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lLat}&lon=${lLon}&zoom=10&accept-language=ar,en`)
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted || !data || !data.address) return;
+        const addr = data.address;
+        const rawState = addr.state || addr.county || addr.city || addr.district || '';
+        const cleanState = rawState
+          .replace(/^ولاية\s+/, '')
+          .replace(/^محافظة\s+/, '')
+          .replace(/^منطقة\s+/, '')
+          .replace(/^أوبلاست\s+/, '')
+          .replace(/\s+Region$/i, '')
+          .replace(/\s+Province$/i, '')
+          .replace(/\s+Oblast$/i, '')
+          .replace(/\s+District$/i, '')
+          .trim();
+
+        if (cleanState) {
+          const refined: AutoResolvedLocation = {
+            ...initial,
+            regionAr: cleanState,
+            regionEn: cleanState,
+            countryAr: addr.country || initial.countryAr,
+            countryEn: addr.country_code ? initial.countryEn : (addr.country || initial.countryEn)
+          };
+          setAutoLocation(refined);
+          try {
+            sessionStorage.setItem(`hb_geo_${cacheKey}`, JSON.stringify(refined));
+          } catch (_) {}
+        }
+      })
+      .catch(() => {
+        // Silently keep offline initial resolution
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [metrics.lLat, metrics.lLon]);
 
   // Graticule Top Longitude (Meridian) Line Label (e.g. 067° 00.0000'E or 074° 15.0000'E)
@@ -3595,7 +3666,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
           {/* Subtitle */}
           <p className="trk-sub">
-            {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {T.regionLabel} {translateValue(activeCamp.name ? activeCamp.name.replace(/^مخيم\s*/, '').replace(/^Camp\s*/i, '') : 'جيزقازغان')} – {translateValue(customMetadata.regionName || 'كازاخستان')} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
+            {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {isTableEditing ? (
+              <span className="inline-flex items-center gap-1 mx-1">
+                <input
+                  type="text"
+                  value={customMetadata.regionName}
+                  onChange={(e) => setCustomMetadata({ ...customMetadata, regionName: e.target.value })}
+                  className="text-xs font-semibold px-2 py-0.5 border border-amber-300 rounded bg-amber-50/50 text-gray-800"
+                  placeholder={reportLanguage === 'ar' ? `${autoLocation.regionAr} – ${autoLocation.countryAr}` : `${autoLocation.regionEn} – ${autoLocation.countryEn}`}
+                />
+              </span>
+            ) : (
+              <span>
+                {customMetadata.regionName 
+                  ? (customMetadata.regionName.startsWith(T.regionLabel) ? customMetadata.regionName : `${T.regionLabel} ${customMetadata.regionName}`)
+                  : (reportLanguage === 'ar' 
+                      ? `${T.regionLabel} ${autoLocation.regionAr} – ${autoLocation.countryAr}`
+                      : `${autoLocation.regionEn} ${T.regionLabel} – ${autoLocation.countryEn}`
+                    )
+                }
+              </span>
+            )} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
           </p>
 
           {/* 2. MAIN REPORT BODY */}
