@@ -289,6 +289,92 @@ const MapInstanceBinder = ({ onMapInstance }: { onMapInstance: (map: L.Map) => v
   return null;
 };
 
+/**
+ * Dynamic GIS Graphic Scale Bar matching reference model (e.g., 25 km with two-segment black/white bar)
+ */
+const CustomGraphicScaleControl = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+
+    const GraphicControl = L.Control.extend({
+      options: { position: 'bottomright' },
+      onAdd: function() {
+        const div = L.DomUtil.create('div', 'leaflet-graphic-scale-card');
+        div.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+        div.style.padding = '3px 8px 5px 8px';
+        div.style.borderRadius = '6px';
+        div.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.25)';
+        div.style.border = '1px solid rgba(0, 0, 0, 0.12)';
+        div.style.marginRight = '8px';
+        div.style.marginBottom = '8px';
+        div.style.display = 'flex';
+        div.style.flexDirection = 'column';
+        div.style.alignItems = 'center';
+        div.style.gap = '2.5px';
+        div.style.userSelect = 'none';
+        div.style.pointerEvents = 'none';
+        div.style.direction = 'ltr';
+        div.innerHTML = `
+          <div class="scale-text" style="font-size: 11px; font-weight: 700; color: #1e293b; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.1;">25 km</div>
+          <div class="scale-bar" style="width: 80px; height: 5px; display: flex; border: 1px solid #1e293b; box-sizing: border-box; overflow: hidden;">
+            <div style="width: 50%; height: 100%; background-color: #1e293b;"></div>
+            <div style="width: 50%; height: 100%; background-color: #ffffff;"></div>
+          </div>
+        `;
+        return div;
+      }
+    });
+
+    const control = new GraphicControl();
+    control.addTo(map);
+
+    const updateScale = () => {
+      const container = control.getContainer();
+      if (!container) return;
+      const size = map.getSize();
+      if (!size.x || !size.y) return;
+
+      const y = size.y / 2;
+      const maxPixels = 88;
+      const p1 = map.containerPointToLatLng([size.x / 2 - maxPixels / 2, y]);
+      const p2 = map.containerPointToLatLng([size.x / 2 + maxPixels / 2, y]);
+      const maxMeters = map.distance(p1, p2);
+      if (!maxMeters || isNaN(maxMeters)) return;
+
+      const pow10 = Math.pow(10, Math.floor(Math.log10(maxMeters)));
+      const d = maxMeters / pow10;
+      let roundFactor = 1;
+      if (d >= 5) roundFactor = 5;
+      else if (d >= 2.5) roundFactor = 2.5;
+      else if (d >= 2) roundFactor = 2;
+      else roundFactor = 1;
+      const targetMeters = roundFactor * pow10;
+
+      const actualWidthPx = Math.max(50, Math.min(120, Math.round((targetMeters / maxMeters) * maxPixels)));
+      const text = targetMeters >= 1000 
+        ? `${targetMeters / 1000} km` 
+        : `${targetMeters} m`;
+
+      const textEl = container.querySelector('.scale-text') as HTMLElement;
+      const barEl = container.querySelector('.scale-bar') as HTMLElement;
+      if (textEl) textEl.textContent = text;
+      if (barEl) barEl.style.width = `${actualWidthPx}px`;
+    };
+
+    updateScale();
+    map.on('zoomend moveend resize', updateScale);
+
+    return () => {
+      map.off('zoomend moveend resize', updateScale);
+      control.remove();
+    };
+  }, [map]);
+
+  return null;
+};
+
 // ─── DYNAMIC GIS GRATICULE (GRID LINES & PERIMETER TICKS THAT MOVE WITH MAP) ───
 const getGraticuleGridStep = (span: number): number => {
   const candidates = [5.0, 2.0, 1.0, 0.5, 0.25, 1 / 6, 1 / 12, 1 / 30, 1 / 60];
@@ -966,24 +1052,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── CUSTOMIZABLE MAP LEGEND ITEMS (ITEM BY ITEM) ───────────────────────────
   const [legendItems, setLegendItems] = useState<CustomLegendItem[]>([
     {
-      id: 'main_road',
-      label: 'Main Road',
-      color: '#c4a47c',
-      symbol: 'line',
-      visible: true
-    },
-    {
-      id: 'camp_dist',
-      label: 'Distance to Camp',
-      color: '#d97706',
-      symbol: 'dashed-line',
-      visible: true
-    },
-    {
-      id: 'camps',
-      label: 'Camp',
-      color: '#f59e0b',
-      symbol: 'tent',
+      id: 'release_pos',
+      label: 'Release Location',
+      color: '#701a2b',
+      symbol: 'circle',
       visible: true
     },
     {
@@ -994,10 +1066,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       visible: true
     },
     {
-      id: 'release_pos',
-      label: 'Release Location',
-      color: '#701a2b',
-      symbol: 'circle',
+      id: 'camps',
+      label: 'Camp',
+      color: '#f59e0b',
+      symbol: 'tent',
+      visible: true
+    },
+    {
+      id: 'camp_dist',
+      label: 'Distance to Camp',
+      color: '#d97706',
+      symbol: 'dashed-line',
+      visible: true
+    },
+    {
+      id: 'main_road',
+      label: 'Main Road',
+      color: '#c4a47c',
+      symbol: 'line',
       visible: true
     }
   ]);
@@ -1047,17 +1133,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const campLabel = getCampLegendLabel(visibleCampIds);
     const items: CustomLegendItem[] = [
       {
-        id: 'main_road',
-        label: reportLanguage === 'en' ? 'Main Road' : 'طريق رئيسي',
-        color: '#c4a47c',
-        symbol: 'line',
-        visible: true
+        id: 'release_pos',
+        label: reportLanguage === 'en' ? 'Release Location' : 'موقع تركيب الجهاز',
+        color: '#701a2b',
+        symbol: 'circle',
+        visible: showReleaseMarker
       },
       {
-        id: 'camp_dist',
-        label: reportLanguage === 'en' ? 'Distance to Camp' : 'المسافة إلى المخيم',
-        color: '#d97706',
-        symbol: 'dashed-line',
+        id: 'last_pos',
+        label: reportLanguage === 'en' ? 'Latest Location' : 'آخر موقع',
+        color: '#22c55e',
+        symbol: 'circle',
         visible: true
       },
       {
@@ -1068,18 +1154,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         visible: visibleCampIds.length > 0
       },
       {
-        id: 'last_pos',
-        label: reportLanguage === 'en' ? 'Latest Location' : 'آخر موقع',
-        color: '#22c55e',
-        symbol: 'circle',
+        id: 'camp_dist',
+        label: reportLanguage === 'en' ? 'Distance to Camp' : 'المسافة إلى المخيم',
+        color: '#d97706',
+        symbol: 'dashed-line',
         visible: true
       },
       {
-        id: 'release_pos',
-        label: reportLanguage === 'en' ? 'Release Location' : 'موقع تركيب الجهاز',
-        color: '#701a2b',
-        symbol: 'circle',
-        visible: showReleaseMarker
+        id: 'main_road',
+        label: reportLanguage === 'en' ? 'Main Road' : 'طريق رئيسي',
+        color: '#c4a47c',
+        symbol: 'line',
+        visible: true
       }
     ];
     if (showCampDistance && visibleCampIds.length >= 2) {
@@ -4120,6 +4206,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span>تفاعلية</span>
                       </button>
                     </div>
+                    {/* Dynamic GIS Graphic Scale Bar on snapshot view */}
+                    <div 
+                      className="absolute bottom-2 right-2 pointer-events-none select-none z-[400]"
+                      style={{
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        padding: '3px 8px 5px 8px',
+                        borderRadius: '6px',
+                        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid rgba(0, 0, 0, 0.12)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '2.5px',
+                        direction: 'ltr'
+                      }}
+                    >
+                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e293b', fontFamily: "'Segoe UI', Arial, sans-serif", lineHeight: 1.1 }}>
+                        25 km
+                      </div>
+                      <div style={{ width: '80px', height: '5px', display: 'flex', border: '1px solid #1e293b', boxSizing: 'border-box', overflow: 'hidden' }}>
+                        <div style={{ width: '50%', height: '100%', backgroundColor: '#1e293b' }} />
+                        <div style={{ width: '50%', height: '100%', backgroundColor: '#ffffff' }} />
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS */
@@ -4181,8 +4291,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         fitKey={fitKey}
                       />
 
-                      {/* GIS Scale Bar */}
-                      <ScaleControl position="bottomright" metric={true} imperial={false} />
+                      {/* Dynamic GIS Graphic Scale Bar (Matching Model 25km Two-Segment Bar) */}
+                      <CustomGraphicScaleControl />
 
                       {/* Real History Flight Trajectory */}
                       {showFlightTrack && allHistoryPoints.length > 1 && (
@@ -4975,9 +5085,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       }
 
                       return (
-                        <div key={item.id} className="inline-flex items-center gap-2 whitespace-nowrap shrink-0">
-                          <span>{lbl}</span>
+                        <div key={item.id} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
                           {renderLegendSymbol(item.symbol, item.color)}
+                          <span>{lbl}</span>
                         </div>
                       );
                     })}
