@@ -1686,34 +1686,158 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           }
         });
 
-        // 2. Format Scale Control on white card background with crisp border (matching reference design)
-        const clonedScaleControls = clonedDoc.querySelectorAll('.leaflet-control-scale');
-        clonedScaleControls.forEach(sc => {
-          const el = sc as HTMLElement;
+        // 2. Format Graphic Scale Control card on white background (matching reference design)
+        const clonedScaleCards = clonedDoc.querySelectorAll('.leaflet-graphic-scale-card');
+        clonedScaleCards.forEach(card => {
+          const el = card as HTMLElement;
           el.style.setProperty('background', '#ffffff', 'important');
           el.style.setProperty('background-color', '#ffffff', 'important');
-          el.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.35)', 'important');
-          el.style.setProperty('border-radius', '4px', 'important');
-          el.style.setProperty('padding', '2px 6px 3px 6px', 'important');
-          el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.25)', 'important');
-          el.style.setProperty('display', 'inline-block', 'important');
+          el.style.setProperty('border', '1px solid rgba(0, 0, 0, 0.2)', 'important');
+          el.style.setProperty('border-radius', '6px', 'important');
+          el.style.setProperty('padding', '5px 14px 6px 14px', 'important');
+          el.style.setProperty('box-shadow', '0 1px 4px rgba(0, 0, 0, 0.18)', 'important');
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('flex-direction', 'column', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('min-width', '115px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+          const txt = el.querySelector('.scale-text') as HTMLElement;
+          if (txt) {
+            txt.style.setProperty('font-size', '11px', 'important');
+            txt.style.setProperty('font-weight', '600', 'important');
+            txt.style.setProperty('color', '#111827', 'important');
+            txt.style.setProperty('margin-bottom', '3px', 'important');
+            txt.style.setProperty('line-height', '1.2', 'important');
+            txt.style.setProperty('text-align', 'center', 'important');
+          }
+          const bar = el.querySelector('.scale-bar') as HTMLElement;
+          if (bar) {
+            bar.style.setProperty('margin', '0 auto', 'important');
+            bar.style.setProperty('height', '4.5px', 'important');
+          }
         });
-        const clonedScaleLines = clonedDoc.querySelectorAll('.leaflet-control-scale-line');
-        clonedScaleLines.forEach(sl => {
-          const el = sl as HTMLElement;
-          el.style.setProperty('background', '#ffffff', 'important');
-          el.style.setProperty('background-color', '#ffffff', 'important');
-          el.style.setProperty('border', '2px solid #000000', 'important');
-          el.style.setProperty('border-top', 'none', 'important');
-          el.style.setProperty('color', '#000000', 'important');
-          el.style.setProperty('font-weight', '800', 'important');
-          el.style.setProperty('font-family', "'IBM Plex Sans Arabic', monospace, Arial, sans-serif", 'important');
-          el.style.setProperty('font-size', '10px', 'important');
-          el.style.setProperty('line-height', '1.1', 'important');
-          el.style.setProperty('padding', '1px 5px', 'important');
-          el.style.setProperty('border-radius', '2px', 'important');
-          el.style.setProperty('text-shadow', 'none', 'important');
-          el.style.setProperty('display', 'block', 'important');
+
+        // 3. FORCE PERFECT VERTICAL CENTERING ACROSS ALL TABLES, CELLS, AND BADGES (HTML2CANVAS FIX)
+        const clonedCardHeads = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-card__head');
+        clonedCardHeads.forEach(ch => {
+          const el = ch as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('min-height', '38px', 'important');
+          el.style.setProperty('padding', '0 14px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+        });
+
+        const clonedRows = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-row');
+        clonedRows.forEach(row => {
+          const el = row as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('flex-direction', 'row', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('min-height', '36px', 'important');
+          el.style.setProperty('height', '36px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+        });
+
+        const clonedKs = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-row .k');
+        clonedKs.forEach(k => {
+          const el = k as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('height', '100%', 'important');
+          el.style.setProperty('padding', '0 14px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+          el.style.setProperty('line-height', '1.2', 'important');
+        });
+
+        const clonedVs = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-row .v');
+        clonedVs.forEach(v => {
+          const el = v as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('justify-content', 'center', 'important');
+          el.style.setProperty('height', '100%', 'important');
+          el.style.setProperty('padding', '0 14px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+          el.style.setProperty('line-height', '1.2', 'important');
+        });
+
+        const clonedTwoHead = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-twohead');
+        clonedTwoHead.forEach(th => {
+          const el = th as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('flex-direction', 'row', 'important');
+          el.style.setProperty('align-items', 'stretch', 'important');
+          el.style.setProperty('height', '40px', 'important');
+          el.style.setProperty('min-height', '40px', 'important');
+        });
+
+        const clonedTwoHeadItems = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-twohead__install, #custom-map-production-print-area .trk-twohead__last');
+        clonedTwoHeadItems.forEach(item => {
+          const el = item as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('justify-content', 'center', 'important');
+          el.style.setProperty('height', '100%', 'important');
+          el.style.setProperty('padding', '0 12px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+          el.style.setProperty('line-height', '1.2', 'important');
+        });
+
+        const clonedTableSpans = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-table > span');
+        clonedTableSpans.forEach(sp => {
+          const el = sp as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('height', '36px', 'important');
+          el.style.setProperty('min-height', '36px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+          el.style.setProperty('line-height', '1.2', 'important');
+          if (el.classList.contains('lbl')) {
+            el.style.setProperty('justify-content', 'flex-start', 'important');
+            el.style.setProperty('padding', '0 14px', 'important');
+          } else {
+            el.style.setProperty('justify-content', 'center', 'important');
+            el.style.setProperty('padding', '0 10px', 'important');
+          }
+        });
+
+        const clonedStats = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-stat');
+        clonedStats.forEach(st => {
+          const el = st as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('flex-direction', 'column', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('justify-content', 'center', 'important');
+          el.style.setProperty('min-height', '58px', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+        });
+
+        const clonedPills = clonedDoc.querySelectorAll('#custom-map-production-print-area .pill');
+        clonedPills.forEach(p => {
+          const el = p as HTMLElement;
+          el.style.setProperty('display', 'inline-flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          el.style.setProperty('justify-content', 'center', 'important');
+          el.style.setProperty('vertical-align', 'middle', 'important');
+          el.style.setProperty('height', '22px', 'important');
+          el.style.setProperty('line-height', '1', 'important');
+          el.style.setProperty('box-sizing', 'border-box', 'important');
+        });
+
+        const clonedLegendBars = clonedDoc.querySelectorAll('#custom-map-legend-bar, #custom-map-production-print-area .trk-legend');
+        clonedLegendBars.forEach(bar => {
+          const el = bar as HTMLElement;
+          el.style.setProperty('display', 'flex', 'important');
+          el.style.setProperty('align-items', 'center', 'important');
+          const items = el.querySelectorAll('div, span');
+          items.forEach(it => {
+            const elIt = it as HTMLElement;
+            elIt.style.setProperty('display', 'inline-flex', 'important');
+            elIt.style.setProperty('align-items', 'center', 'important');
+            elIt.style.setProperty('vertical-align', 'middle', 'important');
+            elIt.style.setProperty('line-height', '1', 'important');
+          });
         });
 
         // Set IBM Plex Sans Arabic font on the cloned print container
@@ -1882,40 +2006,209 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-side { display: flex; flex-direction: column; gap: 12px; }
 
         .trk-card { border: 1px solid #d9dbe1; border-radius: 8px; overflow: hidden; background: #fff; }
-        .trk-card__head { background: #7a1c32; color: #fff; font-weight: 700; font-size: 14.5px; padding: 10px 14px; text-align: right; }
-        .trk-row { display: grid; grid-template-columns: 1fr 1fr; align-items: center; border-top: 1px solid #eceef2; }
+        .trk-card__head { 
+          background: #7a1c32; 
+          color: #fff; 
+          font-weight: 700; 
+          font-size: 14.5px; 
+          padding: 0 14px; 
+          height: 38px; 
+          min-height: 38px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: space-between; 
+          box-sizing: border-box; 
+        }
+        .trk-row { 
+          display: flex; 
+          flex-direction: row; 
+          align-items: center; 
+          border-top: 1px solid #eceef2; 
+          min-height: 36px; 
+          height: 36px; 
+          box-sizing: border-box; 
+        }
         .trk-row:first-of-type { border-top: 0; }
-        .trk-row .k { background: #f6f7f9; padding: 7px 14px; font-weight: 600; font-size: 13px; text-align: right; color: #374151; }
-        .trk-row .v { padding: 7px 14px; font-size: 13px; text-align: center; }
+        .trk-row .k { 
+          flex: 1 1 50%; 
+          width: 50%; 
+          background: #f6f7f9; 
+          padding: 0 14px; 
+          font-weight: 600; 
+          font-size: 13px; 
+          text-align: right; 
+          color: #374151; 
+          height: 100%; 
+          display: flex; 
+          align-items: center; 
+          box-sizing: border-box; 
+          line-height: 1.2; 
+        }
+        .trk-row .v { 
+          flex: 1 1 50%; 
+          width: 50%; 
+          padding: 0 14px; 
+          font-size: 13px; 
+          text-align: center; 
+          height: 100%; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          box-sizing: border-box; 
+          line-height: 1.2; 
+        }
         .trk-row .v .maroon, .maroon { color: #7a1c32; font-weight: 700; }
 
-        .pill { display: inline-block; padding: 1.5px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+        .pill { 
+          display: inline-flex; 
+          align-items: center; 
+          justify-content: center; 
+          padding: 2px 12px; 
+          border-radius: 999px; 
+          font-size: 11px; 
+          font-weight: 600; 
+          line-height: 1; 
+          height: 22px; 
+          vertical-align: middle; 
+          box-sizing: border-box; 
+        }
         .pill--grey { background: #e8eaee; color: #6b7280; }
         .pill--ok { background: #e3f4ea; color: #15803d; }
         .pill--warn { background: #fdf0d5; color: #a16207; }
         .pill--bad { background: #fde4e4; color: #b91c1c; }
 
         .trk-card--table { border-color: #d9dbe1; }
-        .trk-twohead { display: grid; grid-template-columns: 1fr 1fr 1fr; color: #fff; font-weight: 700; font-size: 14px; }
-        .trk-twohead::before { content: ''; background: #fff; }
-        .trk-twohead__install { background: #7a1c32; padding: 12px; text-align: center; }
-        .trk-twohead__last { background: #128a5b; padding: 12px; text-align: center; }
-        .trk-table { display: grid; grid-template-columns: 1fr 1fr 1fr; }
-        .trk-table > span { padding: 9px 12px; text-align: center; font-size: 14px; border-top: 1px solid #eceef2; font-variant-numeric: tabular-nums; }
-        .trk-table .lbl { background: #f6f7f9; font-weight: 600; text-align: right; order: 0; color: #374151; }
+        .trk-twohead { 
+          display: flex; 
+          flex-direction: row; 
+          align-items: stretch; 
+          color: #fff; 
+          font-weight: 700; 
+          font-size: 14px; 
+          height: 40px; 
+          min-height: 40px; 
+          box-sizing: border-box; 
+        }
+        .trk-twohead::before { 
+          content: ''; 
+          background: #fff; 
+          flex: 1 1 33.333%; 
+          width: 33.333%; 
+        }
+        .trk-twohead__install { 
+          background: #7a1c32; 
+          padding: 0 12px; 
+          text-align: center; 
+          flex: 1 1 33.333%; 
+          width: 33.333%; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          height: 100%; 
+          box-sizing: border-box; 
+          line-height: 1.2; 
+        }
+        .trk-twohead__last { 
+          background: #128a5b; 
+          padding: 0 12px; 
+          text-align: center; 
+          flex: 1 1 33.333%; 
+          width: 33.333%; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          height: 100%; 
+          box-sizing: border-box; 
+          line-height: 1.2; 
+        }
+        .trk-table { 
+          display: grid; 
+          grid-template-columns: 1fr 1fr 1fr; 
+        }
+        .trk-table > span { 
+          padding: 0 12px; 
+          text-align: center; 
+          font-size: 14px; 
+          border-top: 1px solid #eceef2; 
+          font-variant-numeric: tabular-nums; 
+          height: 36px; 
+          min-height: 36px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          box-sizing: border-box; 
+          line-height: 1.2; 
+        }
+        .trk-table .lbl { 
+          background: #f6f7f9; 
+          font-weight: 600; 
+          text-align: right; 
+          order: 0; 
+          color: #374151; 
+          justify-content: flex-start; 
+          padding: 0 14px; 
+        }
 
-        .trk-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .trk-stat { border: 1px solid #d9dbe1; border-radius: 8px; padding: 8px 4px; text-align: center; background: #fff; }
-        .trk-stat .val { font-size: 14.5px; font-weight: 700; margin-bottom: 2px; }
+        .trk-stats { 
+          display: grid; 
+          grid-template-columns: repeat(4, 1fr); 
+          gap: 8px; 
+        }
+        .trk-stat { 
+          border: 1px solid #d9dbe1; 
+          border-radius: 8px; 
+          padding: 6px 4px; 
+          text-align: center; 
+          background: #fff; 
+          display: flex; 
+          flex-direction: column; 
+          align-items: center; 
+          justify-content: center; 
+          min-height: 58px; 
+          box-sizing: border-box; 
+        }
+        .trk-stat .val { 
+          font-size: 14.5px; 
+          font-weight: 700; 
+          margin-bottom: 2px; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          line-height: 1.2; 
+        }
         .trk-stat .val.red { color: #d9263a; }
         .trk-stat .val.brown { color: #7a4a12; }
-        .trk-stat .lab { font-size: 10px; color: #6b7280; line-height: 1.3; }
+        .trk-stat .lab { 
+          font-size: 10px; 
+          color: #6b7280; 
+          line-height: 1.2; 
+          text-align: center; 
+        }
 
         .trk-legend {
-          display: flex; flex-wrap: nowrap; gap: 8px; justify-content: space-between; align-items: center;
-          border: 1px solid #d9dbe1; border-radius: 8px; padding: 5px 12px; margin-top: 6px; font-size: 11px; background: #fff; white-space: nowrap; width: 100%; box-sizing: border-box;
+          display: flex; 
+          flex-wrap: nowrap; 
+          gap: 8px; 
+          justify-content: space-between; 
+          align-items: center;
+          border: 1px solid #d9dbe1; 
+          border-radius: 8px; 
+          padding: 5px 12px; 
+          margin-top: 6px; 
+          font-size: 11px; 
+          background: #fff; 
+          white-space: nowrap; 
+          width: 100%; 
+          box-sizing: border-box; 
+          min-height: 32px;
         }
-        .trk-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .trk-legend span, .trk-legend div { 
+          display: inline-flex; 
+          align-items: center; 
+          gap: 6px; 
+          line-height: 1; 
+          vertical-align: middle; 
+        }
         .trk-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
         .trk-legend .dot.maroon { background: #7a1c32; }
         .trk-legend .dot.green { background: #128a5b; }
