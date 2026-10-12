@@ -1887,8 +1887,7 @@ const LiveTrackingInner = () => {
       if (selectedTransmitterIds && selectedTransmitterIds.length > 0) {
         targetTransmitterId = String(selectedTransmitterIds[0]);
       } else {
-        const activeTransmitter = transmitters.find(t => t.status === 'active' || (t as any).derived_status === 'active');
-        targetTransmitterId = activeTransmitter?.platform_id || (transmitters[0]?.platform_id) || '244276';
+        targetTransmitterId = '244289';
       }
 
       const loadedHistory = rawHistoryCache.current || [];

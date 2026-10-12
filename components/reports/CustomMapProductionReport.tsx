@@ -541,15 +541,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     sharedMapZoom
   } = useAppStore();
 
-  // Selected Transmitter
+  // Selected Transmitter (defaults to 244289 as requested)
   const initialPtt = useMemo(() => {
     if (exportedMapView?.transmitterId) return exportedMapView.transmitterId;
-    if (transmitters.length > 0) {
-      const activeT = transmitters.find(t => t.status === 'active');
-      return activeT?.platform_id || transmitters[0]?.platform_id || '244289';
-    }
     return '244289';
-  }, [exportedMapView, transmitters]);
+  }, [exportedMapView]);
 
   const initialNearestCamp = useMemo(() => {
     let nearest = FIXED_FIELD_CAMPS[0];
