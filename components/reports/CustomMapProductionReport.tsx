@@ -28,6 +28,9 @@ import {
   calculateDistanceKm,
   calculateBearingDegrees,
   formatArabicBearing,
+  formatEnglishBearing,
+  formatBearingByLanguage,
+  translateDirection,
   formatDMM,
   formatDateDDMMYYYY,
   formatDateYYYYMMDD,
@@ -758,7 +761,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const dict: any = { 
       'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
       'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp', 'البعد عن المخيم': 'Distance to Camp',
-      'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty'
+      'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty',
+      'شمال': 'North', 'شمال شرق': 'Northeast', 'شرق': 'East', 'جنوب شرق': 'Southeast',
+      'جنوب': 'South', 'جنوب غرب': 'Southwest', 'غرب': 'West', 'شمال غرب': 'Northwest'
     };
     let res = val.trim();
     if (dict[res]) return dict[res];
@@ -782,9 +787,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   };
 
   const getBearingLabel = (deg: number) => {
-    if (reportLanguage === 'ar') return formatArabicBearing(deg);
-    const dirs = ['North', 'Northeast', 'East', 'Southeast', 'South', 'Southwest', 'West', 'Northwest'];
-    return dirs[Math.round(deg / 45) % 8];
+    return formatBearingByLanguage(deg, reportLanguage).text;
   };
 
 
@@ -1214,7 +1217,12 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           gender: currentBird?.sex === 'M' ? 'ذكر' : currentBird?.sex === 'F' ? 'أنثى' : prev.gender,
           birdStatus: currentTransmitter?.status === 'active' ? 'حي' : (currentTransmitter?.status || 'حي'),
           issueDate: formatDateYYYYMMDD(new Date()) || prev.issueDate,
-          regionName: ''
+          regionName: '',
+          statDirection: '',
+          statDirectionDeg: '',
+          statDistFromRelease: '',
+          statDistToCamp: '',
+          statDuration: ''
         }));
 
         // Build History Table Rows from latest fixes (reverse chronological)
@@ -1290,11 +1298,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const distFromRelease = calculateDistanceKm(rLat, rLon, lLat, lLon);
     const bearing = calculateBearingDegrees(rLat, rLon, lLat, lLon);
     const bearingArabic = formatArabicBearing(bearing);
-    const bearingEng = {
-      text: getBearingLabel(bearing),
-      degrees: Math.round(bearing)
-    };
-    const activeBearing = reportLanguage === 'ar' ? bearingArabic : bearingEng;
+    const bearingEnglish = formatEnglishBearing(bearing);
+    const activeBearing = reportLanguage === 'ar' ? bearingArabic : bearingEnglish;
     const distToCamp = calculateDistanceKm(lLat, lLon, cLat, cLon);
     const durationDays = calculateDurationFromReleaseToToday(telemetryData.releasePos.dateStr);
 
@@ -1308,6 +1313,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       bearingDegrees: bearing,
       distFromReleaseKm: distFromRelease.toFixed(2),
       bearingArabic: activeBearing,
+      bearingEnglish,
       distToCampKm: distToCamp.toFixed(2),
       durationDays: durationDays > 0 ? durationDays : 0,
       releaseLatDMM: formatDMM(rLat, true),
@@ -1323,7 +1329,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         (rLon + lLon) / 2
       ] as [number, number]
     };
-  }, [telemetryData, activeCamp]);
+  }, [telemetryData, activeCamp, reportLanguage]);
 
   // Dynamic Kazakhstan country silhouette & bird location for the top-left locator map
   const insetMapData = useMemo(() => {
@@ -2652,7 +2658,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </div>
                   </label>
                   <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    الاتجاه: {metrics.bearingArabic?.text || ''} ({metrics.bearingDegrees ? metrics.bearingDegrees.toFixed(0) : 0}°)
+                    {reportLanguage === 'ar' ? 'الاتجاه' : 'Direction'}: {metrics.bearingArabic?.text || ''} ({metrics.bearingDegrees ? metrics.bearingDegrees.toFixed(0) : 0}°)
                   </div>
                 </div>
 
@@ -4094,7 +4100,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         placeholder={metrics.bearingArabic.text}
                       />
                     ) : (
-                      <>{customMetadata.statDirection || metrics.bearingArabic.text}</>
+                      <>{customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text}</>
                     )}
                   </div>
                   <div className="lab">

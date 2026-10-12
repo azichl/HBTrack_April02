@@ -61,7 +61,7 @@ export const calculateBearingDegrees = (lat1: number, lon1: number, lat2: number
 
 /** Formats bearing into Arabic compass direction and degrees, e.g. "شرق" & "69°" */
 export const formatArabicBearing = (bearing: number): { text: string; degrees: number; full: string } => {
-  const deg = Math.round(bearing);
+  const deg = ((Math.round(bearing) % 360) + 360) % 360;
   let dir = 'شمال';
   if (deg >= 337.5 || deg < 22.5) dir = 'شمال';
   else if (deg >= 22.5 && deg < 67.5) dir = 'شمال شرق';
@@ -77,6 +77,76 @@ export const formatArabicBearing = (bearing: number): { text: string; degrees: n
     degrees: deg,
     full: `${dir} (${deg}°)`
   };
+};
+
+/** Formats bearing into English compass direction and degrees, e.g. "East" & "69°" */
+export const formatEnglishBearing = (bearing: number): { text: string; degrees: number; full: string } => {
+  const deg = ((Math.round(bearing) % 360) + 360) % 360;
+  let dir = 'North';
+  if (deg >= 337.5 || deg < 22.5) dir = 'North';
+  else if (deg >= 22.5 && deg < 67.5) dir = 'Northeast';
+  else if (deg >= 67.5 && deg < 112.5) dir = 'East';
+  else if (deg >= 112.5 && deg < 157.5) dir = 'Southeast';
+  else if (deg >= 157.5 && deg < 202.5) dir = 'South';
+  else if (deg >= 202.5 && deg < 247.5) dir = 'Southwest';
+  else if (deg >= 247.5 && deg < 292.5) dir = 'West';
+  else dir = 'Northwest';
+
+  return {
+    text: dir,
+    degrees: deg,
+    full: `${dir} (${deg}°)`
+  };
+};
+
+/** Bilingual bearing formatter */
+export const formatBearingByLanguage = (bearing: number, lang: 'ar' | 'en'): { text: string; degrees: number; full: string } => {
+  return lang === 'ar' ? formatArabicBearing(bearing) : formatEnglishBearing(bearing);
+};
+
+/** Bidirectional translation between Arabic and English compass directions */
+export const translateDirection = (dirStr: string, targetLang: 'ar' | 'en'): string => {
+  if (!dirStr) return '';
+  const trimmed = dirStr.trim();
+  const arToEn: Record<string, string> = {
+    'شمال': 'North',
+    'شمال شرق': 'Northeast',
+    'شمالي شرقي': 'Northeast',
+    'شرق': 'East',
+    'جنوب شرق': 'Southeast',
+    'جنوبي شرقي': 'Southeast',
+    'جنوب': 'South',
+    'جنوب غرب': 'Southwest',
+    'جنوبي غربي': 'Southwest',
+    'غرب': 'West',
+    'شمال غرب': 'Northwest',
+    'شمالي غربي': 'Northwest'
+  };
+  const enToAr: Record<string, string> = {
+    'north': 'شمال',
+    'n': 'شمال',
+    'northeast': 'شمال شرق',
+    'ne': 'شمال شرق',
+    'east': 'شرق',
+    'e': 'شرق',
+    'southeast': 'جنوب شرق',
+    'se': 'جنوب شرق',
+    'south': 'جنوب',
+    's': 'جنوب',
+    'southwest': 'جنوب غرب',
+    'sw': 'جنوب غرب',
+    'west': 'غرب',
+    'w': 'غرب',
+    'northwest': 'شمال غرب',
+    'nw': 'شمال غرب'
+  };
+
+  if (targetLang === 'en') {
+    return arToEn[trimmed] || trimmed;
+  } else {
+    const lower = trimmed.toLowerCase();
+    return enToAr[lower] || trimmed;
+  }
 };
 
 /** Formats decimal coordinate to Hddmm format with 4 decimals for minutes: "XXX° XX.XXXX′ N" / "XXX° XX.XXXX′ E" */
