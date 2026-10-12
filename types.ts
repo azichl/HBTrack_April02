@@ -20,14 +20,17 @@ export interface User {
 
 export interface Bird {
   id: string;
-  ring_id: string;
-  // Name field removed
+  ring_id?: string;
   species: string; // e.g., "Houbara Bustard"
   sex: 'M' | 'F';
-  hatch_date: string;
+  origin?: 'Wild' | 'Breeding' | string;
+  darvic_number?: string;
+  hatch_date?: string;
+  release_date?: string; // Obligatory on registration
   release_location: string; // Maps to "Release Site"
   release_lat: string;
   release_lon: string;
+  assigned_transmitter_id?: string;
 }
 
 export interface Transmitter {

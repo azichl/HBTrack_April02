@@ -409,10 +409,13 @@ export const deduplicateBirds = (birds: Bird[]): {
 } => {
   const byRid = new Map<string, Bird[]>();
   birds.forEach(b => {
-    const rid = String(b.ring_id || b.id || '').replace(/^bird-/, '').trim();
-    if (!rid) return;
-    if (!byRid.has(rid)) byRid.set(rid, []);
-    byRid.get(rid)!.push(b);
+    const rawRid = String(b.ring_id || '').trim();
+    const isNA = !rawRid || rawRid.toUpperCase() === 'NA' || rawRid.toUpperCase() === 'N/A';
+    // If ring is NA or empty, treat each bird document independently by id so they don't merge
+    const key = isNA ? (b.id || `na-${Math.random()}`) : rawRid.replace(/^bird-/, '').trim();
+    if (!key) return;
+    if (!byRid.has(key)) byRid.set(key, []);
+    byRid.get(key)!.push(b);
   });
 
   const deduplicated: Bird[] = [];
@@ -427,17 +430,25 @@ export const deduplicateBirds = (birds: Bird[]): {
 
     const base = group[0];
     const canonicalId = base.id;
+    let ringId = base.ring_id || 'NA';
     let species = base.species || 'Houbara Bustard';
     let sex = base.sex || 'M';
+    let origin = base.origin || 'Breeding';
+    let darvicNumber = base.darvic_number || '';
     let hatchDate = base.hatch_date || '';
+    let releaseDate = base.release_date || '';
     let releaseLocation = base.release_location || '';
     let releaseLat = base.release_lat || '';
     let releaseLon = base.release_lon || '';
 
     for (const b of group) {
+      if (b.ring_id && b.ring_id !== 'NA') ringId = b.ring_id;
       if (b.species) species = b.species;
       if (b.sex) sex = b.sex;
+      if (b.origin) origin = b.origin;
+      if (b.darvic_number) darvicNumber = b.darvic_number;
       if (b.hatch_date) hatchDate = b.hatch_date;
+      if (b.release_date) releaseDate = b.release_date;
       if (b.release_location) releaseLocation = b.release_location;
       if (b.release_lat) releaseLat = b.release_lat;
       if (b.release_lon) releaseLon = b.release_lon;
@@ -446,10 +457,13 @@ export const deduplicateBirds = (birds: Bird[]): {
     const mergedRecord: Bird = {
       ...base,
       id: canonicalId,
-      ring_id: rid,
+      ring_id: ringId,
       species,
       sex,
+      origin,
+      darvic_number: darvicNumber,
       hatch_date: hatchDate,
+      release_date: releaseDate,
       release_location: releaseLocation,
       release_lat: releaseLat,
       release_lon: releaseLon
@@ -874,8 +888,13 @@ export const useAppStore = create<AppState>()(
 
       // ─── Bird CRUD ──────────────────────────────────────────────────────────
       addBird: (bird) => {
-        const rid = String(bird.ring_id || bird.id || '').replace(/^bird-/, '').trim();
-        const docId = `bird-${rid}`;
+        const rawRid = String(bird.ring_id || '').trim();
+        const isNA = !rawRid || rawRid.toUpperCase() === 'NA' || rawRid.toUpperCase() === 'N/A';
+        const rid = isNA ? 'NA' : rawRid.replace(/^bird-/, '').trim();
+        const docId = bird.id && bird.id !== 'bird-NA' 
+          ? bird.id 
+          : (isNA ? `bird-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` : `bird-${rid}`);
+        
         const normalizedBird: Bird = {
           ...bird,
           id: docId,
@@ -884,7 +903,9 @@ export const useAppStore = create<AppState>()(
 
         logDbAction(get, 'DATA_CREATE', `Added Bird ${rid}`);
         set((state) => {
-          const existingIndex = state.birds.findIndex(b => String(b.ring_id).trim() === rid);
+          const existingIndex = isNA 
+            ? state.birds.findIndex(b => b.id === docId)
+            : state.birds.findIndex(b => String(b.ring_id).trim() === rid || b.id === docId);
           let updatedList: Bird[];
           if (existingIndex >= 0) {
             updatedList = [...state.birds];
@@ -937,22 +958,39 @@ export const useAppStore = create<AppState>()(
       },
       importBirds: (newBirds) => {
          set((state) => {
-            const birdMap = new Map<string, Bird>(state.birds.map(b => [String(b.ring_id).trim(), b] as [string, Bird]));
+            const birdMap = new Map<string, Bird>();
+            const naBirds: Bird[] = [];
+
+            state.birds.forEach(b => {
+              const r = String(b.ring_id || '').trim();
+              if (r && r.toUpperCase() !== 'NA' && r.toUpperCase() !== 'N/A') {
+                birdMap.set(r, b);
+              } else {
+                naBirds.push(b);
+              }
+            });
             
             newBirds.forEach(bird => {
-                const rid = String(bird.ring_id || bird.id || '').replace(/^bird-/, '').trim();
-                if (!rid) return;
-                const canonicalId = `bird-${rid}`;
-                const existing = birdMap.get(rid);
-                if (existing) {
-                    birdMap.set(rid, { ...existing, ...bird, id: canonicalId, ring_id: rid });
+                const rawRid = String(bird.ring_id || '').trim();
+                const isNA = !rawRid || rawRid.toUpperCase() === 'NA' || rawRid.toUpperCase() === 'N/A';
+                if (isNA) {
+                  const docId = bird.id || `bird-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+                  const normalized: Bird = { ...bird, id: docId, ring_id: 'NA' };
+                  naBirds.push(normalized);
+                  fireAndForget(() => saveDocument('birds', docId, normalized));
                 } else {
-                    birdMap.set(rid, { ...bird, id: canonicalId, ring_id: rid });
+                  const rid = rawRid.replace(/^bird-/, '').trim();
+                  const canonicalId = `bird-${rid}`;
+                  const existing = birdMap.get(rid);
+                  const normalized: Bird = existing 
+                    ? { ...existing, ...bird, id: canonicalId, ring_id: rid } 
+                    : { ...bird, id: canonicalId, ring_id: rid };
+                  birdMap.set(rid, normalized);
+                  fireAndForget(() => saveDocument('birds', canonicalId, normalized));
                 }
             });
             
-            const allBirds = Array.from(birdMap.values());
-            fireAndForget(() => syncBirds(allBirds));
+            const allBirds = [...Array.from(birdMap.values()), ...naBirds];
             return { birds: allBirds, lastSaved: new Date().toISOString() };
          });
       },

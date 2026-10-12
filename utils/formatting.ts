@@ -205,9 +205,12 @@ export const findBirdForTransmitter = (birds: any[], birdIdOrTransmitter?: any):
     if (!b) return false;
     return targets.some(target => {
       const strippedTarget = target.replace(/^bird-/, '');
-      if (b.id === target || b.ring_id === target) return true;
-      if (b.ring_id && b.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
-      if (b.id && b.id.replace(/^bird-/, '') === strippedTarget) return true;
+      if (b.id === target || (b.id && b.id.replace(/^bird-/, '') === strippedTarget)) return true;
+      const targetIsNA = target.toUpperCase() === 'NA' || target.toUpperCase() === 'N/A';
+      const birdRingIsNA = !b.ring_id || b.ring_id.toUpperCase() === 'NA' || b.ring_id.toUpperCase() === 'N/A';
+      if (!targetIsNA && !birdRingIsNA) {
+        if (b.ring_id === target || b.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
+      }
       return false;
     });
   });
@@ -226,9 +229,12 @@ export const isBirdLinkedToTransmitter = (bird: any, transmitter: any): boolean 
 
   return targets.some(target => {
     const strippedTarget = target.replace(/^bird-/, '');
-    if (target === bird.id || target === bird.ring_id) return true;
-    if (bird.ring_id && bird.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
-    if (bird.id && bird.id.replace(/^bird-/, '') === strippedTarget) return true;
+    if (target === bird.id || (bird.id && bird.id.replace(/^bird-/, '') === strippedTarget)) return true;
+    const targetIsNA = target.toUpperCase() === 'NA' || target.toUpperCase() === 'N/A';
+    const birdRingIsNA = !bird.ring_id || bird.ring_id.toUpperCase() === 'NA' || bird.ring_id.toUpperCase() === 'N/A';
+    if (!targetIsNA && !birdRingIsNA) {
+      if (bird.ring_id === target || bird.ring_id.replace(/^bird-/, '') === strippedTarget) return true;
+    }
     return false;
   });
 };
