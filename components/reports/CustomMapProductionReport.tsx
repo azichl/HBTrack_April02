@@ -393,6 +393,326 @@ const MapGraticuleListener = ({
   return null;
 };
 
+export interface VectorOverlayLine {
+  id: string;
+  type: 'line' | 'polyline';
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  points?: { x: number; y: number }[];
+  color: string;
+  width: number;
+  dashArray?: string;
+  dots?: { x: number; y: number }[];
+}
+
+const computeMapVectorLines = (
+  map: L.Map,
+  visibleCampIds: string[],
+  campDistToLastEnabled: { [campId: string]: boolean },
+  showCampDistance: boolean,
+  showDistanceToRelease: boolean,
+  showFlightTrack: boolean,
+  allHistoryPoints: [number, number][],
+  measurePoints: [number, number][],
+  metrics: { lLat: number; lLon: number; rLat: number; rLon: number }
+): VectorOverlayLine[] => {
+  const lines: VectorOverlayLine[] = [];
+
+  // 1. Real History Flight Trajectory (Indigo)
+  if (showFlightTrack && allHistoryPoints.length > 1) {
+    const pts = allHistoryPoints.map(p => {
+      const pt = map.latLngToContainerPoint(p);
+      return { x: pt.x, y: pt.y };
+    });
+    lines.push({
+      id: 'flight-track',
+      type: 'polyline',
+      points: pts,
+      color: '#6366f1',
+      width: 2.8,
+      dots: pts
+    });
+  }
+
+  // 2. Distance: Camp(s) to Last Position (Amber Dashed #d97706)
+  visibleCampIds.forEach(campId => {
+    if (!campDistToLastEnabled[campId]) return;
+    const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
+    if (!camp || !metrics.lLat || !metrics.lLon) return;
+
+    const p1 = map.latLngToContainerPoint([camp.lat, camp.lon]);
+    const p2 = map.latLngToContainerPoint([metrics.lLat, metrics.lLon]);
+    lines.push({
+      id: `camp-last-${campId}`,
+      type: 'line',
+      x1: p1.x,
+      y1: p1.y,
+      x2: p2.x,
+      y2: p2.y,
+      color: '#d97706',
+      width: 2.5,
+      dashArray: '6 6'
+    });
+  });
+
+  // 3. Distance: Camp to Camp (Emerald Dashed #059669)
+  if (showCampDistance && visibleCampIds.length >= 2) {
+    const c1 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[0]) || FIXED_FIELD_CAMPS[0];
+    const c2 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[1]) || FIXED_FIELD_CAMPS[1];
+    const p1 = map.latLngToContainerPoint([c1.lat, c1.lon]);
+    const p2 = map.latLngToContainerPoint([c2.lat, c2.lon]);
+    lines.push({
+      id: 'camp-camp',
+      type: 'line',
+      x1: p1.x,
+      y1: p1.y,
+      x2: p2.x,
+      y2: p2.y,
+      color: '#059669',
+      width: 2.5,
+      dashArray: '6 6'
+    });
+  }
+
+  // 4. Distance: Release Location to Last Position (Red Dashed #dc2626)
+  if (showDistanceToRelease && metrics.rLat && metrics.lLat) {
+    const p1 = map.latLngToContainerPoint([metrics.rLat, metrics.rLon]);
+    const p2 = map.latLngToContainerPoint([metrics.lLat, metrics.lLon]);
+    lines.push({
+      id: 'release-last',
+      type: 'line',
+      x1: p1.x,
+      y1: p1.y,
+      x2: p2.x,
+      y2: p2.y,
+      color: '#dc2626',
+      width: 2.5,
+      dashArray: '6 6'
+    });
+  }
+
+  // 5. Ruler Measurement (Yellow Dashed #eab308)
+  if (measurePoints.length > 1) {
+    const pts = measurePoints.map(p => {
+      const pt = map.latLngToContainerPoint(p);
+      return { x: pt.x, y: pt.y };
+    });
+    lines.push({
+      id: 'ruler-measure',
+      type: 'polyline',
+      points: pts,
+      color: '#eab308',
+      width: 3.5,
+      dashArray: '7 7'
+    });
+  }
+
+  return lines;
+};
+
+const renderVectorLinesOnCanvas = (
+  canvas: HTMLCanvasElement,
+  containerEl: HTMLElement,
+  lines: VectorOverlayLine[]
+) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !containerEl || lines.length === 0) return;
+
+  const vpWidth = containerEl.clientWidth || 800;
+  const vpHeight = containerEl.clientHeight || 465;
+  const scaleX = canvas.width / vpWidth;
+  const scaleY = canvas.height / vpHeight;
+
+  ctx.save();
+  ctx.scale(scaleX, scaleY);
+
+  lines.forEach(line => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = line.color;
+    ctx.lineWidth = line.width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.95;
+    if (line.dashArray) {
+      ctx.setLineDash(line.dashArray.split(' ').map(Number));
+    } else {
+      ctx.setLineDash([]);
+    }
+
+    if (line.type === 'line' && line.x1 !== undefined && line.y1 !== undefined && line.x2 !== undefined && line.y2 !== undefined) {
+      ctx.moveTo(line.x1, line.y1);
+      ctx.lineTo(line.x2, line.y2);
+      ctx.stroke();
+    } else if (line.type === 'polyline' && line.points && line.points.length > 1) {
+      line.points.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.stroke();
+
+      if (line.dots) {
+        line.dots.forEach(d => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = 0.95;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = '#4f46e5';
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+    }
+    ctx.restore();
+  });
+
+  ctx.restore();
+};
+
+const renderVectorLinesOnExportCanvas = (
+  canvas: HTMLCanvasElement,
+  reportContainerEl: HTMLElement,
+  mapViewportEl: HTMLElement,
+  lines: VectorOverlayLine[]
+) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !reportContainerEl || !mapViewportEl || lines.length === 0) return;
+
+  const reportRect = reportContainerEl.getBoundingClientRect();
+  const mapRect = mapViewportEl.getBoundingClientRect();
+  const scale = canvas.width / reportRect.width;
+
+  const offsetX = (mapRect.left - reportRect.left) * scale;
+  const offsetY = (mapRect.top - reportRect.top) * scale;
+  const vpScaleX = (mapRect.width / (mapViewportEl.clientWidth || 800)) * scale;
+  const vpScaleY = (mapRect.height / (mapViewportEl.clientHeight || 465)) * scale;
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(vpScaleX, vpScaleY);
+
+  lines.forEach(line => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = line.color;
+    ctx.lineWidth = line.width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.95;
+    if (line.dashArray) {
+      ctx.setLineDash(line.dashArray.split(' ').map(Number));
+    } else {
+      ctx.setLineDash([]);
+    }
+
+    if (line.type === 'line' && line.x1 !== undefined && line.y1 !== undefined && line.x2 !== undefined && line.y2 !== undefined) {
+      ctx.moveTo(line.x1, line.y1);
+      ctx.lineTo(line.x2, line.y2);
+      ctx.stroke();
+    } else if (line.type === 'polyline' && line.points && line.points.length > 1) {
+      line.points.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.stroke();
+
+      if (line.dots) {
+        line.dots.forEach(d => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = 0.95;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = '#4f46e5';
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+    }
+    ctx.restore();
+  });
+
+  ctx.restore();
+};
+
+const MapVectorLinesListener = ({
+  onUpdate,
+  visibleCampIds,
+  campDistToLastEnabled,
+  showCampDistance,
+  showDistanceToRelease,
+  showFlightTrack,
+  allHistoryPoints,
+  measurePoints,
+  metrics
+}: {
+  onUpdate: (lines: VectorOverlayLine[]) => void;
+  visibleCampIds: string[];
+  campDistToLastEnabled: { [campId: string]: boolean };
+  showCampDistance: boolean;
+  showDistanceToRelease: boolean;
+  showFlightTrack: boolean;
+  allHistoryPoints: [number, number][];
+  measurePoints: [number, number][];
+  metrics: { lLat: number; lLon: number; rLat: number; rLon: number };
+}) => {
+  const map = useMap();
+
+  const calculateLines = useCallback(() => {
+    if (!map) return;
+    try {
+      const lines = computeMapVectorLines(
+        map,
+        visibleCampIds,
+        campDistToLastEnabled,
+        showCampDistance,
+        showDistanceToRelease,
+        showFlightTrack,
+        allHistoryPoints,
+        measurePoints,
+        metrics
+      );
+      onUpdate(lines);
+    } catch (e) {
+      console.warn('Vector lines calculation error:', e);
+    }
+  }, [
+    map,
+    onUpdate,
+    visibleCampIds,
+    campDistToLastEnabled,
+    showCampDistance,
+    showDistanceToRelease,
+    showFlightTrack,
+    allHistoryPoints,
+    measurePoints,
+    metrics
+  ]);
+
+  useMapEvents({
+    move: calculateLines,
+    zoom: calculateLines,
+    moveend: calculateLines,
+    zoomend: calculateLines,
+    resize: calculateLines
+  });
+
+  useEffect(() => {
+    calculateLines();
+    const t = setTimeout(calculateLines, 150);
+    return () => clearTimeout(t);
+  }, [calculateLines]);
+
+  return null;
+};
+
 // Map click listener for distance measurement
 const MeasureMapEvents = ({
   isMeasuring,
@@ -589,6 +909,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     width: 800,
     height: 465
   });
+
+  // ─── HIGH-FIDELITY VECTOR OVERLAY LINES (DISTANCE LINES, TRACKS, RULER) ─────
+  const [vectorOverlayLines, setVectorOverlayLines] = useState<VectorOverlayLine[]>([]);
+  const vectorOverlayLinesRef = useRef<VectorOverlayLine[]>([]);
+  useEffect(() => {
+    vectorOverlayLinesRef.current = vectorOverlayLines;
+  }, [vectorOverlayLines]);
 
   // ─── DRAG & DROP PERSONALIZATION MODE ──────────────────────────────────────
   const [isDragEnabled, setIsDragEnabled] = useState<boolean>(false);
@@ -1589,6 +1916,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         mapViewportRef.current, 
         buildHtml2CanvasMapExportOptions(mapViewportRef.current, true)
       );
+
+      // Compute or get latest vector overlay lines to burn permanently into the canvas bitmap
+      const linesToBurn = (vectorOverlayLinesRef.current && vectorOverlayLinesRef.current.length > 0)
+        ? vectorOverlayLinesRef.current
+        : (mapInstance ? computeMapVectorLines(
+            mapInstance,
+            visibleCampIds,
+            campDistToLastEnabled,
+            showCampDistance,
+            showDistanceToRelease,
+            showFlightTrack,
+            allHistoryPoints,
+            measurePoints,
+            metrics
+          ) : []);
+
+      // Burn distance lines, tracks, and ruler permanently into the snapshot canvas pixels
+      renderVectorLinesOnCanvas(canvas, mapViewportRef.current, linesToBurn);
+
       const dataUrl = canvas.toDataURL('image/jpeg', 0.96);
       setMapSnapshotUrl(dataUrl);
       setMapDisplayMode('snapshot');
@@ -1619,6 +1965,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         element, 
         buildHtml2CanvasMapExportOptions(element, false)
       );
+
+      // If exporting while map is in interactive mode, burn vector lines directly onto export canvas
+      if (mapDisplayMode === 'interactive' && mapViewportRef.current) {
+        const linesToBurn = (vectorOverlayLinesRef.current && vectorOverlayLinesRef.current.length > 0)
+          ? vectorOverlayLinesRef.current
+          : (mapInstance ? computeMapVectorLines(
+              mapInstance,
+              visibleCampIds,
+              campDistToLastEnabled,
+              showCampDistance,
+              showDistanceToRelease,
+              showFlightTrack,
+              allHistoryPoints,
+              measurePoints,
+              metrics
+            ) : []);
+
+        renderVectorLinesOnExportCanvas(canvas, element, mapViewportRef.current, linesToBurn);
+      }
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
       const pdf = new jsPDF({
@@ -1658,6 +2023,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         element, 
         buildHtml2CanvasMapExportOptions(element, false)
       );
+
+      // If exporting while map is in interactive mode, burn vector lines directly onto export canvas
+      if (mapDisplayMode === 'interactive' && mapViewportRef.current) {
+        const linesToBurn = (vectorOverlayLinesRef.current && vectorOverlayLinesRef.current.length > 0)
+          ? vectorOverlayLinesRef.current
+          : (mapInstance ? computeMapVectorLines(
+              mapInstance,
+              visibleCampIds,
+              campDistToLastEnabled,
+              showCampDistance,
+              showDistanceToRelease,
+              showFlightTrack,
+              allHistoryPoints,
+              measurePoints,
+              metrics
+            ) : []);
+
+        renderVectorLinesOnExportCanvas(canvas, element, mapViewportRef.current, linesToBurn);
+      }
 
       const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
       const link = document.createElement('a');
@@ -4074,6 +4458,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     >
                       <MapInstanceBinder onMapInstance={setMapInstance} />
                       <MapGraticuleListener onUpdate={setGraticuleData} />
+                      <MapVectorLinesListener
+                        onUpdate={setVectorOverlayLines}
+                        visibleCampIds={visibleCampIds}
+                        campDistToLastEnabled={campDistToLastEnabled}
+                        showCampDistance={showCampDistance}
+                        showDistanceToRelease={showDistanceToRelease}
+                        showFlightTrack={showFlightTrack}
+                        allHistoryPoints={allHistoryPoints}
+                        measurePoints={measurePoints}
+                        metrics={metrics}
+                      />
 
                       {/* Measure Map Click Events Listener */}
                       <MeasureMapEvents
@@ -4471,6 +4866,59 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </svg>
                   <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
                 </div>
+
+                {/* High-Fidelity Vector Overlay Lines (Distance Lines, Trajectories, Ruler) */}
+                {/* Rendered directly on mapViewportRef frame to guarantee 100% visibility in html2canvas snapshots & exports */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-[430]" style={{ display: 'block', width: '100%', height: '100%' }}>
+                  {vectorOverlayLines.map(line => {
+                    if (line.type === 'line' && line.x1 !== undefined && line.y1 !== undefined && line.x2 !== undefined && line.y2 !== undefined) {
+                      return (
+                        <line
+                          key={line.id}
+                          x1={line.x1}
+                          y1={line.y1}
+                          x2={line.x2}
+                          y2={line.y2}
+                          stroke={line.color}
+                          strokeWidth={line.width}
+                          strokeDasharray={line.dashArray}
+                          strokeLinecap="round"
+                          opacity={0.95}
+                        />
+                      );
+                    }
+                    if (line.type === 'polyline' && line.points && line.points.length > 1) {
+                      const pointsStr = line.points.map(p => `${p.x},${p.y}`).join(' ');
+                      return (
+                        <g key={line.id}>
+                          <polyline
+                            points={pointsStr}
+                            fill="none"
+                            stroke={line.color}
+                            strokeWidth={line.width}
+                            strokeDasharray={line.dashArray}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity={0.9}
+                          />
+                          {line.dots?.map((d, i) => (
+                            <circle
+                              key={`dot-${line.id}-${i}`}
+                              cx={d.x}
+                              cy={d.y}
+                              r={3}
+                              fill="#ffffff"
+                              stroke="#4f46e5"
+                              strokeWidth={1.5}
+                              opacity={0.95}
+                            />
+                          ))}
+                        </g>
+                      );
+                    }
+                    return null;
+                  })}
+                </svg>
 
                 {/* Dynamic GIS Graticule Grid Lines & Perimeter Coordinate Labels (Move smoothly with map pan/zoom) */}
                 {showGraticule && (
