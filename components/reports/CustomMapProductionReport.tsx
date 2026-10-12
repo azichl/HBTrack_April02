@@ -13,6 +13,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { exportReport, leafletIdle } from '../TrackingReport/exportReport';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
 
@@ -1898,27 +1899,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
     try {
       if (mapInstance) mapInstance.invalidateSize();
-      await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
 
-      const canvas = await html2canvas(
-        element, 
-        buildHtml2CanvasMapExportOptions(element, false)
-      );
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.96);
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
       const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
-      pdf.save(`${exportFileName}.pdf`);
+      await exportReport(element, {
+        fileName: exportFileName,
+        format: 'pdf',
+        pixelRatio: 2,
+        waitForMap: mapInstance ? () => leafletIdle(mapInstance) : undefined
+      });
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('حدث خطأ أثناء تصدير ملف PDF.');
@@ -1937,20 +1927,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
     try {
       if (mapInstance) mapInstance.invalidateSize();
-      await new Promise(r => setTimeout(r, 400));
       const element = reportContainerRef.current;
       if (!element) return;
 
-      const canvas = await html2canvas(
-        element, 
-        buildHtml2CanvasMapExportOptions(element, false)
-      );
-
       const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
-      const link = document.createElement('a');
-      link.download = `${exportFileName}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      await exportReport(element, {
+        fileName: exportFileName,
+        format: 'png',
+        pixelRatio: 2,
+        waitForMap: mapInstance ? () => leafletIdle(mapInstance) : undefined
+      });
     } catch (error) {
       console.error('Error exporting image:', error);
       alert('حدث خطأ أثناء حفظ الصورة.');
@@ -2005,6 +1991,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-grid { display: grid; grid-template-columns: 440px 1fr; gap: 24px; flex: 1; min-height: 520px; width: 100%; }
         .trk-side { display: flex; flex-direction: column; gap: 12px; }
 
+        /* 1. Explicit line boxes & vertical alignment */
+        .trk-card__head,
+        .trk-twohead > div,
+        .trk-row .k,
+        .trk-row .v,
+        .trk-table > span,
+        .trk-stat .val,
+        .trk-stat .lab,
+        .trk-legend span {
+          line-height: 1.35;
+        }
+
         .trk-card { border: 1px solid #d9dbe1; border-radius: 8px; overflow: hidden; background: #fff; }
         .trk-card__head { 
           background: #7a1c32; 
@@ -2018,17 +2016,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           align-items: center; 
           justify-content: space-between; 
           box-sizing: border-box; 
+          line-height: 1.35;
         }
+
+        /* 2. Table cells: centre with flex and explicit box */
         .trk-row { 
           display: flex; 
           flex-direction: row; 
-          align-items: center; 
+          align-items: stretch; 
           border-top: 1px solid #eceef2; 
           min-height: 36px; 
-          height: 36px; 
           box-sizing: border-box; 
         }
         .trk-row:first-of-type { border-top: 0; }
+        .trk-row .k, .trk-row .v,
+        .trk-table > span { 
+          display: flex; 
+          align-items: center; 
+          min-height: 36px; 
+          box-sizing: border-box; 
+          line-height: 1.35; 
+        }
         .trk-row .k { 
           flex: 1 1 50%; 
           width: 50%; 
@@ -2038,11 +2046,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           font-size: 13px; 
           text-align: right; 
           color: #374151; 
-          height: 100%; 
-          display: flex; 
-          align-items: center; 
-          box-sizing: border-box; 
-          line-height: 1.2; 
         }
         .trk-row .v { 
           flex: 1 1 50%; 
@@ -2050,26 +2053,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           padding: 0 14px; 
           font-size: 13px; 
           text-align: center; 
-          height: 100%; 
-          display: flex; 
-          align-items: center; 
           justify-content: center; 
-          box-sizing: border-box; 
-          line-height: 1.2; 
         }
         .trk-row .v .maroon, .maroon { color: #7a1c32; font-weight: 700; }
 
+        /* 3. Pills: inline-flex + fixed height so they never clip */
         .pill { 
           display: inline-flex; 
           align-items: center; 
           justify-content: center; 
-          padding: 2px 12px; 
+          height: 26px; 
+          padding: 0 16px; 
           border-radius: 999px; 
           font-size: 11px; 
           font-weight: 600; 
           line-height: 1; 
-          height: 22px; 
-          vertical-align: middle; 
           box-sizing: border-box; 
         }
         .pill--grey { background: #e8eaee; color: #6b7280; }
@@ -2095,18 +2093,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           flex: 1 1 33.333%; 
           width: 33.333%; 
         }
+        .trk-twohead > div {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 40px;
+          line-height: 1.35;
+          box-sizing: border-box;
+        }
         .trk-twohead__install { 
           background: #7a1c32; 
           padding: 0 12px; 
           text-align: center; 
           flex: 1 1 33.333%; 
           width: 33.333%; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          height: 100%; 
-          box-sizing: border-box; 
-          line-height: 1.2; 
         }
         .trk-twohead__last { 
           background: #128a5b; 
@@ -2114,12 +2114,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           text-align: center; 
           flex: 1 1 33.333%; 
           width: 33.333%; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          height: 100%; 
-          box-sizing: border-box; 
-          line-height: 1.2; 
         }
         .trk-table { 
           display: grid; 
@@ -2131,13 +2125,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           font-size: 14px; 
           border-top: 1px solid #eceef2; 
           font-variant-numeric: tabular-nums; 
-          height: 36px; 
-          min-height: 36px; 
-          display: flex; 
-          align-items: center; 
-          justify-content: center; 
-          box-sizing: border-box; 
-          line-height: 1.2; 
+        }
+        .trk-table > span:not(.lbl) {
+          justify-content: center;
         }
         .trk-table .lbl { 
           background: #f6f7f9; 
@@ -2174,17 +2164,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           display: flex; 
           align-items: center; 
           justify-content: center; 
-          line-height: 1.2; 
+          line-height: 1.35; 
         }
         .trk-stat .val.red { color: #d9263a; }
         .trk-stat .val.brown { color: #7a4a12; }
         .trk-stat .lab { 
           font-size: 10px; 
           color: #6b7280; 
-          line-height: 1.2; 
+          line-height: 1.35; 
           text-align: center; 
         }
 
+        /* 4. Legend: icon and label share one flex row, centred on the same axis */
         .trk-legend {
           display: flex; 
           flex-wrap: nowrap; 
@@ -2205,9 +2196,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-legend span, .trk-legend div { 
           display: inline-flex; 
           align-items: center; 
-          gap: 6px; 
-          line-height: 1; 
+          gap: 8px; 
+          line-height: 1.35; 
           vertical-align: middle; 
+        }
+        .trk-legend svg {
+          flex: 0 0 auto;
+          display: inline-block;
+          vertical-align: middle;
+        }
+        .trk-legend i {
+          flex: 0 0 auto;
+          display: inline-block;
         }
         .trk-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
         .trk-legend .dot.maroon { background: #7a1c32; }
@@ -2217,6 +2217,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-legend .line.dotted { border-top: 2px dotted #f5a623; }
         .trk-legend .sq { width: 10px; height: 10px; background: #1c2430; display: inline-block; }
         .trk-footer { margin-top: 12px; border-top: 1px solid #d9dbe1; padding-top: 8px; color: #6b7280; font-size: 12px; text-align: left; }
+
+        /* 5. Export mode: lock fonts/size so nothing reflows during capture */
+        .trk-exporting { 
+          -webkit-font-smoothing: antialiased; 
+          font-kerning: normal; 
+        }
+        .trk-exporting .no-print, 
+        .trk-exporting .no-export, 
+        .trk-exporting .no-export-snapshot, 
+        .trk-exporting .drag-handle, 
+        .trk-exporting .logo-control-popover { 
+          display: none !important; 
+        }
 
         #custom-map-production-print-area .leaflet-control-scale {
           background: rgba(255, 255, 255, 0.95) !important;
@@ -3550,7 +3563,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 />
 
                 {/* Hover Quick Edit Badge */}
-                <div className="no-export-snapshot no-print absolute -bottom-2 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
+                <div className="no-export-snapshot no-print no-export absolute -bottom-2 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -3594,7 +3607,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 {/* Floating Dimension Controller Popover */}
                 {activeResizingLogo === 'right' && (
                   <div 
-                    className="logo-control-popover no-export-snapshot no-print absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                    className="logo-control-popover no-export-snapshot no-print no-export absolute top-full right-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
                     style={{ direction: 'rtl', zIndex: 9999, position: 'absolute' }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -3749,7 +3762,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               />
 
               {/* Hover Quick Edit Badge */}
-              <div className="no-export-snapshot no-print absolute -bottom-2 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
+              <div className="no-export-snapshot no-print no-export absolute -bottom-2 left-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/85 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 shadow-lg z-20">
                 <button
                   type="button"
                   onClick={(e) => {
@@ -3793,7 +3806,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {/* Floating Dimension Controller Popover */}
               {activeResizingLogo === 'left' && (
                 <div 
-                  className="logo-control-popover no-export-snapshot no-print absolute top-full left-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
+                  className="logo-control-popover no-export-snapshot no-print no-export absolute top-full left-0 mt-2 bg-white dark:bg-slate-900 border border-brand-300 dark:border-brand-700 p-3 rounded-xl shadow-2xl w-64 text-right space-y-2.5 animate-in fade-in slide-in-from-top-2"
                   style={{ direction: 'rtl', zIndex: 9999, position: 'absolute' }}
                   onClick={(e) => e.stopPropagation()}
                 >
@@ -3979,7 +3992,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {(tableMode === 'standard' || tableMode === 'both') && (
                 <section id="custom-bird-data-table" className={`trk-card ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
-                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
+                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول بيانات الطائر</span>
                       <span>⋮⋮</span>
                     </div>
@@ -4092,7 +4105,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {(tableMode === 'standard' || tableMode === 'both') && (
                 <section id="custom-table2-coordinates" className={`trk-card trk-card--table ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
-                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
+                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول مقارنة الإحداثيات</span>
                       <span>⋮⋮</span>
                     </div>
@@ -4192,7 +4205,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {(tableMode === 'history_list' || tableMode === 'both') && (
                 <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
                   {isDragEnabled && (
-                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print">
+                    <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول سجل المسار</span>
                       <span>⋮⋮</span>
                     </div>
@@ -4333,7 +4346,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {/* 4 KPI METRIC TILES */}
               <div className={`trk-stats ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl relative' : ''}`}>
                 {isDragEnabled && (
-                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print rounded-t-lg">
+                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export rounded-t-lg">
                     <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
                     <span>⋮⋮</span>
                   </div>
@@ -4432,7 +4445,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span>{T.days}</span>
                       </div>
                     ) : (
-                      <><span>{customMetadata.statDuration || metrics.durationDays}</span> {T.days}</>
+                      <span>{`${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
                     )}
                   </div>
                   <div className="lab">
@@ -4468,7 +4481,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       }}
                     />
                     {/* Floating Controls for Uploaded/Captured Map (Excluded during PDF/PNG export) */}
-                    <div className="no-export-snapshot no-print absolute top-2 right-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-xs shadow-lg opacity-85 hover:opacity-100 transition-opacity">
+                    <div className="no-export-snapshot no-print no-export absolute top-2 right-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-xs shadow-lg opacity-85 hover:opacity-100 transition-opacity">
                       <span className="text-[10px] text-sky-400 font-bold pl-1 border-l border-white/20">خريطة QGIS / صورة</span>
                       <button
                         type="button"
@@ -4530,7 +4543,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS */
                   <div className="relative w-full h-full">
                     {/* Quick Button to Upload QGIS Map right from the interactive map view */}
-                    <div className="no-export-snapshot no-print absolute top-2 left-2 z-[400]">
+                    <div className="no-export-snapshot no-print no-export absolute top-2 left-2 z-[400]">
                       <button
                         type="button"
                         onClick={() => mapImageInputRef.current?.click()}
@@ -4863,7 +4876,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {/* Floating Measurement Tool Controls (Like Live Tracking Overlay) */}
                     {(isMeasuring || measurePoints.length > 0) && (
                       <div 
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] no-export-snapshot no-print flex items-center gap-2 bg-slate-900/95 backdrop-blur text-white px-3.5 py-1.5 rounded-full shadow-2xl border border-slate-700 text-xs select-none animate-in fade-in slide-in-from-bottom-2"
+                        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] no-export-snapshot no-print no-export flex items-center gap-2 bg-slate-900/95 backdrop-blur text-white px-3.5 py-1.5 rounded-full shadow-2xl border border-slate-700 text-xs select-none animate-in fade-in slide-in-from-bottom-2"
                       >
                         <div className="flex items-center gap-1.5 text-amber-400 font-bold">
                           <Ruler size={14} />
@@ -4905,7 +4918,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                     {/* Floating Map Controls for Interactive Live Tracking feel (Hidden on Print & Export) */}
                     <div 
-                      className="no-print no-export-snapshot absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
+                      className="no-print no-export-snapshot no-export absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
                       style={{ direction: 'rtl' }}
                     >
                       {/* Fullscreen Toggle */}
@@ -5230,7 +5243,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               >
                 {/* Hover Quick Edit Button (when not in table edit mode) */}
                 {!isTableEditing && (
-                  <div className="no-export-snapshot no-print absolute -top-3 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <div className="no-export-snapshot no-print no-export absolute -top-3 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                     <button
                       type="button"
                       onClick={() => setIsTableEditing(true)}
@@ -5245,7 +5258,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                 {/* Edit Mode Top Toolbar */}
                 {isTableEditing && (
-                  <div className="no-export-snapshot no-print mb-2 pb-1.5 border-b border-gray-200 flex items-center justify-between text-xs w-full">
+                  <div className="no-export-snapshot no-print no-export mb-2 pb-1.5 border-b border-gray-200 flex items-center justify-between text-xs w-full">
                     <span className="font-bold text-gray-800 flex items-center gap-1">
                       <Edit3 size={12} className="text-brand-500" />
                       <span>تعديل مفتاح الخريطة (عنصراً بعنصر):</span>
