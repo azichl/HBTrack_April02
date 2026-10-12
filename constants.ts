@@ -163,8 +163,8 @@ export const FIXED_FIELD_CAMPS: FieldCampPoint[] = [
     id: 'el_bnoud_camp',
     name: 'مخيم البنود',
     nameEn: 'El Bnoud Camp',
-    lat: 32.39853,
-    lon: 0.24449,
+    lat: 32.399502,
+    lon: 0.244456,
     region: 'El Bayadh',
     country: 'Algeria'
   }
