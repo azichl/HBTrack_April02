@@ -302,24 +302,25 @@ const CustomGraphicScaleControl = () => {
       options: { position: 'bottomright' },
       onAdd: function() {
         const div = L.DomUtil.create('div', 'leaflet-graphic-scale-card');
-        div.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
-        div.style.padding = '3px 8px 5px 8px';
+        div.style.backgroundColor = '#ffffff';
+        div.style.padding = '5px 14px 6px 14px';
         div.style.borderRadius = '6px';
-        div.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.25)';
-        div.style.border = '1px solid rgba(0, 0, 0, 0.12)';
-        div.style.marginRight = '8px';
-        div.style.marginBottom = '8px';
+        div.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.18)';
+        div.style.border = '1px solid rgba(0, 0, 0, 0.2)';
+        div.style.marginRight = '12px';
+        div.style.marginBottom = '10px';
         div.style.display = 'flex';
         div.style.flexDirection = 'column';
         div.style.alignItems = 'center';
-        div.style.gap = '2.5px';
+        div.style.minWidth = '115px';
+        div.style.boxSizing = 'border-box';
         div.style.userSelect = 'none';
         div.style.pointerEvents = 'none';
         div.style.direction = 'ltr';
         div.innerHTML = `
-          <div class="scale-text" style="font-size: 11px; font-weight: 700; color: #1e293b; font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.1;">25 km</div>
-          <div class="scale-bar" style="width: 80px; height: 5px; display: flex; border: 1px solid #1e293b; box-sizing: border-box; overflow: hidden;">
-            <div style="width: 50%; height: 100%; background-color: #1e293b;"></div>
+          <div class="scale-text" style="font-size: 11px; font-weight: 600; color: #111827; font-family: Arial, sans-serif; line-height: 1.2; margin-bottom: 3px; text-align: center;">25 km</div>
+          <div class="scale-bar" style="width: 80px; height: 4.5px; display: flex; border: 1px solid #111827; box-sizing: border-box; overflow: hidden;">
+            <div style="width: 50%; height: 100%; background-color: #111827;"></div>
             <div style="width: 50%; height: 100%; background-color: #ffffff;"></div>
           </div>
         `;
@@ -337,7 +338,7 @@ const CustomGraphicScaleControl = () => {
       if (!size.x || !size.y) return;
 
       const y = size.y / 2;
-      const maxPixels = 88;
+      const maxPixels = 80;
       const p1 = map.containerPointToLatLng([size.x / 2 - maxPixels / 2, y]);
       const p2 = map.containerPointToLatLng([size.x / 2 + maxPixels / 2, y]);
       const maxMeters = map.distance(p1, p2);
@@ -352,7 +353,7 @@ const CustomGraphicScaleControl = () => {
       else roundFactor = 1;
       const targetMeters = roundFactor * pow10;
 
-      const actualWidthPx = Math.max(50, Math.min(120, Math.round((targetMeters / maxMeters) * maxPixels)));
+      const actualWidthPx = Math.max(65, Math.min(95, Math.round((targetMeters / maxMeters) * maxPixels)));
       const text = targetMeters >= 1000 
         ? `${targetMeters / 1000} km` 
         : `${targetMeters} m`;
@@ -4208,25 +4209,26 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </div>
                     {/* Dynamic GIS Graphic Scale Bar on snapshot view */}
                     <div 
-                      className="absolute bottom-2 right-2 pointer-events-none select-none z-[400]"
+                      className="absolute bottom-2.5 right-3 pointer-events-none select-none z-[400]"
                       style={{
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                        padding: '3px 8px 5px 8px',
+                        backgroundColor: '#ffffff',
+                        padding: '5px 14px 6px 14px',
                         borderRadius: '6px',
-                        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.25)',
-                        border: '1px solid rgba(0, 0, 0, 0.12)',
+                        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.18)',
+                        border: '1px solid rgba(0, 0, 0, 0.2)',
                         display: 'flex',
                         flexDirection: 'column',
                         alignItems: 'center',
-                        gap: '2.5px',
+                        minWidth: '115px',
+                        boxSizing: 'border-box',
                         direction: 'ltr'
                       }}
                     >
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#1e293b', fontFamily: "'Segoe UI', Arial, sans-serif", lineHeight: 1.1 }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#111827', fontFamily: "Arial, sans-serif", lineHeight: 1.2, marginBottom: '3px', textAlign: 'center' }}>
                         25 km
                       </div>
-                      <div style={{ width: '80px', height: '5px', display: 'flex', border: '1px solid #1e293b', boxSizing: 'border-box', overflow: 'hidden' }}>
-                        <div style={{ width: '50%', height: '100%', backgroundColor: '#1e293b' }} />
+                      <div style={{ width: '80px', height: '4.5px', display: 'flex', border: '1px solid #111827', boxSizing: 'border-box', overflow: 'hidden' }}>
+                        <div style={{ width: '50%', height: '100%', backgroundColor: '#111827' }} />
                         <div style={{ width: '50%', height: '100%', backgroundColor: '#ffffff' }} />
                       </div>
                     </div>
