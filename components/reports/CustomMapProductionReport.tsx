@@ -38,6 +38,8 @@ import {
   getProductionTileLayer,
   buildCountrySvgData,
   resolveLocationFromCoords,
+  normalizeCountryAr,
+  resolveRegionBilingual,
   AutoResolvedLocation
 } from './QGISMapProductionReport';
 
@@ -1352,10 +1354,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const initial = resolveLocationFromCoords(lLat, lLon);
     setAutoLocation(initial);
 
-    // 2. Async OpenStreetMap reverse geocoding to refine region
+    // 2. Async OpenStreetMap reverse geocoding to refine region bilingually
     const cacheKey = `${lLat.toFixed(2)},${lLon.toFixed(2)}`;
     try {
-      const cached = sessionStorage.getItem(`hb_geo_${cacheKey}`);
+      const cached = sessionStorage.getItem(`hb_geo_v3_${cacheKey}`);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed?.regionAr && parsed?.countryAr) {
@@ -1366,36 +1368,40 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     } catch (_) {}
 
     let isMounted = true;
-    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lLat}&lon=${lLon}&zoom=10&accept-language=ar,en`)
-      .then(res => res.json())
-      .then(data => {
-        if (!isMounted || !data || !data.address) return;
-        const addr = data.address;
-        const rawState = addr.state || addr.county || addr.city || addr.district || '';
-        const cleanState = rawState
-          .replace(/^ولاية\s+/, '')
-          .replace(/^محافظة\s+/, '')
-          .replace(/^منطقة\s+/, '')
-          .replace(/^أوبلاست\s+/, '')
-          .replace(/\s+Region$/i, '')
-          .replace(/\s+Province$/i, '')
-          .replace(/\s+Oblast$/i, '')
-          .replace(/\s+District$/i, '')
-          .trim();
+    Promise.all([
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lLat}&lon=${lLon}&zoom=10&accept-language=ar`).then(r => r.json()).catch(() => null),
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lLat}&lon=${lLon}&zoom=10&accept-language=en`).then(r => r.json()).catch(() => null)
+    ])
+      .then(([arData, enData]) => {
+        if (!isMounted) return;
+        const addrAr = arData?.address || {};
+        const addrEn = enData?.address || {};
 
-        if (cleanState) {
-          const refined: AutoResolvedLocation = {
-            ...initial,
-            regionAr: cleanState,
-            regionEn: cleanState,
-            countryAr: addr.country || initial.countryAr,
-            countryEn: addr.country_code ? initial.countryEn : (addr.country || initial.countryEn)
-          };
-          setAutoLocation(refined);
-          try {
-            sessionStorage.setItem(`hb_geo_${cacheKey}`, JSON.stringify(refined));
-          } catch (_) {}
-        }
+        const rawStateAr = addrAr.state || addrAr.county || addrAr.city || addrAr.district || '';
+        const rawStateEn = addrEn.state || addrEn.county || addrEn.city || addrEn.district || '';
+
+        const { regionAr, regionEn } = resolveRegionBilingual(
+          rawStateAr,
+          rawStateEn,
+          initial.regionAr,
+          initial.regionEn
+        );
+
+        const countryAr = normalizeCountryAr(addrAr.country || initial.countryAr, initial.iso2 || addrEn.country_code);
+        const countryEn = addrEn.country || initial.countryEn;
+
+        const refined: AutoResolvedLocation = {
+          iso2: initial.iso2 || addrEn.country_code?.toUpperCase(),
+          regionAr: regionAr || initial.regionAr,
+          regionEn: regionEn || initial.regionEn,
+          countryAr,
+          countryEn
+        };
+
+        setAutoLocation(refined);
+        try {
+          sessionStorage.setItem(`hb_geo_v3_${cacheKey}`, JSON.stringify(refined));
+        } catch (_) {}
       })
       .catch(() => {
         // Silently keep offline initial resolution
@@ -3685,7 +3691,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             ) : (
               <span>
                 {customMetadata.regionName 
-                  ? (customMetadata.regionName.startsWith(T.regionLabel) ? customMetadata.regionName : `${T.regionLabel} ${customMetadata.regionName}`)
+                  ? (() => {
+                      const res = resolveRegionBilingual(customMetadata.regionName, customMetadata.regionName);
+                      const reg = reportLanguage === 'ar' ? res.regionAr : res.regionEn;
+                      const cty = reportLanguage === 'ar' ? autoLocation.countryAr : autoLocation.countryEn;
+                      return reportLanguage === 'ar'
+                        ? `${T.regionLabel} ${reg} – ${cty}`
+                        : `${reg} ${T.regionLabel} – ${cty}`;
+                    })()
                   : (reportLanguage === 'ar' 
                       ? `${T.regionLabel} ${autoLocation.regionAr} – ${autoLocation.countryAr}`
                       : `${autoLocation.regionEn} ${T.regionLabel} – ${autoLocation.countryEn}`

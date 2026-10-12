@@ -591,15 +591,97 @@ export interface CountrySvgResult {
 }
 
 export interface AutoResolvedLocation {
+  iso2?: string;
   countryAr: string;
   countryEn: string;
   regionAr: string;
   regionEn: string;
 }
 
+/** Always ensures Kazakhstan is written as "كازاخستان" in Arabic */
+export const normalizeCountryAr = (countryStr: string, iso2?: string): string => {
+  if (!countryStr) return 'كازاخستان';
+  const c = countryStr.trim();
+  if (
+    iso2?.toUpperCase() === 'KZ' ||
+    c === 'قزاقستان' ||
+    c === 'كازاخستان' ||
+    c.toLowerCase().includes('kazakhstan') ||
+    c.includes('قازاق')
+  ) {
+    return 'كازاخستان';
+  }
+  return c;
+};
+
+/** Bilingual region resolver that ensures proper Arabic and English regional names */
+export const resolveRegionBilingual = (
+  rawAr: string,
+  rawEn: string,
+  fallbackAr: string = '',
+  fallbackEn: string = ''
+): { regionAr: string; regionEn: string } => {
+  let cleanAr = (rawAr || '')
+    .replace(/^(ولاية|محافظة|منطقة|أوبلاست|أوبليس|إقليم)\s+/i, '')
+    .replace(/\s+(أوبلاست|أوبليس)$/i, '')
+    .trim();
+
+  let cleanEn = (rawEn || '')
+    .replace(/^(Region|Province|District|Oblast)\s+/i, '')
+    .replace(/\s+(Region|Province|District|Oblast|Awdanı|Aýdany|Aydany)$/i, '')
+    .trim();
+
+  // Known dictionary mappings for bilingual resolution
+  const map: Record<string, { ar: string; en: string }> = {
+    'ألماتي': { ar: 'ألماتي', en: 'Almaty' },
+    'almaty': { ar: 'ألماتي', en: 'Almaty' },
+    'جيزقازغان': { ar: 'جيزقازغان', en: 'Zhezqazgan' },
+    'zhezkazgan': { ar: 'جيزقازغان', en: 'Zhezqazgan' },
+    'zhezqazgan': { ar: 'جيزقازغان', en: 'Zhezqazgan' },
+    'أوليتاو': { ar: 'أوليتاو', en: 'Ulytau' },
+    'ulytau': { ar: 'أوليتاو', en: 'Ulytau' },
+    'قراغندي': { ar: 'قراغندي', en: 'Karaganda' },
+    'karaganda': { ar: 'قراغندي', en: 'Karaganda' },
+    'qaraghandy': { ar: 'قراغندي', en: 'Karaganda' },
+    'أستانا': { ar: 'أستانا', en: 'Astana' },
+    'astana': { ar: 'أستانا', en: 'Astana' },
+    'بخارى': { ar: 'بخارى', en: 'Bukhara' },
+    'bukhara': { ar: 'بخارى', en: 'Bukhara' },
+    'نواوي': { ar: 'نواوي', en: 'Navoiy' },
+    'navoiy': { ar: 'نواوي', en: 'Navoiy' },
+    'navoi': { ar: 'نواوي', en: 'Navoiy' },
+    'سمرقند': { ar: 'سمرقند', en: 'Samarkand' },
+    'samarkand': { ar: 'سمرقند', en: 'Samarkand' },
+    'طشقند': { ar: 'طشقند', en: 'Tashkent' },
+    'tashkent': { ar: 'طشقند', en: 'Tashkent' },
+    'البيض': { ar: 'البيض', en: 'El Bayadh' },
+    'el bayadh': { ar: 'البيض', en: 'El Bayadh' },
+    'أبوظبي': { ar: 'أبوظبي', en: 'Abu Dhabi' },
+    'abu dhabi': { ar: 'أبوظبي', en: 'Abu Dhabi' },
+    'الدوحة': { ar: 'الدوحة', en: 'Doha' },
+    'doha': { ar: 'الدوحة', en: 'Doha' }
+  };
+
+  if (cleanAr && map[cleanAr]) {
+    return { regionAr: map[cleanAr].ar, regionEn: map[cleanAr].en };
+  }
+  if (cleanEn && map[cleanEn.toLowerCase()]) {
+    return { regionAr: map[cleanEn.toLowerCase()].ar, regionEn: map[cleanEn.toLowerCase()].en };
+  }
+
+  const arIsArabic = /[\u0600-\u06FF]/.test(cleanAr);
+  const enIsLatin = /^[A-Za-z\s-]+$/.test(cleanEn);
+
+  return {
+    regionAr: arIsArabic ? cleanAr : (fallbackAr || cleanAr),
+    regionEn: enIsLatin ? cleanEn : (fallbackEn || cleanEn)
+  };
+};
+
 export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolvedLocation => {
   if (!lat || !lon || isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) {
     return {
+      iso2: 'KZ',
       countryAr: 'كازاخستان',
       countryEn: 'Kazakhstan',
       regionAr: 'جيزقازغان',
@@ -623,6 +705,7 @@ export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolve
       if (ar) countryNameAr = ar;
     } catch (_) {}
   }
+  countryNameAr = normalizeCountryAr(countryNameAr, iso2);
 
   let regionAr = 'جيزقازغان';
   let regionEn = 'Zhezqazgan';
@@ -666,6 +749,7 @@ export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolve
   }
 
   return {
+    iso2,
     countryAr: countryNameAr,
     countryEn: countryNameEn,
     regionAr,
@@ -701,6 +785,7 @@ export function buildCountrySvgData(
       if (ar) countryNameAr = ar;
     } catch (_) {}
   }
+  countryNameAr = normalizeCountryAr(countryNameAr, iso2);
 
   if (!feat || !feat.geometry) {
     return {
