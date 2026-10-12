@@ -8,8 +8,6 @@ import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey,
 import Draggable from 'react-draggable';
 import { saveDocument, deleteCoordinateRecord } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
 
 // Safely parse dates including DD/MM/YYYY HH:mm:ss format from Argos API
 const safeParseDate = (ts: any): number => {
@@ -61,8 +59,6 @@ export const Monitoring = () => {
   const [formData, setFormData] = useState<Partial<Position>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const nodeRef = useRef<HTMLDivElement>(null);
-  // Direct Firebase last_fix for transmitters with no recent in-memory position
-  const [argosLastFix, setArgosLastFix] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (isModalOpen) {
@@ -114,33 +110,6 @@ export const Monitoring = () => {
     return map;
   }, [positions]);
 
-  // Query argos_positions in Firebase for ALL transmitters to get the true latest timestamp.
-  // The in-memory positions cache can be stale or incomplete.
-  useEffect(() => {
-    const fetchDirectLastFix = async () => {
-      const map = new Map<string, string>();
-      for (const t of transmitters) {
-        const pid = String(t.platform_id);
-        try {
-          const q = query(collection(db, 'argos_positions'), where('platformId', '==', pid));
-          const snapshot = await getDocs(q);
-          const allTimestamps = snapshot.docs
-            .map(d => d.data())
-            .map(d => safeParseDate(d.timestamp))
-            .filter(ts => !isNaN(ts) && ts > 0);
-          if (allTimestamps.length > 0) {
-            const maxTs = Math.max(...allTimestamps);
-            map.set(pid, new Date(maxTs).toISOString());
-          }
-        } catch (e) {
-          // ignore - will fall back to pos or t.last_fix
-        }
-      }
-      setArgosLastFix(map);
-    };
-    fetchDirectLastFix();
-  }, [transmitters]);
-
   const currentYearMonthKey = useMemo(() => getCurrentYearMonthKey(), []);
 
   const hasCurrentMonthFixesMap = useMemo(() => {
@@ -170,13 +139,12 @@ export const Monitoring = () => {
         const pid = String(t.platform_id);
         const pos = latestPositions.get(pid);
 
-        // Determine the true latest timestamp by comparing all sources
+        // Determine the true latest timestamp by comparing position store and transmitter metadata
         const posTs = pos ? safeParseDate(pos.timestamp) : NaN;
-        const argosTs = argosLastFix.has(pid) ? safeParseDate(argosLastFix.get(pid)!) : NaN;
         const lastFixTs = safeParseDate(t.last_fix);
 
-        // Pick the maximum valid timestamp from any source
-        const candidates = [posTs, argosTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
+        // Pick the maximum valid timestamp
+        const candidates = [posTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
         const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
         const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
 

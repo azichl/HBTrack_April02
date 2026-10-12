@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord, QGISLayer, QGISLayerStyle } from '../types';
-import { collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
 import { evaluateTransmitterStatus } from '../utils/statusCalculator';
@@ -15,7 +15,8 @@ import {
   batchWriteDocuments, batchDeleteDocuments,
   loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords,
   recordStatusTransition, loadStatusHistoryForTransmitter, loadAllStatusHistory,
-  saveLastIngestTime, loadLastIngestTime, subscribeToLastIngestTime
+  saveLastIngestTime, loadLastIngestTime, subscribeToLastIngestTime,
+  clearTransmitterHistoryCache
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage, KNOWN_CLS_RAW_LOCATION_DATES } from '../services/argosService';
@@ -1415,7 +1416,10 @@ export const useAppStore = create<AppState>()(
 
           onProgress?.(`✅ Done: ${tUpdated} transmitters, ${pCreated} positions, ${incomingMessages.length} raw records`);
 
-          // 6. Run heavy status evaluation asynchronously (non-blocking)
+          // Invalidate history cache for affected transmitters so any reports show fresh data
+          affectedPids.forEach(pid => clearTransmitterHistoryCache(pid));
+
+          // 6. Run status evaluation asynchronously (non-blocking)
           const bgTransmitters = [...newTransmitters];
           setTimeout(async () => {
             try {
@@ -1427,12 +1431,12 @@ export const useAppStore = create<AppState>()(
               let statusUpdated = false;
               for (const { t, i } of affectedIndices) {
                 try {
-                  // Fetch both argos_positions and positions for this transmitter to calculate accurate barycenters & status
-                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)));
+                  // Fetch recent argos_positions and positions (limited to 50 docs each to conserve read quota)
+                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)), limit(50));
                   const snapArgos = await getDocs(qArgos);
                   const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)));
+                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)), limit(50));
                   const snapPos = await getDocs(qPos);
                   const manualPositions = snapPos.docs.map(doc => doc.data());
 
@@ -1771,11 +1775,11 @@ export const useAppStore = create<AppState>()(
             try {
               const pidStr = String(t.platform_id);
               
-              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr));
+              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr), limit(50));
               const snapArgos = await getDocs(qArgos);
               const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr));
+              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr), limit(50));
               const snapPos = await getDocs(qPos);
               const manualPositions = snapPos.docs.map(doc => doc.data());
 

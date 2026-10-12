@@ -268,29 +268,24 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
           collection(db, colName),
           where(fieldName, '==', val),
           orderBy('timestamp', 'desc'),
-          limit(5)
+          limit(2)
         )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
         .catch(() => {
           return getDocs(query(
             collection(db, colName),
             where(fieldName, '==', val),
-            limit(20)
+            limit(2)
           )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
           .catch(() => []);
         });
       };
 
       const p1 = fetchDocs('positions', 'transmitter_id', idStr);
-      const p2 = isNumValid ? fetchDocs('positions', 'transmitter_id', idNum) : Promise.resolve([]);
-      const p3 = fetchDocs('positions', 'platformId', idStr);
-      const p4 = isNumValid ? fetchDocs('positions', 'platformId', idNum) : Promise.resolve([]);
+      const p2 = isNumValid && idNum !== Number(idStr) ? fetchDocs('positions', 'transmitter_id', idNum) : Promise.resolve([]);
+      const p3 = fetchDocs('argos_positions', 'platformId', idStr);
+      const p4 = isNumValid && idNum !== Number(idStr) ? fetchDocs('argos_positions', 'platformId', idNum) : Promise.resolve([]);
 
-      const p5 = fetchDocs('argos_positions', 'platformId', idStr);
-      const p6 = isNumValid ? fetchDocs('argos_positions', 'platformId', idNum) : Promise.resolve([]);
-      const p7 = fetchDocs('argos_positions', 'transmitter_id', idStr);
-      const p8 = isNumValid ? fetchDocs('argos_positions', 'transmitter_id', idNum) : Promise.resolve([]);
-
-      promises.push(Promise.all([p1, p2, p3, p4, p5, p6, p7, p8]).then(results => {
+      promises.push(Promise.all([p1, p2, p3, p4]).then(results => {
         const combinedRaw = results.flat();
         if (combinedRaw.length === 0) return null;
 
@@ -664,17 +659,17 @@ export const loadAllPositions = async (startDate?: Date, endDate?: Date): Promis
 };
 
 /**
- * Get all unique platform IDs from argos_positions for the filter dropdown.
+ * Get all unique platform IDs for filter dropdowns.
+ * Uses the lightweight transmitters collection (~80 docs) rather than scanning the massive argos_positions collection.
  */
 export const getArgosTransmitterIds = async (): Promise<string[]> => {
   try {
-    // Load all docs but only the platformId field
-    // For large datasets, this could be optimized with a separate index collection
-    const snapshot = await getDocs(collection(db, 'argos_positions'));
+    const snapshot = await getDocs(collection(db, 'transmitters'));
     const ids = new Set<string>();
     snapshot.forEach(doc => {
       const data = doc.data();
-      if (data.platformId) ids.add(String(data.platformId));
+      const pid = data.platform_id || data.id;
+      if (pid) ids.add(String(pid).replace(/^trans-/, '').trim());
     });
     return Array.from(ids).sort();
   } catch (error) {
@@ -786,8 +781,22 @@ export const bulkUpdateRecords = async (collectionName: string, docIds: string[]
 
 // ─── Position-Specific Operations ─────────────────────────────────────────────
 
+interface CachedTransmitterHistory {
+  cachedAt: number;
+  docs: any[];
+}
+const transmitterHistoryCache = new Map<string, CachedTransmitterHistory>();
+const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30 minutes cache
+
+export const clearTransmitterHistoryCache = (platformId?: string) => {
+  if (platformId) {
+    transmitterHistoryCache.delete(String(platformId));
+  } else {
+    transmitterHistoryCache.clear();
+  }
+};
+
 export const getHistoricalPositions = async (transmitterIds: string[], startDate: Date, endDate: Date) => {
-  console.log('[Firestore] getHistoricalPositions called for PTTs:', transmitterIds.length);
   if (!transmitterIds || transmitterIds.length === 0) {
     return [];
   }
@@ -818,8 +827,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
     if (!isValidCoordinate(lat, lon)) return null;
 
     let docTs = safeParseTimestamp(rawTs);
-
-    if (isNaN(docTs) || docTs < startMs || docTs > endMs) return null;
+    if (isNaN(docTs)) return null;
 
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
 
@@ -847,47 +855,54 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       const pidStr = String(pttId);
       const idNum = Number(pttId);
       const isNumValid = !isNaN(idNum);
+
+      // 1. Check in-memory cache first to avoid redundant Firestore reads
+      const cached = transmitterHistoryCache.get(pidStr);
+      if (cached && (Date.now() - cached.cachedAt < HISTORY_CACHE_TTL)) {
+        const filtered = cached.docs.filter(r => {
+          const ts = safeParseTimestamp(r.timestamp);
+          return !isNaN(ts) && ts >= startMs && ts <= endMs;
+        });
+        allResults.push(...filtered);
+        continue;
+      }
+
+      // 2. Fetch from Firestore with parallel targeted queries
       const seenKeys = new Set<string>();
-      let pttDocs: any[] = [];
+      const pttDocs: any[] = [];
 
-      const fetchAndProcess = async (q: any) => {
-        try {
-          const snap = await getDocs(q);
-          snap.forEach((ds: any) => {
-            const rec = processDoc(ds, pidStr, seenKeys);
-            if (rec) pttDocs.push(rec);
-          });
-        } catch (e) {
-          // ignore query error
-        }
-      };
+      const queryPromises: Promise<any>[] = [
+        getDocs(query(collection(db, 'argos_positions'), where('platformId', '==', pidStr))).catch(() => null),
+        getDocs(query(collection(db, 'positions'), where('transmitter_id', '==', pidStr))).catch(() => null)
+      ];
 
-      // ── Query argos_positions (string, number, platform_id underscore) ──
-      await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', pidStr)));
-      await fetchAndProcess(query(collection(db, 'argos_positions'), where('platform_id', '==', pidStr)));
-      if (isNumValid) {
-        await fetchAndProcess(query(collection(db, 'argos_positions'), where('platformId', '==', idNum)));
-        await fetchAndProcess(query(collection(db, 'argos_positions'), where('platform_id', '==', idNum)));
+      if (isNumValid && idNum !== Number(pidStr)) {
+        queryPromises.push(getDocs(query(collection(db, 'argos_positions'), where('platformId', '==', idNum))).catch(() => null));
+        queryPromises.push(getDocs(query(collection(db, 'positions'), where('transmitter_id', '==', idNum))).catch(() => null));
       }
 
-      // ── Query positions (string, number, trans- prefix, platform_id) ──
-      await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', pidStr)));
-      if (isNumValid) {
-        await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', idNum)));
-      }
-      await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', pidStr)));
-      await fetchAndProcess(query(collection(db, 'positions'), where('platform_id', '==', pidStr)));
-      if (isNumValid) {
-        await fetchAndProcess(query(collection(db, 'positions'), where('platformId', '==', idNum)));
-        await fetchAndProcess(query(collection(db, 'positions'), where('platform_id', '==', idNum)));
-      }
-      await fetchAndProcess(query(collection(db, 'positions'), where('transmitter_id', '==', `trans-${pidStr}`)));
+      const snapshots = await Promise.all(queryPromises);
+      snapshots.forEach(snap => {
+        if (!snap) return;
+        snap.forEach((ds: any) => {
+          const rec = processDoc(ds, pidStr, seenKeys);
+          if (rec) pttDocs.push(rec);
+        });
+      });
 
-      allResults.push(...pttDocs);
+      // Cache all positions for this transmitter
+      transmitterHistoryCache.set(pidStr, { cachedAt: Date.now(), docs: pttDocs });
+
+      // Filter to requested date window
+      const dateFiltered = pttDocs.filter(r => {
+        const ts = safeParseTimestamp(r.timestamp);
+        return !isNaN(ts) && ts >= startMs && ts <= endMs;
+      });
+
+      allResults.push(...dateFiltered);
     }
 
     allResults.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
-    console.log(`[Firestore] getHistoricalPositions returning ${allResults.length} records`);
     return allResults;
   } catch (error) {
     console.error('[Firestore] Error in getHistoricalPositions:', error);
