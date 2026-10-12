@@ -158,5 +158,14 @@ export const FIXED_FIELD_CAMPS: FieldCampPoint[] = [
     lon: 75.290787,
     region: 'Almaty Region',
     country: 'Kazakhstan'
+  },
+  {
+    id: 'el_bnoud_camp',
+    name: 'مخيم البنود',
+    nameEn: 'El Bnoud Camp',
+    lat: 32.39853,
+    lon: 0.24449,
+    region: 'El Bayadh',
+    country: 'Algeria'
   }
 ];

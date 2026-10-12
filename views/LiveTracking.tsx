@@ -1974,7 +1974,8 @@ const LiveTrackingInner = () => {
          lowerQ.includes(c.name.toLowerCase()) ||
          (c.nameEn && lowerQ.includes(c.nameEn.toLowerCase())) ||
          (c.id === 'almaty_camp' && (lowerQ.includes('ألماتي') || lowerQ.includes('الماتي') || lowerQ.includes('almaty'))) ||
-         (c.id === 'zhezkazgan_camp' && (lowerQ.includes('جيزقازغان') || lowerQ.includes('zhezkazgan') || lowerQ.includes('جيز')))
+         (c.id === 'zhezkazgan_camp' && (lowerQ.includes('جيزقازغان') || lowerQ.includes('zhezkazgan') || lowerQ.includes('جيز'))) ||
+         (c.id === 'el_bnoud_camp' && (lowerQ.includes('البنود') || lowerQ.includes('بنود') || lowerQ.includes('bnoud') || lowerQ.includes('el bnoud')))
     );
     if (matchedCamp) {
          setCustomFlyTo({ lat: matchedCamp.lat, lon: matchedCamp.lon });

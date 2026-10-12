@@ -936,12 +936,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
   // Determine active field camp
   const activeCamp: FieldCampPoint = useMemo(() => {
-    if (selectedCampId === 'zhezkazgan_camp') {
-      return FIXED_FIELD_CAMPS[0];
-    }
-    if (selectedCampId === 'almaty_camp') {
-      return FIXED_FIELD_CAMPS[1];
-    }
+    const matched = FIXED_FIELD_CAMPS.find(c => c.id === selectedCampId);
+    if (matched) return matched;
+
     const lat = parseFloat(String(telemetryData.lastGpsPos.lat)) || 46.9965;
     const lon = parseFloat(String(telemetryData.lastGpsPos.lon)) || 67.0222;
     let nearest = FIXED_FIELD_CAMPS[0];
@@ -1531,8 +1528,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                 className="w-full px-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer"
               >
                 <option value="auto">تلقائي (الأقرب لإحداثية الطائر)</option>
-                <option value="zhezkazgan_camp">مخيم جيزقازغان (Zhezkazgan Camp) – 47.143761, 67.810600</option>
-                <option value="almaty_camp">مخيم ألماتي (Almaty Camp) – 44.398198, 75.290787</option>
+                {FIXED_FIELD_CAMPS.map(c => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.nameEn}) – {c.lat.toFixed(6)}, {c.lon.toFixed(6)}</option>
+                ))}
               </select>
               <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -1613,8 +1611,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
                   className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none cursor-pointer"
                 >
                   <option value="auto">تلقائي (الأقرب لموقع الطائر)</option>
-                  <option value="zhezkazgan_camp">مخيم جيزقازغان (Zhezkazgan Camp)</option>
-                  <option value="almaty_camp">مخيم ألماتي (Almaty Camp)</option>
+                  {FIXED_FIELD_CAMPS.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.nameEn})</option>
+                  ))}
                 </select>
               </div>
 

@@ -563,7 +563,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // ─── FIELD CAMPS FILTER & DISTANCES (AS REQUESTED) ──────────────────────────
   // Choose camps one by one (check case for every camp)
-  const [visibleCampIds, setVisibleCampIds] = useState<string[]>(['zhezkazgan_camp', 'almaty_camp']);
+  const [visibleCampIds, setVisibleCampIds] = useState<string[]>(FIXED_FIELD_CAMPS.map(c => c.id));
   // Distance between each chosen camp and last position
   const [campDistToLastEnabled, setCampDistToLastEnabled] = useState<{ [campId: string]: boolean }>({});
   // Distance between camps
@@ -1260,8 +1260,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const activeCamp: FieldCampPoint = useMemo(() => {
     const visibleCamps = FIXED_FIELD_CAMPS.filter(c => visibleCampIds.includes(c.id));
     if (visibleCamps.length === 1) return visibleCamps[0];
-    if (selectedCampId === 'zhezkazgan_camp') return FIXED_FIELD_CAMPS[0];
-    if (selectedCampId === 'almaty_camp') return FIXED_FIELD_CAMPS[1];
+    const matched = FIXED_FIELD_CAMPS.find(c => c.id === selectedCampId);
+    if (matched) return matched;
     
     const candidates = visibleCamps.length > 0 ? visibleCamps : FIXED_FIELD_CAMPS;
     const lat = parseFloat(String(telemetryData.lastGpsPos.lat)) || 46.9965;
