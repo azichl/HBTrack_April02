@@ -82,20 +82,38 @@ const createLiveTrackingLabelIcon = ({
   number,
   ringId,
   borderColorHex,
-  labelTitle
+  labelTitle,
+  position = 'top'
 }: {
   number: string;
   ringId?: string;
   borderColorHex: string;
   labelTitle?: string;
+  position?: 'top' | 'right' | 'bottom' | 'left';
 }) => {
   const rawId = String(number || '').trim().replace(/^trans-/, '');
   const isNA = !rawId || rawId.toUpperCase() === 'NA' || rawId.toUpperCase() === 'N/A' || rawId.toUpperCase() === 'NONE';
   const cleanId = isNA ? (String(ringId || 'NA').trim() || 'NA') : rawId;
   const hasTitle = Boolean(labelTitle);
-  const totalW = 160;
-  const totalH = hasTitle ? 45 : 25;
   const pillW = Math.max(54, cleanId.length * 7.5 + 16);
+  const titleW = hasTitle ? Math.max(54, (labelTitle || '').length * 8 + 12) : 0;
+  const totalW = Math.max(pillW + 16, titleW + 16, 80);
+  const totalH = hasTitle ? 45 : 25;
+
+  let anchorX = totalW / 2;
+  let anchorY = totalH + 35; // Default: 'top' (above pin)
+
+  if (position === 'right') {
+    // Label sits neatly to the right of the pin (e.g. Release label in Photo 1)
+    anchorX = -12;
+    anchorY = totalH / 2 + 6;
+  } else if (position === 'left') {
+    anchorX = totalW + 12;
+    anchorY = totalH / 2 + 6;
+  } else if (position === 'bottom') {
+    anchorX = totalW / 2;
+    anchorY = -12;
+  }
 
   return L.divIcon({
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
@@ -144,7 +162,7 @@ const createLiveTrackingLabelIcon = ({
       </svg>
     `,
     iconSize: [totalW, totalH],
-    iconAnchor: [totalW / 2, totalH + 35],
+    iconAnchor: [anchorX, anchorY],
   });
 };
 
@@ -201,10 +219,11 @@ const createLiveTrackingCampLabelIcon = (campName: string) => {
 const createDistancePillIcon = (
   text: string, 
   borderColor: string, 
-  anchorOffset: [number, number] = [37, 12]
+  anchorOffset?: [number, number]
 ) => {
-  const pillW = Math.max(74, text.length * 8 + 14);
+  const pillW = Math.max(70, text.length * 7.5 + 16);
   const pillH = 24;
+  const finalAnchor: [number, number] = anchorOffset || [pillW / 2, pillH / 2];
 
   return L.divIcon({
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
@@ -215,7 +234,7 @@ const createDistancePillIcon = (
           y="1" 
           width="${pillW - 2}" 
           height="${pillH - 2}" 
-          rx="10" 
+          rx="11" 
           fill="#ffffff" 
           stroke="${borderColor}" 
           stroke-width="1.8"
@@ -235,7 +254,7 @@ const createDistancePillIcon = (
       </svg>
     `,
     iconSize: [pillW, pillH],
-    iconAnchor: anchorOffset
+    iconAnchor: finalAnchor
   });
 };
 
@@ -947,46 +966,39 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── CUSTOMIZABLE MAP LEGEND ITEMS (ITEM BY ITEM) ───────────────────────────
   const [legendItems, setLegendItems] = useState<CustomLegendItem[]>([
     {
+      id: 'main_road',
+      label: 'Main Road',
+      color: '#c4a47c',
+      symbol: 'line',
+      visible: true
+    },
+    {
       id: 'camp_dist',
-      label: 'المسافة إلى المخيم',
+      label: 'Distance to Camp',
       color: '#d97706',
       symbol: 'dashed-line',
       visible: true
     },
     {
       id: 'camps',
-      label: 'مخيم',
+      label: 'Camp',
       color: '#f59e0b',
       symbol: 'tent',
       visible: true
     },
     {
       id: 'last_pos',
-      label: 'آخر موقع (01-10-2026)',
+      label: 'Latest Location',
       color: '#22c55e',
       symbol: 'circle',
       visible: true
     },
     {
       id: 'release_pos',
-      label: 'موقع تركيب الجهاز',
+      label: 'Release Location',
       color: '#701a2b',
       symbol: 'circle',
       visible: true
-    },
-    {
-      id: 'main_road',
-      label: 'طريق رئيسي',
-      color: '#dc2626',
-      symbol: 'line',
-      visible: true
-    },
-    {
-      id: 'cities',
-      label: 'مدن وقرى',
-      color: '#1e293b',
-      symbol: 'square',
-      visible: false
     }
   ]);
   const [isLegendCustomizedByUser, setIsLegendCustomizedByUser] = useState<boolean>(false);
@@ -1035,8 +1047,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const campLabel = getCampLegendLabel(visibleCampIds);
     const items: CustomLegendItem[] = [
       {
+        id: 'main_road',
+        label: reportLanguage === 'en' ? 'Main Road' : 'طريق رئيسي',
+        color: '#c4a47c',
+        symbol: 'line',
+        visible: true
+      },
+      {
         id: 'camp_dist',
-        label: 'المسافة إلى المخيم',
+        label: reportLanguage === 'en' ? 'Distance to Camp' : 'المسافة إلى المخيم',
         color: '#d97706',
         symbol: 'dashed-line',
         visible: true
@@ -1050,31 +1069,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       },
       {
         id: 'last_pos',
-        label: `آخر موقع (${dateStr})`,
+        label: reportLanguage === 'en' ? 'Latest Location' : 'آخر موقع',
         color: '#22c55e',
         symbol: 'circle',
         visible: true
       },
       {
         id: 'release_pos',
-        label: 'موقع تركيب الجهاز',
+        label: reportLanguage === 'en' ? 'Release Location' : 'موقع تركيب الجهاز',
         color: '#701a2b',
         symbol: 'circle',
         visible: showReleaseMarker
-      },
-      {
-        id: 'main_road',
-        label: 'طريق رئيسي',
-        color: '#dc2626',
-        symbol: 'line',
-        visible: true
-      },
-      {
-        id: 'cities',
-        label: 'مدن وقرى',
-        color: '#1e293b',
-        symbol: 'square',
-        visible: false
       }
     ];
     if (showCampDistance && visibleCampIds.length >= 2) {
@@ -1096,19 +1101,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       });
     }
     setLegendItems(items);
-  }, [telemetryData.lastGpsPos?.dateStr, showReleaseMarker, visibleCampIds, showCampDistance, campDistanceKm, measurePoints.length, totalMeasureDistanceKm]);
+  }, [showReleaseMarker, visibleCampIds, showCampDistance, campDistanceKm, measurePoints.length, totalMeasureDistanceKm, reportLanguage]);
 
-  // Keep legend items smoothly in sync with telemetry date & filters if not manually customized
+  // Keep legend items smoothly in sync with language & filters if not manually customized
   useEffect(() => {
-    if (!isLegendCustomizedByUser && telemetryData.lastGpsPos?.dateStr) {
+    if (!isLegendCustomizedByUser) {
       setLegendItems(prev => prev.map(item => {
         if (item.id === 'last_pos') {
-          return { ...item, label: `آخر موقع (${telemetryData.lastGpsPos.dateStr})` };
+          return { ...item, label: reportLanguage === 'en' ? 'Latest Location' : 'آخر موقع' };
         }
         return item;
       }));
     }
-  }, [telemetryData.lastGpsPos?.dateStr, isLegendCustomizedByUser]);
+  }, [reportLanguage, isLegendCustomizedByUser]);
 
   useEffect(() => {
     if (!isLegendCustomizedByUser) {
@@ -4238,7 +4243,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
                         if (!camp || metrics.lLat === 0 || metrics.lLon === 0) return null;
 
-                        const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(2);
+                        const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(1);
                         const midLat = (camp.lat + metrics.lLat) / 2;
                         const midLon = (camp.lon + metrics.lLon) / 2;
 
@@ -4283,7 +4288,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           />
                           <Marker
                             position={metrics.releaseToLastMid}
-                            icon={createDistancePillIcon(`${metrics.distFromReleaseKm} km`, '#dc2626')}
+                            icon={createDistancePillIcon(
+                              `${metrics.distFromReleaseKm} km`, 
+                              '#dc2626',
+                              [Math.max(70, `${metrics.distFromReleaseKm} km`.length * 7.5 + 16) + 16, 12]
+                            )}
                             zIndexOffset={1500}
                             interactive={true}
                             draggable={true}
@@ -4306,7 +4315,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
                               borderColorHex: '#701a2b',
-                              labelTitle: T.installHead
+                              labelTitle: reportLanguage === 'en' ? 'Release' : T.installHead,
+                              position: 'right'
                             })}
                             zIndexOffset={1801}
                             draggable={true}
@@ -4329,7 +4339,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
                               borderColorHex: '#22c55e',
-                              labelTitle: T.lastHead
+                              labelTitle: reportLanguage === 'en' ? 'Latest Location' : T.lastHead,
+                              position: 'top'
                             })}
                             zIndexOffset={2001}
                             draggable={true}
@@ -4765,7 +4776,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               <div 
                 id="custom-map-legend-bar"
                 className="trk-legend relative group select-none transition-all"
-                style={{ direction: 'rtl', margin: '4px 0 0 0' }}
+                style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%' }}
               >
                 {/* Hover Quick Edit Button (when not in table edit mode) */}
                 {!isTableEditing && (
@@ -4897,13 +4908,34 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-row items-center justify-between flex-nowrap w-full gap-2 px-1 text-[11px] font-bold text-gray-800 whitespace-nowrap overflow-hidden">
-                    {legendItems.filter(item => item.visible).map(item => (
-                      <span key={item.id} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                        {renderLegendSymbol(item.symbol, item.color)}
-                        <span>{translateValue(item.label)}</span>
-                      </span>
-                    ))}
+                  <div 
+                    className="flex flex-row items-center justify-between flex-nowrap w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
+                    style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr' }}
+                  >
+                    {legendItems.filter(item => item.visible).map(item => {
+                      let lbl = item.label;
+                      if (reportLanguage === 'en') {
+                        if (lbl === 'طريق رئيسي' || item.id === 'main_road') lbl = 'Main Road';
+                        else if (lbl === 'المسافة إلى المخيم' || lbl === 'البعد عنه' || item.id === 'camp_dist') lbl = 'Distance to Camp';
+                        else if (lbl === 'مخيم' || lbl === 'المخيم' || item.id === 'camps') lbl = 'Camp';
+                        else if (lbl.includes('آخر موقع') || item.id === 'last_pos') lbl = 'Latest Location';
+                        else if (lbl === 'موقع تركيب الجهاز' || item.id === 'release_pos') lbl = 'Release Location';
+                        else lbl = translateValue(lbl);
+                      } else {
+                        if (lbl === 'Main Road' || item.id === 'main_road') lbl = 'طريق رئيسي';
+                        else if (lbl === 'Distance to Camp' || item.id === 'camp_dist') lbl = 'المسافة إلى المخيم';
+                        else if (lbl === 'Camp' || item.id === 'camps') lbl = 'مخيم';
+                        else if (lbl === 'Latest Location' || item.id === 'last_pos') lbl = 'آخر موقع';
+                        else if (lbl === 'Release Location' || item.id === 'release_pos') lbl = 'موقع تركيب الجهاز';
+                      }
+
+                      return (
+                        <div key={item.id} className="inline-flex items-center gap-2 whitespace-nowrap shrink-0">
+                          <span>{lbl}</span>
+                          {renderLegendSymbol(item.symbol, item.color)}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
