@@ -1533,235 +1533,40 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           clonedPrintArea.style.setProperty('font-family', "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif", 'important');
         }
 
-        // 3. Fix Leaflet Vector Shift Bug:
-        // Leaflet renders SVG paths inside .leaflet-overlay-pane with CSS transforms that
-        // html2canvas incorrectly double-translates, shifting polylines and tracks off-center.
-        // We eliminate the shifted SVGs from the clone and render pixel-perfect canvas lines
-        // positioned at the exact layer coordinates.
-        const activeMap = mapInstance || (targetElement.querySelector('.leaflet-container') as any)?._leaflet_map;
+        // 3. Ensure Leaflet Vector Overlays & Distance Lines remain 100% visible and intact:
+        // Keep all Leaflet SVGs and their paths in .leaflet-overlay-pane fully visible, styled,
+        // and crisp so distance lines, flight trajectories, and measurements are captured accurately.
         const clonedOverlayPane = clonedDoc.querySelector('.leaflet-overlay-pane') as HTMLElement;
+        if (clonedOverlayPane) {
+          clonedOverlayPane.style.zIndex = '350';
+          clonedOverlayPane.style.visibility = 'visible';
+          clonedOverlayPane.style.display = 'block';
 
-        if (clonedOverlayPane && activeMap) {
-          // Wipe out shifted SVGs from the cloned overlay pane
           const overlaySvgs = clonedOverlayPane.querySelectorAll('svg');
           overlaySvgs.forEach(svg => {
-            svg.innerHTML = '';
-            (svg as unknown as HTMLElement).style.display = 'none';
+            const el = svg as unknown as HTMLElement;
+            el.style.display = 'block';
+            el.style.visibility = 'visible';
+            el.style.opacity = '1';
           });
 
-          try {
-            // Collect all points to determine bounding box
-            const allPts: L.Point[] = [];
+          const overlayPaths = clonedOverlayPane.querySelectorAll('path');
+          overlayPaths.forEach(path => {
+            const p = path as unknown as HTMLElement;
+            p.style.display = 'block';
+            p.style.visibility = 'visible';
+            p.style.opacity = '1';
+          });
+        }
 
-            if (showFlightTrack && allHistoryPoints.length > 0) {
-              allHistoryPoints.forEach(pos => {
-                try { allPts.push(activeMap.latLngToLayerPoint(pos)); } catch (e) {}
-              });
-            }
-
-            if (metrics.rLat !== 0 && metrics.rLon !== 0) {
-              try { allPts.push(activeMap.latLngToLayerPoint([metrics.rLat, metrics.rLon])); } catch (e) {}
-            }
-
-            if (metrics.lLat !== 0 && metrics.lLon !== 0) {
-              try { allPts.push(activeMap.latLngToLayerPoint([metrics.lLat, metrics.lLon])); } catch (e) {}
-            }
-
-            FIXED_FIELD_CAMPS.forEach(c => {
-              try { allPts.push(activeMap.latLngToLayerPoint([c.lat, c.lon])); } catch (e) {}
-            });
-
-            if (measurePoints.length > 0) {
-              measurePoints.forEach(pos => {
-                try { allPts.push(activeMap.latLngToLayerPoint(pos)); } catch (e) {}
-              });
-            }
-
-            const mapSize = activeMap.getSize();
-            let minX = 0;
-            let minY = 0;
-            let maxX = mapSize.x || 800;
-            let maxY = mapSize.y || 450;
-
-            allPts.forEach(pt => {
-              if (pt.x < minX) minX = pt.x;
-              if (pt.y < minY) minY = pt.y;
-              if (pt.x > maxX) maxX = pt.x;
-              if (pt.y > maxY) maxY = pt.y;
-            });
-
-            minX = Math.floor(minX - 300);
-            minY = Math.floor(minY - 300);
-            maxX = Math.ceil(maxX + 300);
-            maxY = Math.ceil(maxY + 300);
-
-            const canvasW = maxX - minX;
-            const canvasH = maxY - minY;
-
-            const exportLinesCanvas = clonedDoc.createElement('canvas');
-            exportLinesCanvas.width = canvasW;
-            exportLinesCanvas.height = canvasH;
-            exportLinesCanvas.style.position = 'absolute';
-            exportLinesCanvas.style.left = `${minX}px`;
-            exportLinesCanvas.style.top = `${minY}px`;
-            exportLinesCanvas.style.width = `${canvasW}px`;
-            exportLinesCanvas.style.height = `${canvasH}px`;
-            exportLinesCanvas.style.zIndex = '350';
-            exportLinesCanvas.style.pointerEvents = 'none';
-
-            const ctx = exportLinesCanvas.getContext('2d');
-            if (ctx) {
-              ctx.translate(-minX, -minY);
-
-              // ─── A. Real Flight Trajectory Line & Fix Dots ───
-              if (showFlightTrack && allHistoryPoints.length > 1) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#6366f1';
-                ctx.lineWidth = 2.8;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.globalAlpha = 0.85;
-
-                allHistoryPoints.forEach((pos, idx) => {
-                  const pt = activeMap.latLngToLayerPoint(pos);
-                  if (idx === 0) ctx.moveTo(pt.x, pt.y);
-                  else ctx.lineTo(pt.x, pt.y);
-                });
-                ctx.stroke();
-                ctx.restore();
-
-                // Telemetry fix dots
-                allHistoryPoints.forEach((pos) => {
-                  const pt = activeMap.latLngToLayerPoint(pos);
-                  ctx.save();
-                  ctx.beginPath();
-                  ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-                  ctx.fillStyle = '#ffffff';
-                  ctx.globalAlpha = 0.95;
-                  ctx.fill();
-                  ctx.lineWidth = 1.5;
-                  ctx.strokeStyle = '#4f46e5';
-                  ctx.stroke();
-                  ctx.restore();
-                });
-              }
-
-              // ─── B. Distance line between Chosen Camp(s) and Last Position ───
-              visibleCampIds.forEach(campId => {
-                if (!campDistToLastEnabled[campId]) return;
-                const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
-                if (!camp || metrics.lLat === 0 || metrics.lLon === 0) return;
-
-                const campPt = activeMap.latLngToLayerPoint([camp.lat, camp.lon]);
-                const lastPt = activeMap.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
-
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#d97706';
-                ctx.lineWidth = 2.5;
-                ctx.lineCap = 'round';
-                ctx.setLineDash([6, 6]);
-                ctx.moveTo(campPt.x, campPt.y);
-                ctx.lineTo(lastPt.x, lastPt.y);
-                ctx.stroke();
-                ctx.restore();
-              });
-
-              // ─── C. Distance line between Camps ───
-              if (showCampDistance && visibleCampIds.length >= 2) {
-                const c1 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[0]) || FIXED_FIELD_CAMPS[0];
-                const c2 = FIXED_FIELD_CAMPS.find(c => c.id === visibleCampIds[1]) || FIXED_FIELD_CAMPS[1];
-                const pt1 = activeMap.latLngToLayerPoint([c1.lat, c1.lon]);
-                const pt2 = activeMap.latLngToLayerPoint([c2.lat, c2.lon]);
-
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#059669';
-                ctx.lineWidth = 2.5;
-                ctx.lineCap = 'round';
-                ctx.setLineDash([6, 6]);
-                ctx.moveTo(pt1.x, pt1.y);
-                ctx.lineTo(pt2.x, pt2.y);
-                ctx.stroke();
-                ctx.restore();
-              }
-
-              // ─── D. Distance line: Release Position to Last Position ───
-              if (showDistanceToRelease && metrics.rLat !== 0 && metrics.lLat !== 0) {
-                const relPt = activeMap.latLngToLayerPoint([metrics.rLat, metrics.rLon]);
-                const lastPt = activeMap.latLngToLayerPoint([metrics.lLat, metrics.lLon]);
-
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#dc2626';
-                ctx.lineWidth = 2.5;
-                ctx.lineCap = 'round';
-                ctx.setLineDash([6, 6]);
-                ctx.moveTo(relPt.x, relPt.y);
-                ctx.lineTo(lastPt.x, lastPt.y);
-                ctx.stroke();
-                ctx.restore();
-              }
-
-              // ─── E. Distance Measurement Tool Drawing (Ruler) ───
-              if (measurePoints.length > 1) {
-                ctx.save();
-                ctx.beginPath();
-                ctx.strokeStyle = '#eab308';
-                ctx.lineWidth = 3.5;
-                ctx.lineCap = 'round';
-                ctx.setLineDash([7, 7]);
-
-                measurePoints.forEach((pos, idx) => {
-                  const pt = activeMap.latLngToLayerPoint(pos);
-                  if (idx === 0) ctx.moveTo(pt.x, pt.y);
-                  else ctx.lineTo(pt.x, pt.y);
-                });
-                ctx.stroke();
-                ctx.restore();
-
-                // Measure dots
-                measurePoints.forEach((pos, idx) => {
-                  const pt = activeMap.latLngToLayerPoint(pos);
-                  const isEnd = idx === measurePoints.length - 1;
-                  ctx.save();
-                  ctx.beginPath();
-                  ctx.arc(pt.x, pt.y, isEnd ? 7 : 5, 0, Math.PI * 2);
-                  ctx.fillStyle = isEnd ? '#f59e0b' : '#ffffff';
-                  ctx.fill();
-                  ctx.lineWidth = 2.5;
-                  ctx.strokeStyle = isEnd ? '#ffffff' : '#f59e0b';
-                  ctx.stroke();
-                  ctx.restore();
-                });
-              }
-            }
-
-            clonedOverlayPane.appendChild(exportLinesCanvas);
-          } catch (err) {
-            console.warn('Error rendering custom export lines canvas in clone:', err);
-          }
-
-          // Raise marker pane so marker icons and distance pills sit cleanly on top of canvas lines
-          const clonedMarkerPane = clonedDoc.querySelector('.leaflet-marker-pane') as HTMLElement;
-          if (clonedMarkerPane) {
-            clonedMarkerPane.style.zIndex = '800';
-          }
+        // Raise marker pane so marker icons and distance pills sit cleanly on top
+        const clonedMarkerPane = clonedDoc.querySelector('.leaflet-marker-pane') as HTMLElement;
+        if (clonedMarkerPane) {
+          clonedMarkerPane.style.zIndex = '800';
         }
       }
     };
-  }, [
-    mapInstance,
-    showFlightTrack,
-    allHistoryPoints,
-    metrics,
-    visibleCampIds,
-    campDistToLastEnabled,
-    showCampDistance,
-    showDistanceToRelease,
-    measurePoints
-  ]);
+  }, []);
 
   // Re-capture current interactive map view as snapshot photo
   // IMPORTANT: Hide any "التقاط كصورة" button or controls so it NEVER appears in the snapshot!
