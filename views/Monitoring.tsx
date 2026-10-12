@@ -169,7 +169,7 @@ export const Monitoring = () => {
           hasPos: !!pos || (displayLat !== undefined && displayLon !== undefined)
         };
       });
-  }, [transmitters, birds, latestPositions, argosLastFix, hasCurrentMonthFixesMap]);
+  }, [transmitters, birds, latestPositions, hasCurrentMonthFixesMap]);
 
   // Client-side search filtering
   const filteredData = useMemo(() => {
