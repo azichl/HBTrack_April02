@@ -2761,8 +2761,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         {showCustomizer && (
           <div className="pt-4 border-t border-gray-200 dark:border-slate-700/70 space-y-4 animate-in fade-in slide-in-from-top-2">
             
-            {/* Section A: Map Feature Filters & Distance Checkboxes (USER SPECIFIC REQUESTS) */}
-            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3.5 rounded-xl border border-gray-200 dark:border-slate-700 space-y-3">
+            {/* Section A: Map Feature Filters & Distance Checkboxes (Compact short cells with checkboxes) */}
+            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2.5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
                   <SlidersHorizontal size={14} className="text-brand-500" />
@@ -2785,8 +2785,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 </div>
               </div>
 
-              {/* 1. Field Camps Filter (Choose one by one with distance to last pos check case) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Grid of short compact cells with check cases */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {/* 1. Field Camps: Each in a short compact cell */}
                 {FIXED_FIELD_CAMPS.map(camp => {
                   const isVisible = visibleCampIds.includes(camp.id);
                   const isDistToLastActive = campDistToLastEnabled[camp.id] || false;
@@ -2797,14 +2798,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   return (
                     <div 
                       key={camp.id}
-                      className={`p-2.5 rounded-xl border transition-all ${
+                      className={`px-3 py-1.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${
                         isVisible 
-                          ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700/60 shadow-xs' 
-                          : 'bg-gray-100/60 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-75'
+                          ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700/60 shadow-2xs' 
+                          : 'bg-gray-100/60 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60'
                       }`}
                     >
                       {/* Checkbox: Camp Show/Hide */}
-                      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
                         <input
                           type="checkbox"
                           checked={isVisible}
@@ -2813,184 +2814,131 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               setVisibleCampIds(prev => [...prev, camp.id]);
                             } else {
                               setVisibleCampIds(prev => prev.filter(id => id !== camp.id));
-                              // Also disable distance if camp hidden
                               setCampDistToLastEnabled(prev => ({ ...prev, [camp.id]: false }));
                             }
                           }}
-                          className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
                         />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-gray-900 dark:text-white">
-                              {camp.name}
-                            </span>
-                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold">
-                              {camp.region || 'كازاخستان'}
-                            </span>
-                          </div>
-                          <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
-                            {camp.nameEn} ({camp.lat.toFixed(2)}, {camp.lon.toFixed(2)})
-                          </span>
-                        </div>
+                        <span className="text-xs font-bold text-gray-900 dark:text-white whitespace-nowrap">
+                          {camp.name}
+                        </span>
                       </label>
 
-                      {/* Checkbox: Distance between chosen camp and last position (Requested Feature) */}
-                      <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                        <label className={`flex items-center gap-2 cursor-pointer select-none ${!isVisible ? 'opacity-40 pointer-events-none' : ''}`}>
-                          <input
-                            type="checkbox"
-                            checked={isDistToLastActive}
-                            disabled={!isVisible}
-                            onChange={(e) => {
-                              setCampDistToLastEnabled(prev => ({
-                                ...prev,
-                                [camp.id]: e.target.checked
-                              }));
-                            }}
-                            className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
-                          />
-                          <div className="flex items-center justify-between flex-1">
-                            <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300">
-                              المسافة إلى آخر موقع
-                            </span>
-                            <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
-                              {distToLast} km
-                            </span>
-                          </div>
-                        </label>
-                      </div>
+                      {/* Checkbox: Distance to last position */}
+                      <label className={`flex items-center gap-1.5 cursor-pointer select-none text-[11px] ${!isVisible ? 'opacity-30 pointer-events-none' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={isDistToLastActive}
+                          disabled={!isVisible}
+                          onChange={(e) => {
+                            setCampDistToLastEnabled(prev => ({
+                              ...prev,
+                              [camp.id]: e.target.checked
+                            }));
+                          }}
+                          className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <span className="text-amber-800 dark:text-amber-300 font-semibold whitespace-nowrap">
+                          المسافة لآخر موقع ({distToLast} km)
+                        </span>
+                      </label>
                     </div>
                   );
                 })}
 
-                {/* Distance Between Camps Checkbox */}
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex flex-col justify-between">
-                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showCampDistance}
-                      onChange={(e) => setShowCampDistance(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">
-                          المسافة بين المخيمات
-                        </span>
-                        <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
-                          {campDistanceKm} km
-                        </span>
-                      </div>
-                      <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
-                        رسم خط مباشر وبطاقة مسافة بين مخيمات الميدان
-                      </span>
-                    </div>
-                  </label>
-                  <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    {visibleCampIds.length >= 2 ? 'مفعل بين المخيمات المعروضة' : 'يتطلب اختيار مخيمين على الأقل'}
-                  </div>
-                </div>
-
-                {/* Show / Hide Release Marker Checkbox */}
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex flex-col justify-between">
-                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                {/* 2. Show / Hide Release Marker Checkbox */}
+                <label className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex items-center justify-between gap-2 cursor-pointer select-none shadow-2xs hover:border-red-300 transition-colors">
+                  <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={showReleaseMarker}
                       onChange={(e) => setShowReleaseMarker(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                      className="w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
                     />
-                    <div className="flex-1">
-                      <span className="text-xs font-bold text-gray-900 dark:text-white block">
-                        علامة "موقع التركيب"
-                      </span>
-                      <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
-                        إظهار أو إخفاء علامة نقطة إطلاق/تركيب الطائر
-                      </span>
-                    </div>
-                  </label>
-                  <div className="text-[10px] font-mono text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    {metrics.rLat ? metrics.rLat.toFixed(4) : '0.0000'}, {metrics.rLon ? metrics.rLon.toFixed(4) : '0.0000'}
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      علامة "موقع التركيب"
+                    </span>
                   </div>
-                </div>
+                  <span className="text-[10px] font-mono text-gray-400 bg-gray-50 dark:bg-slate-700/60 px-1.5 py-0.5 rounded">
+                    نقطة الإطلاق
+                  </span>
+                </label>
 
-                {/* Distance between Last Position & Release Location */}
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex flex-col justify-between">
-                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                {/* 3. Distance between Last Position & Release Location */}
+                <label className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex items-center justify-between gap-2 cursor-pointer select-none shadow-2xs hover:border-red-300 transition-colors">
+                  <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={showDistanceToRelease}
                       onChange={(e) => setShowDistanceToRelease(e.target.checked)}
-                      className="mt-0.5 w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                      className="w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
                     />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-gray-900 dark:text-white">
-                          المسافة إلى موقع التركيب
-                        </span>
-                        <span className="text-[10px] font-mono font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded">
-                          {metrics.distFromReleaseKm} km
-                        </span>
-                      </div>
-                      <span className="block text-[10px] text-gray-500 dark:text-gray-400 font-normal mt-0.5">
-                        خط متقطع بين آخر إحداثية ونقطة التركيب
-                      </span>
-                    </div>
-                  </label>
-                  <div className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    {reportLanguage === 'ar' ? 'الاتجاه' : 'Direction'}: {metrics.bearingArabic?.text || ''} ({metrics.bearingDegrees ? metrics.bearingDegrees.toFixed(0) : 0}°)
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      المسافة إلى موقع التركيب
+                    </span>
                   </div>
-                </div>
+                  <span className="text-[10px] font-mono font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 rounded">
+                    {metrics.distFromReleaseKm} km
+                  </span>
+                </label>
 
-                {/* Map Distance Measurement Tool (Requested Feature) */}
-                <div className="p-2.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 flex flex-col justify-between">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-amber-500 text-white rounded-lg">
-                        <Ruler size={16} />
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-amber-900 dark:text-amber-200 block">
-                          أداة قياس المسافة على الخريطة
-                        </span>
-                        <span className="text-[10px] text-amber-700 dark:text-amber-400">
-                          {isMeasuring ? 'انقر على الخريطة لرسم النقاط' : 'رسم خطوط قياس وتصديرها'}
-                        </span>
-                      </div>
-                    </div>
-                    {measurePoints.length > 1 && (
-                      <span className="text-xs font-mono font-bold text-amber-900 dark:text-amber-200 bg-amber-200 dark:bg-amber-800/60 px-2 py-0.5 rounded-md">
-                        {totalMeasureDistanceKm} km
-                      </span>
-                    )}
+                {/* 4. Distance Between Camps Checkbox */}
+                <label className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 flex items-center justify-between gap-2 cursor-pointer select-none shadow-2xs hover:border-emerald-300 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={showCampDistance}
+                      onChange={(e) => setShowCampDistance(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">
+                      المسافة بين المخيمات
+                    </span>
                   </div>
-                  
-                  <div className="flex items-center gap-2 mt-2 pt-2 border-t border-amber-200 dark:border-amber-800/60">
+                  <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                    {campDistanceKm} km
+                  </span>
+                </label>
+              </div>
+
+              {/* 5. Compact Map Distance Measurement Tool */}
+              <div className="px-3 py-1.5 rounded-lg bg-amber-50/70 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700/60 flex items-center justify-between gap-2 shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <Ruler size={14} className="text-amber-600 dark:text-amber-400" />
+                  <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                    أداة قياس المسافة على الخريطة:
+                  </span>
+                  {measurePoints.length > 1 && (
+                    <span className="text-[11px] font-mono font-bold text-amber-800 dark:text-amber-200 bg-amber-200/80 dark:bg-amber-800/60 px-1.5 py-0.5 rounded">
+                      {totalMeasureDistanceKm} km ({measurePoints.length} نقاط)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsMeasuring(!isMeasuring)}
+                    className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
+                      isMeasuring 
+                        ? 'bg-amber-600 text-white' 
+                        : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 border border-amber-300 hover:bg-amber-100'
+                    }`}
+                  >
+                    {isMeasuring ? 'إنهاء الرسم' : 'بدء القياس بالمسطرة'}
+                  </button>
+                  {measurePoints.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setIsMeasuring(!isMeasuring)}
-                      className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all ${
-                        isMeasuring 
-                          ? 'bg-amber-600 text-white' 
-                          : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 border border-amber-300 hover:bg-amber-100'
-                      }`}
+                      onClick={() => setMeasurePoints([])}
+                      className="py-1 px-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-red-600 border border-red-200 hover:bg-red-50"
+                      title="مسح نقاط القياس"
                     >
-                      {isMeasuring ? 'إنهاء الرسم' : 'بدء القياس بالمسطرة'}
+                      مسح ({measurePoints.length})
                     </button>
-                    {measurePoints.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setMeasurePoints([])}
-                        className="py-1 px-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-red-600 border border-red-200 hover:bg-red-50"
-                        title="مسح نقاط القياس"
-                      >
-                        مسح ({measurePoints.length})
-                      </button>
-                    )}
-                  </div>
+                  )}
                 </div>
-
               </div>
+
             </div>
 
             {/* Section B: Editable Texts, Footer, and Metadata */}
@@ -3062,257 +3010,66 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </div>
             </div>
 
-            {/* Section C: Upload & Customize Logos and QGIS Map (USER REQUESTED) */}
-            <div className="bg-sky-50/70 dark:bg-sky-950/30 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/60 space-y-3">
-              <h4 className="text-xs font-bold text-sky-900 dark:text-sky-200 flex items-center gap-1.5">
-                <Upload size={14} className="text-sky-600 dark:text-sky-400" />
-                <span>رفع وتخصيص الشعارات وخريطة QGIS (Logos & QGIS Map Upload):</span>
-              </h4>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {/* 1. Left Logo (Qatar Houbara Center) */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col justify-between space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                      الشعار الأيسر (المركز القطري)
+            {/* Section C: Upload & Display QGIS Map (Logos & Legend managed directly on the report) */}
+            <div className="bg-sky-50/70 dark:bg-sky-950/30 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/60">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-gradient-to-br from-sky-600 to-indigo-600 text-white rounded-lg shadow-2xs">
+                    <Upload size={16} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-gray-900 dark:text-white block">
+                      خريطة معدّلة في QGIS (PNG / JPG)
                     </span>
-                    <span className="text-[10px] text-gray-400 font-mono">PNG / SVG</span>
-                  </div>
-                  
-                  <div className="h-14 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center p-1">
-                    <img
-                      src={logoLeftUrl}
-                      alt="الشعار الأيسر"
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => logoLeftInputRef.current?.click()}
-                      className="flex-1 py-1.5 px-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-xs"
-                    >
-                      <Upload size={12} />
-                      <span>رفع شعار</span>
-                    </button>
-                    {logoLeftUrl !== '/qatar-houbara-center-logo.png' && (
-                      <button
-                        type="button"
-                        onClick={() => setLogoLeftUrl('/qatar-houbara-center-logo.png')}
-                        className="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-lg text-xs font-bold transition-colors"
-                        title="استعادة الشعار الافتراضي"
-                      >
-                        <RotateCcw size={12} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Left Logo Dimension Sliders */}
-                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500 font-semibold">الارتفاع:</span>
-                      <span className="font-mono font-bold text-brand-600">{logoLeftHeight} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={30}
-                      max={200}
-                      step={5}
-                      value={logoLeftHeight}
-                      onChange={(e) => setLogoLeftHeight(Number(e.target.value))}
-                      className="w-full accent-brand-600 cursor-pointer h-1.5"
-                    />
-
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500 font-semibold">أقصى عرض:</span>
-                      <span className="font-mono font-bold text-brand-600">{logoLeftWidth} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={60}
-                      max={450}
-                      step={10}
-                      value={logoLeftWidth}
-                      onChange={(e) => setLogoLeftWidth(Number(e.target.value))}
-                      className="w-full accent-brand-600 cursor-pointer h-1.5"
-                    />
-
-                    <div className="flex items-center justify-between gap-1 pt-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLogoLeftHeight(h => Math.max(30, h - 10));
-                          setLogoLeftWidth(w => Math.max(60, w - 20));
-                        }}
-                        className="flex-1 py-1 px-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
-                      >
-                        <Minus size={10} />
-                        <span>تصغير</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLogoLeftHeight(h => Math.min(220, h + 10));
-                          setLogoLeftWidth(w => Math.min(480, w + 20));
-                        }}
-                        className="flex-1 py-1 px-1.5 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
-                      >
-                        <Plus size={10} />
-                        <span>تكبير</span>
-                      </button>
-                    </div>
+                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                      رفع وتثبيت صورة خريطة خارجية عالية الدقة تم تصميمها ببرنامج QGIS
+                    </span>
                   </div>
                 </div>
 
-                {/* 2. Right Logo (External Reserves Office) */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col justify-between space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                      الشعار الأيمن (محميات الدولة)
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-mono">PNG / SVG</span>
-                  </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Upload button */}
+                  <button
+                    type="button"
+                    onClick={() => mapImageInputRef.current?.click()}
+                    className="py-1.5 px-3 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Upload size={13} />
+                    <span>رفع صورة خريطة QGIS جديدة</span>
+                  </button>
 
-                  <div className="h-14 bg-gray-50 dark:bg-slate-900 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 flex items-center justify-center p-1">
-                    <img
-                      src={logoRightUrl}
-                      alt="الشعار الأيمن"
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5 pt-1">
+                  {/* Display fit options */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700 text-[11px]">
+                    <span className="px-1.5 text-gray-400 text-[10px] font-semibold">ملاءمة العرض:</span>
                     <button
                       type="button"
-                      onClick={() => logoRightInputRef.current?.click()}
-                      className="flex-1 py-1.5 px-2 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1 shadow-xs"
+                      onClick={() => setMapImageFit('contain')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'contain' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
+                      title="احتواء كامل للخريطة دون اقتصاص الحواف"
                     >
-                      <Upload size={12} />
-                      <span>رفع شعار</span>
+                      احتواء (Contain)
                     </button>
-                    {logoRightUrl !== '/external-reserves-office-logo.png' && (
-                      <button
-                        type="button"
-                        onClick={() => setLogoRightUrl('/external-reserves-office-logo.png')}
-                        className="py-1.5 px-2 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-lg text-xs font-bold transition-colors"
-                        title="استعادة الشعار الافتراضي"
-                      >
-                        <RotateCcw size={12} />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Right Logo Dimension Sliders */}
-                  <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-slate-700/60">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500 font-semibold">الارتفاع:</span>
-                      <span className="font-mono font-bold text-brand-600">{logoRightHeight} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={30}
-                      max={200}
-                      step={5}
-                      value={logoRightHeight}
-                      onChange={(e) => setLogoRightHeight(Number(e.target.value))}
-                      className="w-full accent-brand-600 cursor-pointer h-1.5"
-                    />
-
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-gray-500 font-semibold">أقصى عرض:</span>
-                      <span className="font-mono font-bold text-brand-600">{logoRightWidth} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={60}
-                      max={450}
-                      step={10}
-                      value={logoRightWidth}
-                      onChange={(e) => setLogoRightWidth(Number(e.target.value))}
-                      className="w-full accent-brand-600 cursor-pointer h-1.5"
-                    />
-
-                    <div className="flex items-center justify-between gap-1 pt-0.5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLogoRightHeight(h => Math.max(30, h - 10));
-                          setLogoRightWidth(w => Math.max(60, w - 20));
-                        }}
-                        className="flex-1 py-1 px-1.5 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
-                      >
-                        <Minus size={10} />
-                        <span>تصغير</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLogoRightHeight(h => Math.min(220, h + 10));
-                          setLogoRightWidth(w => Math.min(480, w + 20));
-                        }}
-                        className="flex-1 py-1 px-1.5 bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-800 rounded text-[10px] font-bold flex items-center justify-center gap-0.5"
-                      >
-                        <Plus size={10} />
-                        <span>تكبير</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. QGIS Map Upload & Fit Controls */}
-                <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 flex flex-col justify-between space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                      خريطة معدّلة في QGIS
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-mono">PNG / JPG</span>
-                  </div>
-
-                  <div className="space-y-1.5">
                     <button
                       type="button"
-                      onClick={() => mapImageInputRef.current?.click()}
-                      className="w-full py-2 px-3 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-xs"
+                      onClick={() => setMapImageFit('cover')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'cover' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
+                      title="تغطية كامل نافذة الخريطة"
                     >
-                      <Upload size={14} />
-                      <span>رفع صورة خريطة QGIS جديدة</span>
+                      تغطية (Cover)
                     </button>
-
-                    <div className="flex items-center justify-between gap-1 text-[11px] pt-1">
-                      <span className="text-gray-500 font-semibold">ملاءمة العرض:</span>
-                      <div className="flex gap-1 bg-gray-100 dark:bg-slate-900 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700">
-                        <button
-                          type="button"
-                          onClick={() => setMapImageFit('contain')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'contain' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
-                          title="احتواء كامل للخريطة دون اقتصاص الحواف"
-                        >
-                          احتواء (Contain)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMapImageFit('cover')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'cover' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
-                          title="تغطية كامل نافذة الخريطة"
-                        >
-                          تغطية (Cover)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMapImageFit('fill')}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'fill' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
-                          title="ملء الإطار بالكامل"
-                        >
-                          ملء (Fill)
-                        </button>
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setMapImageFit('fill')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'fill' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
+                      title="ملء الإطار بالكامل"
+                    >
+                      ملء (Fill)
+                    </button>
                   </div>
 
                   {mapSnapshotUrl && mapDisplayMode === 'snapshot' && (
-                    <div className="pt-1 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
-                      <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                    <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-lg text-xs">
+                      <span className="text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1 text-[11px]">
                         <CheckCircle2 size={12} />
                         معروضة حالياً بالتقرير
                       </span>
@@ -3322,151 +3079,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           setMapDisplayMode('interactive');
                           setFitKey(k => k + 1);
                         }}
-                        className="text-brand-600 font-bold hover:underline"
+                        className="text-brand-600 hover:text-brand-700 font-bold text-[11px] underline"
                       >
                         العودة للتفاعلية
                       </button>
                     </div>
                   )}
                 </div>
-
-              </div>
-            </div>
-
-            {/* Section D: Map Legend Customization Item-by-Item (USER REQUESTED) */}
-            <div className="bg-emerald-50/70 dark:bg-emerald-950/30 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                  <Palette size={14} className="text-emerald-600 dark:text-emerald-400" />
-                  <span>تخصيص مفتاح الخريطة عنصراً بعنصر (Map Legend Items):</span>
-                </h4>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAddLegendItem}
-                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
-                  >
-                    <Plus size={12} />
-                    <span>إضافة عنصر جديد</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleResetLegendItems}
-                    className="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700 rounded-lg text-xs font-bold border border-gray-200 dark:border-slate-700 transition-colors flex items-center gap-1"
-                    title="استعادة عناصر المفتاح الافتراضية للتقرير"
-                  >
-                    <RotateCcw size={12} />
-                    <span>استعادة الافتراضي</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid of legend items */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                {legendItems.map((item, index) => (
-                  <div
-                    key={item.id}
-                    className={`p-2.5 rounded-xl border transition-all ${
-                      item.visible
-                        ? 'bg-white dark:bg-slate-800 border-emerald-300 dark:border-emerald-700/60 shadow-xs'
-                        : 'bg-gray-100/60 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60'
-                    }`}
-                  >
-                    {/* Top Row: Visibility checkbox & delete */}
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={item.visible}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { visible: e.target.checked })}
-                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                        />
-                        <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                          {item.visible ? 'ظاهر بالمفتاح' : 'مخفي من المفتاح'}
-                        </span>
-                      </label>
-
-                      <div className="flex items-center gap-1">
-                        {/* Move Buttons */}
-                        <button
-                          type="button"
-                          onClick={() => handleMoveLegendItem(index, 'left')}
-                          disabled={index === 0}
-                          className="p-1 text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
-                          title="تحريك للأمام (اليمين)"
-                        >
-                          <ChevronRight size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveLegendItem(index, 'right')}
-                          disabled={index === legendItems.length - 1}
-                          className="p-1 text-gray-500 hover:text-gray-800 dark:hover:text-white disabled:opacity-30 rounded hover:bg-gray-100 dark:hover:bg-slate-700"
-                          title="تحريك للخلف (اليسار)"
-                        >
-                          <ChevronLeft size={13} />
-                        </button>
-                        {/* Delete Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLegendItem(item.id)}
-                          className="p-1 text-red-500 hover:text-red-700 dark:hover:text-red-400 rounded hover:bg-red-50 dark:hover:bg-red-950/40"
-                          title="حذف العنصر"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Middle Row: Text input */}
-                    <div className="mb-2">
-                      <label className="block text-[10px] text-gray-500 mb-0.5">نص العنصر (Label):</label>
-                      <input
-                        type="text"
-                        value={item.label}
-                        onChange={(e) => handleUpdateLegendItem(item.id, { label: e.target.value })}
-                        className="w-full px-2.5 py-1 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none font-bold text-gray-900 dark:text-white"
-                        placeholder="نص المفتاح..."
-                      />
-                    </div>
-
-                    {/* Bottom Row: Color picker & Symbol selector */}
-                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-gray-500">الرمز:</span>
-                        <select
-                          value={item.symbol}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { symbol: e.target.value as any })}
-                          className="text-[11px] bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded px-1.5 py-0.5 outline-none cursor-pointer text-gray-800 dark:text-gray-200 font-medium"
-                        >
-                          <option value="circle">دائرة (Circle)</option>
-                          <option value="line">خط (Line)</option>
-                          <option value="dashed-line">متقطع (Dashed)</option>
-                          <option value="tent">خيمة (Tent)</option>
-                          <option value="square">مربع (Square)</option>
-                          <option value="star">نجمة (Star)</option>
-                        </select>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-gray-500">اللون:</span>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="color"
-                            value={item.color}
-                            onChange={(e) => handleUpdateLegendItem(item.id, { color: e.target.value })}
-                            className="w-6 h-6 rounded cursor-pointer border border-gray-300 dark:border-slate-600 p-0"
-                            title="تغيير لون الرمز"
-                          />
-                          <div className="p-1 rounded bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 flex items-center justify-center">
-                            {renderLegendSymbol(item.symbol, item.color)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                ))}
               </div>
             </div>
 
