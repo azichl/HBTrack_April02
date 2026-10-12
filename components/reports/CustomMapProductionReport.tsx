@@ -228,7 +228,7 @@ const createDistancePillIcon = (
   return L.divIcon({
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
-      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block; cursor: grab; pointer-events: auto;">
         <rect 
           x="1" 
           y="1" 
@@ -626,6 +626,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── DRAG & DROP PERSONALIZATION MODE ──────────────────────────────────────
   const [isDragEnabled, setIsDragEnabled] = useState<boolean>(false);
   const [dragResetKey, setDragResetKey] = useState<number>(0);
+  const [customCampDistPositions, setCustomCampDistPositions] = useState<{ [campId: string]: [number, number] }>({});
+  const [customReleaseDistPos, setCustomReleaseDistPos] = useState<[number, number] | null>(null);
+  const [customReleaseMarkerPos, setCustomReleaseMarkerPos] = useState<[number, number] | null>(null);
+  const [customLastPosMarkerPos, setCustomLastPosMarkerPos] = useState<[number, number] | null>(null);
 
   // Sync with exportedMapView
   useEffect(() => {
@@ -1144,6 +1148,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
     setIsLoadingTelemetry(true);
     setHistoryUploadNotice(null);
+    setCustomCampDistPositions({});
+    setCustomReleaseDistPos(null);
+    setCustomReleaseMarkerPos(null);
+    setCustomLastPosMarkerPos(null);
 
     try {
       const cleanId = String(pttId).replace(/^trans-/, '');
@@ -4242,6 +4250,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(1);
                         const midLat = (camp.lat + metrics.lLat) / 2;
                         const midLon = (camp.lon + metrics.lLon) / 2;
+                        const pillPos: [number, number] = customCampDistPositions[campId] || [midLat, midLon];
 
                         return (
                           <React.Fragment key={`camp-dist-to-last-${campId}`}>
@@ -4258,10 +4267,23 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               }}
                             />
                             <Marker
-                              position={[midLat, midLon]}
+                              position={pillPos}
                               icon={createDistancePillIcon(`${distKm} km`, '#d97706')}
                               zIndexOffset={1600}
-                              interactive={false}
+                              interactive={true}
+                              draggable={true}
+                              eventHandlers={{
+                                dragend: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng) {
+                                    const latLng = marker.getLatLng();
+                                    setCustomCampDistPositions(prev => ({
+                                      ...prev,
+                                      [campId]: [latLng.lat, latLng.lng]
+                                    }));
+                                  }
+                                }
+                              }}
                             />
                           </React.Fragment>
                         );
@@ -4283,7 +4305,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             }}
                           />
                           <Marker
-                            position={metrics.releaseToLastMid}
+                            position={customReleaseDistPos || metrics.releaseToLastMid}
                             icon={createDistancePillIcon(
                               `${metrics.distFromReleaseKm} km`, 
                               '#dc2626',
@@ -4292,6 +4314,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             zIndexOffset={1500}
                             interactive={true}
                             draggable={true}
+                            eventHandlers={{
+                              dragend: (e) => {
+                                const marker = e.target;
+                                if (marker && marker.getLatLng) {
+                                  const latLng = marker.getLatLng();
+                                  setCustomReleaseDistPos([latLng.lat, latLng.lng]);
+                                }
+                              }
+                            }}
                           />
                         </>
                       )}
@@ -4306,7 +4337,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             interactive={false}
                           />
                           <Marker
-                            position={[metrics.rLat, metrics.rLon]}
+                            position={customReleaseMarkerPos || [metrics.rLat, metrics.rLon]}
                             icon={createLiveTrackingLabelIcon({
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
@@ -4316,6 +4347,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             })}
                             zIndexOffset={1801}
                             draggable={true}
+                            eventHandlers={{
+                              dragend: (e) => {
+                                const marker = e.target;
+                                if (marker && marker.getLatLng) {
+                                  const latLng = marker.getLatLng();
+                                  setCustomReleaseMarkerPos([latLng.lat, latLng.lng]);
+                                }
+                              }
+                            }}
                           />
                         </>
                       )}
@@ -4330,7 +4370,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             interactive={false}
                           />
                           <Marker
-                            position={[metrics.lLat, metrics.lLon]}
+                            position={customLastPosMarkerPos || [metrics.lLat, metrics.lLon]}
                             icon={createLiveTrackingLabelIcon({
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
@@ -4340,6 +4380,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             })}
                             zIndexOffset={2001}
                             draggable={true}
+                            eventHandlers={{
+                              dragend: (e) => {
+                                const marker = e.target;
+                                if (marker && marker.getLatLng) {
+                                  const latLng = marker.getLatLng();
+                                  setCustomLastPosMarkerPos([latLng.lat, latLng.lng]);
+                                }
+                              }
+                            }}
                           />
                         </>
                       )}
