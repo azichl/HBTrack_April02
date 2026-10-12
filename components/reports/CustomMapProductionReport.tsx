@@ -532,10 +532,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return '244289';
   }, [exportedMapView, transmitters]);
 
+  const initialNearestCamp = useMemo(() => {
+    let nearest = FIXED_FIELD_CAMPS[0];
+    let minDist = Infinity;
+    const lat = 46.9965;
+    const lon = 67.0222;
+    for (const c of FIXED_FIELD_CAMPS) {
+      const d = calculateDistanceKm(lat, lon, c.lat, c.lon);
+      if (d < minDist) {
+        minDist = d;
+        nearest = c;
+      }
+    }
+    return nearest;
+  }, []);
+
   const [selectedPttId, setSelectedPttId] = useState<string>(initialPtt);
   const [pttSearchTerm, setPttSearchTerm] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
-  const [selectedCampId, setSelectedCampId] = useState<string>('auto');
+  const [selectedCampId, setSelectedCampId] = useState<string>(initialNearestCamp.id);
 
   // Base Map Layer
   const initialBaseLayer = useMemo(() => {
@@ -547,6 +562,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [exportedMapView]);
 
   const [activeBaseLayer, setActiveBaseLayer] = useState<'google_hybrid' | 'google_roadmap' | 'google_satellite' | 'scienceterrain' | 'roadmap'>(initialBaseLayer);
+  const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
   const [showFooter, setShowFooter] = useState<boolean>(true);
   const [showGoogleLabels, setShowGoogleLabels] = useState<boolean>(true);
   const [reportLanguage, setReportLanguage] = useState<'ar' | 'en'>('ar');
@@ -569,8 +585,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── FIELD CAMPS FILTER & DISTANCES (AS REQUESTED) ──────────────────────────
   // Choose camps one by one (check case for every camp)
   const [visibleCampIds, setVisibleCampIds] = useState<string[]>(FIXED_FIELD_CAMPS.map(c => c.id));
-  // Distance between each chosen camp and last position
-  const [campDistToLastEnabled, setCampDistToLastEnabled] = useState<{ [campId: string]: boolean }>({});
+  // Distance between each chosen camp and last position (automatically enabled for nearest camp)
+  const [campDistToLastEnabled, setCampDistToLastEnabled] = useState<{ [campId: string]: boolean }>({
+    [initialNearestCamp.id]: true
+  });
   // Distance between camps
   const [showCampDistance, setShowCampDistance] = useState<boolean>(false);
 
@@ -580,7 +598,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // ─── RELEASE & TRACK TOGGLES ──────────────────────────────────────────────
   const [showReleaseMarker, setShowReleaseMarker] = useState<boolean>(true);
-  const [showDistanceToRelease, setShowDistanceToRelease] = useState<boolean>(false);
+  const [showDistanceToRelease, setShowDistanceToRelease] = useState<boolean>(true);
   const [showFlightTrack, setShowFlightTrack] = useState<boolean>(true);
   const [showGraticule, setShowGraticule] = useState<boolean>(true);
   const [graticuleData, setGraticuleData] = useState<GraticuleData>({
@@ -929,10 +947,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── CUSTOMIZABLE MAP LEGEND ITEMS (ITEM BY ITEM) ───────────────────────────
   const [legendItems, setLegendItems] = useState<CustomLegendItem[]>([
     {
-      id: 'release_pos',
-      label: 'موقع تركيب الجهاز',
-      color: '#701a2b',
-      symbol: 'circle',
+      id: 'camp_dist',
+      label: 'المسافة إلى المخيم',
+      color: '#d97706',
+      symbol: 'dashed-line',
+      visible: true
+    },
+    {
+      id: 'camps',
+      label: 'مخيم',
+      color: '#f59e0b',
+      symbol: 'tent',
       visible: true
     },
     {
@@ -943,17 +968,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       visible: true
     },
     {
-      id: 'camps',
-      label: 'المخيم',
-      color: '#f59e0b',
-      symbol: 'tent',
-      visible: true
-    },
-    {
-      id: 'camp_dist',
-      label: 'البعد عنه',
-      color: '#d97706',
-      symbol: 'dashed-line',
+      id: 'release_pos',
+      label: 'موقع تركيب الجهاز',
+      color: '#701a2b',
+      symbol: 'circle',
       visible: true
     },
     {
@@ -968,7 +986,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       label: 'مدن وقرى',
       color: '#1e293b',
       symbol: 'square',
-      visible: true
+      visible: false
     }
   ]);
   const [isLegendCustomizedByUser, setIsLegendCustomizedByUser] = useState<boolean>(false);
@@ -1017,17 +1035,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const campLabel = getCampLegendLabel(visibleCampIds);
     const items: CustomLegendItem[] = [
       {
-        id: 'release_pos',
-        label: 'موقع تركيب الجهاز',
-        color: '#701a2b',
-        symbol: 'circle',
-        visible: showReleaseMarker
-      },
-      {
-        id: 'last_pos',
-        label: `آخر موقع (${dateStr})`,
-        color: '#22c55e',
-        symbol: 'circle',
+        id: 'camp_dist',
+        label: 'المسافة إلى المخيم',
+        color: '#d97706',
+        symbol: 'dashed-line',
         visible: true
       },
       {
@@ -1038,11 +1049,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         visible: visibleCampIds.length > 0
       },
       {
-        id: 'camp_dist',
-        label: 'البعد عنه',
-        color: '#d97706',
-        symbol: 'dashed-line',
+        id: 'last_pos',
+        label: `آخر موقع (${dateStr})`,
+        color: '#22c55e',
+        symbol: 'circle',
         visible: true
+      },
+      {
+        id: 'release_pos',
+        label: 'موقع تركيب الجهاز',
+        color: '#701a2b',
+        symbol: 'circle',
+        visible: showReleaseMarker
       },
       {
         id: 'main_road',
@@ -1056,7 +1074,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         label: 'مدن وقرى',
         color: '#1e293b',
         symbol: 'square',
-        visible: true
+        visible: false
       }
     ];
     if (showCampDistance && visibleCampIds.length >= 2) {
@@ -1248,9 +1266,42 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           };
         });
 
+        // Automatically find and select the nearest camp to the bird's last GPS fix
+        const targetLastLat = isNaN(lastLat) ? 46.9965 : lastLat;
+        const targetLastLon = isNaN(lastLon) ? 67.0222 : lastLon;
+        let nearestCamp = FIXED_FIELD_CAMPS[0];
+        let minCampDist = Infinity;
+        for (const camp of FIXED_FIELD_CAMPS) {
+          const dist = calculateDistanceKm(targetLastLat, targetLastLon, camp.lat, camp.lon);
+          if (dist < minCampDist) {
+            minCampDist = dist;
+            nearestCamp = camp;
+          }
+        }
+
+        setSelectedCampId(nearestCamp.id);
+        setCampDistToLastEnabled({ [nearestCamp.id]: true });
+        setShowDistanceToRelease(true);
+        setVisibleCampIds(prev => prev.includes(nearestCamp.id) ? prev : [...prev, nearestCamp.id]);
+
         setHistoryRows(generatedRows);
         setHistoryUploadNotice(`تم تحميل ${gpsPositions.length} نقطة من سجل جهاز ${pttId} بنجاح!`);
       } else {
+        const defLastLat = 46.9965;
+        const defLastLon = 67.0222;
+        let nearestCamp = FIXED_FIELD_CAMPS[0];
+        let minCampDist = Infinity;
+        for (const camp of FIXED_FIELD_CAMPS) {
+          const dist = calculateDistanceKm(defLastLat, defLastLon, camp.lat, camp.lon);
+          if (dist < minCampDist) {
+            minCampDist = dist;
+            nearestCamp = camp;
+          }
+        }
+        setSelectedCampId(nearestCamp.id);
+        setCampDistToLastEnabled({ [nearestCamp.id]: true });
+        setShowDistanceToRelease(true);
+        setVisibleCampIds(prev => prev.includes(nearestCamp.id) ? prev : [...prev, nearestCamp.id]);
         setHistoryUploadNotice(`تم تفعيل النموذج لجهاز ${pttId}.`);
       }
     } catch (err) {
@@ -1332,6 +1383,48 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       ] as [number, number]
     };
   }, [telemetryData, activeCamp, reportLanguage]);
+
+  // Recenter Map Helper (Fits bounds around Release Point, Last GPS Fix, and Active Camp)
+  const handleRecenterMap = useCallback(() => {
+    if (!mapInstance) return;
+    mapInstance.invalidateSize();
+    const pts: Array<[number, number]> = [];
+    if (metrics.lLat && metrics.lLon && metrics.lLat !== 0 && metrics.lLon !== 0) {
+      pts.push([metrics.lLat, metrics.lLon]);
+    }
+    if (metrics.rLat && metrics.rLon && metrics.rLat !== 0 && metrics.rLon !== 0) {
+      pts.push([metrics.rLat, metrics.rLon]);
+    }
+    if (activeCamp?.lat && activeCamp?.lon) {
+      pts.push([activeCamp.lat, activeCamp.lon]);
+    }
+
+    if (pts.length >= 2) {
+      const bounds = L.latLngBounds(pts.map(p => L.latLng(p[0], p[1])));
+      mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    } else if (metrics.lLat && metrics.lLon) {
+      mapInstance.setView([metrics.lLat, metrics.lLon], 10);
+    } else {
+      mapInstance.setView(mapCenter, mapZoom);
+    }
+  }, [mapInstance, metrics.lLat, metrics.lLon, metrics.rLat, metrics.rLon, activeCamp, mapCenter, mapZoom]);
+
+  // Auto-recenter when telemetry loads or changes
+  useEffect(() => {
+    if (!mapInstance) return;
+    const timer = setTimeout(() => {
+      handleRecenterMap();
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [mapInstance, telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon, selectedCampId, handleRecenterMap]);
+
+  // Close layer menu on outside click
+  useEffect(() => {
+    if (!showLayerMenu) return;
+    const handleClickOutside = () => setShowLayerMenu(false);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [showLayerMenu]);
 
   // Dynamic Kazakhstan country silhouette & bird location for the top-left locator map
   const insetMapData = useMemo(() => {
@@ -1723,8 +1816,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-stat .lab { font-size: 10px; color: #6b7280; line-height: 1.3; }
 
         .trk-legend {
-          display: flex; flex-wrap: nowrap; gap: 12px; justify-content: center; align-items: center;
-          border: 1px solid #d9dbe1; border-radius: 8px; padding: 6px 10px; margin-top: 10px; font-size: 11px; background: #fff; white-space: nowrap;
+          display: flex; flex-wrap: nowrap; gap: 8px; justify-content: space-between; align-items: center;
+          border: 1px solid #d9dbe1; border-radius: 8px; padding: 5px 12px; margin-top: 6px; font-size: 11px; background: #fff; white-space: nowrap; width: 100%; box-sizing: border-box;
         }
         .trk-legend span { display: inline-flex; align-items: center; gap: 6px; }
         .trk-legend .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
@@ -4145,7 +4238,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
                         if (!camp || metrics.lLat === 0 || metrics.lLon === 0) return null;
 
-                        const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(1);
+                        const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(2);
                         const midLat = (camp.lat + metrics.lLat) / 2;
                         const midLon = (camp.lon + metrics.lLon) / 2;
 
@@ -4349,6 +4442,118 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </div>
                     )}
 
+                    {/* Floating Map Controls for Interactive Live Tracking feel (Hidden on Print & Export) */}
+                    <div 
+                      className="no-print no-export-snapshot absolute bottom-2 left-2 z-[1000] flex items-center gap-1 bg-slate-900/85 backdrop-blur-md px-1.5 py-1 rounded-lg border border-white/20 shadow-lg text-white select-none"
+                      style={{ direction: 'rtl' }}
+                    >
+                      {/* Fullscreen Toggle */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsReportFullscreen(true);
+                        }}
+                        className="p-1 rounded transition-colors text-white hover:bg-white/20"
+                        title="عرض التقرير بالكامل بملء الشاشة"
+                      >
+                        <Maximize2 size={14} />
+                      </button>
+                      <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+
+                      {/* Zoom In */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          mapInstance?.zoomIn();
+                        }}
+                        className="p-1 hover:bg-white/20 rounded transition-colors text-white"
+                        title="تكبير الخريطة (Zoom In)"
+                      >
+                        <Plus size={14} />
+                      </button>
+                      {/* Zoom Out */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          mapInstance?.zoomOut();
+                        }}
+                        className="p-1 hover:bg-white/20 rounded transition-colors text-white"
+                        title="تصغير الخريطة (Zoom Out)"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+                      {/* Recenter */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRecenterMap();
+                        }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/20 rounded text-[11px] font-medium transition-colors text-white"
+                        title="إعادة ضبط الموقع ليتناسب مع النقاط"
+                      >
+                        <Crosshair size={13} />
+                        <span>توسيط</span>
+                      </button>
+                      <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+                      {/* Layer Quick Switcher */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowLayerMenu(prev => !prev);
+                          }}
+                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors text-white ${
+                            showLayerMenu ? 'bg-brand-600' : 'hover:bg-white/20'
+                          }`}
+                          title="تغيير نوع الخريطة"
+                        >
+                          <Layers size={13} />
+                          <span>الطبقات</span>
+                        </button>
+                        {showLayerMenu && (
+                          <div 
+                            className="absolute bottom-full left-0 mb-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg p-1.5 shadow-2xl min-w-[175px] space-y-1 text-right z-[1100]"
+                            dir="rtl"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="text-[10px] font-bold text-gray-400 px-2 py-0.5 border-b border-slate-800">
+                              نوع الخريطة (Base Map):
+                            </div>
+                            {[
+                              { id: 'google_hybrid', name: 'جوجل هجين (Google Hybrid)' },
+                              { id: 'google_roadmap', name: 'جوجل شوارع (Google Roadmap)' },
+                              { id: 'google_satellite', name: 'جوجل أقمار (Google Satellite)' },
+                              { id: 'scienceterrain', name: 'أقمار Esri (Esri Satellite)' },
+                              { id: 'roadmap', name: 'OpenStreetMap' }
+                            ].map(l => (
+                              <button
+                                key={l.id}
+                                type="button"
+                                onClick={() => {
+                                  setActiveBaseLayer(l.id as any);
+                                  setShowLayerMenu(false);
+                                }}
+                                className={`w-full text-right px-2 py-1 text-[11px] rounded flex items-center justify-between transition-colors ${
+                                  activeBaseLayer === l.id 
+                                    ? 'bg-brand-600 text-white font-bold' 
+                                    : 'text-gray-200 hover:bg-slate-800'
+                                }`}
+                              >
+                                <span>{l.name}</span>
+                                {activeBaseLayer === l.id && <Check size={12} />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
                   </div>
                 )}
 
@@ -4541,7 +4746,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             </text>
                           </svg>
                         </div>
-                        <div className="absolute bottom-6 left-1 z-[900] pointer-events-none select-none">
+                        <div className="absolute bottom-10 left-1 z-[900] pointer-events-none select-none">
                           <svg width="74" height="16" viewBox="0 0 74 16" style={{ display: 'block' }}>
                             <rect x="0" y="0" width="74" height="16" rx="4" fill="rgba(0, 0, 0, 0.65)" />
                             <text x="37" y="8.5" textAnchor="middle" dy="0.3em" fill="#ffffff" fontSize="8.5" fontWeight="bold" fontFamily="monospace">
@@ -4692,9 +4897,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-wrap items-center justify-center gap-5 w-full">
+                  <div className="flex flex-row items-center justify-between flex-nowrap w-full gap-2 px-1 text-[11px] font-bold text-gray-800 whitespace-nowrap overflow-hidden">
                     {legendItems.filter(item => item.visible).map(item => (
-                      <span key={item.id} className="inline-flex items-center gap-1.5 text-[12px] font-bold text-gray-800 whitespace-nowrap">
+                      <span key={item.id} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
                         {renderLegendSymbol(item.symbol, item.color)}
                         <span>{translateValue(item.label)}</span>
                       </span>
