@@ -237,6 +237,7 @@ interface AppState {
   initializeFromFirestore: () => Promise<void>;
   purgeZeroCoordinates: () => Promise<void>;
   recalculateTransmitterStatuses: (onProgress?: (msg: string) => void) => Promise<void>;
+  refreshMonitoringData: (onProgress?: (msg: string) => void) => Promise<{ transmittersCount: number; birdsCount: number; positionsCount: number }>;
   subscribeToLivePositions: () => () => void;
 
   // Danger Zone — Collection Clearing
@@ -1894,17 +1895,124 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      // ─── Real-Time Position & Ingestion Listener ────────────────────────────────────────
+      refreshMonitoringData: async (onProgress) => {
+        try {
+          onProgress?.('Fetching fresh transmitters, birds, and tracking fixes...');
+          const [freshTransmittersRaw, freshBirdsRaw] = await Promise.all([
+            loadCollection<Transmitter>('transmitters'),
+            loadCollection<Bird>('birds')
+          ]);
+
+          const { deduplicated: dedupTransmitters } = deduplicateTransmitters(freshTransmittersRaw);
+          const { deduplicated: dedupBirds } = deduplicateBirds(freshBirdsRaw);
+
+          // Re-link birds to transmitters
+          dedupTransmitters.forEach(t => {
+            const matched = findBirdForTransmitter(dedupBirds, t);
+            if (matched) {
+              t.bird_id = matched.id;
+              if (!t.assigned_bird_ring) {
+                t.assigned_bird_ring = matched.ring_id;
+              }
+            }
+          });
+
+          // Fetch latest positions for all transmitters
+          const pids = dedupTransmitters.map(t => t.platform_id);
+          const latestPositions = await loadLatestPositionsPerTransmitter(pids);
+
+          const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
+          const filteredTransmitters = filterTransmittersForUser(dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+          const filteredPositions = filterPositionsForUser(latestPositions as Position[], dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+
+          set((state) => {
+            const posMap = new Map<string, Position>();
+            state.positions.forEach(p => posMap.set(p.id, p));
+            filteredPositions.forEach(p => posMap.set(p.id, p));
+            return {
+              transmitters: filteredTransmitters,
+              birds: dedupBirds,
+              positions: Array.from(posMap.values()),
+              lastSaved: new Date().toISOString()
+            };
+          });
+
+          clearTransmitterHistoryCache();
+          onProgress?.(`Synchronized ${filteredTransmitters.length} transmitters and ${filteredPositions.length} fixes.`);
+          return {
+            transmittersCount: filteredTransmitters.length,
+            birdsCount: dedupBirds.length,
+            positionsCount: filteredPositions.length
+          };
+        } catch (error) {
+          console.error('[AppStore] Error in refreshMonitoringData:', error);
+          throw error;
+        }
+      },
+
+      // ─── Real-Time Position, Ingestion, Transmitter & Bird Listeners ─────────────
       subscribeToLivePositions: () => {
         // Real-time listener for last data update / ingestion timestamp
+        let isAutoRefreshing = false;
         const unsubIngest = subscribeToLastIngestTime((ts) => {
           if (ts) {
             set({ lastIngestTime: ts });
+            if (!isAutoRefreshing) {
+              isAutoRefreshing = true;
+              get().refreshMonitoringData().finally(() => {
+                isAutoRefreshing = false;
+              });
+            }
           }
         });
 
-        // Only listen for new positions generated from today onwards to avoid huge reads
-        const unsubPositions = subscribeToRecentPositions(1, (firestorePositions) => {
+        // Real-time listener for transmitters collection updates (status, metadata, new transmitters, etc.)
+        const unsubTransmitters = subscribeToCollection<Transmitter>('transmitters', (rawTransmitters) => {
+          if (!rawTransmitters || rawTransmitters.length === 0) return;
+          const { deduplicated } = deduplicateTransmitters(rawTransmitters);
+          const { currentUserIosPttVisibility, currentUserIosVisiblePtts, birds } = get();
+
+          deduplicated.forEach(t => {
+            const matched = findBirdForTransmitter(birds, t);
+            if (matched) {
+              t.bird_id = matched.id;
+              if (!t.assigned_bird_ring) {
+                t.assigned_bird_ring = matched.ring_id;
+              }
+            }
+          });
+
+          const filteredTransmitters = filterTransmittersForUser(deduplicated, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+          set({ transmitters: filteredTransmitters, lastSaved: new Date().toISOString() });
+        });
+
+        // Real-time listener for birds collection updates (ring IDs, names, status)
+        const unsubBirds = subscribeToCollection<Bird>('birds', (rawBirds) => {
+          if (!rawBirds || rawBirds.length === 0) return;
+          const { deduplicated } = deduplicateBirds(rawBirds);
+          const currentTransmitters = [...get().transmitters];
+          let txChanged = false;
+
+          currentTransmitters.forEach(t => {
+            const matched = findBirdForTransmitter(deduplicated, t);
+            if (matched && (t.bird_id !== matched.id || t.assigned_bird_ring !== matched.ring_id)) {
+              t.bird_id = matched.id;
+              if (!t.assigned_bird_ring) {
+                t.assigned_bird_ring = matched.ring_id;
+              }
+              txChanged = true;
+            }
+          });
+
+          set({
+            birds: deduplicated,
+            ...(txChanged ? { transmitters: currentTransmitters } : {}),
+            lastSaved: new Date().toISOString()
+          });
+        });
+
+        // Only listen for new positions generated from recent 7 days to avoid huge reads
+        const unsubPositions = subscribeToRecentPositions(7, (firestorePositions) => {
           // Merge incoming new positions into the store (retaining older ones loaded initially)
           set((state) => {
             const currentPositions = [...state.positions];
@@ -1947,6 +2055,8 @@ export const useAppStore = create<AppState>()(
 
         return () => {
           unsubIngest();
+          unsubTransmitters();
+          unsubBirds();
           unsubPositions();
         };
       },

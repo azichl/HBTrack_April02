@@ -53,12 +53,19 @@ export const Monitoring = () => {
     timeZone,
     isPositionModalOpen: isModalOpen,
     setIsPositionModalOpen: setIsModalOpen,
+    refreshMonitoringData,
   } = useAppStore();
 
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Partial<Position>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
+
+  // Sync on mount to guarantee fresh coordinates and database records
+  useEffect(() => {
+    refreshMonitoringData().catch(console.warn);
+  }, []);
 
   useEffect(() => {
     if (isModalOpen) {
@@ -135,7 +142,7 @@ export const Monitoring = () => {
         return true;
       })
       .map(t => {
-        const bird = findBirdForTransmitter(birds, t.bird_id);
+        const bird = findBirdForTransmitter(birds, t);
         const pid = String(t.platform_id);
         const pos = latestPositions.get(pid);
 
@@ -217,8 +224,17 @@ export const Monitoring = () => {
     exportToCSV(data, 'Monitoring_Data');
   };
 
-  const handleSync = () => {
-      // Data is automatically synced to Firebase during ingestion
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await refreshMonitoringData();
+      alert(`Synchronization complete!\n• ${result.transmittersCount} Transmitters\n• ${result.birdsCount} Birds\n• ${result.positionsCount} Tracking Fixes\nLive monitoring is fully synchronized with database.`);
+    } catch (err: any) {
+      console.error("Sync failed:", err);
+      alert(`Sync failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleDeleteCoordinate = async (platformId: string, timestamp: string | undefined) => {
@@ -328,9 +344,12 @@ export const Monitoring = () => {
               </div>
               <button 
                onClick={handleSync}
-               className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-brand-700 dark:text-brand-300 shadow-sm transition-colors"
+               disabled={isSyncing}
+               className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-brand-700 dark:text-brand-300 shadow-sm transition-colors disabled:opacity-50"
+               title="Synchronize Live Monitoring with Transmitters, Birds, and Argos database"
              >
-                <RefreshCw size={16} /> Sync with Argos
+                <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} /> 
+                {isSyncing ? "Syncing..." : "Sync with Argos"}
              </button>
               <button 
                onClick={handleResetAllCoordinates}
