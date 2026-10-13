@@ -1890,6 +1890,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   };
 
   // ─── EXPORT TO PDF & PNG ───────────────────────────────────────────────────
+  const getExportFileName = () => {
+    let datePart = (customMetadata.issueDate || '').trim();
+    if (!datePart || !/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+      datePart = formatDateYYYYMMDD(new Date()) || new Date().toISOString().slice(0, 10);
+    }
+    const transmitterPart = displayTransmitterLabel || 'NA';
+    const suffix = reportLanguage === 'en' ? 'Tracking report' : 'تقرير تتبع';
+    return `${datePart}_${transmitterPart}_${suffix}`;
+  };
+
   const handleExportPdf = async () => {
     if (!reportContainerRef.current) return;
     setIsExportingPdf(true);
@@ -1902,7 +1912,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const element = reportContainerRef.current;
       if (!element) return;
 
-      const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
+      const exportFileName = getExportFileName();
       await exportReport(element, {
         fileName: exportFileName,
         format: 'pdf',
@@ -1911,7 +1921,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       });
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('حدث خطأ أثناء تصدير ملف PDF.');
+      alert(reportLanguage === 'en' ? 'An error occurred while exporting PDF.' : 'حدث خطأ أثناء تصدير ملف PDF.');
     } finally {
       if (snapBtn) snapBtn.style.display = '';
       setIsExportingPdf(false);
@@ -1930,7 +1940,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const element = reportContainerRef.current;
       if (!element) return;
 
-      const exportFileName = `${customMetadata.issueDate}_${displayTransmitterLabel}_تقرير تتبع`;
+      const exportFileName = getExportFileName();
       await exportReport(element, {
         fileName: exportFileName,
         format: 'png',
@@ -1939,7 +1949,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       });
     } catch (error) {
       console.error('Error exporting image:', error);
-      alert('حدث خطأ أثناء حفظ الصورة.');
+      alert(reportLanguage === 'en' ? 'An error occurred while saving the image.' : 'حدث خطأ أثناء حفظ الصورة.');
     } finally {
       if (snapBtn) snapBtn.style.display = '';
       setIsExportingPng(false);

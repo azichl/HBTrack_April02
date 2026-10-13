@@ -1465,8 +1465,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
 
+      const datePart = (customMetadata.issueDate || formatDateYYYYMMDD(new Date()) || new Date().toISOString().slice(0, 10)).trim();
       pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, '', 'FAST');
-      pdf.save(`Houbara_Report_${selectedPttId}_${customMetadata.issueDate}.pdf`);
+      pdf.save(`${datePart}_${selectedPttId}_تقرير تتبع.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('حدث خطأ أثناء تصدير ملف PDF. يرجى المحاولة مرة أخرى.');
@@ -1489,8 +1490,9 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
 
       const canvas = await html2canvas(element, createExportHtml2CanvasOptions());
 
+      const datePart = (customMetadata.issueDate || formatDateYYYYMMDD(new Date()) || new Date().toISOString().slice(0, 10)).trim();
       const link = document.createElement('a');
-      link.download = `Houbara_Report_${selectedPttId}_${customMetadata.issueDate}.png`;
+      link.download = `${datePart}_${selectedPttId}_تقرير تتبع.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     } catch (error) {
