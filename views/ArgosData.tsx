@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Download, Search, Trash2, Database, ChevronLeft, ChevronRight, RefreshCw, Loader2, Filter, X, Save, Plus, Layers } from 'lucide-react';
+import { Download, Search, Trash2, Database, ChevronLeft, ChevronRight, RefreshCw, Loader2, Filter, X, Save, Plus, Layers, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime } from '../utils/formatting';
-import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
+import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, clearAllTrackingData, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
@@ -39,7 +39,12 @@ export const ArgosData = () => {
   const [platformFilter, setPlatformFilter] = useState('');
   const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
   const [rowsPerPage, setRowsPerPage] = useState(100);
-  const [isConfirming, setIsConfirming] = useState(false);
+
+  // Clear Tracking Data Modal State
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearProgress, setClearProgress] = useState<string>('');
+  const [clearScope, setClearScope] = useState<'all' | 'argos_positions' | 'positions'>('all');
 
   // Date Range Filter State
   const [isFilterOpen, setFilterOpen] = useState(false);
@@ -239,14 +244,37 @@ export const ArgosData = () => {
     exportToCSV(sortedData, 'Argos_Firebase_Data');
   };
 
-  const handleClear = async () => {
-    if (isConfirming) {
-      await deleteArgosPositions('');
-      handleRefresh();
-      setIsConfirming(false);
-    } else {
-      setIsConfirming(true);
-      setTimeout(() => setIsConfirming(false), 3000);
+  const handleOpenClearModal = () => {
+    setClearScope(collectionMode === 'all' ? 'all' : collectionMode);
+    setClearProgress('');
+    setIsClearModalOpen(true);
+  };
+
+  const handleConfirmClear = async () => {
+    setIsClearing(true);
+    setClearProgress('Initiating deletion of tracking records...');
+    try {
+      const result = await clearAllTrackingData(clearScope, (msg) => {
+        setClearProgress(msg);
+      });
+
+      // Clear local in-memory positions state in Zustand store
+      if (clearScope === 'all' || clearScope === 'positions') {
+        useAppStore.setState({ positions: [], lastSaved: new Date().toISOString() });
+      }
+
+      setIsClearModalOpen(false);
+      await loadData();
+      getArgosTransmitterIds().then(ids => setAvailablePlatforms(ids));
+
+      const totalDeleted = result.argosDeleted + result.positionsDeleted;
+      alert(`Success: Cleared ${totalDeleted} tracking records from Firebase.\n\nTransmitters and Birds databases were NOT touched.`);
+    } catch (err: any) {
+      console.error('Error clearing tracking data:', err);
+      alert(`Error clearing tracking data: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsClearing(false);
+      setClearProgress('');
     }
   };
 
@@ -386,11 +414,12 @@ export const ArgosData = () => {
                {/* Actions */}
                <div className="flex gap-2">
                    <button 
-                      onClick={handleClear}
-                      className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${isConfirming ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'}`}
+                      onClick={handleOpenClearModal}
+                      className="px-3 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-xs"
+                      title="Clear tracking data from Firebase"
                    >
                        <Trash2 size={14} />
-                       {isConfirming ? 'Confirm Clear?' : 'Clear All'}
+                       Clear All
                    </button>
                    <button 
                       onClick={handleExport}
@@ -814,6 +843,175 @@ export const ArgosData = () => {
               </div>
             </div>
           </DraggableComponent>
+        </div>
+      )}
+
+      {/* Clear Tracking Data Confirmation Modal */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-2xl max-w-lg w-full overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between bg-red-50/50 dark:bg-red-950/20">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 rounded-xl">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                    Clear Tracking Data
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Delete transmitter tracking coordinates from Firebase
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isClearing && setIsClearModalOpen(false)}
+                disabled={isClearing}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-30"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 text-sm">
+              <p className="text-gray-700 dark:text-gray-300 font-medium">
+                Are you sure you want to clear tracking coordinates from Firebase? This will wipe the tracking records so you can upload a fresh clean dataset.
+              </p>
+
+              {/* Protection Guarantee Notice */}
+              <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-start gap-3">
+                <ShieldCheck className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" size={20} />
+                <div className="text-xs space-y-1">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300 block">
+                    Transmitters & Birds Data Protected
+                  </span>
+                  <p className="text-emerald-700/90 dark:text-emerald-400/90">
+                    The <b>Transmitters registry</b> and <b>Birds database</b> will <b>NOT</b> be deleted. Only telemetry tracking coordinates uploaded via API or Excel are erased.
+                  </p>
+                </div>
+              </div>
+
+              {/* Scope Selection */}
+              <div className="space-y-2 pt-1">
+                <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                  Select Scope to Clear:
+                </label>
+                <div className="space-y-2">
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearScope === 'all'
+                      ? 'border-red-400 bg-red-50/40 dark:border-red-600 dark:bg-red-950/20'
+                      : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/40'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="clearScope"
+                      checked={clearScope === 'all'}
+                      onChange={() => setClearScope('all')}
+                      disabled={isClearing}
+                      className="mt-0.5 text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-gray-900 dark:text-white block">
+                        All Tracking Data (argos_positions + positions) <span className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 px-1.5 py-0.5 rounded font-bold ml-1">Recommended</span>
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 block mt-0.5">
+                        Clears both raw Argos messages and processed map positions completely.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearScope === 'argos_positions'
+                      ? 'border-red-400 bg-red-50/40 dark:border-red-600 dark:bg-red-950/20'
+                      : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/40'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="clearScope"
+                      checked={clearScope === 'argos_positions'}
+                      onChange={() => setClearScope('argos_positions')}
+                      disabled={isClearing}
+                      className="mt-0.5 text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-gray-900 dark:text-white block">
+                        Argos Raw Data only (argos_positions)
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 block mt-0.5">
+                        Clears only raw telemetry ingested from Argos CLS API or Excel files.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                    clearScope === 'positions'
+                      ? 'border-red-400 bg-red-50/40 dark:border-red-600 dark:bg-red-950/20'
+                      : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/40'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="clearScope"
+                      checked={clearScope === 'positions'}
+                      onChange={() => setClearScope('positions')}
+                      disabled={isClearing}
+                      className="mt-0.5 text-red-600 focus:ring-red-500 cursor-pointer"
+                    />
+                    <div className="text-xs">
+                      <span className="font-bold text-gray-900 dark:text-white block">
+                        Map Positions only (positions)
+                      </span>
+                      <span className="text-gray-500 dark:text-gray-400 block mt-0.5">
+                        Clears only processed coordinate points displayed on the tracking map.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* In-progress banner */}
+              {isClearing && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center gap-3 animate-pulse">
+                  <Loader2 size={18} className="animate-spin text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                    {clearProgress || 'Deleting records from Firebase in batches... Please wait.'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-gray-50 dark:bg-slate-900/50 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(false)}
+                disabled={isClearing}
+                className="px-4 py-2 text-xs font-bold text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-white bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClear}
+                disabled={isClearing}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors flex items-center gap-2 shadow-xs disabled:opacity-50"
+              >
+                {isClearing ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Clearing Records...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>Confirm & Clear Data</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

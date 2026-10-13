@@ -720,6 +720,41 @@ export const deleteArgosPositions = async (platformId?: string): Promise<number>
   }
 };
 
+/**
+ * Clear all tracking data from Firebase (argos_positions and positions collections).
+ * Guaranteed to NEVER touch or delete transmitters or birds.
+ */
+export const clearAllTrackingData = async (
+  scope: 'all' | 'argos_positions' | 'positions' = 'all',
+  onProgress?: (msg: string) => void
+): Promise<{ argosDeleted: number; positionsDeleted: number }> => {
+  let argosDeleted = 0;
+  let positionsDeleted = 0;
+
+  try {
+    if (scope === 'all' || scope === 'argos_positions') {
+      onProgress?.('Deleting Argos raw positions from Firebase...');
+      argosDeleted = await deleteCollection('argos_positions', (count) => {
+        onProgress?.(`Deleting Argos raw records: ${count} deleted...`);
+      });
+    }
+
+    if (scope === 'all' || scope === 'positions') {
+      onProgress?.('Deleting map positions from Firebase...');
+      positionsDeleted = await deleteCollection('positions', (count) => {
+        onProgress?.(`Deleting map position records: ${count} deleted...`);
+      });
+    }
+
+    clearTransmitterHistoryCache();
+    console.log(`[Firestore] clearAllTrackingData completed: ${argosDeleted} argos_positions, ${positionsDeleted} positions`);
+    return { argosDeleted, positionsDeleted };
+  } catch (err) {
+    console.error('Error in clearAllTrackingData:', err);
+    throw err;
+  }
+};
+
 /** Delete a single coordinate record from both argos_positions and positions */
 export const deleteCoordinateRecord = async (argosId: string | undefined, platformId: string, timestamp: string) => {
   console.log('[Firestore] deleteCoordinateRecord called:', { argosId, platformId, timestamp });
