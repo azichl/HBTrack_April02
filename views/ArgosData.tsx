@@ -258,9 +258,28 @@ export const ArgosData = () => {
         setClearProgress(msg);
       });
 
-      // Clear local in-memory positions state in Zustand store
+      // Clear local in-memory positions and reset transmitter coordinates in Zustand store
       if (clearScope === 'all' || clearScope === 'positions') {
-        useAppStore.setState({ positions: [], lastSaved: new Date().toISOString() });
+        const { transmitters } = useAppStore.getState();
+        const cleanTransmitters = transmitters.map(t => ({
+          ...t,
+          lat: undefined,
+          lon: undefined,
+          latitude: undefined,
+          longitude: undefined,
+          last_latitude: undefined,
+          last_longitude: undefined,
+          last_fix: '',
+          battery_voltage: undefined,
+          speed: undefined,
+          derived_status: 'inactive' as any
+        }));
+
+        useAppStore.setState({ 
+          positions: [], 
+          transmitters: cleanTransmitters,
+          lastSaved: new Date().toISOString() 
+        });
       }
 
       setIsClearModalOpen(false);
@@ -268,7 +287,7 @@ export const ArgosData = () => {
       getArgosTransmitterIds().then(ids => setAvailablePlatforms(ids));
 
       const totalDeleted = result.argosDeleted + result.positionsDeleted;
-      alert(`Success: Cleared ${totalDeleted} tracking records from Firebase.\n\nTransmitters and Birds databases were NOT touched.`);
+      alert(`Success: Cleared ${totalDeleted} tracking records and reset tracking coordinates on transmitters.\n\nTransmitters and Birds registry remains safe.`);
     } catch (err: any) {
       console.error('Error clearing tracking data:', err);
       alert(`Error clearing tracking data: ${err?.message || 'Unknown error'}`);

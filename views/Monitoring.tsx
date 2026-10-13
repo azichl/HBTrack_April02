@@ -6,7 +6,7 @@ import { useSortableTable, SortableHeader } from '../components/TableComponents'
 import { Position } from '../types';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
 import Draggable from 'react-draggable';
-import { saveDocument, deleteCoordinateRecord } from '../services/firestoreService';
+import { saveDocument, deleteCoordinateRecord, resetTransmitterCoordinates, resetAllTransmitterCoordinates, deleteArgosPositions, clearTransmitterHistoryCache } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
 
 // Safely parse dates including DD/MM/YYYY HH:mm:ss format from Argos API
@@ -148,25 +148,36 @@ export const Monitoring = () => {
         const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
         const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
 
-        let displayLat = pos?.lat !== undefined ? Number(pos.lat) : (t as any).latitude !== undefined ? Number((t as any).latitude) : (t as any).lat !== undefined ? Number((t as any).lat) : undefined;
-        let displayLon = pos?.lon !== undefined ? Number(pos.lon) : (t as any).longitude !== undefined ? Number((t as any).longitude) : (t as any).lon !== undefined ? Number((t as any).lon) : undefined;
+        const rawLat = pos?.lat ?? (t as any).latitude ?? t.lat;
+        const rawLon = pos?.lon ?? (t as any).longitude ?? t.lon;
+        let displayLat = (rawLat !== null && rawLat !== undefined && rawLat !== '' && !isNaN(Number(rawLat))) ? Number(rawLat) : undefined;
+        let displayLon = (rawLon !== null && rawLon !== undefined && rawLon !== '' && !isNaN(Number(rawLon))) ? Number(rawLon) : undefined;
+
+        if (displayLat === 0 && displayLon === 0) {
+          displayLat = undefined;
+          displayLon = undefined;
+        }
+
         if (pid === '242086' && displayLon !== undefined && displayLon < 0) {
           displayLon = Math.abs(displayLon);
         }
+
+        const hasValidFix = !!pos || (displayLat !== undefined && displayLon !== undefined);
+        const displayTimestamp = hasValidFix ? bestTimestamp : undefined;
 
         return {
           id: t.id,
           platform_id: t.platform_id,
           bird_ring_id: bird?.ring_id || 'Unassigned',
           bird_id: t.bird_id,
-          status: t.derived_status || t.status,
+          status: hasValidFix ? (t.derived_status || t.status) : 'Inactive',
           model: t.model,
           lat: displayLat,
           lon: displayLon,
           battery_voltage: t.battery_voltage,
           speed: pos?.speed_kmh,
-          timestamp: bestTimestamp,
-          hasPos: !!pos || (displayLat !== undefined && displayLon !== undefined)
+          timestamp: displayTimestamp,
+          hasPos: hasValidFix
         };
       });
   }, [transmitters, birds, latestPositions, hasCurrentMonthFixesMap]);
@@ -211,11 +222,89 @@ export const Monitoring = () => {
   };
 
   const handleDeleteCoordinate = async (platformId: string, timestamp: string | undefined) => {
-    if (!timestamp) return;
-    if (window.confirm(`Are you sure you want to permanently delete the latest coordinate for ${platformId}?`)) {
-      await deleteCoordinateRecord(undefined, platformId, timestamp);
-      // Wait a moment for listeners to catch up or refresh state if needed
-      // Actually since positions are listener-based in appStore, it will automatically vanish!
+    const cleanPid = String(platformId).replace(/^trans-/, '').trim();
+    if (window.confirm(`Are you sure you want to permanently delete tracking coordinates for transmitter ${cleanPid}?`)) {
+      try {
+        await deleteCoordinateRecord(undefined, cleanPid, timestamp);
+        await deleteArgosPositions(cleanPid);
+        await resetTransmitterCoordinates(cleanPid);
+
+        // Update in-memory Zustand store so Monitoring and Live Tracking update immediately
+        const { transmitters, positions } = useAppStore.getState();
+        const updatedTransmitters = transmitters.map(t => {
+          if (String(t.platform_id || t.id).replace(/^trans-/, '').trim() === cleanPid) {
+            return {
+              ...t,
+              lat: undefined,
+              lon: undefined,
+              latitude: undefined,
+              longitude: undefined,
+              last_latitude: undefined,
+              last_longitude: undefined,
+              last_fix: '',
+              battery_voltage: undefined,
+              speed: undefined,
+              derived_status: 'inactive' as any
+            };
+          }
+          return t;
+        });
+
+        const updatedPositions = positions.filter(p => 
+          String(p.transmitter_id || (p as any).platformId).replace(/^trans-/, '').trim() !== cleanPid
+        );
+
+        useAppStore.setState({
+          transmitters: updatedTransmitters,
+          positions: updatedPositions,
+          lastSaved: new Date().toISOString()
+        });
+
+        clearTransmitterHistoryCache(cleanPid);
+      } catch (err: any) {
+        console.error('Error deleting coordinate:', err);
+        alert(`Error: ${err?.message || 'Failed to delete coordinate'}`);
+      }
+    }
+  };
+
+  const [isResettingAll, setIsResettingAll] = useState(false);
+
+  const handleResetAllCoordinates = async () => {
+    if (window.confirm("Are you sure you want to clear tracking coordinates for ALL transmitters on Live Monitoring?\n\nThis will wipe the coordinates from monitoring so you can upload a fresh clean dataset. Transmitters inventory and bird linkages will remain safe.")) {
+      setIsResettingAll(true);
+      try {
+        await resetAllTransmitterCoordinates();
+        
+        const { transmitters } = useAppStore.getState();
+        const cleanTransmitters = transmitters.map(t => ({
+          ...t,
+          lat: undefined,
+          lon: undefined,
+          latitude: undefined,
+          longitude: undefined,
+          last_latitude: undefined,
+          last_longitude: undefined,
+          last_fix: '',
+          battery_voltage: undefined,
+          speed: undefined,
+          derived_status: 'inactive' as any
+        }));
+
+        useAppStore.setState({
+          transmitters: cleanTransmitters,
+          positions: [],
+          lastSaved: new Date().toISOString()
+        });
+
+        clearTransmitterHistoryCache();
+        alert("All tracking coordinates have been cleared successfully. Ready for clean data upload.");
+      } catch (err: any) {
+        console.error("Failed to reset coordinates:", err);
+        alert(`Failed to reset coordinates: ${err?.message || 'Unknown error'}`);
+      } finally {
+        setIsResettingAll(false);
+      }
     }
   };
 
@@ -242,6 +331,14 @@ export const Monitoring = () => {
                className="px-4 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-brand-700 dark:text-brand-300 shadow-sm transition-colors"
              >
                 <RefreshCw size={16} /> Sync with Argos
+             </button>
+              <button 
+               onClick={handleResetAllCoordinates}
+               disabled={isResettingAll}
+               className="px-3.5 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/50 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2 text-red-600 dark:text-red-400 shadow-sm transition-colors disabled:opacity-50"
+               title="Clear coordinates for all transmitters on Live Monitoring"
+             >
+               <Trash2 size={16} /> Clear Coordinates
              </button>
              <button 
               onClick={handleExport}
@@ -339,9 +436,8 @@ export const Monitoring = () => {
                       </button>
                       <button 
                         onClick={() => handleDeleteCoordinate(row.platform_id, row.timestamp)}
-                        disabled={!row.hasPos}
-                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Delete latest coordinate"
+                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-colors"
+                        title="Clear tracking coordinates for this transmitter"
                       >
                         <Trash2 size={16} />
                       </button>

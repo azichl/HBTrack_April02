@@ -256,6 +256,19 @@ const safeParseDate = (ts: any): number => {
 
 export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string | number)[]) => {
   try {
+    if (!transmitterIds || transmitterIds.length === 0) return [];
+
+    // Fast-path: Check if either positions or argos_positions have documents
+    const [checkPos, checkArgos] = await Promise.all([
+      getDocs(query(collection(db, 'positions'), limit(1))),
+      getDocs(query(collection(db, 'argos_positions'), limit(1)))
+    ]);
+
+    if (checkPos.empty && checkArgos.empty) {
+      console.log('[Firestore] positions & argos_positions are empty, skipping queries');
+      return [];
+    }
+
     const promises: Promise<any>[] = [];
     
     transmitterIds.forEach(rawId => {
@@ -267,17 +280,9 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
         return getDocs(query(
           collection(db, colName),
           where(fieldName, '==', val),
-          orderBy('timestamp', 'desc'),
-          limit(2)
+          limit(10)
         )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
-        .catch(() => {
-          return getDocs(query(
-            collection(db, colName),
-            where(fieldName, '==', val),
-            limit(2)
-          )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
-          .catch(() => []);
-        });
+        .catch(() => []);
       };
 
       const p1 = fetchDocs('positions', 'transmitter_id', idStr);
@@ -721,15 +726,93 @@ export const deleteArgosPositions = async (platformId?: string): Promise<number>
 };
 
 /**
+ * Reset coordinate tracking fields on a single transmitter in Firestore.
+ */
+export const resetTransmitterCoordinates = async (platformId: string): Promise<void> => {
+  const cleanPid = String(platformId).replace(/^trans-/, '').trim();
+  const resetFields = {
+    lat: null,
+    lon: null,
+    latitude: null,
+    longitude: null,
+    last_latitude: null,
+    last_longitude: null,
+    last_fix: null,
+    battery_voltage: null,
+    speed: null,
+    derived_status: 'inactive'
+  };
+
+  try {
+    const docId = `trans-${cleanPid}`;
+    await saveDocument('transmitters', docId, resetFields);
+    console.log(`[Firestore] Reset coordinates for transmitter ${docId}`);
+  } catch (err) {
+    try {
+      await saveDocument('transmitters', cleanPid, resetFields);
+      console.log(`[Firestore] Reset coordinates for transmitter ${cleanPid}`);
+    } catch (e2) {
+      console.warn(`[Firestore] Failed to reset transmitter coordinates for ${cleanPid}:`, e2);
+    }
+  }
+};
+
+/**
+ * Reset coordinate tracking fields on ALL transmitters in Firestore.
+ * Transmitters inventory and bird linkages remain fully intact.
+ */
+export const resetAllTransmitterCoordinates = async (onProgress?: (msg: string) => void): Promise<number> => {
+  try {
+    const txSnap = await getDocs(collection(db, 'transmitters'));
+    if (txSnap.empty) return 0;
+
+    onProgress?.(`Resetting coordinates on ${txSnap.size} transmitters...`);
+    const BATCH_LIMIT = 400;
+    const docs = txSnap.docs;
+    let resetCount = 0;
+
+    for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
+      const batch = writeBatch(db);
+      const chunk = docs.slice(i, i + BATCH_LIMIT);
+      chunk.forEach(d => {
+        batch.update(d.ref, {
+          lat: null,
+          lon: null,
+          latitude: null,
+          longitude: null,
+          last_latitude: null,
+          last_longitude: null,
+          last_fix: null,
+          battery_voltage: null,
+          speed: null,
+          derived_status: 'inactive'
+        });
+      });
+      await batch.commit();
+      resetCount += chunk.length;
+      onProgress?.(`Reset coordinates on ${resetCount}/${docs.length} transmitters...`);
+    }
+
+    clearTransmitterHistoryCache();
+    console.log(`[Firestore] Reset coordinates on ${resetCount} transmitters successfully`);
+    return resetCount;
+  } catch (err) {
+    console.error('[Firestore] Error resetting all transmitter coordinates:', err);
+    throw err;
+  }
+};
+
+/**
  * Clear all tracking data from Firebase (argos_positions and positions collections).
- * Guaranteed to NEVER touch or delete transmitters or birds.
+ * Guaranteed to NEVER delete transmitters or birds, but resets tracking coordinates on transmitters so Monitoring and Live Tracking are clean.
  */
 export const clearAllTrackingData = async (
   scope: 'all' | 'argos_positions' | 'positions' = 'all',
   onProgress?: (msg: string) => void
-): Promise<{ argosDeleted: number; positionsDeleted: number }> => {
+): Promise<{ argosDeleted: number; positionsDeleted: number; transmittersReset: number }> => {
   let argosDeleted = 0;
   let positionsDeleted = 0;
+  let transmittersReset = 0;
 
   try {
     if (scope === 'all' || scope === 'argos_positions') {
@@ -746,24 +829,28 @@ export const clearAllTrackingData = async (
       });
     }
 
+    // Reset coordinates on all transmitters so Live Monitoring doesn't retain ghost coordinates
+    if (scope === 'all' || scope === 'positions') {
+      transmittersReset = await resetAllTransmitterCoordinates(onProgress);
+    }
+
     clearTransmitterHistoryCache();
-    console.log(`[Firestore] clearAllTrackingData completed: ${argosDeleted} argos_positions, ${positionsDeleted} positions`);
-    return { argosDeleted, positionsDeleted };
+    console.log(`[Firestore] clearAllTrackingData completed: ${argosDeleted} argos_positions, ${positionsDeleted} positions, ${transmittersReset} transmitters reset`);
+    return { argosDeleted, positionsDeleted, transmittersReset };
   } catch (err) {
     console.error('Error in clearAllTrackingData:', err);
     throw err;
   }
 };
 
-/** Delete a single coordinate record from both argos_positions and positions */
-export const deleteCoordinateRecord = async (argosId: string | undefined, platformId: string, timestamp: string) => {
+/** Delete a single coordinate record from both argos_positions and positions, AND reset coordinates on the transmitter */
+export const deleteCoordinateRecord = async (argosId: string | undefined, platformId: string, timestamp?: string) => {
   console.log('[Firestore] deleteCoordinateRecord called:', { argosId, platformId, timestamp });
   const batch = writeBatch(db);
   
   if (argosId) {
     batch.delete(doc(db, 'argos_positions', argosId));
   } else if (platformId && timestamp) {
-    // If we don't have the explicit argosId (e.g. from Monitoring view), search for it
     const argosQ = query(
       collection(db, 'argos_positions'),
       where('platformId', '==', String(platformId)),
@@ -784,6 +871,12 @@ export const deleteCoordinateRecord = async (argosId: string | undefined, platfo
   }
   
   await batch.commit();
+
+  // Reset the coordinate fields on the transmitter document so Live Monitoring immediately clears it
+  if (platformId) {
+    await resetTransmitterCoordinates(platformId);
+    clearTransmitterHistoryCache(platformId);
+  }
 };
 
 /** Bulk delete records by a specific collection and list of IDs */
