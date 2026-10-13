@@ -16,7 +16,7 @@ import {
   loadAllArgosPositions, bulkDeleteRecords, bulkUpdateRecords,
   recordStatusTransition, loadStatusHistoryForTransmitter, loadAllStatusHistory,
   saveLastIngestTime, loadLastIngestTime, subscribeToLastIngestTime,
-  clearTransmitterHistoryCache
+  clearTransmitterHistoryCache, syncTransmittersFromArgosData
 } from '../services/firestoreService';
 import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage, KNOWN_CLS_RAW_LOCATION_DATES } from '../services/argosService';
@@ -1659,6 +1659,27 @@ export const useAppStore = create<AppState>()(
           // Load only the latest GPS and Doppler position for each transmitter
           const fsPositions = await loadLatestPositionsPerTransmitter(fsTransmitters.map(t => t.platform_id));
 
+          // Auto-discover and synchronize any transmitters existing in argos_positions/positions but missing in transmitters (e.g. 244289)
+          try {
+            const { transmitters: syncedTx, positions: syncedPositions } = await syncTransmittersFromArgosData();
+            syncedTx.forEach(st => {
+              const pid = String(st.platform_id).replace(/^trans-/, '').trim();
+              const existingIdx = fsTransmitters.findIndex(t => String(t.platform_id).replace(/^trans-/, '').trim() === pid);
+              if (existingIdx === -1) {
+                fsTransmitters.push(st);
+              } else if (st.last_fix && (!fsTransmitters[existingIdx].last_fix || safeParseDate(st.last_fix) > safeParseDate(fsTransmitters[existingIdx].last_fix))) {
+                fsTransmitters[existingIdx] = { ...fsTransmitters[existingIdx], ...st };
+              }
+            });
+            syncedPositions.forEach(sp => {
+              if (!fsPositions.some(p => p.id === sp.id)) {
+                fsPositions.push(sp);
+              }
+            });
+          } catch (e) {
+            console.warn('[AppStore] Could not sync from Argos data during init:', e);
+          }
+
           // Ensure bidirectional ID linking between transmitters and birds
           fsTransmitters.forEach(t => {
             const matched = findBirdForTransmitter(fsBirds, t);
@@ -1897,16 +1918,19 @@ export const useAppStore = create<AppState>()(
 
       refreshMonitoringData: async (onProgress) => {
         try {
-          onProgress?.('Fetching fresh transmitters, birds, and tracking fixes...');
-          const [freshTransmittersRaw, freshBirdsRaw] = await Promise.all([
-            loadCollection<Transmitter>('transmitters'),
-            loadCollection<Bird>('birds')
-          ]);
+          onProgress?.('Synchronizing transmitters and fixes from Argos database...');
+          // 1. Sync transmitters & positions directly from Argos data (argos_positions + positions)
+          // Discovers any missing transmitters (like 244289) and writes them to Firestore transmitters collection!
+          const { transmitters: syncedTransmitters, positions: syncedPositions, createdCount, updatedCount } = await syncTransmittersFromArgosData();
 
-          const { deduplicated: dedupTransmitters } = deduplicateTransmitters(freshTransmittersRaw);
+          // 2. Load fresh birds
+          const freshBirdsRaw = await loadCollection<Bird>('birds');
           const { deduplicated: dedupBirds } = deduplicateBirds(freshBirdsRaw);
 
-          // Re-link birds to transmitters
+          // 3. Deduplicate transmitters
+          const { deduplicated: dedupTransmitters } = deduplicateTransmitters(syncedTransmitters);
+
+          // 4. Re-link birds to transmitters
           dedupTransmitters.forEach(t => {
             const matched = findBirdForTransmitter(dedupBirds, t);
             if (matched) {
@@ -1917,28 +1941,24 @@ export const useAppStore = create<AppState>()(
             }
           });
 
-          // Fetch latest positions for all transmitters
-          const pids = dedupTransmitters.map(t => t.platform_id);
-          const latestPositions = await loadLatestPositionsPerTransmitter(pids);
-
+          // 5. Apply user visibility filtering
           const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
           const filteredTransmitters = filterTransmittersForUser(dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
-          const filteredPositions = filterPositionsForUser(latestPositions as Position[], dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+          const filteredPositions = filterPositionsForUser(syncedPositions, dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
 
-          set((state) => {
-            const posMap = new Map<string, Position>();
-            state.positions.forEach(p => posMap.set(p.id, p));
-            filteredPositions.forEach(p => posMap.set(p.id, p));
-            return {
-              transmitters: filteredTransmitters,
-              birds: dedupBirds,
-              positions: Array.from(posMap.values()),
-              lastSaved: new Date().toISOString()
-            };
+          set({
+            transmitters: filteredTransmitters,
+            birds: dedupBirds,
+            positions: filteredPositions,
+            lastSaved: new Date().toISOString()
           });
 
           clearTransmitterHistoryCache();
-          onProgress?.(`Synchronized ${filteredTransmitters.length} transmitters and ${filteredPositions.length} fixes.`);
+
+          // 6. Recalculate derived statuses in background for any newly imported transmitters
+          get().recalculateTransmitterStatuses().catch(console.warn);
+
+          onProgress?.(`Synchronized ${filteredTransmitters.length} transmitters (${createdCount} new from Argos data) and ${filteredPositions.length} fixes.`);
           return {
             transmittersCount: filteredTransmitters.length,
             birdsCount: dedupBirds.length,

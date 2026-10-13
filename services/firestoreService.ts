@@ -5,8 +5,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
-import { ArgosMessage, StatusHistoryRecord, Transmitter } from '../types';
-import { KNOWN_CLS_RAW_LOCATION_DATES } from './argosService';
+import { ArgosMessage, StatusHistoryRecord, Transmitter, Position } from '../types';
+import { KNOWN_CLS_RAW_LOCATION_DATES, decodeBatteryVoltage } from './argosService';
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
 
@@ -664,22 +664,234 @@ export const loadAllPositions = async (startDate?: Date, endDate?: Date): Promis
 };
 
 /**
- * Get all unique platform IDs for filter dropdowns.
- * Uses the lightweight transmitters collection (~80 docs) rather than scanning the massive argos_positions collection.
+ * Get all unique platform IDs across transmitters, argos_positions, and positions.
  */
 export const getArgosTransmitterIds = async (): Promise<string[]> => {
   try {
-    const snapshot = await getDocs(collection(db, 'transmitters'));
+    const [snapTx, snapArgos, snapPos] = await Promise.all([
+      getDocs(collection(db, 'transmitters')),
+      getDocs(collection(db, 'argos_positions')),
+      getDocs(collection(db, 'positions'))
+    ]);
     const ids = new Set<string>();
-    snapshot.forEach(doc => {
+    snapTx.forEach(doc => {
       const data = doc.data();
       const pid = data.platform_id || data.id;
       if (pid) ids.add(String(pid).replace(/^trans-/, '').trim());
     });
-    return Array.from(ids).sort();
+    snapArgos.forEach(doc => {
+      const data = doc.data();
+      const pid = data.platformId || data.platform_id || data.transmitter_id;
+      if (pid) ids.add(String(pid).replace(/^trans-/, '').trim());
+    });
+    snapPos.forEach(doc => {
+      const data = doc.data();
+      const pid = data.transmitter_id;
+      if (pid) ids.add(String(pid).replace(/^trans-/, '').trim());
+    });
+    return Array.from(ids).filter(Boolean).sort();
   } catch (error) {
     console.error('[Firestore] Error getting transmitter IDs:', error);
     return [];
+  }
+};
+
+/**
+ * Synchronizes transmitters and positions from the argos_positions and positions collections.
+ * 1. Discovers all platform IDs present in argos_positions or positions.
+ * 2. Auto-creates transmitter records in Firestore for any newly discovered platform IDs (e.g. 244289).
+ * 3. Extracts the latest valid fix (lat, lon, last_fix, battery) for each platform ID and updates the transmitter in Firestore if newer.
+ * 4. Ensures corresponding position records exist in the positions collection for live mapping.
+ * Returns the fresh, synchronized transmitters and positions.
+ */
+export const syncTransmittersFromArgosData = async (): Promise<{
+  transmitters: Transmitter[];
+  positions: Position[];
+  createdCount: number;
+  updatedCount: number;
+}> => {
+  try {
+    const [txSnap, argosSnap, posSnap] = await Promise.all([
+      getDocs(collection(db, 'transmitters')),
+      getDocs(collection(db, 'argos_positions')),
+      getDocs(collection(db, 'positions'))
+    ]);
+
+    const transmittersMap = new Map<string, Transmitter>();
+    txSnap.forEach(docSnap => {
+      const data = docSnap.data() as Transmitter;
+      const pid = String(data.platform_id || data.id || '').replace(/^trans-/, '').trim();
+      if (pid) {
+        transmittersMap.set(pid, { ...data, id: docSnap.id, platform_id: pid });
+      }
+    });
+
+    // Group all tracking records by clean platform ID
+    const recordsByPid = new Map<string, any[]>();
+    argosSnap.forEach(docSnap => {
+      const data = docSnap.data();
+      const pid = String(data.platformId || data.platform_id || data.transmitter_id || '').replace(/^trans-/, '').trim();
+      if (!pid || pid === 'Unknown') return;
+      if (!recordsByPid.has(pid)) recordsByPid.set(pid, []);
+      recordsByPid.get(pid)!.push({ ...data, _id: docSnap.id, _col: 'argos_positions' });
+    });
+
+    posSnap.forEach(docSnap => {
+      const data = docSnap.data();
+      const pid = String(data.transmitter_id || data.platformId || data.platform_id || '').replace(/^trans-/, '').trim();
+      if (!pid || pid === 'Unknown') return;
+      if (!recordsByPid.has(pid)) recordsByPid.set(pid, []);
+      recordsByPid.get(pid)!.push({ ...data, _id: docSnap.id, _col: 'positions' });
+    });
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    const missingPositionsDocs: Position[] = [];
+
+    // For every platform ID found in argos_positions or positions:
+    for (const [pid, records] of recordsByPid.entries()) {
+      let maxTs = -Infinity;
+      let latestRecord: any = null;
+      let bestBattery: number | undefined;
+
+      records.forEach(r => {
+        const rawLat = r.lat !== undefined ? r.lat : r.latitude;
+        const rawLon = r.lon !== undefined ? r.lon : r.longitude;
+        const lat = Number(rawLat);
+        let lon = Number(rawLon);
+        if (pid === '242086' && !isNaN(lon) && lon < 0) lon = Math.abs(lon);
+
+        const rawDataStr = String(r.rawData || r.raw_data || '').trim().toLowerCase();
+        const isGps = r.locationType === 'GPS' || (!r.locationType && (!r.lc || r.lc === 'GPS'));
+        let trueTs = (r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition)
+          ? (r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition)
+          : (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+              ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
+              : (r.timestamp || r.date || r.msgDatetime));
+
+        const tsMs = safeParseTimestamp(trueTs);
+        if (!isNaN(tsMs) && isValidCoordinate(lat, lon)) {
+          if (tsMs > maxTs) {
+            maxTs = tsMs;
+            latestRecord = { ...r, lat, lon, tsMs, trueTs };
+          }
+        }
+
+        if (r.rawData) {
+          const v = decodeBatteryVoltage(r.rawData);
+          if (v !== undefined) {
+            if (bestBattery === undefined || v > bestBattery) bestBattery = v;
+          }
+        } else if (r.battery_voltage) {
+          const bv = Number(r.battery_voltage);
+          if (!isNaN(bv) && bv > 0) {
+            if (bestBattery === undefined || bv > bestBattery) bestBattery = bv;
+          }
+        }
+
+        // If this record is from argos_positions with valid coordinates, ensure it exists in positions
+        if (r._col === 'argos_positions' && isValidCoordinate(lat, lon)) {
+          const isoTs = !isNaN(tsMs) ? new Date(tsMs).toISOString() : String(trueTs || new Date().toISOString());
+          const posId = `pos-argos-${r._id}`;
+          missingPositionsDocs.push({
+            id: posId,
+            transmitter_id: pid,
+            timestamp: isoTs,
+            lat: lat,
+            lon: lon,
+            lc: r.lc || (r.locationType === 'Doppler' ? '3' : 'GPS'),
+            is_kalman: false,
+            speed_kmh: Number(r.speed_kmh || r.speed || 0),
+            course: Number(r.course || 0),
+            satellite: r.satellite || 'GPS',
+            locationType: classifyLocationType(r.lc, r.locationType, r.satellite),
+            messageDate: r.messageDate,
+            locationDate: isoTs
+          });
+        }
+      });
+
+      const existingTx = transmittersMap.get(pid);
+      if (!existingTx) {
+        // Discovered a new transmitter from tracking data (e.g. 244289)! Create it in Firestore!
+        const latestFixIso = latestRecord ? new Date(latestRecord.tsMs).toISOString() : new Date().toISOString();
+        const newTx: Transmitter = {
+          id: `trans-${pid}`,
+          platform_id: pid,
+          model: 'Unknown (Auto-detected)',
+          status: 'active',
+          derived_status: 'Active',
+          bird_id: '',
+          deployed: true,
+          battery_voltage: bestBattery,
+          last_fix: latestFixIso,
+          lat: latestRecord ? latestRecord.lat : undefined,
+          lon: latestRecord ? latestRecord.lon : undefined,
+          latitude: latestRecord ? latestRecord.lat : undefined,
+          longitude: latestRecord ? latestRecord.lon : undefined,
+          last_latitude: latestRecord ? latestRecord.lat : undefined,
+          last_longitude: latestRecord ? latestRecord.lon : undefined,
+          duty_cycle: 'Unknown'
+        };
+        await saveDocument('transmitters', newTx.id, newTx);
+        transmittersMap.set(pid, newTx);
+        createdCount++;
+      } else {
+        // Transmitter exists, check if coordinates or last_fix need updating
+        if (latestRecord) {
+          const currLastFix = safeParseTimestamp(existingTx.last_fix);
+          const isNewer = isNaN(currLastFix) || latestRecord.tsMs >= currLastFix || !existingTx.lat || !existingTx.lon;
+          if (isNewer) {
+            const latestFixIso = new Date(latestRecord.tsMs).toISOString();
+            const updates: Partial<Transmitter> = {
+              last_fix: latestFixIso,
+              lat: latestRecord.lat,
+              lon: latestRecord.lon,
+              latitude: latestRecord.lat,
+              longitude: latestRecord.lon,
+              last_latitude: latestRecord.lat,
+              last_longitude: latestRecord.lon,
+              ...(bestBattery !== undefined ? { battery_voltage: bestBattery } : {})
+            };
+            await saveDocument('transmitters', existingTx.id, updates);
+            Object.assign(existingTx, updates);
+            updatedCount++;
+          }
+        }
+      }
+    }
+
+    // Save missing positions to positions collection in Firestore
+    if (missingPositionsDocs.length > 0) {
+      const documents = missingPositionsDocs.map(p => ({ id: p.id, data: p }));
+      await batchWriteDocuments('positions', documents);
+    }
+
+    // Collect all final positions from Firestore
+    const allFinalPositions: Position[] = [];
+    const seenPosIds = new Set<string>();
+    posSnap.forEach(d => {
+      allFinalPositions.push({ id: d.id, ...(d.data() as any) });
+      seenPosIds.add(d.id);
+    });
+    missingPositionsDocs.forEach(p => {
+      if (!seenPosIds.has(p.id)) {
+        allFinalPositions.push(p);
+        seenPosIds.add(p.id);
+      }
+    });
+
+    console.log(`[Firestore] syncTransmittersFromArgosData complete: ${createdCount} created, ${updatedCount} updated, ${transmittersMap.size} total transmitters`);
+
+    return {
+      transmitters: Array.from(transmittersMap.values()),
+      positions: allFinalPositions,
+      createdCount,
+      updatedCount
+    };
+  } catch (error) {
+    console.error('[Firestore] Error in syncTransmittersFromArgosData:', error);
+    throw error;
   }
 };
 

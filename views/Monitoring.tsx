@@ -228,7 +228,7 @@ export const Monitoring = () => {
     setIsSyncing(true);
     try {
       const result = await refreshMonitoringData();
-      alert(`Synchronization complete!\n• ${result.transmittersCount} Transmitters\n• ${result.birdsCount} Birds\n• ${result.positionsCount} Tracking Fixes\nLive monitoring is fully synchronized with database.`);
+      alert(`Synchronization complete!\n• ${result.transmittersCount} Transmitters synchronized (all devices from Argos database included)\n• ${result.birdsCount} Birds linked\n• ${result.positionsCount} Tracking Fixes updated\nLive monitoring and Live Map are fully synchronized.`);
     } catch (err: any) {
       console.error("Sync failed:", err);
       alert(`Sync failed: ${err?.message || 'Unknown error'}`);

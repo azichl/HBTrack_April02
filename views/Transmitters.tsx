@@ -54,7 +54,7 @@ export const Transmitters = () => {
   // 1. Prepare Flattened Data
   const tableData = useMemo<TransmitterTableRow[]>(() => {
     return transmitters.map(t => {
-      const bird = findBirdForTransmitter(birds, t.bird_id);
+      const bird = findBirdForTransmitter(birds, t);
       return {
         ...t,
         bird_species: bird?.species || 'Unknown',
