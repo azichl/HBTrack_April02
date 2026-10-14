@@ -193,6 +193,7 @@ const createLiveTrackingCampLabelIcon = (campName: string) => {
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
       <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+        <rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" pointer-events="all" style="cursor: grab;" />
         <text 
           x="${totalW / 2}" 
           y="12" 
@@ -206,7 +207,7 @@ const createLiveTrackingCampLabelIcon = (campName: string) => {
           stroke-width="2.6" 
           stroke-linejoin="round" 
           paint-order="stroke fill"
-          style="pointer-events: auto;"
+          pointer-events="none"
         >
           ${campName}
         </text>
@@ -715,6 +716,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [isDragEnabled, setIsDragEnabled] = useState<boolean>(false);
   const [dragResetKey, setDragResetKey] = useState<number>(0);
   const [customCampDistPositions, setCustomCampDistPositions] = useState<{ [campId: string]: [number, number] }>({});
+  const [customCampLabelPositions, setCustomCampLabelPositions] = useState<{ [campId: string]: [number, number] }>({});
   const [customReleaseDistPos, setCustomReleaseDistPos] = useState<[number, number] | null>(null);
   const [customReleaseMarkerPos, setCustomReleaseMarkerPos] = useState<[number, number] | null>(null);
   const [customLastPosMarkerPos, setCustomLastPosMarkerPos] = useState<[number, number] | null>(null);
@@ -1237,6 +1239,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setIsLoadingTelemetry(true);
     setHistoryUploadNotice(null);
     setCustomCampDistPositions({});
+    setCustomCampLabelPositions({});
     setCustomReleaseDistPos(null);
     setCustomReleaseMarkerPos(null);
     setCustomLastPosMarkerPos(null);
@@ -4441,22 +4444,38 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
 
                       {/* Field Camps - Filtered one by one (Requested Filter) */}
-                      {FIXED_FIELD_CAMPS.filter(camp => visibleCampIds.includes(camp.id)).map(camp => (
-                        <React.Fragment key={camp.id}>
-                          <Marker
-                            position={[camp.lat, camp.lon]}
-                            icon={createLiveTrackingCampPinIcon()}
-                            zIndexOffset={1000}
-                            interactive={false}
-                          />
-                          <Marker
-                            position={[camp.lat, camp.lon]}
-                            icon={createLiveTrackingCampLabelIcon(translateValue(camp.name))}
-                            zIndexOffset={1001}
-                            draggable={true}
-                          />
-                        </React.Fragment>
-                      ))}
+                      {FIXED_FIELD_CAMPS.filter(camp => visibleCampIds.includes(camp.id)).map(camp => {
+                        const labelPos: [number, number] = customCampLabelPositions[camp.id] || [camp.lat, camp.lon];
+                        return (
+                          <React.Fragment key={camp.id}>
+                            <Marker
+                              position={[camp.lat, camp.lon]}
+                              icon={createLiveTrackingCampPinIcon()}
+                              zIndexOffset={1000}
+                              interactive={false}
+                            />
+                            <Marker
+                              key={`camp-label-${camp.id}`}
+                              position={labelPos}
+                              icon={createLiveTrackingCampLabelIcon(translateValue(camp.name))}
+                              zIndexOffset={1001}
+                              draggable={true}
+                              eventHandlers={{
+                                dragend: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng) {
+                                    const latLng = marker.getLatLng();
+                                    setCustomCampLabelPositions(prev => ({
+                                      ...prev,
+                                      [camp.id]: [latLng.lat, latLng.lng]
+                                    }));
+                                  }
+                                }
+                              }}
+                            />
+                          </React.Fragment>
+                        );
+                      })}
 
                       {/* Interactive Distance Measurement Tool Drawing (EXPORTED WITH PNG & PDF) */}
                       {measurePoints.length > 0 && (
@@ -4602,6 +4621,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <Crosshair size={13} />
                         <span>توسيط</span>
                       </button>
+                      {(customReleaseMarkerPos || customLastPosMarkerPos || customReleaseDistPos || Object.keys(customCampDistPositions).length > 0 || Object.keys(customCampLabelPositions).length > 0) && (
+                        <>
+                          <div className="w-px h-3.5 bg-white/25 mx-0.5" />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCustomCampLabelPositions({});
+                              setCustomCampDistPositions({});
+                              setCustomReleaseMarkerPos(null);
+                              setCustomLastPosMarkerPos(null);
+                              setCustomReleaseDistPos(null);
+                            }}
+                            className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/20 rounded text-[11px] font-medium transition-colors text-amber-300 hover:text-amber-200"
+                            title={reportLanguage === 'en' ? 'Reset dragged label positions' : 'إعادة ضبط مواضع التسميات المسحوبة'}
+                          >
+                            <RotateCcw size={12} />
+                            <span>{reportLanguage === 'en' ? 'Reset Labels' : 'إعادة التسميات'}</span>
+                          </button>
+                        </>
+                      )}
                       <div className="w-px h-3.5 bg-white/25 mx-0.5" />
                       {/* Layer Quick Switcher */}
                       <div className="relative">
