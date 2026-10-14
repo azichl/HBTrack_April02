@@ -9,25 +9,35 @@ import { Login } from './views/Login';
 import { Sidebar } from './components/Sidebar';
 import { useAppStore } from './store/appStore';
 import { Dashboard } from './views/Dashboard';
-import { LiveTracking } from './views/LiveTracking';
-import { GeofenceAlerts } from './views/GeofenceAlerts';
-import { AIPredictions } from './views/AIPredictions';
-import { Database } from './views/Database';
-import { Monitoring } from './views/Monitoring';
-import { Reports } from './views/Reports';
-import { Alerts } from './views/Alerts';
-import { UserManagement } from './views/UserManagement';
-import { GISFeatures } from './views/GISFeatures';
-import { QGISConnect } from './views/QGISConnect';
-import { Settings } from './views/Settings';
-import { HelpSupport } from './views/HelpSupport';
-import { GeoSpatialAnalysis } from './views/GeoSpatialAnalysis';
-import { DataUpload } from './views/DataUpload';
 import { Role } from './types';
 import { IOSBottomNav } from './components/IOSBottomNav';
 import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info, Tent } from 'lucide-react';
 import { HoubaraIcon } from './components/HoubaraIcon';
 import { FIXED_FIELD_CAMPS } from './constants';
+import { ToastContainer } from './src/components/ToastContainer';
+
+// Lazy-loaded heavy views for fast initial load
+const LiveTracking = React.lazy(() => import('./views/LiveTracking').then(m => ({ default: m.LiveTracking })));
+const GeofenceAlerts = React.lazy(() => import('./views/GeofenceAlerts').then(m => ({ default: m.GeofenceAlerts })));
+const AIPredictions = React.lazy(() => import('./views/AIPredictions').then(m => ({ default: m.AIPredictions })));
+const Database = React.lazy(() => import('./views/Database').then(m => ({ default: m.Database })));
+const Monitoring = React.lazy(() => import('./views/Monitoring').then(m => ({ default: m.Monitoring })));
+const Reports = React.lazy(() => import('./views/Reports').then(m => ({ default: m.Reports })));
+const Alerts = React.lazy(() => import('./views/Alerts').then(m => ({ default: m.Alerts })));
+const UserManagement = React.lazy(() => import('./views/UserManagement').then(m => ({ default: m.UserManagement })));
+const GISFeatures = React.lazy(() => import('./views/GISFeatures').then(m => ({ default: m.GISFeatures })));
+const QGISConnect = React.lazy(() => import('./views/QGISConnect').then(m => ({ default: m.QGISConnect })));
+const Settings = React.lazy(() => import('./views/Settings').then(m => ({ default: m.Settings })));
+const HelpSupport = React.lazy(() => import('./views/HelpSupport').then(m => ({ default: m.HelpSupport })));
+const GeoSpatialAnalysis = React.lazy(() => import('./views/GeoSpatialAnalysis').then(m => ({ default: m.GeoSpatialAnalysis })));
+const DataUpload = React.lazy(() => import('./views/DataUpload').then(m => ({ default: m.DataUpload })));
+
+const ViewLoader = () => (
+  <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] text-gray-400 dark:text-gray-500">
+    <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mb-3" />
+    <span className="text-xs font-semibold tracking-wide uppercase text-gray-500 dark:text-gray-400">Loading module...</span>
+  </div>
+);
 
 // Placeholder components for other views
 const PlaceholderView = ({ title }: { title: string }) => (
@@ -495,7 +505,7 @@ const App = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowAppIntro(false);
-    }, 3600);
+    }, 1600);
     return () => clearTimeout(timer);
   }, []);
 
@@ -534,34 +544,44 @@ const App = () => {
           </div>
         )}
         <Login externalError={accessError} />
+        <ToastContainer />
       </>
     );
   }
 
   const renderContent = () => {
+    let content: React.ReactNode;
     switch (currentView) {
-      case 'Dashboard': return <Dashboard />;
-      case 'Real-Time Alerts': return <Alerts />;
-      case 'Live Tracking': return <LiveTracking />;
-      case 'AI Predictions': return <AIPredictions />;
-      case 'Database': return <Database />;
+      case 'Dashboard': content = <Dashboard />; break;
+      case 'Real-Time Alerts': content = <Alerts />; break;
+      case 'Live Tracking': content = <LiveTracking />; break;
+      case 'AI Predictions': content = <AIPredictions />; break;
+      case 'Database': content = <Database />; break;
       case 'Data Upload':
       case 'CLS Sync':
-        if (!canUploadData) return <Dashboard />;
-        return <DataUpload />;
-      case 'Monitoring': return <Monitoring />;
-      case 'Reports': return <Reports />;
-      case 'Geo Spatial Analysis': return <GeoSpatialAnalysis />;
-      case 'Alerts': return <Alerts />;
-      case 'Geofence Alerts': return <GeofenceAlerts />;
-
-      case 'User Management': return <UserManagement />;
-      case 'GIS Features': return <GISFeatures />;
-      case 'QGIS Connect': return <QGISConnect />;
-      case 'Settings': return <Settings />;
-      case 'Help & Support': return <HelpSupport />;
-      default: return <PlaceholderView title={currentView} />;
+        if (!canUploadData) {
+          content = <Dashboard />;
+        } else {
+          content = <DataUpload />;
+        }
+        break;
+      case 'Monitoring': content = <Monitoring />; break;
+      case 'Reports': content = <Reports />; break;
+      case 'Geo Spatial Analysis': content = <GeoSpatialAnalysis />; break;
+      case 'Alerts': content = <Alerts />; break;
+      case 'Geofence Alerts': content = <GeofenceAlerts />; break;
+      case 'User Management': content = <UserManagement />; break;
+      case 'GIS Features': content = <GISFeatures />; break;
+      case 'QGIS Connect': content = <QGISConnect />; break;
+      case 'Settings': content = <Settings />; break;
+      case 'Help & Support': content = <HelpSupport />; break;
+      default: content = <PlaceholderView title={currentView} />; break;
     }
+    return (
+      <React.Suspense fallback={<ViewLoader />}>
+        {content}
+      </React.Suspense>
+    );
   };
 
   if (isStandalone) {
@@ -762,6 +782,7 @@ const App = () => {
           {isMobileScreen && <IOSBottomNav activeTab={activeTab} onSelectTab={handleNavigate} />}
         </div>
       </div>
+      <ToastContainer />
     </div>
   );
 };

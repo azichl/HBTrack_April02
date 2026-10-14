@@ -296,6 +296,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
 
         const normalized = combinedRaw.map((d: any) => {
           const rawLat = d.lat !== undefined ? d.lat : d.latitude;
+          const parsedLat = Number(rawLat);
           let rawLon = d.lon !== undefined ? d.lon : d.longitude;
           let numLon = Number(rawLon);
           if (idStr === '242086' && !isNaN(numLon) && numLon < 0) {

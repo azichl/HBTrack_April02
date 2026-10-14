@@ -1306,7 +1306,8 @@ export const QGISMapProductionReport: React.FC<QGISMapProductionReportProps> = (
       // 6. Copy live canvas contents to cloned canvas for any base tile or GIS layers
       const origCanvases = Array.from(document.querySelectorAll('#map-production-print-area canvas'));
       const clonedCanvases = Array.from(clonedDoc.querySelectorAll('#map-production-print-area canvas'));
-      clonedCanvases.forEach((clonedC, i) => {
+      clonedCanvases.forEach((clonedElem, i) => {
+        const clonedC = clonedElem as HTMLCanvasElement;
         const origC = origCanvases[i] as HTMLCanvasElement;
         if (origC && origC.width && origC.height) {
           clonedC.width = origC.width;

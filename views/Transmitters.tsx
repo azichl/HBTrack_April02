@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Edit, Trash2, Download, Check, X, Plus, Save, History, Clock, Activity, ShieldAlert } from 'lucide-react';
+import { Edit, Trash2, Download, Check, X, Plus, Save, History, Clock, Activity, ShieldAlert, Loader2, FileSpreadsheet } from 'lucide-react';
 import { Transmitter, StatusHistoryRecord } from '../types';
+import { TransmittersBulkUploadModal } from '../src/components/TransmittersBulkUploadModal';
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
@@ -43,6 +44,7 @@ export const Transmitters = () => {
   const [manualStatusChoice, setManualStatusChoice] = useState<'Static test' | 'Active' | 'Potential Mortality' | 'Dead' | 'Inactive'>('Static test');
   const [manualStatusComment, setManualStatusComment] = useState('');
   const [formData, setFormData] = useState<Partial<Transmitter>>({});
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -118,20 +120,29 @@ export const Transmitters = () => {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingTransmitter) {
-      updateTransmitter(editingTransmitter.id, formData);
-    } else {
-      const pid = String(formData.platform_id || '').replace(/^trans-/, '').trim();
-      const newTransmitter: Transmitter = {
-        id: `trans-${pid}`,
-        ...formData as Transmitter,
-        platform_id: pid
-      };
-      addTransmitter(newTransmitter);
+    setIsSubmitting(true);
+    try {
+      if (editingTransmitter) {
+        await updateTransmitter(editingTransmitter.id, formData);
+      } else {
+        const pid = String(formData.platform_id || '').replace(/^trans-/, '').trim();
+        const newTransmitter: Transmitter = {
+          id: pid,
+          ...formData as Transmitter,
+          platform_id: pid
+        };
+        await addTransmitter(newTransmitter);
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('[Transmitter Submit Error]', err);
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   const handleExport = () => {
@@ -189,6 +200,15 @@ export const Transmitters = () => {
             >
               <Download size={16} /> Export CSV
             </button>
+            {(currentUserRole === 'Administrator' || currentUserRole === 'Manager') && (
+              <button
+                onClick={() => setIsBulkUploadOpen(true)}
+                className="px-4 py-2 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-lg text-sm font-medium hover:bg-emerald-100 dark:hover:bg-emerald-900/50 flex items-center gap-2"
+                title="Bulk Upload Transmitters from Excel"
+              >
+                <FileSpreadsheet size={16} /> Bulk Upload
+              </button>
+            )}
             <button 
               onClick={() => { setEditingRecordId(null); setIsModalOpen(true); }}
               className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 flex items-center gap-2 shadow-sm shadow-sky-600/20"
@@ -538,8 +558,14 @@ export const Transmitters = () => {
 
             <div className="px-6 py-4 bg-gray-50 dark:bg-slate-900 border-t border-gray-100 dark:border-slate-700 flex justify-end gap-3 flex-shrink-0">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
-                <button type="button" onClick={handleSubmit} className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 transition-colors flex items-center gap-2">
-                  <Save size={16} /> Save Transmitter
+                <button 
+                  type="button" 
+                  onClick={handleSubmit} 
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-sky-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium hover:bg-sky-700 transition-colors flex items-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+                  {isSubmitting ? 'Saving...' : 'Save Transmitter'}
                 </button>
             </div>
           </div>
@@ -715,6 +741,12 @@ export const Transmitters = () => {
           </div>
         </div>
       )}
+
+      {/* Bulk Upload Modal */}
+      <TransmittersBulkUploadModal
+        isOpen={isBulkUploadOpen}
+        onClose={() => setIsBulkUploadOpen(false)}
+      />
     </div>
   );
 };

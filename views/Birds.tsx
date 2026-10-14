@@ -3,7 +3,7 @@ import { useAppStore } from '../store/appStore';
 import { 
   Edit, Trash2, Download, MapPin, Plus, X, Save, Map, Activity, 
   FileSpreadsheet, UploadCloud, CheckCircle2, AlertCircle, HelpCircle, 
-  FileText, ChevronDown, ChevronUp, RefreshCw 
+  FileText, ChevronDown, ChevronUp, RefreshCw, Loader2 
 } from 'lucide-react';
 import { Bird } from '../types';
 import { exportToCSV } from '../utils/csvExport';
@@ -177,41 +177,52 @@ export const Birds = () => {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     let birdId = '';
     const rawRid = String(formData.ring_id || '').trim();
     const isNA = !rawRid || rawRid.toUpperCase() === 'NA' || rawRid.toUpperCase() === 'N/A';
     const finalRingId = isNA ? 'NA' : rawRid.replace(/^bird-/, '').trim();
 
-    if (editingBird && editingBird.id) {
-      birdId = editingBird.id;
-      const { id, ...updates } = formData as Bird;
-      updateBird(birdId, {
-        ...updates,
-        ring_id: finalRingId,
-        origin: formData.origin || 'Breeding',
-        darvic_number: formData.darvic_number?.trim() || '',
-        release_date: formData.release_date || new Date().toISOString().split('T')[0]
-      });
-    } else {
-      birdId = isNA 
-        ? `bird-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` 
-        : `bird-${finalRingId}`;
-      const newBird: Bird = {
-        ...(formData as Bird),
-        id: birdId,
-        ring_id: finalRingId,
-        origin: formData.origin || 'Breeding',
-        darvic_number: formData.darvic_number?.trim() || '',
-        release_date: formData.release_date || new Date().toISOString().split('T')[0]
-      };
-      addBird(newBird);
-    }
+    try {
+      if (editingBird && editingBird.id) {
+        birdId = editingBird.id;
+        const { id, ...updates } = formData as Bird;
+        await updateBird(birdId, {
+          ...updates,
+          ring_id: finalRingId,
+          origin: formData.origin || 'Breeding',
+          darvic_number: formData.darvic_number?.trim() || '',
+          release_date: formData.release_date || new Date().toISOString().split('T')[0]
+        });
+      } else {
+        birdId = isNA 
+          ? `bird-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` 
+          : `bird-${finalRingId}`;
+        const newBird: Bird = {
+          ...(formData as Bird),
+          id: birdId,
+          ring_id: finalRingId,
+          origin: formData.origin || 'Breeding',
+          darvic_number: formData.darvic_number?.trim() || '',
+          release_date: formData.release_date || new Date().toISOString().split('T')[0]
+        };
+        await addBird(newBird);
+      }
 
-    // Link or unlink transmitter (selectedTransmitterId can be empty string for none)
-    assignTransmitterToBird(selectedTransmitterId, birdId);
-    setIsModalOpen(false);
+      // Link or unlink transmitter (selectedTransmitterId can be empty string for none)
+      if (selectedTransmitterId) {
+        assignTransmitterToBird(selectedTransmitterId, birdId);
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('[Bird Submit Error]', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -901,8 +912,13 @@ export const Birds = () => {
 
               <div className="pt-4 flex justify-end gap-3 border-t border-gray-100 dark:border-slate-700">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors flex items-center gap-2">
-                  <Save size={16} /> Save Record
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-brand-600 disabled:opacity-50 text-white rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors flex items-center gap-2"
+                >
+                  {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+                  {isSubmitting ? 'Saving...' : 'Save Record'}
                 </button>
               </div>
             </form>

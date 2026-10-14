@@ -41,5 +41,14 @@ service cloud.firestore {
     match /system_status/{doc} {
       allow read, write: if request.auth != null;
     }
+    // Ingestion run audit logs
+    match /ingest_runs/{doc} {
+      allow read, write: if request.auth != null;
+    }
+    // Security Audit Log — Written only via Cloud Functions (Admin SDK), never editable/deletable by client
+    match /audit_log/{doc} {
+      allow read: if request.auth != null;
+      allow write, delete: if false;
+    }
   }
 }

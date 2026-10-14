@@ -1,4 +1,4 @@
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 // Initialize Admin SDK
@@ -574,3 +574,80 @@ exports.purgeInvalidZeroCoordinates = onRequest({ cors: true, timeoutSeconds: 54
     res.status(500).json({ error: error.message });
   }
 });
+
+// ─── Danger Zone: wipeCollection (Callable Cloud Function v2) ───────────────────
+// Enforces: Auth required, role == 'manager', confirmation text matching WIPE <collection>
+
+const WIPEABLE_COLLECTIONS = new Set([
+  "argos_raw",
+  "argos_data",
+  "transmitters",
+  "birds",
+  "monitoring",
+  "positions",
+  "argos_positions",
+  "alerts",
+  "user_activity_logs",
+]);
+
+exports.wipeCollection = onCall({ cors: true, maxInstances: 5, timeoutSeconds: 540 }, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError("unauthenticated", "Sign in required to perform database wipe operations.");
+  }
+
+  // Token role custom claim check
+  const role = req.auth.token.role || req.auth.token.userRole;
+  if (role !== "manager" && role !== "Manager") {
+    throw new HttpsError("permission-denied", "Only Manager accounts can wipe data collections.");
+  }
+
+  const { collection: colName, confirmText } = req.data || {};
+  if (!colName || !WIPEABLE_COLLECTIONS.has(colName)) {
+    throw new HttpsError("invalid-argument", `Collection "${colName}" is not wipeable.`);
+  }
+
+  const expectedConfirm = `WIPE ${colName}`;
+  if (confirmText !== expectedConfirm) {
+    throw new HttpsError("failed-precondition", `Confirmation text mismatch. Expected: "${expectedConfirm}".`);
+  }
+
+  // Write audit log
+  await db.collection("audit_log").add({
+    action: "wipe",
+    collection: colName,
+    by: req.auth.uid,
+    email: req.auth.token.email || null,
+    at: new Date().toISOString(),
+  });
+
+  // Recursive delete
+  await db.recursiveDelete(db.collection(colName));
+
+  return { ok: true, collection: colName };
+});
+
+// ─── Set Role Custom Claims (Callable for Manager or SuperAdmin) ───────────────
+
+exports.setUserRoleClaim = onCall({ cors: true, maxInstances: 5 }, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError("unauthenticated", "Sign in required.");
+  }
+
+  const callerRole = req.auth.token.role;
+  const isBootstrapAdmin = req.auth.token.email === "achlih21@gmail.com";
+  if (callerRole !== "manager" && !isBootstrapAdmin) {
+    throw new HttpsError("permission-denied", "Only Managers can set user role claims.");
+  }
+
+  const { uid, role } = req.data || {};
+  if (!uid || !role) {
+    throw new HttpsError("invalid-argument", "uid and role ('manager' | 'admin' | 'viewer') are required.");
+  }
+
+  const cleanRole = String(role).toLowerCase().trim();
+  await admin.auth().setCustomUserClaims(uid, { role: cleanRole });
+  await db.collection("users").doc(uid).set({ role: cleanRole, updatedAt: new Date().toISOString() }, { merge: true });
+
+  return { ok: true, uid, role: cleanRole };
+});
+

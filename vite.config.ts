@@ -25,6 +25,33 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        chunkSizeWarningLimit: 1200,
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules/firebase') || id.includes('@firebase')) {
+                return 'vendor-firebase';
+              }
+              if (id.includes('node_modules/leaflet') || id.includes('node_modules/@react-leaflet') || id.includes('node_modules/react-leaflet')) {
+                return 'vendor-leaflet';
+              }
+              if (id.includes('node_modules/recharts')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('node_modules/xlsx') || id.includes('node_modules/read-excel-file')) {
+                return 'vendor-excel';
+              }
+              if (id.includes('node_modules/jspdf') || id.includes('node_modules/html-to-image') || id.includes('node_modules/pdfkit') || id.includes('node_modules/jspdf-autotable')) {
+                return 'vendor-pdf';
+              }
+              if (id.includes('node_modules/lucide-react')) {
+                return 'vendor-icons';
+              }
+            }
+          }
+        }
       }
     };
 });

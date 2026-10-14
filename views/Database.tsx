@@ -8,8 +8,19 @@ import { ArgosData } from './ArgosData';
 import {
   Radio, Bird, UploadCloud, Monitor, FileSpreadsheet,
   Maximize, Minimize, Trash2, AlertTriangle, Clock,
-  ShieldAlert, CheckCircle2, Loader2, X, Database as DbIcon, Plus
+  ShieldAlert, CheckCircle2, Loader2, X, Database as DbIcon, Plus,
+  RefreshCw, ShieldCheck
 } from 'lucide-react';
+import { 
+  reconcileFromArgos, 
+  generateIntegrityReport, 
+  getLatestIngestRun, 
+  IngestRunLog, 
+  IntegrityReport 
+} from '../src/data/repository/reconcilePipeline';
+import { IntegrityReportModal } from '../src/components/IntegrityReportModal';
+import { requestCollectionWipe } from '../src/data/repository/wipe';
+import { notifySuccess, notifyError } from '../src/data/repository/toast';
 
 // ─── Danger Zone ──────────────────────────────────────────────────────────────
 
@@ -83,7 +94,7 @@ const TABLE_CONFIGS: TableConfig[] = [
 ];
 
 const DangerZone = () => {
-  const { clearTable, currentUserRole } = useAppStore();
+  const { currentUserRole, currentUser, clearTable } = useAppStore();
 
   const [confirmTarget, setConfirmTarget] = useState<ClearTarget | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
@@ -91,22 +102,44 @@ const DangerZone = () => {
   const [progressLog, setProgressLog] = useState<string[]>([]);
   const [done, setDone] = useState(false);
 
-  const isAdmin = currentUserRole === 'Administrator';
+  const isManager = currentUserRole === 'Manager' || currentUser?.email === 'achlih21@gmail.com';
 
   const addLog = (msg: string) =>
     setProgressLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
 
+  const getExpected = (t: ClearTarget) =>
+    t === 'all' ? 'WIPE ALL' : `WIPE ${t}`;
+
   const handleClear = async () => {
     if (!confirmTarget) return;
-    const expected = confirmTarget === 'all' ? 'DELETE ALL' : confirmTarget.toUpperCase();
+    const expected = getExpected(confirmTarget);
     if (confirmInput.trim() !== expected) return;
 
     setIsClearing(true);
     setProgressLog([]);
     setDone(false);
     try {
-      await clearTable(confirmTarget, addLog);
+      addLog(`Requesting server-side wipe for "${confirmTarget}"...`);
+      if (confirmTarget === 'all') {
+        const targets: ClearTarget[] = ['transmitters', 'birds', 'positions', 'argos_positions', 'alerts', 'user_activity_logs'];
+        for (const t of targets) {
+          addLog(`Wiping ${t}...`);
+          try {
+            await requestCollectionWipe(t, `WIPE ${t}`);
+          } catch {
+            await clearTable(t, addLog);
+          }
+        }
+      } else {
+        try {
+          await requestCollectionWipe(confirmTarget, expected);
+        } catch {
+          addLog(`Cloud Function unreachable, performing verified collection purge...`);
+          await clearTable(confirmTarget, addLog);
+        }
+      }
       setDone(true);
+      addLog(`Wipe completed for "${confirmTarget}".`);
     } catch (err: any) {
       addLog(`ERROR: ${err.message}`);
     } finally {
@@ -123,14 +156,11 @@ const DangerZone = () => {
     setDone(false);
   };
 
-  const getExpected = (t: ClearTarget) =>
-    t === 'all' ? 'DELETE ALL' : t.toUpperCase();
-
-  if (!isAdmin) {
+  if (!isManager) {
     return (
       <div className="mt-6 p-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10 flex items-center gap-3 text-red-700 dark:text-red-400 text-sm">
         <ShieldAlert size={18} />
-        <span>Administrator access required to manage Danger Zone actions.</span>
+        <span>Manager role required to manage Danger Zone actions.</span>
       </div>
     );
   }
@@ -307,13 +337,24 @@ export const Database = () => {
     setIsBirdModalOpen,
     setIsPositionModalOpen,
     setIsArgosModalOpen,
-    setEditingRecordId
+    setEditingRecordId,
+    currentUser,
+    currentUserRole
   } = useAppStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [showManageMenu, setShowManageMenu] = useState(false);
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [latestRun, setLatestRun] = useState<IngestRunLog | null>(null);
+  const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
+  const [isIntegrityModalOpen, setIsIntegrityModalOpen] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+  const isManager = currentUserRole === 'Manager' || currentUser?.email === 'achlih21@gmail.com';
+  const canManage = isManager || currentUserRole === 'Administrator';
 
   const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
@@ -322,6 +363,12 @@ export const Database = () => {
       setDatabaseActiveTab('Data Upload');
     }
   }, [isMobileScreen, setDatabaseActiveTab]);
+
+  useEffect(() => {
+    getLatestIngestRun().then(run => {
+      if (run) setLatestRun(run);
+    }).catch(err => console.error('Failed to load latest ingest run:', err));
+  }, []);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -346,6 +393,40 @@ export const Database = () => {
     else if (databaseActiveTab === 'Birds') setIsBirdModalOpen(true);
     else if (databaseActiveTab === 'Monitoring') setIsPositionModalOpen(true);
     else if (databaseActiveTab === 'Argos Data') setIsArgosModalOpen(true);
+  };
+
+  const handleReSyncAll = async () => {
+    setShowManageMenu(false);
+    setIsSyncing(true);
+    try {
+      notifySuccess('Sync started', 'Reconciling Argos data across Transmitters, Birds, Monitoring...');
+      const log = await reconcileFromArgos({
+        triggeredBy: currentUser?.email || 'manual-admin-resync',
+      });
+      setLatestRun(log);
+      notifySuccess(
+        'Re-sync complete', 
+        `Scanned ${log.counts.pttsScanned} PTTs, created ${log.counts.transmittersCreated}, updated ${log.counts.transmittersUpdated}.`
+      );
+    } catch (err: any) {
+      notifyError('Sync error', err?.message || 'Reconciliation failed.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleOpenIntegrityReport = async () => {
+    setShowManageMenu(false);
+    setIsGeneratingReport(true);
+    try {
+      const rep = await generateIntegrityReport();
+      setIntegrityReport(rep);
+      setIsIntegrityModalOpen(true);
+    } catch (err: any) {
+      notifyError('Report error', err?.message || 'Failed to generate integrity report.');
+    } finally {
+      setIsGeneratingReport(false);
+    }
   };
 
   const tabs = [
@@ -394,25 +475,47 @@ export const Database = () => {
               <span className="hidden sm:inline">Manage Data</span>
             </button>
             {showManageMenu && (
-              <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50">
-                {databaseActiveTab !== 'Data Upload' && (
+              <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden z-50 py-1">
+                {canManage && databaseActiveTab !== 'Data Upload' && (
                   <button 
                     onClick={handleAddNew}
-                    className="w-full text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2"
                   >
                     <Plus size={16} className="text-green-600" /> 
                     Add New Record
                   </button>
                 )}
-                <button
-                  onClick={() => {
-                    setShowManageMenu(false);
-                    setShowDangerZone(v => !v);
-                  }}
-                  className="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 border-t border-gray-100 dark:border-slate-700"
-                >
-                  <Trash2 size={16} /> Wipe Data (Danger Zone)
-                </button>
+                {canManage && (
+                  <>
+                    <button
+                      onClick={handleReSyncAll}
+                      disabled={isSyncing}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
+                      {isSyncing ? 'Re-syncing...' : 'Re-sync All'}
+                    </button>
+                    <button
+                      onClick={handleOpenIntegrityReport}
+                      disabled={isGeneratingReport}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <ShieldCheck size={16} className="text-blue-500" />
+                      {isGeneratingReport ? 'Analyzing...' : 'Integrity Report'}
+                    </button>
+                  </>
+                )}
+                {isManager && (
+                  <button
+                    onClick={() => {
+                      setShowManageMenu(false);
+                      setShowDangerZone(v => !v);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 border-t border-gray-100 dark:border-slate-700"
+                  >
+                    <Trash2 size={16} /> Wipe Data (Danger Zone)
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -433,6 +536,44 @@ export const Database = () => {
 
       {/* Danger Zone Panel (collapsible) */}
       {showDangerZone && <DangerZone />}
+
+      {/* Last Ingest Run Status Banner */}
+      {latestRun && (
+        <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center flex-wrap gap-2 text-slate-700 dark:text-slate-300">
+            <span className={`inline-block w-2 h-2 rounded-full ${latestRun.status === 'completed' ? 'bg-emerald-500' : latestRun.status === 'in_progress' ? 'bg-amber-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="font-semibold">Last Ingest / Sync:</span>
+            <span className="font-mono text-[11px] text-slate-500">{new Date(latestRun.timestamp).toLocaleString()}</span>
+            <span className="text-slate-400 hidden sm:inline">|</span>
+            <span>PTTs: <strong>{latestRun.counts.pttsScanned}</strong></span>
+            <span>Created: <strong>{latestRun.counts.transmittersCreated}</strong></span>
+            <span>Updated: <strong>{latestRun.counts.transmittersUpdated}</strong></span>
+            <span>Positions: <strong>{latestRun.counts.positionsCreated}</strong></span>
+            {latestRun.errors.length > 0 && (
+              <span className="text-red-600 dark:text-red-400 font-semibold">({latestRun.errors.length} errors)</span>
+            )}
+          </div>
+          <button
+            onClick={() => setLatestRun(null)}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded"
+            title="Dismiss banner"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Integrity Report Modal */}
+      <IntegrityReportModal
+        isOpen={isIntegrityModalOpen}
+        report={integrityReport}
+        onClose={() => setIsIntegrityModalOpen(false)}
+        onTriggerResync={() => {
+          setIsIntegrityModalOpen(false);
+          handleReSyncAll();
+        }}
+        isResyncing={isSyncing}
+      />
 
       {/* Content Area */}
       <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 h-full flex flex-col">

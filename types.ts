@@ -58,6 +58,12 @@ export interface Transmitter {
   comment?: string;
   deployed?: boolean;
   assigned_bird_ring?: string;
+  lat?: number;
+  lon?: number;
+  latitude?: number;
+  longitude?: number;
+  last_latitude?: number;
+  last_longitude?: number;
 }
 
 export interface StaticTestPeriod {

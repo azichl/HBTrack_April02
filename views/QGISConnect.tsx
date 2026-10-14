@@ -17,6 +17,7 @@ import {
 import { QGISMapProductionReport } from '../components/reports/QGISMapProductionReport';
 import { CustomMapProductionReport } from '../components/reports/CustomMapProductionReport';
 import { saveAs } from 'file-saver';
+import { getHistoricalPositions } from '../services/firestoreService';
 import { Sparkles } from 'lucide-react';
 import type { QGISLayer, QGISLayerStyle } from '../types';
 

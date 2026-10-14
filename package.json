@@ -37,6 +37,8 @@
     "read-excel-file": "5.7.1",
     "recharts": "^3.4.1",
     "shpjs": "^6.2.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.6.7",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

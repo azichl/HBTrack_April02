@@ -22,6 +22,20 @@ import { analyzePositionsForAlerts } from '../services/alertService';
 import { decodeBatteryVoltage, KNOWN_CLS_RAW_LOCATION_DATES } from '../services/argosService';
 import { findBirdForTransmitter, isBirdLinkedToTransmitter, classifyLocationType, isValidCoordinate } from '../utils/formatting';
 import type { Role } from '../types';
+import { 
+  saveTransmitterToFirestore, 
+  updateTransmitterInFirestore, 
+  deleteTransmitterFromFirestore,
+  fetchAllTransmittersFromFirestore 
+} from '../src/data/repository/transmitters';
+import { 
+  saveBirdToFirestore, 
+  updateBirdInFirestore, 
+  deleteBirdFromFirestore,
+  fetchAllBirdsFromFirestore 
+} from '../src/data/repository/birds';
+import { normalizePttId } from '../src/data/repository/pttNormalizer';
+import { notifyError, notifySuccess } from '../src/data/repository/toast';
 
 const safeParseDate = (ts: any): number => {
     if (!ts) return NaN;
@@ -198,17 +212,17 @@ interface AppState {
   cleanupOldAlerts: () => void;
   
   // Bird Actions
-  addBird: (bird: Bird) => void;
-  updateBird: (id: string, updates: Partial<Bird>) => void;
-  deleteBird: (id: string) => void;
+  addBird: (bird: Bird) => Promise<void>;
+  updateBird: (id: string, updates: Partial<Bird>) => Promise<void>;
+  deleteBird: (id: string) => Promise<void>;
   bulkDeleteBirds: (ids: string[]) => Promise<void>;
   bulkUpdateBirds: (ids: string[], updates: Partial<Bird>) => Promise<void>;
   importBirds: (birds: Bird[]) => void;
 
   // Transmitter Actions
-  addTransmitter: (transmitter: Transmitter) => void;
-  updateTransmitter: (id: string, updates: Partial<Transmitter>) => void;
-  deleteTransmitter: (id: string) => void;
+  addTransmitter: (transmitter: Transmitter) => Promise<void>;
+  updateTransmitter: (id: string, updates: Partial<Transmitter>) => Promise<void>;
+  deleteTransmitter: (id: string) => Promise<void>;
   bulkDeleteTransmitters: (ids: string[]) => Promise<void>;
   bulkUpdateTransmitters: (ids: string[], updates: Partial<Transmitter>) => Promise<void>;
   importTransmitters: (transmitters: Transmitter[]) => void;
@@ -321,7 +335,7 @@ export const deduplicateTransmitters = (transmitters: Transmitter[]): {
     const withBird = group.find(t => t.bird_id && t.bird_id.trim() !== '');
     const withKnownModel = group.find(t => t.model && !t.model.includes('Unknown') && !t.model.includes('Auto-detected'));
     const base = withBird || withKnownModel || group[0];
-    const canonicalId = base.id;
+    const canonicalId = pid;
 
     // Merge attributes from all records
     let mergedBirdId = base.bird_id || '';
@@ -888,53 +902,58 @@ export const useAppStore = create<AppState>()(
       },
 
       // ─── Bird CRUD ──────────────────────────────────────────────────────────
-      addBird: (bird) => {
-        const rawRid = String(bird.ring_id || '').trim();
-        const isNA = !rawRid || rawRid.toUpperCase() === 'NA' || rawRid.toUpperCase() === 'N/A';
-        const rid = isNA ? 'NA' : rawRid.replace(/^bird-/, '').trim();
-        const docId = bird.id && bird.id !== 'bird-NA' 
-          ? bird.id 
-          : (isNA ? `bird-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` : `bird-${rid}`);
-        
-        const normalizedBird: Bird = {
-          ...bird,
-          id: docId,
-          ring_id: rid
-        };
-
-        logDbAction(get, 'DATA_CREATE', `Added Bird ${rid}`);
-        set((state) => {
-          const existingIndex = isNA 
-            ? state.birds.findIndex(b => b.id === docId)
-            : state.birds.findIndex(b => String(b.ring_id).trim() === rid || b.id === docId);
-          let updatedList: Bird[];
-          if (existingIndex >= 0) {
-            updatedList = [...state.birds];
-            updatedList[existingIndex] = { ...updatedList[existingIndex], ...normalizedBird };
-          } else {
-            updatedList = [normalizedBird, ...state.birds];
-          }
-          return { birds: updatedList, lastSaved: new Date().toISOString() };
-        });
-        fireAndForget(() => saveDocument('birds', docId, normalizedBird));
+      addBird: async (bird) => {
+        logDbAction(get, 'DATA_CREATE', `Adding Bird ${bird.ring_id || 'NA'}`);
+        try {
+          const savedBird = await saveBirdToFirestore(bird);
+          set((state) => {
+            const isNA = !savedBird.ring_id || savedBird.ring_id === 'NA' || savedBird.ring_id === 'N/A';
+            const existingIndex = isNA 
+              ? state.birds.findIndex(b => b.id === savedBird.id)
+              : state.birds.findIndex(b => b.id === savedBird.id || b.ring_id === savedBird.ring_id);
+            let updatedList: Bird[];
+            if (existingIndex >= 0) {
+              updatedList = [...state.birds];
+              updatedList[existingIndex] = savedBird;
+            } else {
+              updatedList = [savedBird, ...state.birds];
+            }
+            return { birds: updatedList, lastSaved: new Date().toISOString() };
+          });
+          notifySuccess(`Bird ${savedBird.ring_id || savedBird.id} saved to Firebase`);
+        } catch (err: any) {
+          notifyError(err, 'Failed to save bird to Firebase');
+          throw err;
+        }
       },
-      updateBird: (id, updates) => {
-        logDbAction(get, 'DATA_UPDATE', `Updated Bird ID: ${id}`);
-        set((state) => {
-          const updatedBirds = state.birds.map(b => b.id === id ? { ...b, ...updates } : b);
-          const updated = updatedBirds.find(b => b.id === id);
-          if (updated) fireAndForget(() => saveDocument('birds', id, updated));
-          return { birds: updatedBirds, lastSaved: new Date().toISOString() };
-        });
+      updateBird: async (id, updates) => {
+        logDbAction(get, 'DATA_UPDATE', `Updating Bird ID: ${id}`);
+        try {
+          await updateBirdInFirestore(id, updates);
+          set((state) => {
+            const updatedBirds = state.birds.map(b => b.id === id ? { ...b, ...updates } : b);
+            return { birds: updatedBirds, lastSaved: new Date().toISOString() };
+          });
+          notifySuccess('Bird updated successfully');
+        } catch (err: any) {
+          notifyError(err, 'Failed to update bird');
+          throw err;
+        }
       },
-      deleteBird: (id) => {
-        logDbAction(get, 'DATA_DELETE', `Deleted Bird ID: ${id}`);
-        set((state) => ({
-          birds: state.birds.filter(b => b.id !== id),
-          transmitters: state.transmitters.map(t => t.bird_id === id ? { ...t, bird_id: '' } : t),
-          lastSaved: new Date().toISOString()
-        }));
-        fireAndForget(() => deleteDocument('birds', id));
+      deleteBird: async (id) => {
+        logDbAction(get, 'DATA_DELETE', `Deleting Bird ID: ${id}`);
+        try {
+          await deleteBirdFromFirestore(id);
+          set((state) => ({
+            birds: state.birds.filter(b => b.id !== id),
+            transmitters: state.transmitters.map(t => t.bird_id === id ? { ...t, bird_id: '' } : t),
+            lastSaved: new Date().toISOString()
+          }));
+          notifySuccess('Bird deleted successfully');
+        } catch (err: any) {
+          notifyError(err, 'Failed to delete bird');
+          throw err;
+        }
       },
       bulkDeleteBirds: async (ids) => {
         set((state) => {
@@ -997,52 +1016,63 @@ export const useAppStore = create<AppState>()(
       },
 
       // ─── Transmitter CRUD ───────────────────────────────────────────────────
-      addTransmitter: (transmitter) => {
-          const pid = String(transmitter.platform_id || transmitter.id || '').replace(/^trans-/, '').trim();
-          const docId = `trans-${pid}`;
-          const normalizedTx: Transmitter = {
-            ...transmitter,
-            id: docId,
-            platform_id: pid
-          };
-
-          logDbAction(get, 'DATA_CREATE', `Added Transmitter ${pid}`);
+      addTransmitter: async (transmitter) => {
+        const pid = normalizePttId(transmitter.platform_id || transmitter.id);
+        logDbAction(get, 'DATA_CREATE', `Adding Transmitter ${pid}`);
+        try {
+          const savedTx = await saveTransmitterToFirestore({ ...transmitter, platform_id: pid });
           set((state) => {
-            const existingIndex = state.transmitters.findIndex(t => String(t.platform_id).trim() === pid);
+            const existingIndex = state.transmitters.findIndex(t => normalizePttId(t.platform_id) === pid);
             let updatedList: Transmitter[];
             if (existingIndex >= 0) {
               updatedList = [...state.transmitters];
-              updatedList[existingIndex] = { ...updatedList[existingIndex], ...normalizedTx };
+              updatedList[existingIndex] = savedTx;
             } else {
-              updatedList = [normalizedTx, ...state.transmitters];
+              updatedList = [savedTx, ...state.transmitters];
             }
             return { 
-                transmitters: updatedList,
-                lastSaved: new Date().toISOString()
-            };
-          });
-          fireAndForget(() => saveDocument('transmitters', docId, normalizedTx));
-      },
-      updateTransmitter: (id, updates) => {
-        logDbAction(get, 'DATA_UPDATE', `Updated Transmitter ID: ${id}`);
-        set((state) => {
-          const updated = state.transmitters.map(t => t.id === id ? { ...t, ...updates } : t);
-          const t = updated.find(t => t.id === id);
-          if (t) fireAndForget(() => saveDocument('transmitters', id, t));
-          return { transmitters: updated, lastSaved: new Date().toISOString() };
-        });
-      },
-      deleteTransmitter: (id) => {
-          logDbAction(get, 'DATA_DELETE', `Deleted Transmitter ID: ${id}`);
-          set((state) => {
-            const t = state.transmitters.find(tr => tr.id === id);
-            return {
-              transmitters: state.transmitters.filter(t => t.id !== id),
-              positions: state.positions.filter(p => p.transmitter_id !== t?.platform_id),
+              transmitters: updatedList,
               lastSaved: new Date().toISOString()
             };
           });
-          fireAndForget(() => deleteDocument('transmitters', id));
+          notifySuccess(`Transmitter ${pid} saved to Firebase`);
+        } catch (err: any) {
+          notifyError(err, 'Failed to save transmitter to Firebase');
+          throw err;
+        }
+      },
+      updateTransmitter: async (id, updates) => {
+        const pid = normalizePttId(id);
+        logDbAction(get, 'DATA_UPDATE', `Updating Transmitter ID: ${pid}`);
+        try {
+          await updateTransmitterInFirestore(pid, updates);
+          set((state) => {
+            const updated = state.transmitters.map(t => (normalizePttId(t.id) === pid || normalizePttId(t.platform_id) === pid) ? { ...t, ...updates } : t);
+            return { transmitters: updated, lastSaved: new Date().toISOString() };
+          });
+          notifySuccess(`Transmitter ${pid} updated successfully`);
+        } catch (err: any) {
+          notifyError(err, 'Failed to update transmitter');
+          throw err;
+        }
+      },
+      deleteTransmitter: async (id) => {
+        const pid = normalizePttId(id);
+        logDbAction(get, 'DATA_DELETE', `Deleting Transmitter ID: ${pid}`);
+        try {
+          await deleteTransmitterFromFirestore(pid);
+          set((state) => {
+            return {
+              transmitters: state.transmitters.filter(t => normalizePttId(t.id) !== pid && normalizePttId(t.platform_id) !== pid),
+              positions: state.positions.filter(p => normalizePttId(p.transmitter_id) !== pid),
+              lastSaved: new Date().toISOString()
+            };
+          });
+          notifySuccess(`Transmitter ${pid} deleted successfully`);
+        } catch (err: any) {
+          notifyError(err, 'Failed to delete transmitter');
+          throw err;
+        }
       },
       bulkDeleteTransmitters: async (ids: string[]) => {
           set((state) => {
@@ -1618,8 +1648,8 @@ export const useAppStore = create<AppState>()(
           // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
           const [fsTransmittersRaw, fsBirdsRaw, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory, fsLastIngest] = await Promise.all([
-            loadCollection<Transmitter>('transmitters'),
-            loadCollection<Bird>('birds'),
+            fetchAllTransmittersFromFirestore(),
+            fetchAllBirdsFromFirestore(),
             loadRecentAlerts<Alert>(),
             loadCollection<User>('users'),
             loadCollection<StaticTestPeriod>('static_test_periods'),
