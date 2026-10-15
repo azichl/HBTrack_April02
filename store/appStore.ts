@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord, QGISLayer, QGISLayerStyle } from '../types';
+import type { LiveViewState } from '../components/reports/liveViewState';
+
 import { collection, query, where, getDocs, writeBatch, limit, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
@@ -36,6 +38,8 @@ import {
 } from '../src/data/repository/birds';
 import { normalizePttId } from '../src/data/repository/pttNormalizer';
 import { notifyError, notifySuccess } from '../src/data/repository/toast';
+import { trackedGetDocs } from '../src/perf/firestoreTracked';
+
 
 const safeParseDate = (ts: any): number => {
     if (!ts) return NaN;
@@ -138,6 +142,7 @@ interface AppState {
     historyPositions?: any[];
     capturedAt: string;
     mapSnapshotImage?: string;
+    liveViewState?: LiveViewState;
   } | null;
   setExportedMapView: (view: {
     center: [number, number];
@@ -148,8 +153,10 @@ interface AppState {
     historyPositions?: any[];
     capturedAt: string;
     mapSnapshotImage?: string;
+    liveViewState?: LiveViewState;
   } | null) => void;
   clearExportedMapView: () => void;
+
 
   // QGIS Connect Active Tab
   qgisConnectActiveTab: string;
@@ -1826,8 +1833,9 @@ export const useAppStore = create<AppState>()(
                 where('status', '==', 'resolved'),
                 where('timestamp', '<', cutoffISO)
               );
-              const oldSnap = await getDocs(oldResolvedQuery);
+              const oldSnap = await trackedGetDocs('alerts (cleanup old)', oldResolvedQuery);
               if (oldSnap.size > 0) {
+
                 console.log(`[AppStore] Deleting ${oldSnap.size} old archived alerts from Firestore...`);
                 const batch = writeBatch(db);
                 let ops = 0;

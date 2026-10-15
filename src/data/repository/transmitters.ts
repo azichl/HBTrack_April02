@@ -149,12 +149,15 @@ export async function deleteTransmitterFromFirestore(rawPttId: string): Promise<
   ]);
 }
 
+import { trackedGetDocs } from '../../perf/firestoreTracked';
+
 /**
  * Loads all transmitters without orderBy restrictions so newly created docs are never excluded.
  */
 export async function fetchAllTransmittersFromFirestore(): Promise<Transmitter[]> {
-  const snap = await getDocs(collection(db, 'transmitters'));
+  const snap = await trackedGetDocs('transmitters (fetchAllTransmitters)', collection(db, 'transmitters'));
   const list: Transmitter[] = [];
+
   const seenPtt = new Set<string>();
 
   snap.forEach((d) => {

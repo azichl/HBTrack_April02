@@ -1,0 +1,42 @@
+/* ---------- Frame: always 100 % filled, no bars ---------- */
+.rpt-mapframe {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;            /* lets flex/grid parents shrink it */
+  overflow: hidden;
+  background: #ece8de;      /* neutral map colour (NOT the dark navy that showed as bars) */
+  border-radius: 10px;
+}
+.rpt-mapframe .leaflet-container { width: 100%; height: 100%; background: #ece8de; font-family: inherit; }
+
+/* Parent must give the frame a definite size (also at export time) */
+.trk-map { position: relative; min-height: 0; aspect-ratio: auto; }
+.trk-map > .rpt-mapframe { position: absolute; inset: 0; }
+
+/* ---------- Pins ---------- */
+.rpt-pin { background: none; border: 0; }
+.rpt-tag {
+  position: absolute; left: 0; bottom: 36px; transform: translateX(-50%); white-space: nowrap;
+  background: #fff; color: #111; border: 2px solid #2e9e4f; border-radius: 999px;
+  padding: 1px 9px; font: 700 12px 'IBM Plex Sans Arabic', 'Inter', sans-serif; box-shadow: 0 1px 4px rgba(0,0,0,.3);
+}
+.rpt-camp { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; }
+.rpt-camp svg { filter: drop-shadow(0 1px 3px rgba(0,0,0,.45)); }
+.rpt-camp__name {
+  position: absolute; top: 34px; white-space: nowrap; font: 700 11px 'IBM Plex Sans Arabic', sans-serif;
+  color: #fff; background: rgba(0,0,0,.72); padding: 1px 7px; border-radius: 4px;
+}
+
+/* ---------- IMAGE mode (QGIS image / uploaded snapshot): fill, never letterbox ---------- */
+.rpt-snapshot { position: absolute; inset: 0; background: #ece8de; }
+.rpt-snapshot > img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+
+/* ---------- Editing toolbar is UI chrome, never part of the report/export ---------- */
+.rpt-toolbar { position: absolute; top: 10px; inset-inline-end: 10px; z-index: 1000; }
+.trk-exporting .rpt-toolbar, .rpt-toolbar.no-export { display: none !important; }
+@media print { .rpt-toolbar { display: none !important; } }
+
+/* ---------- Legend must never overflow the card ---------- */
+.trk-legend { flex-wrap: wrap; gap: 8px 18px; min-width: 0; }
+.trk-legend > span { min-width: 0; white-space: normal; }

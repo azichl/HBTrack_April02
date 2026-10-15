@@ -11,7 +11,9 @@ import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey,
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { fetchAllLayers } from '../services/qgisLayerService';
+import { readLiveViewState, type MarkerPoint, type LiveViewState } from '../components/reports/liveViewState';
 import Draggable from 'react-draggable';
+
 const DraggableComponent = Draggable as any;
 // Use exact user-requested hex colors for the map markers, adjusted size
 const createSvgIcon = (colorHex: string) => {
@@ -247,6 +249,16 @@ const MapResizeHandler = ({ viewMode }: { viewMode: string }) => {
     }, [viewMode, map]);
     return null;
 };
+
+// Binds the live Leaflet map instance for reporting and viewport capturing
+const LiveMapInstanceBinder = ({ onMap }: { onMap: (map: L.Map) => void }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (map) onMap(map);
+    }, [map, onMap]);
+    return null;
+};
+
 
 
 // Handles clicking on map to close dropdowns and handle left-click interactions
@@ -1398,7 +1410,9 @@ const LiveTrackingInner = () => {
 
   // Fullscreen & Floating Donut State
   const containerRef = useRef<HTMLDivElement>(null);
+  const liveMapInstanceRef = useRef<L.Map | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   
@@ -1961,16 +1975,66 @@ const LiveTrackingInner = () => {
         }
       }
 
+      // Build LiveViewState from live Leaflet map instance (Mode A: pass view state, not only bitmap)
+      let liveViewState: LiveViewState | undefined = undefined;
+      const liveMap = liveMapInstanceRef.current;
+      if (liveMap) {
+        const bounds = liveMap.getBounds();
+        const markerPoints: MarkerPoint[] = [];
+
+        // 1. Visible unclustered transmitters
+        latestPositions.forEach((pos) => {
+          const t = transmitters.find((tr) => String(tr.platform_id) === String(pos.transmitter_id));
+          const st = t?.derived_status || t?.status || 'Active';
+          if (st === 'Static test' || st === 'Static Test') return;
+          if (selectedStatus === 'all' || st.toLowerCase() === selectedStatus.toLowerCase()) {
+            if (bounds.contains([pos.lat, pos.lon])) {
+              markerPoints.push({
+                id: String(pos.transmitter_id),
+                lat: pos.lat,
+                lon: pos.lon,
+                kind: 'transmitter',
+                status: st,
+                label: String(pos.transmitter_id),
+              });
+            }
+          }
+        });
+
+        // 2. Visible field camps
+        if (showFieldCamps) {
+          FIXED_FIELD_CAMPS.forEach((camp) => {
+            if (bounds.contains([camp.lat, camp.lon])) {
+              markerPoints.push({
+                id: camp.id,
+                lat: camp.lat,
+                lon: camp.lon,
+                kind: 'camp',
+                label: camp.name,
+              });
+            }
+          });
+        }
+
+        liveViewState = readLiveViewState(liveMap, {
+          markerPoints,
+          baseLayerId: activeLayer || 'google_hybrid',
+          statusFilter: selectedStatus,
+        });
+      }
+
       setExportedMapView({
-        center: sharedMapCenter || [47.05, 67.32],
-        zoom: sharedMapZoom || 9,
+        center: liveViewState ? liveViewState.center : (sharedMapCenter || [47.05, 67.32]),
+        zoom: liveViewState ? liveViewState.zoom : (sharedMapZoom || 9),
         baseLayer: activeLayer || 'google_hybrid',
         transmitterId: targetTransmitterId,
         transmitterIds: selectedTransmitterIds.length > 0 ? selectedTransmitterIds : [targetTransmitterId],
         historyPositions: loadedHistory.length > 0 ? loadedHistory : undefined,
         capturedAt: new Date().toISOString(),
-        mapSnapshotImage: snapshotDataUrl
+        mapSnapshotImage: snapshotDataUrl,
+        liveViewState
       });
+
 
       if (setQgisConnectActiveTab) {
         setQgisConnectActiveTab('custom-report');
@@ -2383,8 +2447,10 @@ const LiveTrackingInner = () => {
         >
             <MapController selectedPos={flyToPos} customFlyTo={customFlyTo} />
             <MapResizeHandler viewMode={viewMode} />
+            <LiveMapInstanceBinder onMap={(m) => { liveMapInstanceRef.current = m; }} />
             
             <MapEventsHandler 
+
                 closeDropdowns={closeAllDropdowns} 
                 onWeatherClick={handleWeatherClick}
                 activeWeatherLayer={activeWeatherLayer}

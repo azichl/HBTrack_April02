@@ -117,12 +117,15 @@ export async function deleteBirdFromFirestore(id: string): Promise<void> {
   await deleteDoc(doc(db, 'birds', id));
 }
 
+import { trackedGetDocs } from '../../perf/firestoreTracked';
+
 /**
  * Loads all birds without orderBy restrictions so newly created docs are never excluded.
  */
 export async function fetchAllBirdsFromFirestore(): Promise<Bird[]> {
-  const snap = await getDocs(collection(db, 'birds'));
+  const snap = await trackedGetDocs('birds (fetchAllBirds)', collection(db, 'birds'));
   const list: Bird[] = [];
+
 
   snap.forEach((d) => {
     const data = d.data();

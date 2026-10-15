@@ -7,6 +7,8 @@ import { db } from '../firebase';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
 import { ArgosMessage, StatusHistoryRecord, Transmitter, Position } from '../types';
 import { KNOWN_CLS_RAW_LOCATION_DATES, decodeBatteryVoltage } from './argosService';
+import { trackedGetDocs, trackedGetDoc, trackedOnSnapshot, trackedOnDocSnapshot } from '../src/perf/firestoreTracked';
+
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
 
@@ -28,7 +30,7 @@ export const saveLastIngestTime = async (timestampIso?: string): Promise<string>
 /** Loads last data update / ingestion timestamp from Firestore */
 export const loadLastIngestTime = async (): Promise<string | null> => {
   try {
-    const docSnap = await getDoc(doc(db, 'system_status', 'ingestion'));
+    const docSnap = await trackedGetDoc('system_status (ingestion)', doc(db, 'system_status', 'ingestion'));
     if (docSnap.exists()) {
       return docSnap.data().last_ingest_time || null;
     }
@@ -43,7 +45,7 @@ export const subscribeToLastIngestTime = (
   callback: (timestampIso: string | null) => void
 ): (() => void) => {
   const docRef = doc(db, 'system_status', 'ingestion');
-  return onSnapshot(docRef, (snapshot) => {
+  return trackedOnDocSnapshot('system_status (listener)', docRef, (snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.data();
       callback(data.last_ingest_time || null);
@@ -54,6 +56,7 @@ export const subscribeToLastIngestTime = (
     console.warn('[Firestore] Error subscribing to last_ingest_time:', error);
   });
 };
+
 
 // ─── Single Document Operations ───────────────────────────────────────────────
 
@@ -160,7 +163,7 @@ export const batchDeleteDocuments = async (collectionName: string, documentIds: 
 
 export const loadCollection = async <T>(collectionName: string): Promise<T[]> => {
   try {
-    const snapshot = await getDocs(collection(db, collectionName));
+    const snapshot = await trackedGetDocs(collectionName, collection(db, collectionName));
     const data: T[] = [];
     snapshot.forEach((doc) => {
       data.push({ id: doc.id, ...doc.data() } as unknown as T);
@@ -199,8 +202,8 @@ export const loadRecentAlerts = async <T>(): Promise<T[]> => {
     );
 
     const [activeSnap, recentSnap] = await Promise.all([
-      getDocs(activeQuery),
-      getDocs(recentResolvedQuery)
+      trackedGetDocs('alerts (active)', activeQuery),
+      trackedGetDocs('alerts (recent resolved)', recentResolvedQuery)
     ]);
 
     const data: T[] = [];
@@ -237,7 +240,7 @@ export const subscribeToCollection = <T>(
   callback: (data: T[]) => void
 ): (() => void) => {
   const q = query(collection(db, collectionName));
-  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+  const unsubscribe = trackedOnSnapshot(`collection (listen ${collectionName})`, q, (querySnapshot) => {
     const data: T[] = [];
     querySnapshot.forEach((doc) => {
       data.push({ id: doc.id, ...doc.data() } as unknown as T);
@@ -261,8 +264,8 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
 
     // Fast-path: Check if either positions or argos_positions have documents
     const [checkPos, checkArgos] = await Promise.all([
-      getDocs(query(collection(db, 'positions'), limit(1))),
-      getDocs(query(collection(db, 'argos_positions'), limit(1)))
+      trackedGetDocs('check positions (limit 1)', query(collection(db, 'positions'), limit(1))),
+      trackedGetDocs('check argos_positions (limit 1)', query(collection(db, 'argos_positions'), limit(1)))
     ]);
 
     if (checkPos.empty && checkArgos.empty) {
@@ -278,7 +281,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
       const isNumValid = !isNaN(idNum);
 
       const fetchDocs = (colName: string, fieldName: string, val: string | number) => {
-        return getDocs(query(
+        return trackedGetDocs(`latest ${colName} (${val})`, query(
           collection(db, colName),
           where(fieldName, '==', val),
           orderBy('timestamp', 'desc'),
@@ -286,6 +289,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
         )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
         .catch(() => []);
       };
+
 
       const p1 = fetchDocs('positions', 'transmitter_id', idStr);
       const p2 = isNumValid && idNum !== Number(idStr) ? fetchDocs('positions', 'transmitter_id', idNum) : Promise.resolve([]);
@@ -421,7 +425,7 @@ export const subscribeToRecentPositions = (days: number, callback: (data: any[])
     where('timestamp', '>=', cutoffISO)
   );
 
-  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+  const unsubscribe = trackedOnSnapshot('positions (listen recent 7d)', q, (querySnapshot) => {
     const data: any[] = [];
     querySnapshot.forEach((doc) => {
       data.push({ id: doc.id, ...doc.data() });
@@ -432,6 +436,7 @@ export const subscribeToRecentPositions = (days: number, callback: (data: any[])
   });
   return unsubscribe;
 };
+
 
 // ─── ARGOS POSITIONS — Firebase Direct Storage ─────────────────────────────────
 // This is the core of the Firebase-first architecture.
@@ -715,10 +720,11 @@ export const syncTransmittersFromArgosData = async (): Promise<{
 }> => {
   try {
     const [txSnap, argosSnap, posSnap] = await Promise.all([
-      getDocs(collection(db, 'transmitters')),
-      getDocs(collection(db, 'argos_positions')),
-      getDocs(collection(db, 'positions'))
+      trackedGetDocs('syncTransmitters (transmitters)', collection(db, 'transmitters')),
+      trackedGetDocs('syncTransmitters (argos_positions)', collection(db, 'argos_positions')),
+      trackedGetDocs('syncTransmitters (positions)', collection(db, 'positions'))
     ]);
+
 
     const transmittersMap = new Map<string, Transmitter>();
     txSnap.forEach(docSnap => {

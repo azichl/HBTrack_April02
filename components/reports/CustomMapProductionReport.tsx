@@ -6,7 +6,7 @@ import {
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
   Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload,
-  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X, Save
+  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X, Save, AlertTriangle
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -15,6 +15,10 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { exportReport, leafletIdle } from '../TrackingReport/exportReport';
 import Draggable from 'react-draggable';
+import ReportLiveMapFrame from './ReportLiveMapFrame';
+import './reportMapFrame.css';
+import { smartCrop } from './smartCrop';
+import type { FitMode } from './fitToFrame';
 const DraggableComponent = Draggable as any;
 
 import { useAppStore } from '../../store/appStore';
@@ -674,11 +678,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
   // Map Display Mode:
-  // 'snapshot': exact photo screened from live track (as requested by user)
+  // 'live': full frame real Leaflet map matching Live Tracking view (Mode A, default on export)
+  // 'snapshot': exact photo screened from live track or QGIS upload (Mode B)
   // 'interactive': dynamic Leaflet map without the old rules (clean, matching live track)
-  const [mapDisplayMode, setMapDisplayMode] = useState<'snapshot' | 'interactive'>(
-    exportedMapView?.mapSnapshotImage ? 'snapshot' : 'interactive'
+  const [mapDisplayMode, setMapDisplayMode] = useState<'live' | 'snapshot' | 'interactive'>(
+    exportedMapView?.liveViewState ? 'live' : exportedMapView?.mapSnapshotImage ? 'snapshot' : 'interactive'
   );
+  const [liveMapFitMode, setLiveMapFitMode] = useState<FitMode>('fit-view');
   const [mapSnapshotUrl, setMapSnapshotUrl] = useState<string | null>(
     exportedMapView?.mapSnapshotImage || null
   );
@@ -728,7 +734,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       if (exportedMapView.center) setMapCenter(exportedMapView.center);
       if (exportedMapView.zoom) setMapZoom(exportedMapView.zoom);
       if (exportedMapView.baseLayer) setActiveBaseLayer(exportedMapView.baseLayer as any);
-      if (exportedMapView.mapSnapshotImage) {
+      if (exportedMapView.liveViewState) {
+        setMapDisplayMode('live');
+      } else if (exportedMapView.mapSnapshotImage) {
         setMapSnapshotUrl(exportedMapView.mapSnapshotImage);
         setMapDisplayMode('snapshot');
       }
@@ -927,7 +935,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── CUSTOM LOGOS & QGIS MAP UPLOAD (USER REQUESTED) ────────────────────────
   const [logoLeftUrl, setLogoLeftUrl] = useState<string>('/qatar-houbara-center-logo.png');
   const [logoRightUrl, setLogoRightUrl] = useState<string>('/qatar-emblem.png');
-  const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('contain');
+  const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('cover');
+
+  // Non-blocking crop check for Mode B (Image mode): warns if any marker would be cropped away
+  const cropWarningNeeded = useMemo(() => {
+    if (mapDisplayMode !== 'snapshot' || !exportedMapView?.liveViewState || mapImageFit !== 'cover') return false;
+    const view = exportedMapView.liveViewState;
+    if (!view.markerPoints?.length || !view.sizePx?.w || !view.sizePx?.h) return false;
+    const [[swLat, swLon], [neLat, neLon]] = view.bounds;
+    const latSpan = neLat - swLat;
+    const lonSpan = neLon - swLon;
+    if (latSpan <= 0 || lonSpan <= 0) return false;
+    const pts = view.markerPoints.map(p => ({
+      x: ((p.lon - swLon) / lonSpan) * view.sizePx.w,
+      y: ((neLat - p.lat) / latSpan) * view.sizePx.h,
+    }));
+    const res = smartCrop(view.sizePx.w, view.sizePx.h, 876, 465, pts, 30);
+    return !res.coversAllPoints;
+  }, [mapDisplayMode, exportedMapView?.liveViewState, mapImageFit]);
 
   // Logo Dimensions Management (User requested: click and adjust dimensions)
   const [logoLeftHeight, setLogoLeftHeight] = useState<number>(78);
@@ -1915,12 +1940,35 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const element = reportContainerRef.current;
       if (!element) return;
 
+      const waitForMapReady = async () => {
+        if (mapDisplayMode === 'interactive' && mapInstance) {
+          await leafletIdle(mapInstance);
+        } else if (mapDisplayMode === 'live') {
+          const checkReady = () => !!reportContainerRef.current?.querySelector('.rpt-mapframe [data-map-ready="1"]');
+          if (!checkReady()) {
+            await new Promise<void>((resolve) => {
+              let elapsed = 0;
+              const interval = setInterval(() => {
+                elapsed += 60;
+                if (checkReady() || elapsed >= 8000) {
+                  clearInterval(interval);
+                  resolve();
+                }
+              }, 60);
+            });
+          }
+          if (mapInstance) {
+            await leafletIdle(mapInstance);
+          }
+        }
+      };
+
       const exportFileName = getExportFileName();
       await exportReport(element, {
         fileName: exportFileName,
         format: 'pdf',
         pixelRatio: 2,
-        waitForMap: mapInstance ? () => leafletIdle(mapInstance) : undefined
+        waitForMap: waitForMapReady
       });
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -1943,12 +1991,35 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const element = reportContainerRef.current;
       if (!element) return;
 
+      const waitForMapReady = async () => {
+        if (mapDisplayMode === 'interactive' && mapInstance) {
+          await leafletIdle(mapInstance);
+        } else if (mapDisplayMode === 'live') {
+          const checkReady = () => !!reportContainerRef.current?.querySelector('.rpt-mapframe [data-map-ready="1"]');
+          if (!checkReady()) {
+            await new Promise<void>((resolve) => {
+              let elapsed = 0;
+              const interval = setInterval(() => {
+                elapsed += 60;
+                if (checkReady() || elapsed >= 8000) {
+                  clearInterval(interval);
+                  resolve();
+                }
+              }, 60);
+            });
+          }
+          if (mapInstance) {
+            await leafletIdle(mapInstance);
+          }
+        }
+      };
+
       const exportFileName = getExportFileName();
       await exportReport(element, {
         fileName: exportFileName,
         format: 'png',
         pixelRatio: 2,
-        waitForMap: mapInstance ? () => leafletIdle(mapInstance) : undefined
+        waitForMap: waitForMapReady
       });
     } catch (error) {
       console.error('Error exporting image:', error);
@@ -2597,15 +2668,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             )}
           </div>
 
-          {/* 2. Map View Mode (Snapshot vs Interactive) */}
+          {/* 2. Map View Mode (Live vs Snapshot vs Interactive) */}
           <div>
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
               <span>عرض الخريطة (Map Display):</span>
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                {mapDisplayMode === 'snapshot' ? 'صورة ملتقطة' : 'تفاعلية'}
+                {mapDisplayMode === 'live' ? 'منظور مباشر (100%)' : mapDisplayMode === 'snapshot' ? 'صورة ملتقطة' : 'تفاعلية'}
               </span>
             </label>
-            <div className="flex bg-gray-100 dark:bg-slate-900 p-1 rounded-xl border border-gray-200 dark:border-slate-700">
+            <div className="flex bg-gray-100 dark:bg-slate-900 p-1 rounded-xl border border-gray-200 dark:border-slate-700 gap-1">
+              {exportedMapView?.liveViewState && (
+                <button
+                  type="button"
+                  onClick={() => setMapDisplayMode('live')}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                    mapDisplayMode === 'live' 
+                      ? 'bg-white dark:bg-slate-800 text-emerald-600 shadow-sm' 
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  title="عرض منظور التتبع المباشر الحقيقي بدون أشرطة أو تشويه"
+                >
+                  <Sparkles size={13} />
+                  <span>منظور مباشر</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setMapDisplayMode('snapshot')}
@@ -4094,44 +4180,35 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {/* Map Viewport Frame */}
               <div 
                 ref={mapViewportRef}
-                className="relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-stone-900 h-[465px] shadow-xs flex items-center justify-center"
+                className="trk-map relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-[#ece8de] h-[465px] shadow-xs flex items-center justify-center"
                 style={{ direction: 'ltr', textAlign: 'left' }}
               >
                 
-                {/* 1. SCREENED PHOTO FROM LIVE TRACK OR UPLOADED QGIS MAP */}
-                {mapDisplayMode === 'snapshot' && mapSnapshotUrl ? (
-                  <div className="relative w-full h-full overflow-hidden bg-slate-950 flex items-center justify-center group">
-                    <img 
-                      src={mapSnapshotUrl} 
-                      alt="خريطة التقرير (QGIS أو لقطة مباشرة)" 
-                      className="w-full h-full select-none"
-                      style={{ 
-                        display: 'block', 
-                        width: '100%', 
-                        height: '100%',
-                        objectFit: mapImageFit 
-                      }}
-                    />
-                    {/* Floating Controls for Uploaded/Captured Map (Excluded during PDF/PNG export) */}
-                    <div className="no-export-snapshot no-print no-export absolute top-2 right-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-xs shadow-lg opacity-85 hover:opacity-100 transition-opacity">
-                      <span className="text-[10px] text-sky-400 font-bold pl-1 border-l border-white/20">خريطة QGIS / صورة</span>
+                {/* 1. REAL LIVE MAP VIEW FRAME (MODE A - DEFAULT ON EXPORT) */}
+                {mapDisplayMode === 'live' && exportedMapView?.liveViewState ? (
+                  <div className="relative w-full h-full">
+                    {/* Floating Controls for Live Map View */}
+                    <div className="rpt-toolbar no-export no-print absolute top-2 right-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-xs shadow-lg opacity-85 hover:opacity-100 transition-opacity z-[1000]">
+                      <span className="text-[10px] text-emerald-400 font-bold pl-1 border-l border-white/20">منظور مباشر (100%)</span>
                       <button
                         type="button"
-                        onClick={() => mapImageInputRef.current?.click()}
-                        className="hover:text-sky-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
-                        title="استبدال بصورة خريطة QGIS أخرى"
+                        onClick={() => setLiveMapFitMode(prev => prev === 'fit-view' ? 'fit-markers' : prev === 'fit-markers' ? 'same-center-zoom' : 'fit-view')}
+                        className="hover:text-emerald-300 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-mono"
+                        title="تبديل وضع التأطير: كامل المنظور (fit-view) / الأجهزة فقط (fit-markers) / نفس التكبير (same-center-zoom)"
                       >
-                        <Upload size={11} />
-                        <span>استبدال</span>
+                        {liveMapFitMode}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setMapImageFit(prev => prev === 'contain' ? 'cover' : prev === 'cover' ? 'fill' : 'contain')}
-                        className="hover:text-sky-300 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-mono"
-                        title="تبديل وضع ملاءمة العرض: احتواء (contain) / تغطية (cover) / ملء (fill)"
-                      >
-                        {mapImageFit}
-                      </button>
+                      {mapSnapshotUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setMapDisplayMode('snapshot')}
+                          className="hover:text-sky-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
+                          title="التبديل إلى الصورة الملتقطة"
+                        >
+                          <Camera size={11} />
+                          <span>صورة</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -4145,37 +4222,120 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span>تفاعلية</span>
                       </button>
                     </div>
-                    {/* Dynamic GIS Graphic Scale Bar on snapshot view */}
-                    <div 
-                      className="absolute bottom-2.5 right-3 pointer-events-none select-none z-[400]"
-                      style={{
-                        backgroundColor: '#ffffff',
-                        padding: '5px 14px 6px 14px',
-                        borderRadius: '6px',
-                        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.18)',
-                        border: '1px solid rgba(0, 0, 0, 0.2)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        minWidth: '115px',
-                        boxSizing: 'border-box',
-                        direction: 'ltr'
+
+                    <ReportLiveMapFrame
+                      view={exportedMapView.liveViewState}
+                      mode={liveMapFitMode}
+                      baseLayer={getProductionTileLayer(activeBaseLayer)}
+                      onMapInstance={setMapInstance}
+                      overlays={
+                        <>
+                          {showGoogleLabels && (
+                            <TileLayer
+                              url="https://mt1.google.com/vt/lyrs=h&x={x}&y={y}&z={z}"
+                              attribution="&copy; Google"
+                              maxZoom={20}
+                              zIndex={400}
+                              crossOrigin="anonymous"
+                            />
+                          )}
+                          <CustomGraphicScaleControl />
+                          <MapGraticuleListener onUpdate={setGraticuleData} />
+                          {showFlightTrack && allHistoryPoints.length > 1 && (
+                            <Polyline
+                              positions={allHistoryPoints}
+                              pathOptions={{
+                                color: '#6366f1',
+                                weight: 2.8,
+                                opacity: 0.85
+                              }}
+                            />
+                          )}
+                        </>
+                      }
+                    />
+                  </div>
+                ) : mapDisplayMode === 'snapshot' && mapSnapshotUrl ? (
+                  /* 2. SCREENED PHOTO FROM LIVE TRACK OR UPLOADED QGIS MAP (MODE B) */
+                  <div className="rpt-snapshot relative w-full h-full overflow-hidden bg-[#ece8de] flex items-center justify-center group">
+                    <img 
+                      src={mapSnapshotUrl} 
+                      alt="خريطة التقرير (QGIS أو لقطة مباشرة)" 
+                      className="w-full h-full select-none"
+                      style={{ 
+                        display: 'block', 
+                        width: '100%', 
+                        height: '100%',
+                        objectFit: mapImageFit 
                       }}
-                    >
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#111827', fontFamily: "Arial, sans-serif", lineHeight: 1.2, marginBottom: '3px', textAlign: 'center' }}>
-                        25 km
-                      </div>
-                      <div style={{ width: '80px', height: '4.5px', display: 'flex', border: '1px solid #111827', boxSizing: 'border-box', overflow: 'hidden' }}>
-                        <div style={{ width: '50%', height: '100%', backgroundColor: '#111827' }} />
-                        <div style={{ width: '50%', height: '100%', backgroundColor: '#ffffff' }} />
-                      </div>
+                    />
+                    {/* Floating Controls for Uploaded/Captured Map (Excluded during PDF/PNG export) */}
+                    <div className="rpt-toolbar no-export-snapshot no-print no-export absolute top-2 right-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-sm text-white px-2.5 py-1 rounded-lg text-xs shadow-lg opacity-85 hover:opacity-100 transition-opacity z-[1000]">
+                      <span className="text-[10px] text-sky-400 font-bold pl-1 border-l border-white/20">خريطة QGIS / صورة</span>
+                      <button
+                        type="button"
+                        onClick={() => mapImageInputRef.current?.click()}
+                        className="hover:text-sky-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
+                        title="استبدال بصورة خريطة QGIS أخرى"
+                      >
+                        <Upload size={11} />
+                        <span>استبدال</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMapImageFit(prev => prev === 'cover' ? 'contain' : 'cover')}
+                        className="hover:text-sky-300 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-mono"
+                        title="تبديل وضع ملاءمة العرض: Fill (تغطية) / Letterbox (احتواء)"
+                      >
+                        {mapImageFit === 'cover' ? 'Fit: Fill' : 'Fit: Letterbox'}
+                      </button>
+                      {exportedMapView?.liveViewState && (
+                        <button
+                          type="button"
+                          onClick={() => setMapDisplayMode('live')}
+                          className="hover:text-emerald-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
+                          title="التبديل إلى المنظور المباشر الحقيقي"
+                        >
+                          <Sparkles size={11} />
+                          <span>منظور مباشر</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMapDisplayMode('interactive');
+                          setFitKey(k => k + 1);
+                        }}
+                        className="hover:text-amber-300 flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px]"
+                        title="العودة للخريطة التفاعلية"
+                      >
+                        <Layers size={11} />
+                        <span>تفاعلية</span>
+                      </button>
                     </div>
+
+                    {/* Warning if any marker is cropped in Cover mode */}
+                    {cropWarningNeeded && (
+                      <div className="no-export no-print absolute bottom-3 left-3 right-3 z-[950] bg-amber-600/95 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-lg flex items-center justify-between backdrop-blur-xs">
+                        <span className="flex items-center gap-1.5">
+                          <AlertTriangle size={14} className="shrink-0" />
+                          <span>تنبيه: قد يتم اقتطاع بعض الأجهزة بسبب أبعاد الصورة. يُفضل استخدام المنظور المباشر.</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMapDisplayMode('live')}
+                          className="bg-white text-amber-900 font-bold px-2 py-0.5 rounded text-[11px] hover:bg-amber-50 transition-colors shrink-0"
+                        >
+                          عرض كمنظور مباشر
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS */
+                  /* 3. CLEAN DYNAMIC MAP WITH APPLIED FILTERS (PER-BIRD INTERACTIVE MODE) */
                   <div className="relative w-full h-full">
                     {/* Quick Button to Upload QGIS Map right from the interactive map view */}
-                    <div className="no-export-snapshot no-print no-export absolute top-2 left-2 z-[400]">
+                    <div className="rpt-toolbar no-export-snapshot no-print no-export absolute top-2 left-2 z-[400] flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => mapImageInputRef.current?.click()}
@@ -4185,6 +4345,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <Upload size={12} className="text-sky-600" />
                         <span>رفع خريطة QGIS</span>
                       </button>
+                      {exportedMapView?.liveViewState && (
+                        <button
+                          type="button"
+                          onClick={() => setMapDisplayMode('live')}
+                          className="px-2.5 py-1 bg-white/95 dark:bg-slate-800/95 hover:bg-white text-emerald-800 dark:text-emerald-300 rounded-md shadow-md border border-gray-300 dark:border-slate-600 text-xs font-bold flex items-center gap-1.5 transition-all backdrop-blur-xs"
+                          title="عرض منظور التتبع المباشر"
+                        >
+                          <Sparkles size={12} className="text-emerald-600" />
+                          <span>منظور مباشر</span>
+                        </button>
+                      )}
+                      {mapSnapshotUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setMapDisplayMode('snapshot')}
+                          className="px-2.5 py-1 bg-white/95 dark:bg-slate-800/95 hover:bg-white text-blue-800 dark:text-blue-300 rounded-md shadow-md border border-gray-300 dark:border-slate-600 text-xs font-bold flex items-center gap-1.5 transition-all backdrop-blur-xs"
+                          title="عرض الصورة الملتقطة"
+                        >
+                          <Camera size={12} className="text-blue-600" />
+                          <span>صورة ملتقطة</span>
+                        </button>
+                      )}
                     </div>
                     <MapContainer
                       center={mapCenter}
@@ -4796,7 +4978,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 </div>
 
                 {/* Dynamic GIS Graticule Grid Lines & Perimeter Coordinate Labels (Move smoothly with map pan/zoom) */}
-                {showGraticule && (
+                {showGraticule && mapDisplayMode !== 'snapshot' && (
                   <>
                     {/* Graticule Grid Lines (Thin, elegant, semi-transparent dashed lines across map) */}
                     <svg className="absolute inset-0 w-full h-full pointer-events-none z-[450]" style={{ display: 'block' }}>
@@ -5041,8 +5223,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
                 ) : (
                   <div 
-                    className="flex flex-row items-center justify-between flex-nowrap w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
-                    style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr' }}
+                    className="trk-legend flex flex-row items-center flex-wrap gap-x-4 gap-y-1.5 w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
+                    style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', minWidth: 0 }}
                   >
                     {legendItems.filter(item => item.visible).map(item => {
                       let lbl = item.label;

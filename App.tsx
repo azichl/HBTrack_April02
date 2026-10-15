@@ -3,6 +3,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { getDoc, doc } from 'firebase/firestore';
+import { trackedGetDoc } from './src/perf/firestoreTracked';
+import { bootInteractive } from './src/perf/bootTrace';
+import { countCollections } from './src/perf/bootQueries';
 import { useIdleTimeout } from './hooks/useIdleTimeout';
 import { logUserActivity } from './services/activityLogger';
 import { Login } from './views/Login';
@@ -15,6 +18,15 @@ import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckC
 import { HoubaraIcon } from './components/HoubaraIcon';
 import { FIXED_FIELD_CAMPS } from './constants';
 import { ToastContainer } from './src/components/ToastContainer';
+
+if (typeof window !== 'undefined') {
+  (window as any).__countDocs = () => countCollections(db, [
+    'transmitters', 'birds', 'positions', 'argos_positions', 'argos_data',
+    'alerts', 'users', 'system_health', 'static_test_periods', 'status_history',
+    'user_activity_logs', 'qgis_layers', 'ingest_runs'
+  ]);
+}
+
 
 // Lazy-loaded heavy views for fast initial load
 const LiveTracking = React.lazy(() => import('./views/LiveTracking').then(m => ({ default: m.LiveTracking })));
@@ -400,8 +412,9 @@ const App = () => {
       if (user && !firestoreInitialized.current) {
         try {
           // Verify App Access
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          const userDoc = await trackedGetDoc('user profile (users)', doc(db, 'users', user.uid));
           if (userDoc.exists()) {
+
              const userData = userDoc.data();
              const appAccess = userData.appAccess || ['web', 'ios'];
              
@@ -508,6 +521,13 @@ const App = () => {
     }, 1600);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!authLoading) {
+      bootInteractive();
+    }
+  }, [authLoading]);
+
 
   if (authLoading && !showAppIntro) {
     return (
