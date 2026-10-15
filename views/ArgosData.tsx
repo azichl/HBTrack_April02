@@ -34,6 +34,9 @@ export const ArgosData = () => {
   const [collectionMode, setCollectionMode] = useState<CollectionMode>('all');
 
   // Pagination & Filtering state
+  type QualityFilterType = 'accepted' | 'all' | 'high' | 'medium' | 'degraded' | 'rejected';
+  const [qualityFilter, setQualityFilter] = useState<QualityFilterType>('accepted');
+  const [rejectReasonFilter, setRejectReasonFilter] = useState<string>('all');
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
@@ -133,7 +136,54 @@ export const ArgosData = () => {
         });
       }
 
-      setAllData(data);
+      // Enrich rows with classification fields, locationDate vs messageDate, latency
+      const enriched = data.map((d) => {
+        const rawLc = String(d.locationClass || d.lc || '').trim();
+        const lat = Number(d.lat !== undefined ? d.lat : d.latitude);
+        const lon = Number(d.lon !== undefined ? d.lon : d.longitude);
+        const isGps = d.locationType === 'GPS' || (!d.locationType && (!rawLc || rawLc === 'GPS'));
+        const lc = isGps ? 'GPS' : (rawLc || 'Z');
+
+        let quality = d.quality;
+        let accepted = d.accepted !== undefined ? d.accepted : true;
+        let rejectReason = d.rejectReason || null;
+
+        if (!quality) {
+          if (lc === 'GPS' || ['3', '2', '1'].includes(lc)) quality = 'High';
+          else if (lc === '0') quality = 'Medium';
+          else if (['A', 'B'].includes(lc)) quality = 'Low';
+          else {
+            quality = 'Invalid';
+            accepted = false;
+            rejectReason = 'LC_Z';
+          }
+        }
+
+        if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+          accepted = false;
+          if (!rejectReason) rejectReason = 'OUT_OF_RANGE';
+        }
+
+        const fixTime = d.fixTime || d.locationDate || d.timestamp || d.date || '';
+        const receivedAt = d.receivedAt || d.messageDate || fixTime;
+        const latencyMin = d.latencyMin !== undefined 
+          ? d.latencyMin 
+          : Math.round(Math.max(0, (new Date(receivedAt).getTime() - new Date(fixTime).getTime()) / 60000));
+
+        return {
+          ...d,
+          lc,
+          quality: quality || 'High',
+          accepted,
+          rejectReason,
+          fixTime,
+          timestamp: fixTime,
+          receivedAt,
+          latencyMin: isNaN(latencyMin) ? 0 : latencyMin,
+        };
+      });
+
+      setAllData(enriched);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -183,14 +233,41 @@ export const ArgosData = () => {
   // Pre-filter by platform
 
 
+  // Quality & Reject Reason Filtering
+  const qualityFilteredData = allData.filter(row => {
+    if (qualityFilter === 'accepted') {
+      return row.accepted !== false && row.quality !== 'Invalid' && row.lc !== 'Z';
+    }
+    if (qualityFilter === 'high') {
+      return row.quality === 'High';
+    }
+    if (qualityFilter === 'medium') {
+      return row.quality === 'Medium';
+    }
+    if (qualityFilter === 'degraded') {
+      return row.quality === 'Low' || ['A', 'B'].includes(row.lc);
+    }
+    if (qualityFilter === 'rejected') {
+      return row.accepted === false || row.quality === 'Invalid' || row.lc === 'Z';
+    }
+    return true; // 'all'
+  }).filter(row => {
+    if (rejectReasonFilter !== 'all') {
+      return row.rejectReason === rejectReasonFilter;
+    }
+    return true;
+  });
+
   // Global search — search across ALL fields
   const searchableData = searchQuery
-    ? allData.filter(row => {
+    ? qualityFilteredData.filter(row => {
         const q = searchQuery.toLowerCase();
         return (
           String(row.platformId || '').toLowerCase().includes(q) ||
           String(row.programId || '').toLowerCase().includes(q) ||
           String(row.lc || '').toLowerCase().includes(q) ||
+          String(row.quality || '').toLowerCase().includes(q) ||
+          String(row.rejectReason || '').toLowerCase().includes(q) ||
           String(row.msgType || '').toLowerCase().includes(q) ||
           String(row.satellite || '').toLowerCase().includes(q) ||
           String(row.lat || '').includes(q) ||
@@ -199,7 +276,7 @@ export const ArgosData = () => {
           String(row._collection || '').toLowerCase().includes(q)
         );
       })
-    : allData;
+    : qualityFilteredData;
 
   // Apply sorting, column filtering, and selection
   const { 
@@ -218,7 +295,7 @@ export const ArgosData = () => {
   // Reset pagination on filter change
   useEffect(() => {
     setCurrentPageIndex(0);
-  }, ['', searchQuery, filters, rowsPerPage]);
+  }, [qualityFilter, rejectReasonFilter, searchQuery, filters, rowsPerPage]);
 
   const totalRecords = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalRecords / rowsPerPage));
@@ -449,6 +526,58 @@ export const ArgosData = () => {
                </div>
           </div>
 
+          {/* Quality Classification Filter Bar */}
+          <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-gray-100 dark:border-slate-700/60">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Classification:</span>
+              {(['accepted', 'all', 'high', 'medium', 'degraded', 'rejected'] as const).map((q) => {
+                const labelMap: Record<string, string> = {
+                  accepted: 'Accepted Only',
+                  all: 'All Statuses',
+                  high: 'High (GPS/3/2/1)',
+                  medium: 'Medium (0)',
+                  degraded: 'Degraded (A/B)',
+                  rejected: 'Rejected (Z/Invalid)'
+                };
+                const colorMap: Record<string, string> = {
+                  accepted: qualityFilter === 'accepted' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200',
+                  all: qualityFilter === 'all' ? 'bg-slate-700 text-white shadow-xs' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200',
+                  high: qualityFilter === 'high' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100',
+                  medium: qualityFilter === 'medium' ? 'bg-amber-600 text-white shadow-xs' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100',
+                  degraded: qualityFilter === 'degraded' ? 'bg-orange-600 text-white shadow-xs' : 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 hover:bg-orange-100',
+                  rejected: qualityFilter === 'rejected' ? 'bg-rose-600 text-white shadow-xs' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100'
+                };
+                return (
+                  <button
+                    key={q}
+                    onClick={() => setQualityFilter(q)}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-full transition-all ${colorMap[q]}`}
+                  >
+                    {labelMap[q]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Reject Reason filter dropdown */}
+            {(qualityFilter === 'rejected' || qualityFilter === 'all') && (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-gray-500 dark:text-gray-400">Reject Reason:</span>
+                <select
+                  value={rejectReasonFilter}
+                  onChange={(e) => setRejectReasonFilter(e.target.value)}
+                  className="bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md px-2 py-1 text-xs text-gray-700 dark:text-gray-200 outline-none focus:ring-1 focus:ring-brand-500"
+                >
+                  <option value="all">All Reasons</option>
+                  <option value="LC_Z">LC_Z (No fix)</option>
+                  <option value="OUT_OF_RANGE">OUT_OF_RANGE</option>
+                  <option value="FUTURE_TIMESTAMP">FUTURE_TIMESTAMP</option>
+                  <option value="RETROGRADE">RETROGRADE</option>
+                </select>
+              </div>
+            )}
+          </div>
+
           {/* Active filter count */}
           {(Object.values(filters).some(v => v) || searchQuery || '') && (
             <div className="flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
@@ -503,14 +632,18 @@ export const ArgosData = () => {
                       )}
                       <SortableHeader label="Device ID" sortKey="platformId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['platformId']} onFilter={setFilter} />
                       <SortableHeader label="Program ID" sortKey="programId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['programId']} onFilter={setFilter} />
-                      <SortableHeader label="Location Class" sortKey="lc" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lc']} onFilter={setFilter} />
-                      <SortableHeader label="Location Type" sortKey="locationType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['locationType']} onFilter={setFilter} />
-                      <SortableHeader label="Msg Type" sortKey="msgType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['msgType']} onFilter={setFilter} />
-                      <SortableHeader label="Doppler Error" sortKey="dopplerError" currentSort={sortConfig} onSort={requestSort} filterValue={filters['dopplerError']} onFilter={setFilter} />
-                      <SortableHeader label="Location Date" sortKey="timestamp" currentSort={sortConfig} onSort={requestSort} filterValue={filters['timestamp']} onFilter={setFilter} />
+                      <SortableHeader label="Quality" sortKey="quality" currentSort={sortConfig} onSort={requestSort} filterValue={filters['quality']} onFilter={setFilter} />
+                      <SortableHeader label="Accepted" sortKey="accepted" currentSort={sortConfig} onSort={requestSort} filterValue={filters['accepted']} onFilter={setFilter} />
+                      <SortableHeader label="Class" sortKey="lc" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lc']} onFilter={setFilter} />
+                      <SortableHeader label="Type" sortKey="locationType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['locationType']} onFilter={setFilter} />
+                      <SortableHeader label="Fix Time" sortKey="fixTime" currentSort={sortConfig} onSort={requestSort} filterValue={filters['fixTime']} onFilter={setFilter} />
+                      <SortableHeader label="Received At" sortKey="receivedAt" currentSort={sortConfig} onSort={requestSort} filterValue={filters['receivedAt']} onFilter={setFilter} />
+                      <SortableHeader label="Latency" sortKey="latencyMin" currentSort={sortConfig} onSort={requestSort} filterValue={filters['latencyMin']} onFilter={setFilter} />
                       <SortableHeader label="Latitude" sortKey="lat" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lat']} onFilter={setFilter} />
                       <SortableHeader label="Longitude" sortKey="lon" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lon']} onFilter={setFilter} />
                       <SortableHeader label="Satellite" sortKey="satellite" currentSort={sortConfig} onSort={requestSort} filterValue={filters['satellite']} onFilter={setFilter} />
+                      <SortableHeader label="Msg Type" sortKey="msgType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['msgType']} onFilter={setFilter} />
+                      <SortableHeader label="Reject Reason" sortKey="rejectReason" currentSort={sortConfig} onSort={requestSort} filterValue={filters['rejectReason']} onFilter={setFilter} />
                       <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-100 dark:bg-slate-900 z-20 shadow-sm">Actions</th>
                   </tr>
                 </thead>
@@ -551,6 +684,27 @@ export const ArgosData = () => {
                           )}
                           <td className="px-4 py-2.5 text-sm font-bold text-gray-900 dark:text-white">{row.platformId}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.programId}</td>
+                          <td className="px-4 py-2.5 text-xs">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                              row.quality === 'High' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                              row.quality === 'Medium' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
+                              row.quality === 'Low' ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' :
+                              'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300'
+                            }`}>
+                              {row.quality || 'Unknown'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs">
+                            {row.accepted !== false ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                                YES
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+                                NO
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-2.5 text-sm">
                               {derivedLc && (
                                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${
@@ -564,12 +718,32 @@ export const ArgosData = () => {
                               )}
                           </td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{derivedLocationType}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.msgType}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.dopplerError}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">{formatDateTime(row.timestamp, timeZone)}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 whitespace-nowrap font-mono text-xs">
+                            {row.fixTime ? formatDateTime(row.fixTime, timeZone) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap font-mono text-xs">
+                            {row.receivedAt ? formatDateTime(row.receivedAt, timeZone) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                            {row.latencyMin !== undefined ? (
+                              <span className={`font-mono ${row.latencyMin > 120 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>
+                                {row.latencyMin}m
+                              </span>
+                            ) : '-'}
+                          </td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.lat}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.lon}</td>
                           <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.satellite}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.msgType}</td>
+                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                            {row.rejectReason ? (
+                              <span className="font-mono text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-900/60" title={row.rejectReason}>
+                                {row.rejectReason}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </td>
                           <td className="px-4 py-2.5 text-sm text-right">
                             <button
                               onClick={(e) => { e.stopPropagation(); handleDeleteRow(row); }}

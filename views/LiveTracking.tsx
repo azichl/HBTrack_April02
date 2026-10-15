@@ -1053,7 +1053,7 @@ const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
 };
 
 interface HistoricalMarkerProps {
-    point: { lat: number, lon: number, timestamp: string, type?: string };
+    point: { lat: number, lon: number, timestamp: string, type?: string, isDegraded?: boolean };
     pttId: string;
     color: string;
     timeZone: string;
@@ -1072,7 +1072,13 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
         <CircleMarker
             center={[point.lat, point.lon]}
             radius={4}
-            pathOptions={{ color: color, fillColor: 'white', fillOpacity: 1, weight: 2 }}
+            pathOptions={{ 
+                color: color, 
+                fillColor: 'white', 
+                fillOpacity: point.isDegraded ? 0.45 : 1, 
+                opacity: point.isDegraded ? 0.45 : 1, 
+                weight: point.isDegraded ? 1.5 : 2 
+            }}
             eventHandlers={{
                 popupopen: () => setIsOpen(true),
                 popupclose: () => setIsOpen(false)
@@ -1101,7 +1107,8 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
         prevProps.point.lat === nextProps.point.lat &&
         prevProps.point.lon === nextProps.point.lon &&
         prevProps.point.timestamp === nextProps.point.timestamp &&
-        prevProps.point.type === nextProps.point.type
+        prevProps.point.type === nextProps.point.type &&
+        prevProps.point.isDegraded === nextProps.point.isDegraded
     );
 });
 
@@ -1223,6 +1230,7 @@ const LiveTrackingInner = () => {
   const [activeWeatherLayer, setActiveWeatherLayer] = useState('none');
   const [showLabels, setShowLabels] = useState(false);
   const [showFieldCamps, setShowFieldCamps] = useState(true);
+  const [showDegradedFixes, setShowDegradedFixes] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
   // Measurement Tool State
@@ -1566,6 +1574,14 @@ const LiveTrackingInner = () => {
             return;
         }
 
+        // Quality & Degraded filter: Exclude rejected fixes (LC Z, invalid coords, accepted === false)
+        const rawLc = String(p.lc || '').trim();
+        const isRejected = (p as any).accepted === false || (p as any).quality === 'Invalid' || rawLc === 'Z';
+        if (isRejected) return;
+
+        const isDegraded = ['A', 'B'].includes(rawLc) || (p as any).quality === 'Low';
+        if (isDegraded && !showDegradedFixes) return;
+
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
         const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
         if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && locType !== historyFixType) return;
@@ -1661,7 +1677,7 @@ const LiveTrackingInner = () => {
     }
 
     return Array.from(latestMap.values());
-  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType, showHistory, historyPaths, hasCurrentMonthFixesMap, currentYearMonthKey]);
+  }, [positions, selectedTransmitterIds, selectedStatus, transmitters, historyFixType, showHistory, historyPaths, hasCurrentMonthFixesMap, currentYearMonthKey, showDegradedFixes]);
   
   // ── Cache raw history so changing GPS/Doppler filter does NOT re-fetch from Firestore ──
   const rawHistoryCache = useRef<any[]>([]);
@@ -1774,8 +1790,16 @@ const LiveTrackingInner = () => {
             const validCoords = isValidCoordinate(numLat, numLon);
             if (!validCoords) return false;
 
+            const rawLc = String(p.lc || '').trim();
+            const isRejected = (p as any).accepted === false || (p as any).quality === 'Invalid' || rawLc === 'Z';
+            if (isRejected) return false;
+
+            const isDegraded = ['A', 'B'].includes(rawLc) || (p as any).quality === 'Low';
+            if (isDegraded && !showDegradedFixes) return false;
+
             const fixType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
             p.locationType = fixType;
+            (p as any).isDegraded = isDegraded;
 
             // GPS / Doppler / All filter
             if (historyFixType === 'GPS') return fixType === 'GPS';
@@ -1839,14 +1863,20 @@ const LiveTrackingInner = () => {
         if (track.length > 0) {
              newPaths.push({
                  id: pttId,
-                 path: track.map(p => ({ lat: p.lat, lon: p.lon, timestamp: p.timestamp, type: p.locationType })),
+                 path: track.map(p => ({ 
+                     lat: p.lat, 
+                     lon: p.lon, 
+                     timestamp: p.timestamp, 
+                     type: p.locationType,
+                     isDegraded: Boolean((p as any).isDegraded)
+                 })),
                  color: colors[index % colors.length]
              });
         }
     });
     
     setHistoryPaths(newPaths);
-  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current]);
+  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current, showDegradedFixes]);
 
   // Filter transmitters for search suggestion
   const searchResults = useMemo(() => {
@@ -3098,6 +3128,15 @@ const LiveTrackingInner = () => {
                         <span>مخيمات الميدان (Field Camps)</span>
                       </span>
                     </label>
+                    <label className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={showDegradedFixes}
+                        onChange={(e) => setShowDegradedFixes(e.target.checked)}
+                        className="rounded text-brand-500 focus:ring-brand-500" 
+                      />
+                      <span className="text-sm text-gray-700">Show Degraded Fixes (LC A/B)</span>
+                    </label>
                   </div>
                 </div>
               )}
@@ -3312,6 +3351,15 @@ const LiveTrackingInner = () => {
                                     <Tent size={14} className="text-emerald-600" />
                                     <span>مخيمات الميدان (Field Camps)</span>
                                 </span>
+                            </label>
+                            <label className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-gray-50 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={showDegradedFixes}
+                                    onChange={(e) => setShowDegradedFixes(e.target.checked)}
+                                    className="rounded text-brand-500 focus:ring-brand-500" 
+                                />
+                                <span className="text-sm text-gray-700">Show Degraded Fixes (LC A/B)</span>
                             </label>
                         </div>
 
