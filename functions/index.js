@@ -1,5 +1,8 @@
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
+const clsPipeline = require("./clsPipeline");
 
 // Initialize Admin SDK
 admin.initializeApp();
@@ -650,4 +653,128 @@ exports.setUserRoleClaim = onCall({ cors: true, maxInstances: 5 }, async (req) =
 
   return { ok: true, uid, role: cleanRole };
 });
+
+// ─── Step 3: Server-Side Pipeline Cloud Functions ────────────────────────────
+
+/**
+ * 1. ingestCls (Scheduled every 15 minutes)
+ * Polls CLS telemetry API, writes raw records to argos_raw (deduped),
+ * and triggers immediate batch classification & promotion.
+ */
+exports.ingestCls = onSchedule({
+  schedule: "every 15 minutes",
+  timeZone: "UTC",
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (event) => {
+  console.log("[ingestCls] Scheduled CLS poll started at", new Date().toISOString());
+  try {
+    const result = await clsPipeline.ingestClsCore(db, null, (msg) => console.log(msg));
+    console.log("[ingestCls] Scheduled poll result:", JSON.stringify(result));
+  } catch (err) {
+    console.error("[ingestCls] Scheduled poll error:", err);
+  }
+});
+
+/**
+ * Callable version of ingestCls ("Fetch now" button)
+ */
+exports.ingestClsCallable = onCall({
+  cors: true,
+  maxInstances: 5,
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required to ingest CLS data.");
+  }
+  const apiConfigOverride = req.data?.apiConfig || null;
+  console.log(`[ingestClsCallable] Triggered by ${req.auth.token.email || req.auth.uid}`);
+  try {
+    const result = await clsPipeline.ingestClsCore(db, apiConfigOverride, (msg) => console.log(msg));
+    return result;
+  } catch (err) {
+    console.error("[ingestClsCallable] Error:", err);
+    throw new HttpsError("internal", err.message);
+  }
+});
+
+/**
+ * 2. classifyAndPromote (Firestore trigger)
+ * Triggered on write to argos_raw/{rawId}.
+ * Evaluates fixTime, quality classification, and updates transmitters (pipeline-owned fields).
+ */
+exports.classifyAndPromote = onDocumentCreated({
+  document: "argos_raw/{rawId}",
+  timeoutSeconds: 300,
+  memory: "512MiB",
+}, async (event) => {
+  const snapshot = event.data;
+  if (!snapshot) return;
+  const rawData = snapshot.data();
+  console.log(`[classifyAndPromote] Triggered for rawId ${event.params.rawId}, PTT ${rawData.pttId}`);
+  try {
+    await clsPipeline.classifyAndPromoteBatch(db, [rawData], (msg) => console.log(msg));
+  } catch (err) {
+    console.error(`[classifyAndPromote] Error processing ${event.params.rawId}:`, err);
+  }
+});
+
+/**
+ * 3. verifyAndRepair (Scheduled Nightly)
+ * Scans all transmitters, compares against MAX(fixTime) from argos_data, repairs drift, logs health.
+ */
+exports.verifyAndRepair = onSchedule({
+  schedule: "every 24 hours",
+  timeZone: "UTC",
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (event) => {
+  console.log("[verifyAndRepair] Nightly integrity check started at", new Date().toISOString());
+  try {
+    const result = await clsPipeline.verifyAndRepairPipeline(db, (msg) => console.log(msg));
+    console.log("[verifyAndRepair] Completed:", JSON.stringify(result));
+  } catch (err) {
+    console.error("[verifyAndRepair] Error:", err);
+  }
+});
+
+/**
+ * Callable version of verifyAndRepair
+ */
+exports.verifyAndRepairCallable = onCall({
+  cors: true,
+  maxInstances: 3,
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+  return await clsPipeline.verifyAndRepairPipeline(db, (msg) => console.log(msg));
+});
+
+/**
+ * 4. rebuildTransmitterSummaries (Callable "Request rebuild")
+ * Server-side authoritative rebuild of all transmitter summaries from historical telemetry.
+ */
+exports.rebuildTransmitterSummaries = onCall({
+  cors: true,
+  maxInstances: 5,
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required to rebuild summaries.");
+  }
+  const userEmail = req.auth.token.email || req.auth.uid;
+  console.log(`[rebuildTransmitterSummaries] Triggered by ${userEmail}`);
+  try {
+    return await clsPipeline.rebuildTransmitterSummariesCore(db, (msg) => console.log(msg), userEmail);
+  } catch (err) {
+    console.error("[rebuildTransmitterSummaries] Error:", err);
+    throw new HttpsError("internal", err.message);
+  }
+});
+
 

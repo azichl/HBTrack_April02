@@ -9,7 +9,7 @@ import {
   Radio, Bird, UploadCloud, Monitor, FileSpreadsheet,
   Maximize, Minimize, Trash2, AlertTriangle, Clock,
   ShieldAlert, CheckCircle2, Loader2, X, Database as DbIcon, Plus,
-  RefreshCw, ShieldCheck
+  RefreshCw, ShieldCheck, CloudDownload, Wrench
 } from 'lucide-react';
 import { 
   reconcileFromArgos, 
@@ -20,6 +20,7 @@ import {
 } from '../src/data/repository/reconcilePipeline';
 import { IntegrityReportModal } from '../src/components/IntegrityReportModal';
 import { requestCollectionWipe } from '../src/data/repository/wipe';
+import { requestIngestCls, requestVerifyAndRepair } from '../src/data/repository/serverSync';
 import { notifySuccess, notifyError } from '../src/data/repository/toast';
 
 // ─── Danger Zone ──────────────────────────────────────────────────────────────
@@ -340,7 +341,8 @@ export const Database = () => {
     setEditingRecordId,
     currentUser,
     currentUserRole,
-    refreshMonitoringData
+    refreshMonitoringData,
+    apiConfig
   } = useAppStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -349,6 +351,8 @@ export const Database = () => {
   const [showManageMenu, setShowManageMenu] = useState(false);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isIngestingCls, setIsIngestingCls] = useState(false);
+  const [isVerifyingDrift, setIsVerifyingDrift] = useState(false);
   const [latestRun, setLatestRun] = useState<IngestRunLog | null>(null);
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [isIntegrityModalOpen, setIsIntegrityModalOpen] = useState(false);
@@ -431,6 +435,47 @@ export const Database = () => {
     }
   };
 
+  const handleFetchClsNow = async () => {
+    setShowManageMenu(false);
+    setIsIngestingCls(true);
+    try {
+      notifySuccess('CLS Fetch Started', 'Polling CLS telemetry API on server...');
+      const result = await requestIngestCls(apiConfig);
+      if (result && result.ok) {
+        notifySuccess(
+          'CLS Fetch Complete',
+          `Retrieved ${result.rawRetrieved || 0} telemetry items, updated ${result.transmittersUpdated || 0} transmitters.`
+        );
+        await refreshMonitoringData().catch(() => {});
+      } else {
+        notifyError('CLS Fetch Notice', result?.message || result?.error || 'No records returned.');
+      }
+    } catch (err: any) {
+      notifyError('CLS Fetch Error', err?.message || 'Failed to poll CLS API.');
+    } finally {
+      setIsIngestingCls(false);
+    }
+  };
+
+  const handleVerifyDrift = async () => {
+    setShowManageMenu(false);
+    setIsVerifyingDrift(true);
+    try {
+      notifySuccess('Integrity Verification', 'Running server-side drift check...');
+      const result = await requestVerifyAndRepair();
+      if (result && result.repairedCount > 0) {
+        notifySuccess('Verification Complete', `Repaired ${result.repairedCount} drifting transmitter(s).`);
+        await refreshMonitoringData().catch(() => {});
+      } else {
+        notifySuccess('Verification Clean', 'All transmitters match MAX(fixTime) perfectly.');
+      }
+    } catch (err: any) {
+      notifyError('Verification Error', err?.message || 'Failed to run drift check.');
+    } finally {
+      setIsVerifyingDrift(false);
+    }
+  };
+
   const tabs = [
     { id: 'Monitoring',   label: 'Monitoring',   icon: <Monitor size={16} /> },
     { id: 'Transmitters', label: 'Transmitters', icon: <Radio size={16} /> },
@@ -495,7 +540,23 @@ export const Database = () => {
                       className="w-full text-left px-4 py-2.5 text-sm font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-center gap-2 disabled:opacity-50"
                     >
                       <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                      {isSyncing ? 'Re-syncing...' : 'Re-sync All'}
+                      {isSyncing ? 'Re-syncing...' : 'Re-sync All (Rebuild)'}
+                    </button>
+                    <button
+                      onClick={handleFetchClsNow}
+                      disabled={isIngestingCls}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <CloudDownload size={16} className={isIngestingCls ? 'animate-bounce' : ''} />
+                      {isIngestingCls ? 'Fetching Argos...' : 'Fetch Argos Now'}
+                    </button>
+                    <button
+                      onClick={handleVerifyDrift}
+                      disabled={isVerifyingDrift}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <Wrench size={16} className={isVerifyingDrift ? 'animate-spin' : ''} />
+                      {isVerifyingDrift ? 'Verifying...' : 'Verify & Repair Drift'}
                     </button>
                     <button
                       onClick={handleOpenIntegrityReport}

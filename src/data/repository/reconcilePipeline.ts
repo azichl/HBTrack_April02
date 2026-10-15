@@ -6,6 +6,7 @@ import { Transmitter, Bird, Position } from '../../../types';
 import { normalizePttId } from './pttNormalizer';
 import { safeParseTimestamp, isValidCoordinate, classifyLocationType } from '../../../utils/formatting';
 import { KNOWN_CLS_RAW_LOCATION_DATES, decodeBatteryVoltage } from '../../../services/argosService';
+import { requestServerRebuild } from './serverSync';
 
 export interface IngestRunLog {
   runId: string;
@@ -77,7 +78,40 @@ export async function reconcileFromArgos(opts?: {
   };
 
   try {
-    // 1. Load existing transmitters, birds, positions, and argos_positions
+    // 0. Primary path: Attempt authoritative server-side rebuild via Cloud Function
+    try {
+      opts?.onProgress?.('Attempting server-side rebuild via Cloud Function...');
+      const serverResult = await requestServerRebuild();
+      if (serverResult && serverResult.ok) {
+        opts?.onProgress?.('Server-side rebuild completed successfully.');
+        const latestRun = await getLatestIngestRun();
+        if (latestRun) return latestRun;
+        return {
+          runId: serverResult.runId || runId,
+          timestamp: nowIso,
+          status: 'completed',
+          triggeredBy: opts?.triggeredBy || auth.currentUser?.email || 'server-rebuild',
+          counts: {
+            pttsScanned: serverResult.classifiedCount,
+            transmittersCreated: serverResult.transmittersCreated,
+            transmittersUpdated: serverResult.transmittersUpdated,
+            positionsCreated: serverResult.classifiedCount,
+            birdsLinked: 0,
+          },
+          errors: [],
+          orphans: {
+            argosWithoutTransmitter: [],
+            transmitterWithoutBird: [],
+            birdWithoutTransmitter: [],
+            transmitterWithoutFixes: [],
+          },
+        };
+      }
+    } catch (serverErr: any) {
+      opts?.onProgress?.(`Server function unavailable (${serverErr?.message || 'offline'}), running verified client reconcile...`);
+    }
+
+    // 1. Fallback: Load existing transmitters, birds, positions, and argos_positions
     opts?.onProgress?.('Loading database records...');
     const [txSnap, birdsSnap, argosSnap, posSnap] = await Promise.all([
       getDocs(collection(db, 'transmitters')),
