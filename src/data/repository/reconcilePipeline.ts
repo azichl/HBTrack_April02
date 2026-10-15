@@ -38,6 +38,9 @@ export interface IntegrityReport {
   transmitterWithoutBird: string[];
   birdWithoutTransmitter: string[];
   transmitterWithoutFixes: string[];
+  legacyTransmitterIds: string[];
+  missingLastFix: string[];
+  driftedTransmitters: Array<{ ptt: string; currentLastFix: string; expectedLastFix: string }>;
 }
 
 const BATCH_SIZE = 400;
@@ -435,7 +438,7 @@ export async function getLatestIngestRun(): Promise<IngestRunLog | null> {
 }
 
 /**
- * Generates an on-demand integrity report analyzing orphaned records across all tables.
+ * Generates an on-demand integrity report analyzing orphaned records, legacy IDs, and drift across tables.
  */
 export async function generateIntegrityReport(): Promise<IntegrityReport> {
   const [txSnap, birdsSnap, argosSnap] = await Promise.all([
@@ -445,16 +448,51 @@ export async function generateIntegrityReport(): Promise<IntegrityReport> {
   ]);
 
   const pttsInArgos = new Set<string>();
+  const latestFixPerPtt = new Map<string, string>();
+
   argosSnap.forEach((d) => {
-    const pid = normalizePttId(d.data().platformId || d.data().platform_id);
-    if (pid) pttsInArgos.add(pid);
+    const raw = d.data();
+    const pid = normalizePttId(raw.platformId || raw.platform_id);
+    if (pid) {
+      pttsInArgos.add(pid);
+      const fixTime = raw.fixTime || raw.locationDate || raw.timestamp || raw.date;
+      if (fixTime) {
+        const existing = latestFixPerPtt.get(pid);
+        if (!existing || new Date(fixTime).getTime() > new Date(existing).getTime()) {
+          latestFixPerPtt.set(pid, fixTime);
+        }
+      }
+    }
   });
 
   const transmitters = new Map<string, Transmitter>();
+  const legacyTransmitterIds: string[] = [];
+  const missingLastFix: string[] = [];
+  const driftedTransmitters: Array<{ ptt: string; currentLastFix: string; expectedLastFix: string }> = [];
+
   txSnap.forEach((d) => {
     const data = d.data();
-    const pid = normalizePttId(data.platform_id || d.id);
-    if (pid) transmitters.set(pid, data as Transmitter);
+    const docId = d.id;
+    if (docId.startsWith('trans-') || !/^\d{3,10}$/.test(docId)) {
+      legacyTransmitterIds.push(docId);
+    }
+    const pid = normalizePttId(data.platform_id || docId);
+    if (pid) {
+      transmitters.set(pid, data as Transmitter);
+      const currentFix = data.last_fix || data.lastFixAt || '';
+      if (!currentFix) {
+        missingLastFix.push(pid);
+      } else {
+        const expectedFix = latestFixPerPtt.get(pid);
+        if (expectedFix && currentFix !== expectedFix) {
+          driftedTransmitters.push({
+            ptt: pid,
+            currentLastFix: currentFix,
+            expectedLastFix: expectedFix,
+          });
+        }
+      }
+    }
   });
 
   const birds = new Map<string, Bird>();
@@ -495,5 +533,8 @@ export async function generateIntegrityReport(): Promise<IntegrityReport> {
     transmitterWithoutBird,
     birdWithoutTransmitter,
     transmitterWithoutFixes,
+    legacyTransmitterIds,
+    missingLastFix,
+    driftedTransmitters,
   };
 }

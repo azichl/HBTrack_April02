@@ -22,6 +22,7 @@ import { IntegrityReportModal } from '../src/components/IntegrityReportModal';
 import { requestCollectionWipe } from '../src/data/repository/wipe';
 import { requestIngestCls, requestVerifyAndRepair } from '../src/data/repository/serverSync';
 import { notifySuccess, notifyError } from '../src/data/repository/toast';
+import { subscribeSystemHealth, SystemHealth, computeSyncLagMinutes, isSyncLagging } from '../src/data/repository/systemHealth';
 
 // ─── Danger Zone ──────────────────────────────────────────────────────────────
 
@@ -357,6 +358,7 @@ export const Database = () => {
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [isIntegrityModalOpen, setIsIntegrityModalOpen] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
 
   const isManager = currentUserRole === 'Manager' || currentUser?.email === 'achlih21@gmail.com';
   const canManage = isManager || currentUserRole === 'Administrator';
@@ -373,7 +375,15 @@ export const Database = () => {
     getLatestIngestRun().then(run => {
       if (run) setLatestRun(run);
     }).catch(err => console.error('Failed to load latest ingest run:', err));
+
+    const unsubHealth = subscribeSystemHealth((h) => {
+      setSystemHealth(h);
+    });
+    return () => unsubHealth();
   }, []);
+
+  const syncLagMinutes = computeSyncLagMinutes(systemHealth);
+  const isLagWarning = isSyncLagging(systemHealth, 120);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -599,6 +609,87 @@ export const Database = () => {
 
       {/* Danger Zone Panel (collapsible) */}
       {showDangerZone && <DangerZone />}
+
+      {/* Lag Alert Banner (triggers when sync lag > 2 hours or status is lagging/error) */}
+      {isLagWarning && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200 shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <span className="font-bold">Sync Lag Alert:</span>
+              <span className="ml-1.5">
+                Telemetry ingestion is lagging by <strong>{Math.floor(syncLagMinutes / 60)}h {syncLagMinutes % 60}m</strong>.
+                {systemHealth?.lastSuccess && ` Last successful ingest was at ${new Date(systemHealth.lastSuccess).toLocaleTimeString()}.`}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleFetchClsNow}
+              disabled={isIngestingCls}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition-all"
+            >
+              <CloudDownload size={13} className={isIngestingCls ? 'animate-bounce' : ''} />
+              {isIngestingCls ? 'Fetching...' : 'Fetch Argos Now'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Live System Health & Sync Indicator */}
+      {systemHealth && (
+        <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center flex-wrap gap-2 text-slate-700 dark:text-slate-300">
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${isLagWarning ? 'bg-amber-500 animate-pulse' : systemHealth.status === 'error' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+            <span className="font-bold">Sync Pipeline:</span>
+            <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
+              isLagWarning ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' :
+              systemHealth.status === 'error' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300' :
+              'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+            }`}>
+              {isLagWarning ? 'LAGGING' : (systemHealth.status || 'HEALTHY').toUpperCase()}
+            </span>
+            <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">|</span>
+            <span>Lag: <strong>{syncLagMinutes < 60 ? `${syncLagMinutes}m` : `${Math.floor(syncLagMinutes / 60)}h ${syncLagMinutes % 60}m`}</strong></span>
+            {systemHealth.lastPoll && (
+              <>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">|</span>
+                <span>Last Poll: <strong className="font-mono text-[11px]">{new Date(systemHealth.lastPoll).toLocaleTimeString()}</strong></span>
+              </>
+            )}
+            {systemHealth.totalTransmittersScanned !== undefined && (
+              <>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">|</span>
+                <span>Transmitters: <strong>{systemHealth.totalTransmittersScanned}</strong></span>
+              </>
+            )}
+            {systemHealth.totalIngested !== undefined && (
+              <>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">|</span>
+                <span>Total Ingested: <strong>{systemHealth.totalIngested.toLocaleString()}</strong></span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleOpenIntegrityReport}
+              disabled={isGeneratingReport}
+              className="px-2.5 py-1 text-[11px] font-semibold bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-1 transition-colors"
+            >
+              <ShieldCheck size={12} className="text-blue-500" />
+              Integrity
+            </button>
+            <button
+              onClick={handleFetchClsNow}
+              disabled={isIngestingCls}
+              className="px-2.5 py-1 text-[11px] font-semibold bg-gray-50 dark:bg-slate-700/60 border border-gray-200 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 flex items-center gap-1 transition-colors"
+            >
+              <CloudDownload size={12} className={isIngestingCls ? 'animate-bounce' : 'text-amber-500'} />
+              Fetch
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Last Ingest Run Status Banner */}
       {latestRun && (

@@ -26,7 +26,10 @@ export const IntegrityReportModal: React.FC<Props> = ({
     report.argosWithoutTransmitter.length +
     report.transmitterWithoutBird.length +
     report.birdWithoutTransmitter.length +
-    report.transmitterWithoutFixes.length;
+    report.transmitterWithoutFixes.length +
+    (report.legacyTransmitterIds?.length || 0) +
+    (report.missingLastFix?.length || 0) +
+    (report.driftedTransmitters?.length || 0);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -165,6 +168,70 @@ export const IntegrityReportModal: React.FC<Props> = ({
               </div>
             ) : (
               <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">None (All birds linked)</div>
+            )}
+          </div>
+
+          {/* Section: Legacy Non-Canonical Transmitter IDs */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-purple-500" />
+                Legacy / Non-Canonical IDs ({report.legacyTransmitterIds?.length || 0})
+              </span>
+            </div>
+            {(report.legacyTransmitterIds?.length || 0) > 0 ? (
+              <div className="p-2.5 bg-rose-50 dark:bg-rose-950/20 rounded-xl border border-rose-200 dark:border-rose-900/40 text-xs text-rose-700 dark:text-rose-300 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto font-mono">
+                {report.legacyTransmitterIds.map((id) => (
+                  <span key={id} className="px-2 py-0.5 bg-rose-100 dark:bg-rose-900/40 rounded-md font-bold">
+                    {id}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">None (All 100% canonical numeric IDs)</div>
+            )}
+          </div>
+
+          {/* Section: Transmitters Missing Last Fix */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+              <span className="flex items-center gap-1.5">
+                <Radio size={14} className="text-amber-500" />
+                Transmitters Missing Last Fix Date ({report.missingLastFix?.length || 0})
+              </span>
+            </div>
+            {(report.missingLastFix?.length || 0) > 0 ? (
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 dark:border-amber-900/40 text-xs text-amber-700 dark:text-amber-300 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto font-mono">
+                {report.missingLastFix.map((pid) => (
+                  <span key={pid} className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/40 rounded-md">
+                    {pid}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">None (All have verified last fix timestamps)</div>
+            )}
+          </div>
+
+          {/* Section: Drift vs Telemetry */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300">
+              <span className="flex items-center gap-1.5">
+                <AlertTriangle size={14} className="text-red-500" />
+                Drifted Transmitters vs Telemetry ({report.driftedTransmitters?.length || 0})
+              </span>
+            </div>
+            {(report.driftedTransmitters?.length || 0) > 0 ? (
+              <div className="p-2.5 bg-red-50 dark:bg-red-950/20 rounded-xl border border-red-200 dark:border-red-900/40 text-xs text-red-700 dark:text-red-300 max-h-32 overflow-y-auto font-mono space-y-1">
+                {report.driftedTransmitters.map((d) => (
+                  <div key={d.ptt} className="flex justify-between items-center text-[11px] bg-white dark:bg-slate-800 p-1.5 rounded">
+                    <span className="font-bold">{d.ptt}</span>
+                    <span className="text-gray-500">Current: {d.currentLastFix} | Expected: {d.expectedLastFix}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">None (0 drift detected)</div>
             )}
           </div>
         </div>
