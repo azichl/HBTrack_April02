@@ -1,0 +1,2394 @@
+{
+  "timestamp": "2026-10-15T08:05:56.249Z",
+  "mode": "commit",
+  "totalTransmittersScanned": 131,
+  "canonicalDocsFound": 32,
+  "legacyDocsFound": 98,
+  "malformedDocsFound": [
+    "trans-"
+  ],
+  "plansToMerge": [
+    {
+      "ptt": "242080",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242080",
+      "targetDocId": "242080",
+      "mergedFields": {
+        "derived_status": "Dead",
+        "platform_id": "242080",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "manual_status_set_at": "2026-07-29T10:04:27.436Z",
+        "lon": 67.04944,
+        "model": "Unknown (Auto-detected)",
+        "id": "242080",
+        "last_longitude": 67.04944,
+        "latitude": 40.60535,
+        "speed": null,
+        "manual_status_override": "Dead",
+        "updatedBy": "migration-step2",
+        "bird_id": "bird-QA00122",
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "longitude": 67.04944,
+        "duty_cycle": "Unknown",
+        "status": "active",
+        "battery_voltage": null,
+        "last_fix": "2026-10-03T16:27:42.746Z",
+        "assigned_bird_ring": "QA00122",
+        "lat": 40.60535,
+        "last_latitude": 40.60535
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242081",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242081",
+      "targetDocId": "242081",
+      "mergedFields": {
+        "lon": 66.9422,
+        "deployed": true,
+        "battery_voltage": null,
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "model": "Unknown (Auto-detected)",
+        "bird_id": "bird-QA00152",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "assigned_bird_ring": "QA00152",
+        "updatedBy": "migration-step2",
+        "lat": 40.60279,
+        "longitude": 66.9422,
+        "platform_id": "242081",
+        "last_longitude": 66.9422,
+        "latitude": 40.60279,
+        "manual_status_override": "Dead",
+        "manual_status_set_at": "2026-07-29T10:04:17.834Z",
+        "duty_cycle": "Unknown",
+        "speed": null,
+        "last_latitude": 40.60279,
+        "id": "242081",
+        "status": "active",
+        "last_fix": "2026-09-29T16:08:00.668Z",
+        "derived_status": "Dead"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242085",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242085",
+      "targetDocId": "242085",
+      "mergedFields": {
+        "deployed": true,
+        "lon": -0.03587,
+        "derived_status": "Active",
+        "battery_voltage": null,
+        "model": "Unknown (Auto-detected)",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "last_longitude": -0.03587,
+        "last_latitude": 31.64604,
+        "id": "242085",
+        "lat": 31.64604,
+        "speed": null,
+        "latitude": 31.64604,
+        "updatedBy": "migration-step2",
+        "longitude": -0.03587,
+        "status": "active",
+        "duty_cycle": "Unknown",
+        "platform_id": "242085",
+        "bird_id": "bird-QA0011",
+        "last_fix": "2026-10-14T14:21:56.554Z",
+        "assigned_bird_ring": "QA0011"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242086",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242086",
+      "targetDocId": "242086",
+      "mergedFields": {
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "status": "active",
+        "lat": 31.74194,
+        "bird_id": "bird-QA2009",
+        "deployed": true,
+        "speed": null,
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "model": "Unknown (Auto-detected)",
+        "last_latitude": 31.74194,
+        "platform_id": "242086",
+        "derived_status": "Dead",
+        "last_fix": "2026-10-14T20:58:38.646Z",
+        "manual_status_set_at": "2026-07-29T07:22:52.143Z",
+        "last_longitude": 0.39341,
+        "lon": 0.39341,
+        "battery_voltage": null,
+        "duty_cycle": "Unknown",
+        "updatedBy": "migration-step2",
+        "id": "242086",
+        "assigned_bird_ring": "QA2009",
+        "longitude": 0.39341,
+        "manual_status_override": "Dead",
+        "latitude": 31.74194
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242087",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242087",
+      "targetDocId": "242087",
+      "mergedFields": {
+        "comment": "",
+        "lat": 31.6581,
+        "latitude": 31.6581,
+        "status": "active",
+        "battery_voltage": null,
+        "last_longitude": 0.18646,
+        "duty_cycle": "8h ON/16h OFF",
+        "radio_time": "Enabled",
+        "derived_status": "Active",
+        "id": "242087",
+        "model": "MTI 30g",
+        "longitude": 0.18646,
+        "lon": 0.18646,
+        "updatedBy": "migration-step2",
+        "manufacturer": "Microwave Telemetry",
+        "platform_id": "242087",
+        "last_latitude": 31.6581,
+        "inactive_since": null,
+        "site_location": "Namouss Algeria",
+        "last_fix": "2026-10-14T14:22:50.424Z",
+        "speed": null,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "satellite_time": "Continuous",
+        "bird_id": "bird-003",
+        "assigned_bird_ring": "003",
+        "deployed": true,
+        "frequency": "433.575",
+        "program_region": "Algeria UTC+2",
+        "hex_id": "4F34479"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242090",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242090",
+      "targetDocId": "242090",
+      "mergedFields": {
+        "last_latitude": 40.5907,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "derived_status": "Dead",
+        "platform_id": "242090",
+        "bird_id": "bird-QA0001012",
+        "lat": 40.5907,
+        "manual_status_set_at": "2026-07-29T10:04:31.418Z",
+        "speed": null,
+        "status": "active",
+        "deployed": true,
+        "last_longitude": 66.95401,
+        "model": "Unknown (Auto-detected)",
+        "last_fix": "2026-10-15T02:40:19.811Z",
+        "duty_cycle": "Unknown",
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "id": "242090",
+        "lon": 66.95401,
+        "battery_voltage": null,
+        "latitude": 40.5907,
+        "assigned_bird_ring": "QA0001012",
+        "manual_status_override": "Dead",
+        "updatedBy": "migration-step2",
+        "longitude": 66.95401
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242091",
+      "canonicalExists": true,
+      "legacyDocId": "trans-242091",
+      "targetDocId": "242091",
+      "mergedFields": {
+        "lat": 40.65708,
+        "model": "Unknown (Auto-detected)",
+        "manual_status_override": "Dead",
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "last_fix": "2026-10-14T11:52:57.757Z",
+        "bird_id": "bird-QA00021",
+        "latitude": 40.65708,
+        "platform_id": "242091",
+        "last_latitude": 40.65708,
+        "id": "242091",
+        "status": "active",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "lon": 67.0316,
+        "longitude": 67.0316,
+        "derived_status": "Dead",
+        "updatedBy": "migration-step2",
+        "assigned_bird_ring": "QA00021",
+        "duty_cycle": "Unknown",
+        "speed": null,
+        "battery_voltage": null,
+        "last_longitude": 67.0316,
+        "manual_status_set_at": "2026-07-29T10:04:38.286Z",
+        "deployed": true
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "244279",
+      "canonicalExists": true,
+      "legacyDocId": "trans-244279",
+      "targetDocId": "244279",
+      "mergedFields": {
+        "derived_status": "Active",
+        "last_fix": "2026-10-10T21:09:07.638Z",
+        "lon": 0.46376,
+        "model": "Unknown (Auto-detected)",
+        "inactive_since": null,
+        "bird_id": "bird-QA0040",
+        "platform_id": "244279",
+        "battery_voltage": null,
+        "longitude": 0.46376,
+        "last_longitude": 0.46376,
+        "updatedBy": "migration-step2",
+        "latitude": 32.07626,
+        "id": "244279",
+        "status": "active",
+        "speed": null,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "last_latitude": 32.07626,
+        "duty_cycle": "Unknown",
+        "lat": 32.07626,
+        "deployed": true,
+        "assigned_bird_ring": "QA0040"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "244285",
+      "canonicalExists": true,
+      "legacyDocId": "trans-244285",
+      "targetDocId": "244285",
+      "mergedFields": {
+        "platform_id": "244285",
+        "bird_id": "bird-QA0010",
+        "latitude": 41.52742,
+        "manual_status_override": "Dead",
+        "manual_status_set_at": "2026-07-29T10:04:45.119Z",
+        "model": "Unknown (Auto-detected)",
+        "lon": 64.92614,
+        "last_latitude": 41.52742,
+        "status": "active",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "last_fix": "2026-09-13T21:02:58.769Z",
+        "duty_cycle": "Unknown",
+        "derived_status": "Dead",
+        "id": "244285",
+        "lat": 41.52742,
+        "deployed": true,
+        "assigned_bird_ring": "QA0010",
+        "longitude": 64.92614,
+        "battery_voltage": null,
+        "updatedBy": "migration-step2",
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "speed": null,
+        "last_longitude": 64.92614
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "244289",
+      "canonicalExists": true,
+      "legacyDocId": "trans-244289",
+      "targetDocId": "244289",
+      "mergedFields": {
+        "lon": 66.87809,
+        "model": "30g",
+        "program_region": "Kazakhastan",
+        "comment": "",
+        "platform_id": "244289",
+        "last_fix": "2026-10-14T21:47:00.435Z",
+        "frequency": "",
+        "status": "active",
+        "satellite_time": "Continuous",
+        "last_latitude": 46.94809,
+        "assigned_bird_ring": "NA",
+        "lat": 46.94809,
+        "battery_voltage": 4,
+        "deployed": true,
+        "manufacturer": "Microsensory",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "latitude": 46.94809,
+        "updatedBy": "migration-step2",
+        "longitude": 66.87809,
+        "id": "244289",
+        "duty_cycle": "8h ON/16h OFF",
+        "radio_time": "None",
+        "site_location": "Zhezqazgan",
+        "bird_id": "bird-W001-2024",
+        "derived_status": "Active",
+        "hex_id": "",
+        "last_longitude": 66.87809
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "244292",
+      "canonicalExists": true,
+      "legacyDocId": "trans-244292",
+      "targetDocId": "244292",
+      "mergedFields": {
+        "derived_status": "Active",
+        "assigned_bird_ring": "002",
+        "last_fix": "2026-10-14T10:44:58.160Z",
+        "bird_species": "Houbara Bustard",
+        "manufacturer": "Microsensory",
+        "battery_voltage": 4,
+        "frequency": "",
+        "last_longitude": 67.30977,
+        "lat": 46.93244,
+        "id": "244292",
+        "platform_id": "244292",
+        "deployed": true,
+        "bird_id": "bird-W01-2026",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "site_location": "Zhezqazgan",
+        "hex_id": "",
+        "speed": null,
+        "lon": 67.30977,
+        "longitude": 67.30977,
+        "updatedBy": "migration-step2",
+        "duty_cycle": "8h ON/16h OFF",
+        "radio_time": "None",
+        "last_latitude": 46.93244,
+        "model": "30g",
+        "status": "active",
+        "deployed_status": "No",
+        "comment": "",
+        "latitude": 46.93244,
+        "program_region": "Kazakhastan",
+        "satellite_time": "Continuous"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283700",
+      "canonicalExists": true,
+      "legacyDocId": "trans-283700",
+      "targetDocId": "283700",
+      "mergedFields": {
+        "model": "Unknown (Auto-detected)",
+        "status_history": [
+          {
+            "changed_by_email": "",
+            "status": "Dead",
+            "reason": "Marked dead via iOS App",
+            "timestamp": {
+              "seconds": 1788354313,
+              "nanoseconds": 608159000,
+              "type": "firestore/timestamp/1.0"
+            },
+            "changed_by_role": "Manager",
+            "changed_by": "user"
+          }
+        ],
+        "last_longitude": 72.48531,
+        "id": "283700",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "manual_status_set_at": "2026-08-03T18:56:05.941Z",
+        "lon": 72.48531,
+        "bird_id": "bird-QA000012",
+        "last_latitude": 46.33687,
+        "deployed": true,
+        "derived_status": "Dead",
+        "manual_status_override": "Dead",
+        "platform_id": "283700",
+        "duty_cycle": "Unknown",
+        "status": "active",
+        "last_fix": "2026-10-14T17:38:43.970Z",
+        "lat": 46.33687,
+        "battery_voltage": null,
+        "assigned_bird_ring": "QA000012",
+        "speed": null,
+        "longitude": 72.48531,
+        "updatedBy": "migration-step2",
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "latitude": 46.33687
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283705",
+      "canonicalExists": true,
+      "legacyDocId": "trans-283705",
+      "targetDocId": "283705",
+      "mergedFields": {
+        "last_fix": "2026-10-07T15:32:08.731Z",
+        "lon": 67.82095,
+        "last_latitude": 47.13833,
+        "status": "active",
+        "derived_status": "Dead",
+        "battery_voltage": null,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "manual_status_set_at": "2026-07-30T10:16:48.414Z",
+        "latitude": 47.13833,
+        "last_longitude": 67.82095,
+        "speed": null,
+        "id": "283705",
+        "assigned_bird_ring": "QA00200",
+        "bird_id": "bird-QA00200",
+        "lat": 47.13833,
+        "manual_status_override": "Dead",
+        "model": "Unknown (Auto-detected)",
+        "longitude": 67.82095,
+        "updatedBy": "migration-step2",
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "platform_id": "283705",
+        "deployed": true
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283710",
+      "canonicalExists": true,
+      "legacyDocId": "trans-283710",
+      "targetDocId": "283710",
+      "mergedFields": {
+        "updatedBy": "migration-step2",
+        "model": "Unknown (Auto-detected)",
+        "id": "283710",
+        "longitude": 67.07051,
+        "deployed": true,
+        "lat": 46.93077,
+        "bird_id": "bird-QA00212",
+        "derived_status": "Potential Mortality",
+        "assigned_bird_ring": "QA00212",
+        "last_latitude": 46.93077,
+        "platform_id": "283710",
+        "battery_voltage": null,
+        "latitude": 46.93077,
+        "status": "active",
+        "duty_cycle": "Unknown",
+        "speed": null,
+        "last_fix": "2026-09-30T15:01:40.264Z",
+        "lon": 67.07051,
+        "last_longitude": 67.07051,
+        "updatedAt": "2026-10-15T08:05:56.249Z"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "284104",
+      "canonicalExists": true,
+      "legacyDocId": "trans-284104",
+      "targetDocId": "284104",
+      "mergedFields": {
+        "latitude": 44.22125,
+        "last_latitude": 44.22125,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "platform_id": "284104",
+        "last_fix": "2026-09-23T09:03:11.805Z",
+        "model": "Unknown (Auto-detected)",
+        "lon": 74.83214,
+        "id": "284104",
+        "battery_voltage": null,
+        "speed": null,
+        "duty_cycle": "Unknown",
+        "derived_status": "Active",
+        "bird_id": "bird-QA01-2024",
+        "deployed": true,
+        "inactive_since": null,
+        "status": "active",
+        "updatedBy": "migration-step2",
+        "longitude": 74.83214,
+        "lat": 44.22125,
+        "last_longitude": 74.83214,
+        "assigned_bird_ring": "QA01-2024"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "284105",
+      "canonicalExists": true,
+      "legacyDocId": "trans-284105",
+      "targetDocId": "284105",
+      "mergedFields": {
+        "lon": 76.61,
+        "model": "Unknown (Auto-detected)",
+        "assigned_bird_ring": "QA00211",
+        "duty_cycle": "Unknown",
+        "battery_voltage": null,
+        "latitude": 44.90542,
+        "last_latitude": 44.90542,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "last_fix": "2026-09-20T11:32:11.476Z",
+        "updatedBy": "migration-step2",
+        "last_longitude": 76.61,
+        "lat": 44.90542,
+        "longitude": 76.61,
+        "deployed": true,
+        "platform_id": "284105",
+        "id": "284105",
+        "speed": null,
+        "status": "active",
+        "bird_id": "bird-QA00211",
+        "derived_status": "Potential Mortality"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "36109",
+      "canonicalExists": true,
+      "legacyDocId": "trans-36109",
+      "targetDocId": "36109",
+      "mergedFields": {
+        "lat": 39.69294,
+        "updatedBy": "migration-step2",
+        "longitude": 64.98253,
+        "manual_status_set_by": "Abdelaziz CHLIH",
+        "last_fix": "2026-10-15T03:05:51.592Z",
+        "duty_cycle": "Unknown",
+        "bird_id": "bird-QA002012",
+        "manual_status_override": "Dead",
+        "platform_id": "36109",
+        "speed": null,
+        "latitude": 39.69294,
+        "lon": 64.98253,
+        "battery_voltage": null,
+        "model": "Unknown (Auto-detected)",
+        "derived_status": "Dead",
+        "status": "active",
+        "last_longitude": 64.98253,
+        "deployed": true,
+        "id": "36109",
+        "last_latitude": 39.69294,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "assigned_bird_ring": "QA002012",
+        "manual_status_set_at": "2026-07-29T10:04:11.140Z"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43571",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43571",
+      "targetDocId": "43571",
+      "mergedFields": {
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "site_location": "Almaty",
+        "comment": "",
+        "lon": 75.04582,
+        "status": "active",
+        "duty_cycle": "8h ON/16h OFF",
+        "radio_time": "From 6am to 17pm UTC+5",
+        "satellite_time": "From 6am to 17pm UTC+5",
+        "lat": 44.44878,
+        "frequency": "",
+        "id": "43571",
+        "latitude": 44.44878,
+        "program_region": "Kazakhstan",
+        "speed": null,
+        "last_longitude": 75.04582,
+        "model": "30g",
+        "assigned_bird_ring": "NA",
+        "platform_id": "43571",
+        "deployed": true,
+        "derived_status": "Active",
+        "bird_id": "bird-1791800776814-j82pv",
+        "last_fix": "2026-10-15T03:12:02.378Z",
+        "battery_voltage": 4,
+        "manufacturer": "Microsensory",
+        "last_latitude": 44.44878,
+        "hex_id": "",
+        "longitude": 75.04582,
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43574",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43574",
+      "targetDocId": "43574",
+      "mergedFields": {
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "id": "43574",
+        "hex_id": "",
+        "duty_cycle": "8h ON/16h OFF",
+        "radio_time": "From 6am to 17pm UTC+5",
+        "comment": "",
+        "last_latitude": 43.84418,
+        "platform_id": "43574",
+        "assigned_bird_ring": "NA",
+        "manufacturer": "Microsensory",
+        "last_longitude": 73.32887,
+        "model": "30g",
+        "frequency": "",
+        "latitude": 43.84418,
+        "derived_status": "Active",
+        "satellite_time": "From 6am to 17pm UTC+5",
+        "lon": 73.32887,
+        "speed": null,
+        "program_region": "Kazakhstan",
+        "deployed": true,
+        "last_fix": "2026-10-15T04:19:16.318Z",
+        "bird_id": "bird-1791873509345-bbpus",
+        "battery_voltage": 4,
+        "site_location": "Almaty",
+        "lat": 43.84418,
+        "updatedBy": "migration-step2",
+        "longitude": 73.32887,
+        "status": "active"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43575",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43575",
+      "targetDocId": "43575",
+      "mergedFields": {
+        "updatedBy": "migration-step2",
+        "longitude": 75.28723,
+        "last_fix": "2026-10-15T04:20:21.978Z",
+        "speed": null,
+        "last_latitude": 44.40908,
+        "program_region": "Kazakhstan",
+        "hex_id": "",
+        "satellite_time": "From 6am to 17pm UTC+5",
+        "manufacturer": "Microsensory",
+        "deployed": true,
+        "bird_id": "bird-1791874817939-mpwgq",
+        "derived_status": "Active",
+        "id": "43575",
+        "frequency": "",
+        "latitude": 44.40908,
+        "comment": "",
+        "lat": 44.40908,
+        "last_longitude": 75.28723,
+        "status": "active",
+        "site_location": "Almaty",
+        "battery_voltage": 4,
+        "assigned_bird_ring": "NA",
+        "model": "30g",
+        "platform_id": "43575",
+        "radio_time": "From 6am to 17pm UTC+5",
+        "duty_cycle": "8h ON/16h OFF",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "lon": 75.28723
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43577",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43577",
+      "targetDocId": "43577",
+      "mergedFields": {
+        "site_location": "",
+        "id": "43577",
+        "duty_cycle": "Unknown",
+        "latitude": 47.14358,
+        "speed": null,
+        "program_region": "",
+        "battery_voltage": null,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "platform_id": "43577",
+        "status": "active",
+        "lon": 67.80886,
+        "last_fix": "2026-10-07T09:24:46.984Z",
+        "bird_id": "",
+        "frequency": "",
+        "deployed": false,
+        "derived_status": "Static test",
+        "updatedBy": "migration-step2",
+        "longitude": 67.80886,
+        "last_longitude": 67.80886,
+        "lat": 47.14358,
+        "last_latitude": 47.14358,
+        "model": "Unknown (Auto-detected)"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43578",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43578",
+      "targetDocId": "43578",
+      "mergedFields": {
+        "last_fix": "2026-09-26T09:12:48.093Z",
+        "model": "Unknown",
+        "status": "active",
+        "updatedBy": "migration-step2",
+        "longitude": 75.28541,
+        "lon": 75.28541,
+        "latitude": 44.39862,
+        "duty_cycle": "Unknown",
+        "derived_status": "Static test",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "last_latitude": 44.39862,
+        "id": "43578",
+        "deployed": false,
+        "bird_id": "",
+        "platform_id": "43578",
+        "battery_voltage": null,
+        "speed": null,
+        "lat": 44.39862,
+        "last_longitude": 75.28541
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43580",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43580",
+      "targetDocId": "43580",
+      "mergedFields": {
+        "deployed": true,
+        "last_latitude": 44.38732,
+        "status": "active",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "platform_id": "43580",
+        "battery_voltage": null,
+        "speed": null,
+        "lat": 44.38732,
+        "duty_cycle": "Unknown",
+        "model": "Unknown",
+        "last_longitude": 75.27473,
+        "latitude": 44.38732,
+        "bird_id": "",
+        "longitude": 75.27473,
+        "derived_status": "Static test",
+        "updatedBy": "migration-step2",
+        "lon": 75.27473,
+        "last_fix": "2026-09-27T09:39:48.906Z",
+        "id": "43580"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43582",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43582",
+      "targetDocId": "43582",
+      "mergedFields": {
+        "status": "active",
+        "longitude": 75.28682,
+        "updatedBy": "migration-step2",
+        "id": "43582",
+        "latitude": 44.39821,
+        "lon": 75.28682,
+        "model": "Unknown",
+        "last_fix": "2026-09-26T09:13:42.213Z",
+        "speed": null,
+        "bird_id": "",
+        "derived_status": "Static test",
+        "platform_id": "43582",
+        "last_latitude": 44.39821,
+        "deployed": true,
+        "lat": 44.39821,
+        "battery_voltage": null,
+        "duty_cycle": "Unknown",
+        "last_longitude": 75.28682,
+        "updatedAt": "2026-10-15T08:05:56.249Z"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43583",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43583",
+      "targetDocId": "43583",
+      "mergedFields": {
+        "last_longitude": 75.284,
+        "duty_cycle": "Unknown",
+        "latitude": 44.39818,
+        "speed": null,
+        "bird_id": "",
+        "lon": 75.284,
+        "last_fix": "2026-09-26T09:38:11.099Z",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "derived_status": "Static test",
+        "status": "active",
+        "updatedBy": "migration-step2",
+        "longitude": 75.284,
+        "deployed": true,
+        "battery_voltage": null,
+        "platform_id": "43583",
+        "model": "Unknown",
+        "id": "43583",
+        "lat": 44.39818,
+        "last_latitude": 44.39818
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43584",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43584",
+      "targetDocId": "43584",
+      "mergedFields": {
+        "bird_id": "",
+        "latitude": 44.39613,
+        "lat": 44.39613,
+        "status": "active",
+        "longitude": 75.29732,
+        "updatedBy": "migration-step2",
+        "last_fix": "2026-09-26T09:13:19.103Z",
+        "battery_voltage": null,
+        "last_latitude": 44.39613,
+        "id": "43584",
+        "speed": null,
+        "duty_cycle": "Unknown",
+        "platform_id": "43584",
+        "lon": 75.29732,
+        "deployed": true,
+        "model": "Unknown",
+        "derived_status": "Static test",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "last_longitude": 75.29732
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43585",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43585",
+      "targetDocId": "43585",
+      "mergedFields": {
+        "latitude": 44.39618,
+        "updatedBy": "migration-step2",
+        "longitude": 75.2955,
+        "lat": 44.39618,
+        "speed": null,
+        "duty_cycle": "Unknown",
+        "last_fix": "2026-09-26T09:13:20.953Z",
+        "status": "active",
+        "model": "Unknown",
+        "battery_voltage": null,
+        "id": "43585",
+        "derived_status": "Static test",
+        "bird_id": "",
+        "lon": 75.2955,
+        "last_latitude": 44.39618,
+        "deployed": true,
+        "platform_id": "43585",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "last_longitude": 75.2955
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43596",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43596",
+      "targetDocId": "43596",
+      "mergedFields": {
+        "status": "active",
+        "derived_status": "Static test",
+        "platform_id": "43596",
+        "latitude": 44.39731,
+        "lat": 44.39731,
+        "last_longitude": 75.28901,
+        "speed": null,
+        "id": "43596",
+        "last_fix": "2026-09-26T09:13:24.693Z",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "longitude": 75.28901,
+        "deployed": true,
+        "updatedBy": "migration-step2",
+        "model": "Unknown",
+        "lon": 75.28901,
+        "bird_id": "",
+        "last_latitude": 44.39731,
+        "battery_voltage": null,
+        "duty_cycle": "Unknown"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43605",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43605",
+      "targetDocId": "43605",
+      "mergedFields": {
+        "platform_id": "43605",
+        "last_fix": "2026-09-26T09:13:54.083Z",
+        "duty_cycle": "Unknown",
+        "lon": 75.28153,
+        "updatedBy": "migration-step2",
+        "longitude": 75.28153,
+        "status": "active",
+        "latitude": 44.39858,
+        "model": "Unknown",
+        "last_latitude": 44.39858,
+        "battery_voltage": null,
+        "last_longitude": 75.28153,
+        "speed": null,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "lat": 44.39858,
+        "derived_status": "Static test",
+        "deployed": true,
+        "id": "43605",
+        "bird_id": ""
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43607",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43607",
+      "targetDocId": "43607",
+      "mergedFields": {
+        "derived_status": "Static test",
+        "duty_cycle": "Unknown",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "model": "Unknown",
+        "last_longitude": 75.2856,
+        "platform_id": "43607",
+        "lat": 44.39839,
+        "speed": null,
+        "last_latitude": 44.39839,
+        "status": "active",
+        "latitude": 44.39839,
+        "bird_id": "",
+        "longitude": 75.2856,
+        "id": "43607",
+        "updatedBy": "migration-step2",
+        "last_fix": "2026-09-26T09:17:21.233Z",
+        "battery_voltage": null,
+        "lon": 75.2856
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43610",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43610",
+      "targetDocId": "43610",
+      "mergedFields": {
+        "battery_voltage": null,
+        "status": "active",
+        "longitude": 75.29316,
+        "updatedBy": "migration-step2",
+        "last_latitude": 44.39605,
+        "id": "43610",
+        "latitude": 44.39605,
+        "model": "Unknown",
+        "last_fix": "2026-09-26T09:16:40.063Z",
+        "duty_cycle": "Unknown",
+        "lat": 44.39605,
+        "deployed": true,
+        "speed": null,
+        "platform_id": "43610",
+        "derived_status": "Static test",
+        "last_longitude": 75.29316,
+        "bird_id": "",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "lon": 75.29316
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43616",
+      "canonicalExists": true,
+      "legacyDocId": "trans-43616",
+      "targetDocId": "43616",
+      "mergedFields": {
+        "last_longitude": 75.29251,
+        "latitude": 44.39681,
+        "lat": 44.39681,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "bird_id": "",
+        "speed": null,
+        "derived_status": "Static test",
+        "last_fix": "2026-09-26T09:13:46.213Z",
+        "deployed": true,
+        "model": "Unknown (Auto-detected)",
+        "id": "43616",
+        "updatedBy": "migration-step2",
+        "last_latitude": 44.39681,
+        "longitude": 75.29251,
+        "lon": 75.29251,
+        "platform_id": "43616",
+        "battery_voltage": null,
+        "status": "active"
+      },
+      "fieldsUpdated": []
+    }
+  ],
+  "plansToCreate": [
+    {
+      "ptt": "242082",
+      "canonicalExists": false,
+      "legacyDocId": "trans-242082",
+      "targetDocId": "242082",
+      "mergedFields": {
+        "id": "242082",
+        "platform_id": "242082",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242084",
+      "canonicalExists": false,
+      "legacyDocId": "trans-242084",
+      "targetDocId": "242084",
+      "mergedFields": {
+        "id": "242084",
+        "platform_id": "242084",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242088",
+      "canonicalExists": false,
+      "legacyDocId": "trans-242088",
+      "targetDocId": "242088",
+      "mergedFields": {
+        "id": "242088",
+        "platform_id": "242088",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "242089",
+      "canonicalExists": false,
+      "legacyDocId": "trans-242089",
+      "targetDocId": "242089",
+      "mergedFields": {
+        "id": "242089",
+        "platform_id": "242089",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "244276",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244276",
+      "targetDocId": "244276",
+      "mergedFields": {
+        "id": "244276",
+        "platform_id": "244276",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244278",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244278",
+      "targetDocId": "244278",
+      "mergedFields": {
+        "id": "244278",
+        "platform_id": "244278",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244280",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244280",
+      "targetDocId": "244280",
+      "mergedFields": {
+        "id": "244280",
+        "platform_id": "244280",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244282",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244282",
+      "targetDocId": "244282",
+      "mergedFields": {
+        "id": "244282",
+        "platform_id": "244282",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244283",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244283",
+      "targetDocId": "244283",
+      "mergedFields": {
+        "id": "244283",
+        "platform_id": "244283",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244286",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244286",
+      "targetDocId": "244286",
+      "mergedFields": {
+        "id": "244286",
+        "platform_id": "244286",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244287",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244287",
+      "targetDocId": "244287",
+      "mergedFields": {
+        "id": "244287",
+        "platform_id": "244287",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244288",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244288",
+      "targetDocId": "244288",
+      "mergedFields": {
+        "id": "244288",
+        "platform_id": "244288",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244290",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244290",
+      "targetDocId": "244290",
+      "mergedFields": {
+        "id": "244290",
+        "platform_id": "244290",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244291",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244291",
+      "targetDocId": "244291",
+      "mergedFields": {
+        "id": "244291",
+        "platform_id": "244291",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "244295",
+      "canonicalExists": false,
+      "legacyDocId": "trans-244295",
+      "targetDocId": "244295",
+      "mergedFields": {
+        "id": "244295",
+        "platform_id": "244295",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "252870",
+      "canonicalExists": false,
+      "legacyDocId": "trans-252870",
+      "targetDocId": "252870",
+      "mergedFields": {
+        "id": "252870",
+        "platform_id": "252870",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "252892",
+      "canonicalExists": false,
+      "legacyDocId": "trans-252892",
+      "targetDocId": "252892",
+      "mergedFields": {
+        "id": "252892",
+        "platform_id": "252892",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "266362",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266362",
+      "targetDocId": "266362",
+      "mergedFields": {
+        "id": "266362",
+        "platform_id": "266362",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266364",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266364",
+      "targetDocId": "266364",
+      "mergedFields": {
+        "id": "266364",
+        "platform_id": "266364",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266365",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266365",
+      "targetDocId": "266365",
+      "mergedFields": {
+        "id": "266365",
+        "platform_id": "266365",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266366",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266366",
+      "targetDocId": "266366",
+      "mergedFields": {
+        "id": "266366",
+        "platform_id": "266366",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266367",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266367",
+      "targetDocId": "266367",
+      "mergedFields": {
+        "id": "266367",
+        "platform_id": "266367",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266368",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266368",
+      "targetDocId": "266368",
+      "mergedFields": {
+        "id": "266368",
+        "platform_id": "266368",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266369",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266369",
+      "targetDocId": "266369",
+      "mergedFields": {
+        "id": "266369",
+        "platform_id": "266369",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.248Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266370",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266370",
+      "targetDocId": "266370",
+      "mergedFields": {
+        "id": "266370",
+        "platform_id": "266370",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "266371",
+      "canonicalExists": false,
+      "legacyDocId": "trans-266371",
+      "targetDocId": "266371",
+      "mergedFields": {
+        "id": "266371",
+        "platform_id": "266371",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283699",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283699",
+      "targetDocId": "283699",
+      "mergedFields": {
+        "id": "283699",
+        "platform_id": "283699",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283701",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283701",
+      "targetDocId": "283701",
+      "mergedFields": {
+        "id": "283701",
+        "platform_id": "283701",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283702",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283702",
+      "targetDocId": "283702",
+      "mergedFields": {
+        "id": "283702",
+        "platform_id": "283702",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283703",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283703",
+      "targetDocId": "283703",
+      "mergedFields": {
+        "id": "283703",
+        "platform_id": "283703",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283704",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283704",
+      "targetDocId": "283704",
+      "mergedFields": {
+        "id": "283704",
+        "platform_id": "283704",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283706",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283706",
+      "targetDocId": "283706",
+      "mergedFields": {
+        "id": "283706",
+        "platform_id": "283706",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283709",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283709",
+      "targetDocId": "283709",
+      "mergedFields": {
+        "id": "283709",
+        "platform_id": "283709",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "283711",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283711",
+      "targetDocId": "283711",
+      "mergedFields": {
+        "id": "283711",
+        "platform_id": "283711",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283712",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283712",
+      "targetDocId": "283712",
+      "mergedFields": {
+        "id": "283712",
+        "platform_id": "283712",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283713",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283713",
+      "targetDocId": "283713",
+      "mergedFields": {
+        "id": "283713",
+        "platform_id": "283713",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283714",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283714",
+      "targetDocId": "283714",
+      "mergedFields": {
+        "id": "283714",
+        "platform_id": "283714",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283715",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283715",
+      "targetDocId": "283715",
+      "mergedFields": {
+        "id": "283715",
+        "platform_id": "283715",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283716",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283716",
+      "targetDocId": "283716",
+      "mergedFields": {
+        "id": "283716",
+        "platform_id": "283716",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283717",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283717",
+      "targetDocId": "283717",
+      "mergedFields": {
+        "id": "283717",
+        "platform_id": "283717",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283718",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283718",
+      "targetDocId": "283718",
+      "mergedFields": {
+        "id": "283718",
+        "platform_id": "283718",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283719",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283719",
+      "targetDocId": "283719",
+      "mergedFields": {
+        "id": "283719",
+        "platform_id": "283719",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283720",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283720",
+      "targetDocId": "283720",
+      "mergedFields": {
+        "id": "283720",
+        "platform_id": "283720",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283721",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283721",
+      "targetDocId": "283721",
+      "mergedFields": {
+        "id": "283721",
+        "platform_id": "283721",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "283722",
+      "canonicalExists": false,
+      "legacyDocId": "trans-283722",
+      "targetDocId": "283722",
+      "mergedFields": {
+        "id": "283722",
+        "platform_id": "283722",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "284098",
+      "canonicalExists": false,
+      "legacyDocId": "trans-284098",
+      "targetDocId": "284098",
+      "mergedFields": {
+        "id": "284098",
+        "platform_id": "284098",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "284099",
+      "canonicalExists": false,
+      "legacyDocId": "trans-284099",
+      "targetDocId": "284099",
+      "mergedFields": {
+        "id": "284099",
+        "platform_id": "284099",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "284101",
+      "canonicalExists": false,
+      "legacyDocId": "trans-284101",
+      "targetDocId": "284101",
+      "mergedFields": {
+        "id": "284101",
+        "platform_id": "284101",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "284102",
+      "canonicalExists": false,
+      "legacyDocId": "trans-284102",
+      "targetDocId": "284102",
+      "mergedFields": {
+        "id": "284102",
+        "platform_id": "284102",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "284107",
+      "canonicalExists": false,
+      "legacyDocId": "trans-284107",
+      "targetDocId": "284107",
+      "mergedFields": {
+        "id": "284107",
+        "platform_id": "284107",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "284109",
+      "canonicalExists": false,
+      "legacyDocId": "trans-284109",
+      "targetDocId": "284109",
+      "mergedFields": {
+        "id": "284109",
+        "platform_id": "284109",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "36130",
+      "canonicalExists": false,
+      "legacyDocId": "trans-36130",
+      "targetDocId": "36130",
+      "mergedFields": {
+        "id": "36130",
+        "platform_id": "36130",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "36132",
+      "canonicalExists": false,
+      "legacyDocId": "trans-36132",
+      "targetDocId": "36132",
+      "mergedFields": {
+        "id": "36132",
+        "platform_id": "36132",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "36133",
+      "canonicalExists": false,
+      "legacyDocId": "trans-36133",
+      "targetDocId": "36133",
+      "mergedFields": {
+        "id": "36133",
+        "platform_id": "36133",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "36137",
+      "canonicalExists": false,
+      "legacyDocId": "trans-36137",
+      "targetDocId": "36137",
+      "mergedFields": {
+        "id": "36137",
+        "platform_id": "36137",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "36139",
+      "canonicalExists": false,
+      "legacyDocId": "trans-36139",
+      "targetDocId": "36139",
+      "mergedFields": {
+        "id": "36139",
+        "platform_id": "36139",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "43598",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43598",
+      "targetDocId": "43598",
+      "mergedFields": {
+        "id": "43598",
+        "platform_id": "43598",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "43618",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43618",
+      "targetDocId": "43618",
+      "mergedFields": {
+        "id": "43618",
+        "platform_id": "43618",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43619",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43619",
+      "targetDocId": "43619",
+      "mergedFields": {
+        "id": "43619",
+        "platform_id": "43619",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43620",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43620",
+      "targetDocId": "43620",
+      "mergedFields": {
+        "id": "43620",
+        "platform_id": "43620",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43623",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43623",
+      "targetDocId": "43623",
+      "mergedFields": {
+        "id": "43623",
+        "platform_id": "43623",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43624",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43624",
+      "targetDocId": "43624",
+      "mergedFields": {
+        "id": "43624",
+        "platform_id": "43624",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43625",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43625",
+      "targetDocId": "43625",
+      "mergedFields": {
+        "id": "43625",
+        "platform_id": "43625",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    },
+    {
+      "ptt": "43627",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43627",
+      "targetDocId": "43627",
+      "mergedFields": {
+        "id": "43627",
+        "platform_id": "43627",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43628",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43628",
+      "targetDocId": "43628",
+      "mergedFields": {
+        "id": "43628",
+        "platform_id": "43628",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": []
+    },
+    {
+      "ptt": "43632",
+      "canonicalExists": false,
+      "legacyDocId": "trans-43632",
+      "targetDocId": "43632",
+      "mergedFields": {
+        "id": "43632",
+        "platform_id": "43632",
+        "status": "active",
+        "derived_status": "Active",
+        "model": "Unknown (Auto-detected)",
+        "deployed": true,
+        "duty_cycle": "Unknown",
+        "updatedAt": "2026-10-15T08:05:56.249Z",
+        "updatedBy": "migration-step2"
+      },
+      "fieldsUpdated": [
+        "duty_cycle"
+      ]
+    }
+  ],
+  "docsToDelete": [
+    "trans-242080",
+    "trans-242081",
+    "trans-242082",
+    "trans-242084",
+    "trans-242085",
+    "trans-242086",
+    "trans-242087",
+    "trans-242088",
+    "trans-242089",
+    "trans-242090",
+    "trans-242091",
+    "trans-244276",
+    "trans-244278",
+    "trans-244279",
+    "trans-244280",
+    "trans-244282",
+    "trans-244283",
+    "trans-244285",
+    "trans-244286",
+    "trans-244287",
+    "trans-244288",
+    "trans-244289",
+    "trans-244290",
+    "trans-244291",
+    "trans-244292",
+    "trans-244295",
+    "trans-252870",
+    "trans-252892",
+    "trans-266362",
+    "trans-266364",
+    "trans-266365",
+    "trans-266366",
+    "trans-266367",
+    "trans-266368",
+    "trans-266369",
+    "trans-266370",
+    "trans-266371",
+    "trans-283699",
+    "trans-283700",
+    "trans-283701",
+    "trans-283702",
+    "trans-283703",
+    "trans-283704",
+    "trans-283705",
+    "trans-283706",
+    "trans-283709",
+    "trans-283710",
+    "trans-283711",
+    "trans-283712",
+    "trans-283713",
+    "trans-283714",
+    "trans-283715",
+    "trans-283716",
+    "trans-283717",
+    "trans-283718",
+    "trans-283719",
+    "trans-283720",
+    "trans-283721",
+    "trans-283722",
+    "trans-284098",
+    "trans-284099",
+    "trans-284101",
+    "trans-284102",
+    "trans-284104",
+    "trans-284105",
+    "trans-284107",
+    "trans-284109",
+    "trans-36109",
+    "trans-36130",
+    "trans-36132",
+    "trans-36133",
+    "trans-36137",
+    "trans-36139",
+    "trans-43571",
+    "trans-43574",
+    "trans-43575",
+    "trans-43577",
+    "trans-43578",
+    "trans-43580",
+    "trans-43582",
+    "trans-43583",
+    "trans-43584",
+    "trans-43585",
+    "trans-43596",
+    "trans-43598",
+    "trans-43605",
+    "trans-43607",
+    "trans-43610",
+    "trans-43616",
+    "trans-43618",
+    "trans-43619",
+    "trans-43620",
+    "trans-43623",
+    "trans-43624",
+    "trans-43625",
+    "trans-43627",
+    "trans-43628",
+    "trans-43632",
+    "trans-"
+  ],
+  "summary": {
+    "totalCleanPttsAfterMigration": 98,
+    "docsToBeMerged": 32,
+    "docsToBeCreated": 66,
+    "docsToBeDeleted": 99,
+    "malformedRejected": 1
+  }
+}
