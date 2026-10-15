@@ -1505,7 +1505,8 @@ const LiveTrackingInner = () => {
        const isStatic = status === 'Static test' || status === 'Static Test' || status === 'static';
 
        // Rule: Static test status tags MUST have fixes in current calendar month to display on live map
-       if (isStatic && !hasCurrentMonthFixesMap.get(String(t.platform_id))) {
+       const hasFixInCurrentMonth = hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey);
+       if (isStatic && !hasFixInCurrentMonth) {
          return false;
        }
        

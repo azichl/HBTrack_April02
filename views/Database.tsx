@@ -339,7 +339,8 @@ export const Database = () => {
     setIsArgosModalOpen,
     setEditingRecordId,
     currentUser,
-    currentUserRole
+    currentUserRole,
+    refreshMonitoringData
   } = useAppStore();
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -404,6 +405,7 @@ export const Database = () => {
         triggeredBy: currentUser?.email || 'manual-admin-resync',
       });
       setLatestRun(log);
+      await refreshMonitoringData().catch((err) => console.warn('[Database] Refresh error post-reconcile:', err));
       notifySuccess(
         'Re-sync complete', 
         `Scanned ${log.counts.pttsScanned} PTTs, created ${log.counts.transmittersCreated}, updated ${log.counts.transmittersUpdated}.`

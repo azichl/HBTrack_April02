@@ -62,11 +62,6 @@ export const Monitoring = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
 
-  // Sync on mount to guarantee fresh coordinates and database records
-  useEffect(() => {
-    refreshMonitoringData().catch(console.warn);
-  }, []);
-
   useEffect(() => {
     if (isModalOpen) {
       if (editingRecordId) {
@@ -136,7 +131,8 @@ export const Monitoring = () => {
       .filter(t => {
         const st = t.derived_status || t.status;
         const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
-        if (isStatic && !hasCurrentMonthFixesMap.get(String(t.platform_id))) {
+        const hasCurrentMonthFix = hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey);
+        if (isStatic && !hasCurrentMonthFix) {
           return false;
         }
         return true;

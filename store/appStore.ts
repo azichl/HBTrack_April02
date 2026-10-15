@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord, QGISLayer, QGISLayerStyle } from '../types';
-import { collection, query, where, getDocs, writeBatch, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, writeBatch, limit, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logUserActivity } from '../services/activityLogger';
 import { evaluateTransmitterStatus } from '../utils/statusCalculator';
@@ -1102,7 +1102,7 @@ export const useAppStore = create<AppState>()(
               newTransmitters.forEach(t => {
                   const pid = String(t.platform_id || t.id || '').replace(/^trans-/, '').trim();
                   if (!pid) return;
-                  const canonicalId = `trans-${pid}`;
+                  const canonicalId = pid;
                   const existing = transMap.get(pid);
                   if (existing) {
                       transMap.set(pid, { ...existing, ...t, id: canonicalId, platform_id: pid });
@@ -1252,18 +1252,18 @@ export const useAppStore = create<AppState>()(
                   const t = newTransmitters[index];
                   newTransmitters[index] = {
                       ...t,
-                      id: `trans-${pid}`,
+                      id: pid,
                       platform_id: pid,
                       model: (t.model && !t.model.includes('Unknown') && !t.model.includes('Auto-detected')) ? t.model : (device.model || t.model),
-                      manufacturer: device.manufacturer || t.manufacturer,
-                      program_region: device.programRef || t.program_region,
-                      status: device.active ? 'active' : 'inactive',
-                      deployed: device.active
+                      manufacturer: t.manufacturer || device.manufacturer,
+                      program_region: t.program_region || device.programRef,
+                      status: t.status || (device.active ? 'active' : 'inactive'),
+                      deployed: t.deployed !== undefined ? t.deployed : device.active
                   };
                   tUpdated++;
               } else {
                   newTransmitters.push({
-                      id: `trans-${pid}`,
+                      id: pid,
                       platform_id: pid,
                       model: device.model || 'Unknown',
                       status: device.active ? 'active' : 'inactive',
@@ -1314,7 +1314,7 @@ export const useAppStore = create<AppState>()(
 
               if (tIndex === -1) {
                   newTransmitters.push({
-                      id: `trans-${pid}`,
+                      id: pid,
                       platform_id: pid,
                       model: 'Unknown (Auto-detected)',
                       status: 'active',
@@ -1342,10 +1342,10 @@ export const useAppStore = create<AppState>()(
                   const newLat = (isNewer && isValidCoordinate(lat, lon)) ? lat : (t.lat ?? (t as any).latitude);
                   const newLon = (isNewer && isValidCoordinate(lat, lon)) ? lon : (t.lon ?? (t as any).longitude);
                   
-                  if (newBattery !== t.battery_voltage || newLastFix !== t.last_fix || t.id !== `trans-${pid}` || isNewer) {
+                  if (newBattery !== t.battery_voltage || newLastFix !== t.last_fix || t.id !== pid || isNewer) {
                       newTransmitters[tIndex] = {
                           ...t,
-                          id: `trans-${pid}`,
+                          id: pid,
                           platform_id: pid,
                           battery_voltage: newBattery,
                           last_fix: newLastFix,
@@ -1500,17 +1500,18 @@ export const useAppStore = create<AppState>()(
               let statusUpdated = false;
               for (const { t, i } of affectedIndices) {
                 try {
-                  // Fetch recent argos_positions and positions (limited to 50 docs each to conserve read quota)
-                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', String(t.platform_id)), limit(50));
+                  // Fetch recent argos_positions and positions (ordered by timestamp desc)
+                  const targetPid = String(t.platform_id || t.id).replace(/^trans-/, '').trim();
+                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', targetPid), orderBy('timestamp', 'desc'), limit(50));
                   const snapArgos = await getDocs(qArgos);
                   const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', String(t.platform_id)), limit(50));
+                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', targetPid), orderBy('timestamp', 'desc'), limit(50));
                   const snapPos = await getDocs(qPos);
                   const manualPositions = snapPos.docs.map(doc => doc.data());
 
                   let allPositions = [...argosPositions, ...manualPositions];
-                  if (String(t.platform_id) === '242086') {
+                  if (targetPid === '242086') {
                     allPositions = allPositions.map(p => {
                       const lon = Number(p.lon !== undefined ? p.lon : p.longitude);
                       if (!isNaN(lon) && lon < 0) {
@@ -1560,7 +1561,9 @@ export const useAppStore = create<AppState>()(
                         (bgTransmitters[i] as any).longitude = latestPos.lon;
                         (bgTransmitters[i] as any).last_latitude = latestPos.lat;
                         (bgTransmitters[i] as any).last_longitude = latestPos.lon;
-                        await saveDocument('transmitters', t.id, { 
+                        await saveDocument('transmitters', targetPid, { 
+                          id: targetPid,
+                          platform_id: targetPid,
                           last_fix: maxIso,
                           lat: latestPos.lat,
                           lon: latestPos.lon,
@@ -1588,7 +1591,7 @@ export const useAppStore = create<AppState>()(
                   if (Object.keys(statusUpdatesResult).length > 0) {
                     bgTransmitters[i] = { ...bgTransmitters[i], ...statusUpdatesResult };
                     statusUpdated = true;
-                    await saveDocument('transmitters', t.id, statusUpdatesResult);
+                    await saveDocument('transmitters', targetPid, statusUpdatesResult);
                   }
                 } catch (err) {
                   console.error(`Error evaluating status for ${t.platform_id}:`, err);
@@ -1863,13 +1866,13 @@ export const useAppStore = create<AppState>()(
           for (let i = 0; i < currentTransmitters.length; i++) {
             const t = currentTransmitters[i];
             try {
-              const pidStr = String(t.platform_id);
+              const pidStr = String(t.platform_id || t.id).replace(/^trans-/, '').trim();
               
-              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr), limit(50));
+              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr), orderBy('timestamp', 'desc'), limit(50));
               const snapArgos = await getDocs(qArgos);
               const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr), limit(50));
+              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr), orderBy('timestamp', 'desc'), limit(50));
               const snapPos = await getDocs(qPos);
               const manualPositions = snapPos.docs.map(doc => doc.data());
 
@@ -1904,7 +1907,7 @@ export const useAppStore = create<AppState>()(
                       if (isNaN(currentTs) || maxTs > currentTs) {
                           correctedLastFix = maxIso;
                           currentTransmitters[i].last_fix = maxIso;
-                          await saveDocument('transmitters', t.id, { last_fix: maxIso });
+                          await saveDocument('transmitters', pidStr, { id: pidStr, platform_id: pidStr, last_fix: maxIso });
                           updated++;
                       }
                   }
@@ -1922,8 +1925,8 @@ export const useAppStore = create<AppState>()(
               );
 
               if (Object.keys(statusUpdates).length > 0) {
-                currentTransmitters[i] = { ...currentTransmitters[i], ...statusUpdates };
-                await saveDocument('transmitters', t.id, statusUpdates);
+                currentTransmitters[i] = { ...currentTransmitters[i], ...statusUpdates, id: pidStr, platform_id: pidStr };
+                await saveDocument('transmitters', pidStr, { ...statusUpdates, id: pidStr, platform_id: pidStr });
                 updated++;
               }
             } catch (err) {
@@ -1984,9 +1987,6 @@ export const useAppStore = create<AppState>()(
           });
 
           clearTransmitterHistoryCache();
-
-          // 6. Recalculate derived statuses in background for any newly imported transmitters
-          get().recalculateTransmitterStatuses().catch(console.warn);
 
           onProgress?.(`Synchronized ${filteredTransmitters.length} transmitters (${createdCount} new from Argos data) and ${filteredPositions.length} fixes.`);
           return {

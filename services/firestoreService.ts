@@ -194,6 +194,7 @@ export const loadRecentAlerts = async <T>(): Promise<T[]> => {
       collection(db, 'alerts'),
       where('status', '==', 'resolved'),
       where('timestamp', '>=', cutoffISO),
+      orderBy('timestamp', 'desc'),
       limit(200)
     );
 
@@ -280,6 +281,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
         return getDocs(query(
           collection(db, colName),
           where(fieldName, '==', val),
+          orderBy('timestamp', 'desc'),
           limit(10)
         )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
         .catch(() => []);
@@ -817,7 +819,7 @@ export const syncTransmittersFromArgosData = async (): Promise<{
         // Discovered a new transmitter from tracking data (e.g. 244289)! Create it in Firestore!
         const latestFixIso = latestRecord ? new Date(latestRecord.tsMs).toISOString() : new Date().toISOString();
         const newTx: Transmitter = {
-          id: `trans-${pid}`,
+          id: pid,
           platform_id: pid,
           model: 'Unknown (Auto-detected)',
           status: 'active',
@@ -834,7 +836,7 @@ export const syncTransmittersFromArgosData = async (): Promise<{
           last_longitude: latestRecord ? latestRecord.lon : undefined,
           duty_cycle: 'Unknown'
         };
-        await saveDocument('transmitters', newTx.id, newTx);
+        await saveDocument('transmitters', pid, newTx);
         transmittersMap.set(pid, newTx);
         createdCount++;
       } else {
@@ -845,6 +847,8 @@ export const syncTransmittersFromArgosData = async (): Promise<{
           if (isNewer) {
             const latestFixIso = new Date(latestRecord.tsMs).toISOString();
             const updates: Partial<Transmitter> = {
+              id: pid,
+              platform_id: pid,
               last_fix: latestFixIso,
               lat: latestRecord.lat,
               lon: latestRecord.lon,
@@ -854,7 +858,7 @@ export const syncTransmittersFromArgosData = async (): Promise<{
               last_longitude: latestRecord.lon,
               ...(bestBattery !== undefined ? { battery_voltage: bestBattery } : {})
             };
-            await saveDocument('transmitters', existingTx.id, updates);
+            await saveDocument('transmitters', pid, updates);
             Object.assign(existingTx, updates);
             updatedCount++;
           }
@@ -957,16 +961,18 @@ export const resetTransmitterCoordinates = async (platformId: string): Promise<v
   };
 
   try {
-    const docId = `trans-${cleanPid}`;
-    await saveDocument('transmitters', docId, resetFields);
-    console.log(`[Firestore] Reset coordinates for transmitter ${docId}`);
+    await saveDocument('transmitters', cleanPid, resetFields);
+    console.log(`[Firestore] Reset coordinates for transmitter ${cleanPid}`);
   } catch (err) {
-    try {
-      await saveDocument('transmitters', cleanPid, resetFields);
-      console.log(`[Firestore] Reset coordinates for transmitter ${cleanPid}`);
-    } catch (e2) {
-      console.warn(`[Firestore] Failed to reset transmitter coordinates for ${cleanPid}:`, e2);
-    }
+    console.warn(`[Firestore] Failed to reset transmitter coordinates for ${cleanPid}:`, err);
+  }
+
+  // Also clean legacy prefixed doc if exists
+  try {
+    const legacyDocId = `trans-${cleanPid}`;
+    await saveDocument('transmitters', legacyDocId, resetFields);
+  } catch {
+    // Ignore legacy doc reset failure
   }
 };
 
