@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown, Filter, X } from 'lucide-react';
+import { safeParseTimestamp } from '../utils/formatting';
 
 export type SortDirection = 'asc' | 'desc' | null;
 
@@ -8,10 +9,10 @@ export interface SortConfig {
   direction: SortDirection;
 }
 
-export const useSortableTable = <T,>(data: T[], defaultSortKey?: string) => {
+export const useSortableTable = <T,>(data: T[], defaultSortKey?: string, defaultDirection: SortDirection = null) => {
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: defaultSortKey || '',
-    direction: null,
+    direction: defaultDirection,
   });
 
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -44,6 +45,15 @@ export const useSortableTable = <T,>(data: T[], defaultSortKey?: string) => {
       // Numeric sort
       if (typeof aValue === 'number' && typeof bValue === 'number') {
          return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      // Date sort
+      if (sortConfig.key.toLowerCase().includes('date') || sortConfig.key.toLowerCase().includes('time') || sortConfig.key === 'timestamp') {
+        const aMs = safeParseTimestamp(aValue);
+        const bMs = safeParseTimestamp(bValue);
+        if (!isNaN(aMs) && !isNaN(bMs)) {
+          return sortConfig.direction === 'asc' ? aMs - bMs : bMs - aMs;
+        }
       }
       
       // String sort

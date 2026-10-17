@@ -4,7 +4,7 @@ import {
   DocumentSnapshot, addDoc, updateDoc, Timestamp, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate } from '../utils/formatting';
+import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate, normalizePttId, makeDeterministicFixDocId } from '../utils/formatting';
 import { ArgosMessage, StatusHistoryRecord, Transmitter, Position } from '../types';
 import { KNOWN_CLS_RAW_LOCATION_DATES, decodeBatteryVoltage } from './argosService';
 import { trackedGetDocs, trackedGetDoc, trackedOnSnapshot, trackedOnDocSnapshot } from '../src/perf/firestoreTracked';
@@ -443,22 +443,21 @@ export const subscribeToRecentPositions = (days: number, callback: (data: any[])
 // Argos API data goes DIRECTLY here, bypassing zustand state entirely.
 
 /**
- * Generate a deterministic document ID from platformId + lat + lon + timestamp.
- * If all 4 match, the document is overwritten (no duplicate).
- * Different coordinates or times = separate documents.
+ * Canonical deterministic document ID for an Argos position fix:
+ * argos_positions/{ptt}_{GPS|DOP}_{locationDateEpochMs}
  */
-function makeArgosDocId(platformId: string, lat: number, lon: number, timestamp: string): string {
-  const ts = new Date(timestamp).getTime();
-  // Round lat/lon to 6 decimal places to avoid floating point noise
-  const latRound = Math.round(lat * 1000000);
-  const lonRound = Math.round(lon * 1000000);
-  return `${platformId}_${latRound}_${lonRound}_${ts}`;
+export { makeDeterministicFixDocId };
+
+export function makeArgosDocId(platformId: string, lat: number, lon: number, timestamp: string, locationType: string = 'GPS'): string {
+  const locDateMs = safeParseTimestamp(timestamp);
+  return makeDeterministicFixDocId(platformId, locationType, locDateMs);
 }
 
 /**
  * Write Argos messages DIRECTLY to Firebase `argos_positions` collection.
- * Uses deterministic IDs so duplicates (same ID + coords + time) are overwritten.
- * Returns number of records written.
+ * Uses canonical deterministic IDs: argos_positions/{pttId}_{GPS|DOP}_{locationDateEpochMs}.
+ * Performs in-batch deduplication accumulating deliveryCount, firstMessageDate, lastMessageDate, and lagMinutes.
+ * Merges idempotently into Firestore.
  */
 export const batchWriteArgosPositions = async (
   messages: ArgosMessage[],
@@ -466,52 +465,107 @@ export const batchWriteArgosPositions = async (
 ): Promise<number> => {
   if (messages.length === 0) return 0;
 
+  // In-batch deduplication accumulating deliveryCount, firstMessageDate, lastMessageDate, lagMinutes
+  const dedupedFixes = new Map<string, any>();
+  for (const msg of messages) {
+    const pidStr = normalizePttId(msg.platformId || (msg as any).pttId || (msg as any).deviceRef);
+    if (!pidStr) continue;
+
+    let lat = parseFloat(String(msg.lat));
+    let lon = parseFloat(String(msg.lon));
+    if (!isValidCoordinate(lat, lon)) continue;
+    if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
+
+    const locType: 'GPS' | 'DOPPLER' = classifyLocationType(msg.lc, msg.locationType, msg.satellite);
+    const locDateMs = safeParseTimestamp(msg.locationDate || msg.timestamp);
+    if (isNaN(locDateMs) || locDateMs <= 0) continue;
+    const locDateIso = new Date(locDateMs).toISOString();
+
+    const docId = makeDeterministicFixDocId(pidStr, locType, locDateMs);
+    const msgDateMs = safeParseTimestamp(msg.messageDate || (msg as any).msgDatetime || locDateIso);
+    const validMsgDateMs = (!isNaN(msgDateMs) && msgDateMs > 0) ? msgDateMs : locDateMs;
+
+    const existing = dedupedFixes.get(docId);
+    if (existing) {
+      existing.deliveryCount = (existing.deliveryCount || 1) + (msg.deliveryCount || 1);
+      if (validMsgDateMs < existing.firstMessageMs) {
+        existing.firstMessageMs = validMsgDateMs;
+        existing.firstMessageDate = new Date(validMsgDateMs).toISOString();
+      }
+      if (validMsgDateMs > existing.lastMessageMs) {
+        existing.lastMessageMs = validMsgDateMs;
+        existing.lastMessageDate = new Date(validMsgDateMs).toISOString();
+      }
+      existing.lagMinutes = Math.max(0, Math.round((existing.firstMessageMs - locDateMs) / 60000));
+    } else {
+      const errorRad = locType === 'GPS' 
+        ? 0 
+        : (typeof msg.errorRadiusM === 'number' ? msg.errorRadiusM : (parseFloat(String(msg.dopplerError || '0')) || 0));
+      const lcVal = locType === 'GPS' ? null : (msg.locationClass || msg.lc || null);
+      
+      dedupedFixes.set(docId, {
+        docId,
+        pttId: pidStr,
+        platformId: pidStr,
+        locationType: locType,
+        locationDate: locDateIso,
+        locationDateMs: locDateMs,
+        timestamp: locDateIso, // for backward-compatible queries
+        lat,
+        lon,
+        locationClass: lcVal,
+        lc: locType === 'GPS' ? 'GPS' : String(msg.lc || ''),
+        errorRadiusM: errorRad,
+        dopplerError: String(errorRad),
+        firstMessageMs: validMsgDateMs,
+        firstMessageDate: new Date(validMsgDateMs).toISOString(),
+        lastMessageMs: validMsgDateMs,
+        lastMessageDate: new Date(validMsgDateMs).toISOString(),
+        deliveryCount: msg.deliveryCount || 1,
+        lagMinutes: Math.max(0, Math.round((validMsgDateMs - locDateMs) / 60000)),
+        unitType: String(msg.msgType || 'Houbara'),
+        msgType: String(msg.msgType || 'Houbara'),
+        programId: String(msg.programId || ''),
+        satellite: String(msg.satellite || ''),
+        rawData: String(msg.rawData || ''),
+        source: (msg as any).source || 'cls-api',
+        ingestedAt: new Date().toISOString()
+      });
+    }
+  }
+
+  const items = Array.from(dedupedFixes.values());
   const BATCH_LIMIT = 400;
   let totalWritten = 0;
 
-  for (let i = 0; i < messages.length; i += BATCH_LIMIT) {
+  for (let i = 0; i < items.length; i += BATCH_LIMIT) {
     const batch = writeBatch(db);
-    const chunk = messages.slice(i, i + BATCH_LIMIT);
-    
-    chunk.forEach(msg => {
-      const pidStr = String(msg.platformId);
-      let lat = parseFloat(msg.lat);
-      let lon = parseFloat(msg.lon);
-      if (!isValidCoordinate(lat, lon)) return; // Strictly reject zero / near-zero coords
-      
-      // Auto-correct negative longitude to positive for transmitter 242086
-      if (pidStr === '242086' && lon < 0) {
-        lon = Math.abs(lon);
-      }
+    const chunk = items.slice(i, i + BATCH_LIMIT);
 
-      const docId = makeArgosDocId(pidStr, lat, lon, msg.timestamp);
-      const ref = doc(db, 'argos_positions', docId);
-      
-      batch.set(ref, {
-        platformId: pidStr,
-        programId: String(msg.programId || ''),
-        lat: lat,
-        lon: lon,
-        lc: String(msg.lc || ''),
-        timestamp: msg.timestamp,
-        msgType: String(msg.msgType || ''),
-        satellite: String(msg.satellite || ''),
-        locationType: String(msg.locationType || ''),
-        dopplerError: String(msg.dopplerError || ''),
-        rawData: String(msg.rawData || ''),
-        ingestedAt: new Date().toISOString()
-      }, { merge: true }); // merge = overwrite if exists
+    chunk.forEach(item => {
+      const ref = doc(db, 'argos_positions', item.docId);
+      const { docId, firstMessageMs, lastMessageMs, ...dataToWrite } = item;
+      batch.set(ref, dataToWrite, { merge: true });
     });
 
     await batch.commit();
     totalWritten += chunk.length;
-    
-    if (onProgress) {
-      onProgress(totalWritten, messages.length);
-    }
+    onProgress?.(totalWritten, items.length);
   }
 
-  console.log(`[Firestore] Wrote ${totalWritten} argos_positions to Firebase`);
+  // Update sync health watchdog
+  try {
+    await saveDocument('system', 'syncHealth', {
+      lastSuccessAt: new Date().toISOString(),
+      lastRunId: `run-${Date.now()}`,
+      lagSeconds: 0,
+      totalPositionsIngested: totalWritten
+    });
+  } catch (err) {
+    console.warn('[Firestore] Could not update syncHealth:', err);
+  }
+
+  console.log(`[Firestore] Wrote ${totalWritten} canonical argos_positions docs to Firebase`);
   return totalWritten;
 };
 
@@ -758,10 +812,20 @@ export const syncTransmittersFromArgosData = async (): Promise<{
     const missingPositionsDocs: Position[] = [];
 
     // For every platform ID found in argos_positions or positions:
-    for (const [pid, records] of recordsByPid.entries()) {
-      let maxTs = -Infinity;
+    for (const [rawPid, records] of recordsByPid.entries()) {
+      const pid = normalizePttId(rawPid);
+      if (!pid) continue;
+
+      let maxLocDateMs = -Infinity;
+      let minLocDateMs = Infinity;
       let latestRecord: any = null;
+      let latestGpsRecord: any = null;
+      let latestDopplerRecord: any = null;
+      let maxMessageMs = -Infinity;
+      let validFixCount = 0;
       let bestBattery: number | undefined;
+
+      const validFixesForStatus: any[] = [];
 
       records.forEach(r => {
         const rawLat = r.lat !== undefined ? r.lat : r.latitude;
@@ -770,19 +834,32 @@ export const syncTransmittersFromArgosData = async (): Promise<{
         let lon = Number(rawLon);
         if (pid === '242086' && !isNaN(lon) && lon < 0) lon = Math.abs(lon);
 
-        const rawDataStr = String(r.rawData || r.raw_data || '').trim().toLowerCase();
-        const isGps = r.locationType === 'GPS' || (!r.locationType && (!r.lc || r.lc === 'GPS'));
-        let trueTs = (r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition)
-          ? (r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition)
-          : (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-              ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-              : (r.timestamp || r.date || r.msgDatetime));
+        const locType: 'GPS' | 'DOPPLER' = classifyLocationType(r.lc, r.locationType, r.satellite);
+        const locDateStr = r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition || r.timestamp;
+        const locDateMs = safeParseTimestamp(locDateStr);
+        const msgDateMs = safeParseTimestamp(r.messageDate || r.firstMessageDate || r.msgDatetime || locDateStr);
 
-        const tsMs = safeParseTimestamp(trueTs);
-        if (!isNaN(tsMs) && isValidCoordinate(lat, lon)) {
-          if (tsMs > maxTs) {
-            maxTs = tsMs;
-            latestRecord = { ...r, lat, lon, tsMs, trueTs };
+        if (!isNaN(msgDateMs) && msgDateMs > maxMessageMs) {
+          maxMessageMs = msgDateMs;
+        }
+
+        if (!isNaN(locDateMs) && isValidCoordinate(lat, lon)) {
+          validFixCount++;
+          if (locDateMs < minLocDateMs) minLocDateMs = locDateMs;
+          const locDateIso = new Date(locDateMs).toISOString();
+          const recObj = { ...r, lat, lon, locDateMs, locDateIso, locType };
+
+          validFixesForStatus.push(recObj);
+
+          if (locDateMs > maxLocDateMs) {
+            maxLocDateMs = locDateMs;
+            latestRecord = recObj;
+          }
+          if (locType === 'GPS' && (!latestGpsRecord || locDateMs > latestGpsRecord.locDateMs)) {
+            latestGpsRecord = recObj;
+          }
+          if (locType === 'DOPPLER' && (!latestDopplerRecord || locDateMs > latestDopplerRecord.locDateMs)) {
+            latestDopplerRecord = recObj;
           }
         }
 
@@ -799,31 +876,60 @@ export const syncTransmittersFromArgosData = async (): Promise<{
         }
 
         // If this record is from argos_positions with valid coordinates, ensure it exists in positions
-        if (r._col === 'argos_positions' && isValidCoordinate(lat, lon)) {
-          const isoTs = !isNaN(tsMs) ? new Date(tsMs).toISOString() : String(trueTs || new Date().toISOString());
-          const posId = `pos-argos-${r._id}`;
+        if (r._col === 'argos_positions' && isValidCoordinate(lat, lon) && !isNaN(locDateMs)) {
+          const isoTs = new Date(locDateMs).toISOString();
+          const posId = `pos-${pid}-${locType === 'GPS' ? 'GPS' : 'DOP'}-${locDateMs}`;
           missingPositionsDocs.push({
             id: posId,
             transmitter_id: pid,
             timestamp: isoTs,
             lat: lat,
             lon: lon,
-            lc: r.lc || (r.locationType === 'Doppler' ? '3' : 'GPS'),
+            lc: locType === 'GPS' ? 'GPS' : (r.locationClass || r.lc || '3'),
+            locationClass: locType === 'GPS' ? null : (r.locationClass || r.lc || '3'),
             is_kalman: false,
             speed_kmh: Number(r.speed_kmh || r.speed || 0),
             course: Number(r.course || 0),
             satellite: r.satellite || 'GPS',
-            locationType: classifyLocationType(r.lc, r.locationType, r.satellite),
-            messageDate: r.messageDate,
-            locationDate: isoTs
+            locationType: locType,
+            messageDate: r.messageDate || r.firstMessageDate || isoTs,
+            locationDate: isoTs,
+            errorRadiusM: locType === 'GPS' ? 0 : (typeof r.errorRadiusM === 'number' ? r.errorRadiusM : (parseFloat(String(r.dopplerError || '0')) || 0))
           });
         }
       });
 
+      const liveDerived: any = {
+        lastFix: latestRecord ? {
+          type: latestRecord.locType,
+          date: latestRecord.locDateIso,
+          lat: latestRecord.lat,
+          lon: latestRecord.lon,
+          class: latestRecord.locType === 'GPS' ? null : (latestRecord.locationClass || latestRecord.lc || null),
+          errorRadiusM: latestRecord.locType === 'GPS' ? 0 : (typeof latestRecord.errorRadiusM === 'number' ? latestRecord.errorRadiusM : (parseFloat(String(latestRecord.dopplerError || '0')) || 0))
+        } : undefined,
+        lastGps: latestGpsRecord ? {
+          date: latestGpsRecord.locDateIso,
+          lat: latestGpsRecord.lat,
+          lon: latestGpsRecord.lon
+        } : undefined,
+        lastDoppler: latestDopplerRecord ? {
+          date: latestDopplerRecord.locDateIso,
+          lat: latestDopplerRecord.lat,
+          lon: latestDopplerRecord.lon,
+          class: latestDopplerRecord.locationClass || latestDopplerRecord.lc || 'Z',
+          errorRadiusM: typeof latestDopplerRecord.errorRadiusM === 'number' ? latestDopplerRecord.errorRadiusM : (parseFloat(String(latestDopplerRecord.dopplerError || '0')) || 0)
+        } : undefined,
+        lastMessageAt: maxMessageMs > 0 ? new Date(maxMessageMs).toISOString() : (latestRecord ? latestRecord.locDateIso : undefined),
+        firstFixAt: minLocDateMs < Infinity ? new Date(minLocDateMs).toISOString() : undefined,
+        fixCount: validFixCount,
+        updatedByRun: `run-${Date.now()}`
+      };
+
       const existingTx = transmittersMap.get(pid);
       if (!existingTx) {
         // Discovered a new transmitter from tracking data (e.g. 244289)! Create it in Firestore!
-        const latestFixIso = latestRecord ? new Date(latestRecord.tsMs).toISOString() : new Date().toISOString();
+        const latestFixIso = latestRecord ? latestRecord.locDateIso : new Date().toISOString();
         const newTx: Transmitter = {
           id: pid,
           platform_id: pid,
@@ -840,35 +946,37 @@ export const syncTransmittersFromArgosData = async (): Promise<{
           longitude: latestRecord ? latestRecord.lon : undefined,
           last_latitude: latestRecord ? latestRecord.lat : undefined,
           last_longitude: latestRecord ? latestRecord.lon : undefined,
-          duty_cycle: 'Unknown'
+          duty_cycle: 'Unknown',
+          live: liveDerived
         };
         await saveDocument('transmitters', pid, newTx);
         transmittersMap.set(pid, newTx);
         createdCount++;
       } else {
-        // Transmitter exists, check if coordinates or last_fix need updating
-        if (latestRecord) {
-          const currLastFix = safeParseTimestamp(existingTx.last_fix);
-          const isNewer = isNaN(currLastFix) || latestRecord.tsMs >= currLastFix || !existingTx.lat || !existingTx.lon;
-          if (isNewer) {
-            const latestFixIso = new Date(latestRecord.tsMs).toISOString();
-            const updates: Partial<Transmitter> = {
-              id: pid,
-              platform_id: pid,
-              last_fix: latestFixIso,
-              lat: latestRecord.lat,
-              lon: latestRecord.lon,
-              latitude: latestRecord.lat,
-              longitude: latestRecord.lon,
-              last_latitude: latestRecord.lat,
-              last_longitude: latestRecord.lon,
-              ...(bestBattery !== undefined ? { battery_voltage: bestBattery } : {})
-            };
-            await saveDocument('transmitters', pid, updates);
-            Object.assign(existingTx, updates);
-            updatedCount++;
-          }
+        // Transmitter exists, update with latest derived state strictly based on max(locationDate)
+        const currLastFixMs = safeParseTimestamp(existingTx.last_fix);
+        const isNewer = isNaN(currLastFixMs) || (latestRecord && latestRecord.locDateMs >= currLastFixMs) || !existingTx.lat || !existingTx.lon;
+        
+        const updates: Partial<Transmitter> = {
+          id: pid,
+          platform_id: pid,
+          live: liveDerived,
+          ...(bestBattery !== undefined ? { battery_voltage: bestBattery } : {})
+        };
+
+        if (isNewer && latestRecord) {
+          updates.last_fix = latestRecord.locDateIso;
+          updates.lat = latestRecord.lat;
+          updates.lon = latestRecord.lon;
+          updates.latitude = latestRecord.lat;
+          updates.longitude = latestRecord.lon;
+          updates.last_latitude = latestRecord.lat;
+          updates.last_longitude = latestRecord.lon;
         }
+
+        await saveDocument('transmitters', pid, updates);
+        Object.assign(existingTx, updates);
+        updatedCount++;
       }
     }
 
@@ -1196,7 +1304,11 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       platformId: pidStr,
       lat, lon,
       timestamp: rawTs,
-      lc: d.lc || '',
+      locationDate: rawTs,
+      lc: locType === 'GPS' ? 'GPS' : String(d.locationClass || d.lc || 'Z'),
+      locationClass: locType === 'GPS' ? null : (d.locationClass || d.lc || 'Z'),
+      errorRadiusM: locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0)),
+      lagMinutes: d.lagMinutes !== undefined ? d.lagMinutes : (d.latencyMin || 0),
       satellite: d.satellite || '',
       locationType: locType,
       speed_kmh: d.speed_kmh || 0,

@@ -5,6 +5,7 @@ import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { Position } from '../types';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
+import { isVisibleInMonitoring } from '../utils/statusCalculator';
 import Draggable from 'react-draggable';
 import { saveDocument, deleteCoordinateRecord, resetTransmitterCoordinates, resetAllTransmitterCoordinates, deleteArgosPositions, clearTransmitterHistoryCache } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
@@ -129,13 +130,8 @@ export const Monitoring = () => {
   const tableData = useMemo<MonitoringTableRow[]>(() => {
     return transmitters
       .filter(t => {
-        const st = t.derived_status || t.status;
-        const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
-        const hasCurrentMonthFix = hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey);
-        if (isStatic && !hasCurrentMonthFix) {
-          return false;
-        }
-        return true;
+        const hasCurrentMonthFix = Boolean(hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey));
+        return isVisibleInMonitoring(t, hasCurrentMonthFix);
       })
       .map(t => {
         const bird = findBirdForTransmitter(birds, t);

@@ -44,6 +44,22 @@ export const formatDateTime = (isoString?: string | null, timeZone?: string): st
   }
 };
 
+export const formatUtcDateTime = (val?: any): string => {
+  if (!val) return '-';
+  const ms = safeParseTimestamp(val);
+  if (isNaN(ms) || ms <= 0) return '-';
+  const d = new Date(ms);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const min = String(d.getUTCMinutes()).padStart(2, '0');
+  const s = String(d.getUTCSeconds()).padStart(2, '0');
+  const milli = d.getUTCMilliseconds();
+  const milliStr = milli > 0 ? `.${String(milli).padStart(3, '0')}` : '';
+  return `${y}-${m}-${day} ${h}:${min}:${s}${milliStr}`;
+};
+
 export const formatBattery = (voltage?: number): string => {
   if (voltage === undefined || voltage === null || voltage === 0) return '-- V';
   return `${voltage.toFixed(1)} V`;
@@ -109,11 +125,24 @@ export function getCurrentYearMonthKey(): string {
 }
 
 /**
+ * Normalizes a PTT ID: digits only, no prefix (e.g. 'trans-'), no leading zeros.
+ * Consistent across ingest, reconcile, queries, and UI.
+ */
+export const normalizePttId = (ptt: any): string => {
+  if (ptt === null || ptt === undefined) return '';
+  const str = String(ptt).trim();
+  const digits = str.replace(/\D/g, '');
+  if (!digits) return '';
+  const stripped = digits.replace(/^0+/, '');
+  return stripped || '0';
+};
+
+/**
  * Accurately determines whether a telemetry fix is GPS or Doppler.
  * GPS fixes have explicit GPS locationType, LC 'GPS'/'G', or satellite 'GPS'.
  * Doppler fixes have locationType 'DOPPLER' or LC in '3', '2', '1', '0', 'A', 'B', 'Z' (when not explicitly GPS).
  */
-export const classifyLocationType = (lc?: string, rawLocType?: string, satellite?: string): 'GPS' | 'Doppler' => {
+export const classifyLocationType = (lc?: string, rawLocType?: string, satellite?: string): 'GPS' | 'DOPPLER' => {
   const lcUp = String(lc || '').trim().toUpperCase();
   const rtUp = String(rawLocType || '').trim().toUpperCase();
   const satUp = String(satellite || '').trim().toUpperCase();
@@ -124,13 +153,13 @@ export const classifyLocationType = (lc?: string, rawLocType?: string, satellite
   }
 
   // 2. Explicit Doppler indicators
-  if (rtUp === 'DOPPLER' || rtUp.includes('DOPPLER')) {
-    return 'Doppler';
+  if (rtUp === 'DOPPLER' || rtUp.includes('DOP') || rtUp === 'DOP') {
+    return 'DOPPLER';
   }
 
   // 3. Argos Doppler Location Classes (when not explicitly GPS)
   if (['3', '2', '1', '0', 'A', 'B', 'Z'].includes(lcUp)) {
-    return 'Doppler';
+    return 'DOPPLER';
   }
 
   // Default fallback
@@ -277,5 +306,11 @@ export const formatCoordinateSystems = (lat: number, lon: number) => {
     HDMS: `${formatDMS(lat, true)}  ${formatDMS(lon, false)}`
   };
 };
+
+export function makeDeterministicFixDocId(pttId: string, locationType: string, locationDateEpochMs: number): string {
+  const normPtt = normalizePttId(pttId);
+  const typeTag = String(locationType).toUpperCase().includes('GPS') ? 'GPS' : 'DOP';
+  return `${normPtt}_${typeTag}_${locationDateEpochMs}`;
+}
 
 

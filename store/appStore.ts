@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Alert, Bird, Transmitter, KPI, Position, User, ArgosMessage, ArgosDevice, StaticTestPeriod, StatusHistoryRecord, QGISLayer, QGISLayerStyle } from '../types';
-import type { LiveViewState } from '../components/reports/liveViewState';
 
 import { collection, query, where, getDocs, writeBatch, limit, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -142,7 +141,6 @@ interface AppState {
     historyPositions?: any[];
     capturedAt: string;
     mapSnapshotImage?: string;
-    liveViewState?: LiveViewState;
   } | null;
   setExportedMapView: (view: {
     center: [number, number];
@@ -153,7 +151,6 @@ interface AppState {
     historyPositions?: any[];
     capturedAt: string;
     mapSnapshotImage?: string;
-    liveViewState?: LiveViewState;
   } | null) => void;
   clearExportedMapView: () => void;
 

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './firebase';
-import { getDoc, doc } from 'firebase/firestore';
+import { getDoc, doc, onSnapshot } from 'firebase/firestore';
 import { trackedGetDoc } from './src/perf/firestoreTracked';
 import { bootInteractive } from './src/perf/bootTrace';
 import { countCollections } from './src/perf/bootQueries';
@@ -407,6 +407,32 @@ const App = () => {
   }, [currentUser]);
   const [accessError, setAccessError] = useState<string | null>(null);
 
+  // Step 3 Watchdog: check system/syncHealth and display banner if lag > 15 minutes
+  const [syncHealthWarning, setSyncHealthWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsub = onSnapshot(doc(db, 'system', 'syncHealth'), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const lastSuccess = data.lastSuccessAt || data.updatedAt;
+        const lastSuccessMs = lastSuccess ? (lastSuccess.toMillis ? lastSuccess.toMillis() : new Date(lastSuccess).getTime()) : NaN;
+        if (!isNaN(lastSuccessMs)) {
+          const lagMinutes = Math.round((Date.now() - lastSuccessMs) / 60000);
+          if (lagMinutes > 15) {
+            setSyncHealthWarning(`Argos auto-sync delayed: last successful sync was ${lagMinutes} min ago.`);
+          } else {
+            setSyncHealthWarning(null);
+          }
+        }
+      }
+    }, (err) => {
+      console.warn('Sync health monitor:', err);
+    });
+
+    return () => unsub();
+  }, [currentUser]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && !firestoreInitialized.current) {
@@ -717,6 +743,23 @@ const App = () => {
         )}
 
         <div className="flex-1 flex flex-col overflow-hidden w-full relative">
+          {/* Step 3 Watchdog Banner */}
+          {syncHealthWarning && (
+            <div className="bg-red-600 text-white text-xs px-4 py-2 flex items-center justify-between font-semibold z-[1100] shadow-md shrink-0">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={15} className="shrink-0 animate-pulse text-amber-300" />
+                <span>{syncHealthWarning}</span>
+              </div>
+              <button 
+                onClick={() => setSyncHealthWarning(null)} 
+                className="text-white/80 hover:text-white p-0.5 rounded"
+                title="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {/* Top Header (Web Mode Only) */}
           {!isMobileScreen && (
             <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 shadow-sm z-[900] relative transition-colors duration-300 flex-shrink-0">

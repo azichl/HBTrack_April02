@@ -4,7 +4,7 @@ import { Download, Search, Trash2, Database, ChevronLeft, ChevronRight, RefreshC
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
-import { formatDateTime } from '../utils/formatting';
+import { formatDateTime, formatUtcDateTime, normalizePttId, safeParseTimestamp } from '../utils/formatting';
 import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, clearAllTrackingData, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
@@ -136,22 +136,41 @@ export const ArgosData = () => {
         });
       }
 
-      // Enrich rows with classification fields, locationDate vs messageDate, latency
+      // Enrich rows with classification fields, locationDate vs messageDate, latency, deliveries
       const enriched = data.map((d) => {
         const rawLc = String(d.locationClass || d.lc || '').trim();
-        const lat = Number(d.lat !== undefined ? d.lat : d.latitude);
-        const lon = Number(d.lon !== undefined ? d.lon : d.longitude);
-        const isGps = d.locationType === 'GPS' || (!d.locationType && (!rawLc || rawLc === 'GPS'));
-        const lc = isGps ? 'GPS' : (rawLc || 'Z');
+        const latNum = Number(d.lat !== undefined ? d.lat : d.latitude);
+        const lonNum = Number(d.lon !== undefined ? d.lon : d.longitude);
+        const rawLocType = String(d.locationType || '').toUpperCase();
+        const isGps = rawLocType === 'GPS' || (!d.locationType && (!rawLc || rawLc === 'GPS'));
+        const locationType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
+        const locationClass = isGps ? null : (rawLc !== 'GPS' && rawLc ? rawLc : 'Z');
+        const errorRadiusM = isGps ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
+
+        const locDateStr = d.locationDate || d.fixTime || d.gpsLocDate || d.timestamp || d.date || '';
+        const locDateMs = safeParseTimestamp(locDateStr);
+        const locationDateIso = !isNaN(locDateMs) && locDateMs > 0 ? new Date(locDateMs).toISOString() : locDateStr;
+
+        const receivedAtStr = d.firstMessageDate || d.receivedAt || d.messageDate || locationDateIso;
+        const receivedAtMs = safeParseTimestamp(receivedAtStr);
+        const receivedAtIso = !isNaN(receivedAtMs) && receivedAtMs > 0 ? new Date(receivedAtMs).toISOString() : receivedAtStr;
+
+        const delayMin = d.lagMinutes !== undefined 
+          ? d.lagMinutes 
+          : (!isNaN(receivedAtMs) && !isNaN(locDateMs) ? Math.max(0, Math.round((receivedAtMs - locDateMs) / 60000)) : 0);
+
+        const pttId = normalizePttId(String(d.pttId || d.platformId || d.transmitter_id || ''));
+        const unitType = String(d.unitType || d.msgType || 'Houbara');
+        const deliveryCount = Number(d.deliveryCount || 1);
 
         let quality = d.quality;
         let accepted = d.accepted !== undefined ? d.accepted : true;
         let rejectReason = d.rejectReason || null;
 
         if (!quality) {
-          if (lc === 'GPS' || ['3', '2', '1'].includes(lc)) quality = 'High';
-          else if (lc === '0') quality = 'Medium';
-          else if (['A', 'B'].includes(lc)) quality = 'Low';
+          if (isGps || ['3', '2', '1'].includes(String(locationClass))) quality = 'High';
+          else if (locationClass === '0') quality = 'Medium';
+          else if (['A', 'B'].includes(String(locationClass))) quality = 'Low';
           else {
             quality = 'Invalid';
             accepted = false;
@@ -159,27 +178,34 @@ export const ArgosData = () => {
           }
         }
 
-        if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        if (isNaN(latNum) || isNaN(lonNum) || (latNum === 0 && lonNum === 0) || Math.abs(latNum) > 90 || Math.abs(lonNum) > 180) {
           accepted = false;
           if (!rejectReason) rejectReason = 'OUT_OF_RANGE';
         }
 
-        const fixTime = d.fixTime || d.locationDate || d.timestamp || d.date || '';
-        const receivedAt = d.receivedAt || d.messageDate || fixTime;
-        const latencyMin = d.latencyMin !== undefined 
-          ? d.latencyMin 
-          : Math.round(Math.max(0, (new Date(receivedAt).getTime() - new Date(fixTime).getTime()) / 60000));
-
         return {
           ...d,
-          lc,
+          pttId,
+          platformId: pttId,
+          unitType,
+          msgType: unitType,
+          locationClass,
+          lc: isGps ? 'GPS' : (locationClass || 'Z'),
+          locationType,
+          errorRadiusM,
+          locationDate: locationDateIso,
+          fixTime: locationDateIso,
+          timestamp: locationDateIso,
+          receivedAt: receivedAtIso,
+          firstMessageDate: receivedAtIso,
+          lagMinutes: delayMin,
+          latencyMin: delayMin,
+          deliveryCount,
+          lat: !isNaN(latNum) ? latNum.toFixed(5) : '-',
+          lon: !isNaN(lonNum) ? lonNum.toFixed(5) : '-',
           quality: quality || 'High',
           accepted,
           rejectReason,
-          fixTime,
-          timestamp: fixTime,
-          receivedAt,
-          latencyMin: isNaN(latencyMin) ? 0 : latencyMin,
         };
       });
 
@@ -290,7 +316,7 @@ export const ArgosData = () => {
     selectAllFiltered,
     clearSelection,
     filteredData 
-  } = useSortableTable<any>(searchableData, 'timestamp');
+  } = useSortableTable<any>(searchableData, 'locationDate', 'desc');
 
   // Reset pagination on filter change
   useEffect(() => {
@@ -318,7 +344,20 @@ export const ArgosData = () => {
   };
 
   const handleExport = () => {
-    exportToCSV(sortedData, 'Argos_Firebase_Data');
+    const exportRows = sortedData.map(row => ({
+      'PTT': row.pttId || row.platformId,
+      'Unit type': row.unitType || row.msgType || 'Houbara',
+      'Location class': row.locationType === 'GPS' ? '' : (row.locationClass || row.lc || ''),
+      'Location type': row.locationType || (row.lc === 'GPS' ? 'GPS' : 'DOPPLER'),
+      'Error radius (m)': row.locationType === 'GPS' ? 0 : (row.errorRadiusM ?? 0),
+      'Location date (UTC)': row.locationDate ? formatUtcDateTime(row.locationDate) : '',
+      'Longitude': row.lon,
+      'Latitude': row.lat,
+      'Received (first message)': row.receivedAt ? formatUtcDateTime(row.receivedAt) : '',
+      'Delay': row.lagMinutes !== undefined ? (row.lagMinutes >= 60 ? `+${(row.lagMinutes / 60).toFixed(1)}h` : `+${row.lagMinutes}m`) : '',
+      'Deliveries': row.deliveryCount || 1
+    }));
+    exportToCSV(exportRows, 'Argos_CLS_Positions');
   };
 
   const handleOpenClearModal = () => {
@@ -630,32 +669,23 @@ export const ArgosData = () => {
                       {collectionMode === 'all' && (
                         <SortableHeader label="Source" sortKey="_collection" currentSort={sortConfig} onSort={requestSort} filterValue={filters['_collection']} onFilter={setFilter} />
                       )}
-                      <SortableHeader label="Device ID" sortKey="platformId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['platformId']} onFilter={setFilter} />
-                      <SortableHeader label="Program ID" sortKey="programId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['programId']} onFilter={setFilter} />
-                      <SortableHeader label="Quality" sortKey="quality" currentSort={sortConfig} onSort={requestSort} filterValue={filters['quality']} onFilter={setFilter} />
-                      <SortableHeader label="Accepted" sortKey="accepted" currentSort={sortConfig} onSort={requestSort} filterValue={filters['accepted']} onFilter={setFilter} />
-                      <SortableHeader label="Class" sortKey="lc" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lc']} onFilter={setFilter} />
-                      <SortableHeader label="Type" sortKey="locationType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['locationType']} onFilter={setFilter} />
-                      <SortableHeader label="Fix Time" sortKey="fixTime" currentSort={sortConfig} onSort={requestSort} filterValue={filters['fixTime']} onFilter={setFilter} />
-                      <SortableHeader label="Received At" sortKey="receivedAt" currentSort={sortConfig} onSort={requestSort} filterValue={filters['receivedAt']} onFilter={setFilter} />
-                      <SortableHeader label="Latency" sortKey="latencyMin" currentSort={sortConfig} onSort={requestSort} filterValue={filters['latencyMin']} onFilter={setFilter} />
-                      <SortableHeader label="Latitude" sortKey="lat" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lat']} onFilter={setFilter} />
+                      <SortableHeader label="PTT" sortKey="pttId" currentSort={sortConfig} onSort={requestSort} filterValue={filters['pttId']} onFilter={setFilter} />
+                      <SortableHeader label="Unit type" sortKey="unitType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['unitType']} onFilter={setFilter} />
+                      <SortableHeader label="Location class" sortKey="locationClass" currentSort={sortConfig} onSort={requestSort} filterValue={filters['locationClass']} onFilter={setFilter} />
+                      <SortableHeader label="Location type" sortKey="locationType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['locationType']} onFilter={setFilter} />
+                      <SortableHeader label="Error radius (m)" sortKey="errorRadiusM" currentSort={sortConfig} onSort={requestSort} filterValue={filters['errorRadiusM']} onFilter={setFilter} />
+                      <SortableHeader label="Location date (UTC)" sortKey="locationDate" currentSort={sortConfig} onSort={requestSort} filterValue={filters['locationDate']} onFilter={setFilter} />
                       <SortableHeader label="Longitude" sortKey="lon" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lon']} onFilter={setFilter} />
-                      <SortableHeader label="Satellite" sortKey="satellite" currentSort={sortConfig} onSort={requestSort} filterValue={filters['satellite']} onFilter={setFilter} />
-                      <SortableHeader label="Msg Type" sortKey="msgType" currentSort={sortConfig} onSort={requestSort} filterValue={filters['msgType']} onFilter={setFilter} />
-                      <SortableHeader label="Reject Reason" sortKey="rejectReason" currentSort={sortConfig} onSort={requestSort} filterValue={filters['rejectReason']} onFilter={setFilter} />
+                      <SortableHeader label="Latitude" sortKey="lat" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lat']} onFilter={setFilter} />
+                      <SortableHeader label="Received" sortKey="receivedAt" currentSort={sortConfig} onSort={requestSort} filterValue={filters['receivedAt']} onFilter={setFilter} />
+                      <SortableHeader label="Delay" sortKey="lagMinutes" currentSort={sortConfig} onSort={requestSort} filterValue={filters['lagMinutes']} onFilter={setFilter} />
+                      <SortableHeader label="Deliveries" sortKey="deliveryCount" currentSort={sortConfig} onSort={requestSort} filterValue={filters['deliveryCount']} onFilter={setFilter} />
+                      <SortableHeader label="Quality" sortKey="quality" currentSort={sortConfig} onSort={requestSort} filterValue={filters['quality']} onFilter={setFilter} />
                       <th className="px-4 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider text-right sticky top-0 bg-gray-100 dark:bg-slate-900 z-20 shadow-sm">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700 bg-white dark:bg-slate-800">
                  {paginatedData.map((row: any, idx: number) => {
-                      const rawLc = row.lc || '';
-                      const dopplerErr = String(row.dopplerError || '');
-                      let derivedLc = rawLc;
-                      let derivedLocationType = row.locationType || '';
-                      if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) derivedLocationType = 'Doppler';
-                      if (dopplerErr === '0' && (!rawLc || rawLc.trim() === '')) { derivedLc = 'GPS'; derivedLocationType = 'GPS'; }
-
                       const isSelected = selectedIds.has(row.id);
                       const isPositionsCol = row._collection === 'positions';
 
@@ -682,8 +712,51 @@ export const ArgosData = () => {
                               </span>
                             </td>
                           )}
-                          <td className="px-4 py-2.5 text-sm font-bold text-gray-900 dark:text-white">{row.platformId}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.programId}</td>
+                          <td className="px-4 py-2.5 text-sm font-bold text-gray-900 dark:text-white">{row.pttId || row.platformId}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.unitType || row.msgType || 'Houbara'}</td>
+                          <td className="px-4 py-2.5 text-sm">
+                            {row.locationType === 'GPS' ? (
+                              <span className="text-gray-400 text-xs">-</span>
+                            ) : (
+                              <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                ['3','2','1'].includes(String(row.locationClass || row.lc)) ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 
+                                ['A','B'].includes(String(row.locationClass || row.lc)) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 
+                                'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                              }`}>
+                                {row.locationClass || row.lc || 'Z'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                              row.locationType === 'GPS' 
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' 
+                                : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
+                            }`}>
+                              {row.locationType || (row.lc === 'GPS' ? 'GPS' : 'DOPPLER')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-sm font-mono text-xs text-gray-700 dark:text-gray-200">
+                            {row.locationType === 'GPS' ? '0' : (row.errorRadiusM !== undefined ? `${row.errorRadiusM}` : '0')}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap font-mono text-xs font-medium">
+                            {row.locationDate ? formatUtcDateTime(row.locationDate) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm font-mono text-xs text-gray-600 dark:text-gray-300">{row.lon}</td>
+                          <td className="px-4 py-2.5 text-sm font-mono text-xs text-gray-600 dark:text-gray-300">{row.lat}</td>
+                          <td className="px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap font-mono text-xs">
+                            {row.receivedAt ? formatUtcDateTime(row.receivedAt) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
+                            {row.lagMinutes !== undefined ? (
+                              <span className={`font-mono ${row.lagMinutes > 120 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>
+                                {row.lagMinutes >= 60 ? `+${(row.lagMinutes / 60).toFixed(1)}h` : `+${row.lagMinutes}m`}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="px-4 py-2.5 text-sm font-bold text-center text-gray-800 dark:text-gray-200">
+                            {row.deliveryCount || 1}
+                          </td>
                           <td className="px-4 py-2.5 text-xs">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                               row.quality === 'High' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' :
@@ -693,56 +766,6 @@ export const ArgosData = () => {
                             }`}>
                               {row.quality || 'Unknown'}
                             </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-xs">
-                            {row.accepted !== false ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                                YES
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
-                                NO
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 text-sm">
-                              {derivedLc && (
-                                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                                      derivedLc === 'GPS' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                                      ['3','2','1'].includes(derivedLc) ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 
-                                      ['A','B'].includes(derivedLc) ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : 
-                                      'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                  }`}>
-                                      {derivedLc}
-                                  </span>
-                              )}
-                          </td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{derivedLocationType}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 whitespace-nowrap font-mono text-xs">
-                            {row.fixTime ? formatDateTime(row.fixTime, timeZone) : '-'}
-                          </td>
-                          <td className="px-4 py-2.5 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap font-mono text-xs">
-                            {row.receivedAt ? formatDateTime(row.receivedAt, timeZone) : '-'}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                            {row.latencyMin !== undefined ? (
-                              <span className={`font-mono ${row.latencyMin > 120 ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-gray-600 dark:text-gray-300'}`}>
-                                {row.latencyMin}m
-                              </span>
-                            ) : '-'}
-                          </td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.lat}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.lon}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.satellite}</td>
-                          <td className="px-4 py-2.5 text-sm text-gray-600 dark:text-gray-300">{row.msgType}</td>
-                          <td className="px-4 py-2.5 text-xs whitespace-nowrap">
-                            {row.rejectReason ? (
-                              <span className="font-mono text-[11px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-200 dark:border-rose-900/60" title={row.rejectReason}>
-                                {row.rejectReason}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 text-xs">-</span>
-                            )}
                           </td>
                           <td className="px-4 py-2.5 text-sm text-right">
                             <button

@@ -7,11 +7,11 @@ import html2canvas from 'html2canvas';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import { FIXED_FIELD_CAMPS } from '../constants';
-import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
+import { formatDateTime, formatUtcDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
+import { isVisibleOnLiveMap } from '../utils/statusCalculator';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { fetchAllLayers } from '../services/qgisLayerService';
-import { readLiveViewState, type MarkerPoint, type LiveViewState } from '../components/reports/liveViewState';
 import Draggable from 'react-draggable';
 
 const DraggableComponent = Draggable as any;
@@ -250,14 +250,7 @@ const MapResizeHandler = ({ viewMode }: { viewMode: string }) => {
     return null;
 };
 
-// Binds the live Leaflet map instance for reporting and viewport capturing
-const LiveMapInstanceBinder = ({ onMap }: { onMap: (map: L.Map) => void }) => {
-    const map = useMap();
-    useEffect(() => {
-        if (map) onMap(map);
-    }, [map, onMap]);
-    return null;
-};
+
 
 
 
@@ -355,7 +348,29 @@ const LocationTimestamp = ({ timestamp, lat, lon, fallbackTimeZone }: { timestam
 };
 
 // Component for Popup with LST Data Fetching
-const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: { lat: number, lon: number, timestamp: string, pttId: string, color: string, type?: string, timeZone: string }) => {
+const LSTPopupContent = ({ 
+  lat, 
+  lon, 
+  timestamp, 
+  pttId, 
+  color, 
+  type, 
+  timeZone,
+  locationClass,
+  errorRadiusM,
+  delay
+}: { 
+  lat: number; 
+  lon: number; 
+  timestamp: string; 
+  pttId: string; 
+  color: string; 
+  type?: string; 
+  timeZone: string;
+  locationClass?: string | null;
+  errorRadiusM?: number;
+  delay?: number | string;
+}) => {
   const [data, setData] = useState<{
     airTemp: number | null;
     soilTemp: number | null;
@@ -409,19 +424,39 @@ const LSTPopupContent = ({ lat, lon, timestamp, pttId, color, type, timeZone }: 
   const hdmmStr = `${formatDM(lat, true)}  ${formatDM(lon, false)}`;
   const hdmsStr = `${formatDMS(lat, true)}  ${formatDMS(lon, false)}`;
 
+  const isGps = (type || '').toUpperCase() === 'GPS';
+  const delayStr = delay !== undefined && delay !== null && delay !== ''
+    ? typeof delay === 'number'
+      ? delay >= 60 ? `+${(delay / 60).toFixed(1)} h` : `+${Math.round(delay)} m`
+      : `+${delay}`
+    : null;
+
   return (
     <div className="text-center p-1 min-w-[210px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
-        <div className="flex items-center justify-center gap-1 mb-1">
+        <div className="flex items-center justify-center flex-wrap gap-1 mb-1">
              <div className="font-bold text-[14px]" style={{color: color}}>{pttId}</div>
              {type && (
-                 <span className={`text-[10px] px-1 rounded ${type === 'GPS' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
+                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${isGps ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
                      {type}
                  </span>
              )}
+             {!isGps && locationClass && (
+                 <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-100 text-amber-800">
+                     Class {locationClass}
+                 </span>
+             )}
+             {!isGps && typeof errorRadiusM === 'number' && errorRadiusM > 0 && (
+                 <span className="text-[9px] px-1 py-0.5 rounded bg-gray-100 text-gray-600">
+                     ±{Math.round(errorRadiusM)}m
+                 </span>
+             )}
         </div>
-        <div className="text-[12px] font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-2">
-            {formatDateTime(timestamp, data.timezone || timeZone)}
-            {(data.timezone) && <div className="text-[10px] text-gray-400 font-normal mt-0.5">Local: {data.timezone.replace('_', ' ')}</div>}
+        <div className="text-[12px] font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-2 leading-tight">
+            <div className="text-[11px] font-mono text-slate-700">UTC: {formatUtcDateTime(timestamp)}</div>
+            <div className="text-[10px] text-gray-500 font-normal mt-0.5">Local: {formatDateTime(timestamp, data.timezone || timeZone)}</div>
+            {delayStr && (
+              <div className="text-[9px] text-brand-600 font-medium mt-0.5">Delay: {delayStr}</div>
+            )}
         </div>
         
         <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded text-left font-mono text-[10px] text-slate-700 dark:text-slate-300 mb-2 leading-relaxed">
@@ -1065,7 +1100,16 @@ const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
 };
 
 interface HistoricalMarkerProps {
-    point: { lat: number, lon: number, timestamp: string, type?: string, isDegraded?: boolean };
+    point: { 
+      lat: number; 
+      lon: number; 
+      timestamp: string; 
+      type?: string; 
+      isDegraded?: boolean;
+      locationClass?: string | null;
+      errorRadiusM?: number;
+      delay?: number | string;
+    };
     pttId: string;
     color: string;
     timeZone: string;
@@ -1079,15 +1123,22 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
     timeZone 
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const isDoppler = (point.type || '').toUpperCase() === 'DOPPLER';
 
     return (
         <CircleMarker
             center={[point.lat, point.lon]}
-            radius={4}
-            pathOptions={{ 
+            radius={isDoppler ? 3 : 5}
+            pathOptions={isDoppler ? {
+                color: color,
+                fillColor: 'white',
+                fillOpacity: 0.25,
+                opacity: 0.65,
+                weight: 1.5
+            } : { 
                 color: color, 
-                fillColor: 'white', 
-                fillOpacity: point.isDegraded ? 0.45 : 1, 
+                fillColor: color, 
+                fillOpacity: point.isDegraded ? 0.45 : 0.95, 
                 opacity: point.isDegraded ? 0.45 : 1, 
                 weight: point.isDegraded ? 1.5 : 2 
             }}
@@ -1096,7 +1147,7 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
                 popupclose: () => setIsOpen(false)
             }}
         >
-            <Popup closeButton={false} minWidth={200}>
+            <Popup closeButton={false} minWidth={210}>
                 {isOpen && (
                     <LSTPopupContent 
                         lat={point.lat} 
@@ -1106,6 +1157,9 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
                         color={color}
                         type={point.type}
                         timeZone={timeZone}
+                        locationClass={point.locationClass}
+                        errorRadiusM={point.errorRadiusM}
+                        delay={point.delay}
                     />
                 )}
             </Popup>
@@ -1120,6 +1174,9 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
         prevProps.point.lon === nextProps.point.lon &&
         prevProps.point.timestamp === nextProps.point.timestamp &&
         prevProps.point.type === nextProps.point.type &&
+        prevProps.point.locationClass === nextProps.point.locationClass &&
+        prevProps.point.errorRadiusM === nextProps.point.errorRadiusM &&
+        prevProps.point.delay === nextProps.point.delay &&
         prevProps.point.isDegraded === nextProps.point.isDegraded
     );
 });
@@ -1366,9 +1423,19 @@ const LiveTrackingInner = () => {
   });
   
   const [historyPaths, setHistoryPaths] = useState<Array<{
-    id: string, 
-    path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, 
-    color: string
+    id: string;
+    path: Array<{
+      lat: number;
+      lon: number;
+      timestamp: string;
+      type?: string;
+      isDegraded?: boolean;
+      locationClass?: string | null;
+      errorRadiusM?: number;
+      delay?: number | string;
+    }>;
+    segments?: Array<Array<[number, number]>>;
+    color: string;
   }>>([]);
 
   // Search State
@@ -1410,7 +1477,6 @@ const LiveTrackingInner = () => {
 
   // Fullscreen & Floating Donut State
   const containerRef = useRef<HTMLDivElement>(null);
-  const liveMapInstanceRef = useRef<L.Map | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [showDonutWidget, setShowDonutWidget] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 640 : false);
@@ -1523,38 +1589,8 @@ const LiveTrackingInner = () => {
   const latestPositions = useMemo(() => {
     // 1. Identify relevant transmitters based on status filter & current month static test rule
     const relevantTransmitters = transmitters.filter(t => {
-       const status = t.derived_status || t.status || 'Active';
-       const isStatic = status === 'Static test' || status === 'Static Test' || status === 'static';
-
-       // Rule: Static test status tags MUST have fixes in current calendar month to display on live map
-       const hasFixInCurrentMonth = hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey);
-       if (isStatic && !hasFixInCurrentMonth) {
-         return false;
-       }
-       
-       const allowedStatuses = ['Active', 'active', 'Potential Mortality', 'Inactive', 'inactive', 'Static test', 'Dead', 'dead'];
-       if (!allowedStatuses.includes(status)) return false;
-
-       if (selectedStatus === 'all') {
-         // Auto-hide Inactive transmitters 30 days after inactive_since on default map view
-         if (status === 'Inactive' || status === 'inactive') {
-           if (t.inactive_since) {
-             const inactiveTime = new Date(t.inactive_since).getTime();
-             const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-             if (!isNaN(inactiveTime) && (Date.now() - inactiveTime) > thirtyDaysMs) {
-               return false;
-             }
-           }
-         }
-         return true;
-       }
-
-       if (selectedStatus === 'active') return status === 'Active' || status === 'active';
-       if (selectedStatus === 'inactive') return status === 'Inactive' || status === 'inactive';
-       if (selectedStatus === 'mortality') return status === 'Potential Mortality';
-       if (selectedStatus === 'static') return isStatic;
-       if (selectedStatus === 'dead') return status === 'Dead' || status === 'dead';
-       return true;
+       const hasFixInCurrentMonth = Boolean(hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey));
+       return isVisibleOnLiveMap(t, selectedStatus, hasFixInCurrentMonth);
     });
     
     const relevantIds = new Set(relevantTransmitters.map(t => String(t.platform_id)));
@@ -1755,7 +1791,7 @@ const LiveTrackingInner = () => {
     }
 
     const rawPositions = rawHistoryCache.current;
-    const newPaths: Array<{id: string, path: Array<{lat: number, lon: number, timestamp: string, type?: string}>, color: string}> = [];
+    const newPaths: Array<typeof historyPaths[0]> = [];
     const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
 
     selectedTransmitterIds.forEach((pttId, index) => {
@@ -1786,6 +1822,9 @@ const LiveTrackingInner = () => {
               lc: lp?.lc || 'GPS',
               satellite: lp?.satellite || 'GPS',
               locationType: fixType,
+              locationClass: (lp as any)?.locationClass || null,
+              errorRadiusM: (lp as any)?.errorRadiusM || 0,
+              lagMinutes: (lp as any)?.lagMinutes ?? (lp as any)?.delay,
               speed_kmh: lp?.speed_kmh || 0
             });
           }
@@ -1817,7 +1856,7 @@ const LiveTrackingInner = () => {
 
             // GPS / Doppler / All filter
             if (historyFixType === 'GPS') return fixType === 'GPS';
-            if (historyFixType === 'Doppler') return fixType === 'Doppler';
+            if (historyFixType === 'Doppler') return fixType === 'DOPPLER';
             return true; // 'All': show all fixes (GPS + Doppler)
         });
 
@@ -1874,6 +1913,40 @@ const LiveTrackingInner = () => {
           track = filteredTrack;
         }
 
+        // Break polyline into segments where time gap > 48 h or implied speed > 120 km/h (with dt > 0.05 h)
+        const segments: Array<Array<[number, number]>> = [];
+        let currentSegment: Array<[number, number]> = [];
+
+        for (let i = 0; i < track.length; i++) {
+          const p = track[i];
+          const coord: [number, number] = [Number(p.lat), Number(p.lon)];
+          if (currentSegment.length === 0) {
+            currentSegment.push(coord);
+          } else {
+            const prev = track[i - 1];
+            const prevMs = safeParseTimestamp(prev.timestamp);
+            const currMs = safeParseTimestamp(p.timestamp);
+            const dtHours = Math.abs(currMs - prevMs) / (1000 * 3600);
+            const distMeters = haversineDistMeters(Number(prev.lat), Number(prev.lon), Number(p.lat), Number(p.lon));
+            const distKm = distMeters / 1000;
+            const speedKmh = dtHours > 0.01 ? (distKm / dtHours) : 0;
+
+            const shouldBreak = dtHours > 48 || (speedKmh > 120 && dtHours > 0.05);
+
+            if (shouldBreak) {
+              if (currentSegment.length > 1) {
+                segments.push(currentSegment);
+              }
+              currentSegment = [coord];
+            } else {
+              currentSegment.push(coord);
+            }
+          }
+        }
+        if (currentSegment.length > 1) {
+          segments.push(currentSegment);
+        }
+
         if (track.length > 0) {
              newPaths.push({
                  id: pttId,
@@ -1882,8 +1955,12 @@ const LiveTrackingInner = () => {
                      lon: p.lon, 
                      timestamp: p.timestamp, 
                      type: p.locationType,
-                     isDegraded: Boolean((p as any).isDegraded)
+                     isDegraded: Boolean((p as any).isDegraded),
+                     locationClass: (p as any).locationClass || null,
+                     errorRadiusM: (p as any).errorRadiusM || 0,
+                     delay: (p as any).lagMinutes !== undefined ? (p as any).lagMinutes : (p as any).delay
                  })),
+                 segments,
                  color: colors[index % colors.length]
              });
         }
@@ -1971,68 +2048,19 @@ const LiveTrackingInner = () => {
           });
           snapshotDataUrl = canvas.toDataURL('image/jpeg', 0.95);
         } catch (captureErr) {
-          console.warn('Could not take live map screenshot, will use identical vector renderer:', captureErr);
+          console.warn('Could not take live map screenshot:', captureErr);
         }
-      }
-
-      // Build LiveViewState from live Leaflet map instance (Mode A: pass view state, not only bitmap)
-      let liveViewState: LiveViewState | undefined = undefined;
-      const liveMap = liveMapInstanceRef.current;
-      if (liveMap) {
-        const bounds = liveMap.getBounds();
-        const markerPoints: MarkerPoint[] = [];
-
-        // 1. Visible unclustered transmitters
-        latestPositions.forEach((pos) => {
-          const t = transmitters.find((tr) => String(tr.platform_id) === String(pos.transmitter_id));
-          const st = t?.derived_status || t?.status || 'Active';
-          if (st === 'Static test' || st === 'Static Test') return;
-          if (selectedStatus === 'all' || st.toLowerCase() === selectedStatus.toLowerCase()) {
-            if (bounds.contains([pos.lat, pos.lon])) {
-              markerPoints.push({
-                id: String(pos.transmitter_id),
-                lat: pos.lat,
-                lon: pos.lon,
-                kind: 'transmitter',
-                status: st,
-                label: String(pos.transmitter_id),
-              });
-            }
-          }
-        });
-
-        // 2. Visible field camps
-        if (showFieldCamps) {
-          FIXED_FIELD_CAMPS.forEach((camp) => {
-            if (bounds.contains([camp.lat, camp.lon])) {
-              markerPoints.push({
-                id: camp.id,
-                lat: camp.lat,
-                lon: camp.lon,
-                kind: 'camp',
-                label: camp.name,
-              });
-            }
-          });
-        }
-
-        liveViewState = readLiveViewState(liveMap, {
-          markerPoints,
-          baseLayerId: activeLayer || 'google_hybrid',
-          statusFilter: selectedStatus,
-        });
       }
 
       setExportedMapView({
-        center: liveViewState ? liveViewState.center : (sharedMapCenter || [47.05, 67.32]),
-        zoom: liveViewState ? liveViewState.zoom : (sharedMapZoom || 9),
+        center: sharedMapCenter || [47.05, 67.32],
+        zoom: sharedMapZoom || 9,
         baseLayer: activeLayer || 'google_hybrid',
         transmitterId: targetTransmitterId,
         transmitterIds: selectedTransmitterIds.length > 0 ? selectedTransmitterIds : [targetTransmitterId],
         historyPositions: loadedHistory.length > 0 ? loadedHistory : undefined,
         capturedAt: new Date().toISOString(),
-        mapSnapshotImage: snapshotDataUrl,
-        liveViewState
+        mapSnapshotImage: snapshotDataUrl
       });
 
 
@@ -2447,7 +2475,6 @@ const LiveTrackingInner = () => {
         >
             <MapController selectedPos={flyToPos} customFlyTo={customFlyTo} />
             <MapResizeHandler viewMode={viewMode} />
-            <LiveMapInstanceBinder onMap={(m) => { liveMapInstanceRef.current = m; }} />
             
             <MapEventsHandler 
 
@@ -2546,13 +2573,14 @@ const LiveTrackingInner = () => {
             {/* Historical Tracks */}
             {showHistory && historyPaths.map((hp) => (
                 <React.Fragment key={hp.id}>
-                    {/* The line connecting all filtered points */}
-                    {hp.path.length > 1 && (
+                    {/* The line connecting filtered points by segment */}
+                    {(hp.segments && hp.segments.length > 0 ? hp.segments : (hp.path.length > 1 ? [hp.path.map(p => [p.lat, p.lon] as [number, number])] : [])).map((seg, sIdx) => (
                         <Polyline 
-                            positions={hp.path.map(p => [p.lat, p.lon])} 
+                            key={`${hp.id}-seg-${sIdx}`}
+                            positions={seg} 
                             pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
                         />
-                    )}
+                    ))}
                     
                     {/* Dots for every filtered fix */}
                     {hp.path.map((point, idx) => (
@@ -2574,8 +2602,8 @@ const LiveTrackingInner = () => {
             {latestPositions
                 .filter(pos => {
                     const t = transmitters.find(tr => String(tr.platform_id) === String(pos.transmitter_id));
-                    const st = t?.derived_status || t?.status;
-                    return st !== 'Static test' && st !== 'Static Test';
+                    const hasFixInCurrentMonth = Boolean(hasCurrentMonthFixesMap.get(String(pos.transmitter_id)) || (pos.timestamp && getYearMonthKey(pos.timestamp) === currentYearMonthKey));
+                    return t ? isVisibleOnLiveMap(t, selectedStatus, hasFixInCurrentMonth) : true;
                 })
                 .map((pos) => {
                     const transmitter = transmitters.find(t => String(t.platform_id) === String(pos.transmitter_id));

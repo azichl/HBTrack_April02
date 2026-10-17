@@ -82,13 +82,21 @@ export function evaluateTransmitterStatus(
     });
   }
 
-  const isDeployed = transmitter.bird_id && transmitter.bird_id.trim() !== '';
+  const isExplicitStatic = transmitter.status?.toLowerCase().includes('static') || 
+                           transmitter.model?.toLowerCase().includes('static');
+  const isDeployed = (transmitter.bird_id && transmitter.bird_id.trim() !== '') || transmitter.deployed === true;
 
-  if (!isDeployed) {
+  if (isExplicitStatic && !isDeployed) {
     return { status: 'Static test', isNesting: false };
   }
 
   if (!positions || positions.length === 0) {
+    if (transmitter.last_fix) {
+      const lastFixMs = safeParseTimestamp(transmitter.last_fix);
+      if (!isNaN(lastFixMs) && (Date.now() - lastFixMs) <= 30 * 24 * 60 * 60 * 1000) {
+        return { status: 'Active', isNesting: false };
+      }
+    }
     return { status: 'Inactive', isNesting: false };
   }
 
@@ -116,20 +124,25 @@ export function evaluateTransmitterStatus(
     return !(isNaN(pLat) || isNaN(pLon) || (Math.abs(pLat) <= 1 && Math.abs(pLon) <= 1));
   });
 
-  const allSorted = [...validPositions].sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+  const allSorted = [...validPositions].sort((a, b) => safeParseTimestamp(a.locationDate || a.timestamp) - safeParseTimestamp(b.locationDate || b.timestamp));
   
   if (allSorted.length === 0) {
+    if (transmitter.last_fix) {
+      const lastFixMs = safeParseTimestamp(transmitter.last_fix);
+      if (!isNaN(lastFixMs) && (Date.now() - lastFixMs) <= 30 * 24 * 60 * 60 * 1000) {
+        return { status: 'Active', isNesting: false };
+      }
+    }
     return { status: 'Inactive', isNesting: false };
   }
 
   const latestPos = allSorted[allSorted.length - 1];
-  const latestTime = safeParseTimestamp(latestPos.timestamp);
-  // Reference timestamp baseline (evaluating against 01/08/2026 baseline date or current time)
-  const refTime = Math.max(new Date().getTime(), Date.UTC(2026, 7, 1)); // 01/08/2026
-
-  // 1. Check Inactive (> 30 days since last transmission rule from 01/08/2026)
-  const daysSinceLastFix = (refTime - latestTime) / (1000 * 60 * 60 * 24);
-  if (daysSinceLastFix > 30) {
+  const latestTime = safeParseTimestamp(latestPos.locationDate || latestPos.timestamp);
+  // Communication inactivity check based on last message/transmission (or fix)
+  const lastContactMs = safeParseTimestamp(transmitter.live?.lastMessageAt || transmitter.last_fix || latestTime);
+  const nowMs = Date.now();
+  const daysSinceLastContact = (nowMs - (isNaN(lastContactMs) ? latestTime : lastContactMs)) / (1000 * 60 * 60 * 24);
+  if (daysSinceLastContact > 30) {
     return { status: 'Inactive', isNesting: false };
   }
 
@@ -274,3 +287,52 @@ export function evaluateTransmitterStatus(
   // 4. Default to Active
   return { status: 'Active', isNesting: false };
 }
+
+/**
+ * Shared visibility filter for Live Map.
+ * Matches status filters without copy-pasting across views.
+ */
+export function isVisibleOnLiveMap(
+  transmitter: Transmitter, 
+  selectedStatus: string = 'active',
+  hasFixInCurrentMonth: boolean = true
+): boolean {
+  const status = transmitter.derived_status || transmitter.status || 'Active';
+  const isStatic = status === 'Static test' || status === 'Static Test' || status === 'static';
+  if (isStatic && !hasFixInCurrentMonth) {
+    return false;
+  }
+
+  if (selectedStatus === 'all') {
+    if (status === 'Inactive' || status === 'inactive') {
+      if (transmitter.inactive_since) {
+        const inactiveTime = new Date(transmitter.inactive_since).getTime();
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        if (!isNaN(inactiveTime) && (Date.now() - inactiveTime) > thirtyDaysMs) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  if (selectedStatus === 'active') return status === 'Active' || status === 'active';
+  if (selectedStatus === 'inactive') return status === 'Inactive' || status === 'inactive';
+  if (selectedStatus === 'mortality') return status === 'Potential Mortality';
+  if (selectedStatus === 'static') return isStatic;
+  if (selectedStatus === 'dead') return status === 'Dead' || status === 'dead';
+  return true;
+}
+
+/**
+ * Shared visibility filter for Monitoring view.
+ */
+export function isVisibleInMonitoring(transmitter: Transmitter, hasCurrentMonthFix: boolean = true): boolean {
+  const st = transmitter.derived_status || transmitter.status || 'Active';
+  const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
+  if (isStatic && !hasCurrentMonthFix) {
+    return false;
+  }
+  return true;
+}
+

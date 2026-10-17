@@ -1,6 +1,6 @@
 import { ArgosMessage, ArgosDevice, ArgosDoppler } from '../types';
-import { isValidCoordinate, safeParseTimestamp } from '../utils/formatting';
-export { isValidCoordinate, safeParseTimestamp };
+import { isValidCoordinate, safeParseTimestamp, normalizePttId, makeDeterministicFixDocId } from '../utils/formatting';
+export { isValidCoordinate, safeParseTimestamp, normalizePttId, makeDeterministicFixDocId };
 
 /**
  * Known CLS raw telemetry signatures mapped to exact GPS fix dates.
@@ -155,7 +155,9 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
 
         // Strictly prioritize Location Date (GPS / Doppler fix date) over Message reception date
         const { locationDate, messageDate } = extractLocationDate(item);
-        const platformId = String(item.deviceRef || item.platformId || item.ptt || 'Unknown').replace(/^trans-/, '').trim();
+        const platformId = normalizePttId(item.deviceRef || item.platformId || item.ptt || '');
+        if (!platformId) return null;
+
         let numLat = Number(lat);
         let numLon = Number(lon);
         
@@ -169,8 +171,14 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
             numLon = Math.abs(numLon);
         }
 
+        const canonicalLocType: 'GPS' | 'DOPPLER' = locationType === 'GPS' ? 'GPS' : 'DOPPLER';
+        const locDateMs = safeParseTimestamp(locationDate);
+        const deterministicId = makeDeterministicFixDocId(platformId, canonicalLocType, locDateMs);
+        const errRadiusM = canonicalLocType === 'GPS' ? 0 : (parseFloat(dopplerError) || 0);
+        const locClass = canonicalLocType === 'GPS' ? null : (item.dopplerLocClass || item.location?.locationClass || (rawLc !== 'GPS' ? rawLc : null) || null);
+
         return {
-            id: `msg-${item.deviceMsgUid || Math.random().toString(36).substr(2,9)}`,
+            id: deterministicId,
             programId: String(item.programRef || item.programNumber || 'Unknown'),
             platformId: platformId,
             timestamp: locationDate,
@@ -180,7 +188,9 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
             msgType: String(item.unitType || item.transType || 'DS'), 
             satellite: item.kineisMetadata?.sat || item.satellite || 'UNK',
             rawData: item.rawData || '',
-            locationType: locationType, 
+            locationType: canonicalLocType, 
+            locationClass: locClass,
+            errorRadiusM: errRadiusM,
             dopplerError: dopplerError,
             messageDate: messageDate,
             locationDate: locationDate

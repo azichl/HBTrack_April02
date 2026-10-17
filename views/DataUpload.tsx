@@ -5,7 +5,7 @@ import { useAppStore } from '../store/appStore';
 import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird as BirdType } from '../types';
 import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
-import { formatDateTime, isValidCoordinate, safeParseTimestamp } from '../utils/formatting';
+import { formatDateTime, isValidCoordinate, safeParseTimestamp, normalizePttId, classifyLocationType, makeDeterministicFixDocId } from '../utils/formatting';
 import { mapArgosApiData, mapArgosDevices, extractLocationDate } from '../services/argosService';
 
 // --- HELPERS ---
@@ -321,84 +321,187 @@ export const DataUpload = () => {
             setUploadMessage(`Successfully imported ${mappedBirds.length} birds. ${linkedCount > 0 ? `Linked ${linkedCount} birds to PTTs.` : ''}`);
         }
         else if (uploadType === 'argos_data') {
-            // Map raw rows to ArgosMessage structure
-            const mappedArgos: ArgosMessage[] = rawData.map((row: any) => {
-                const platformId = String(row['Device ID'] || row['DeviceRef'] || row['platformId'] || row['platform_id'] || row['ptt'] || 'Unknown').replace(/^trans-/, '').trim();
-                const lat = row['Latitude'] || row['lat'] || row['latitude'] || row['Lat'];
-                const lon = row['Longitude'] || row['lon'] || row['longitude'] || row['Lon'];
-                
-                // Strictly prioritize Location Date (Date of position fix) over satellite reception date
-                const locDateCandidate = 
-                    row['GPS Date of position (UTC)'] ||
-                    row['GPS Date of position'] ||
-                    row['GPS Date of Position (UTC)'] ||
-                    row['GPS Date of Position'] ||
-                    row['Location date (UTC)'] ||
-                    row['Location date'] ||
-                    row['Location Date (UTC)'] ||
-                    row['Location Date'] ||
-                    row['Date of position (UTC)'] ||
-                    row['Date of position'] ||
-                    row['Date of Position'] ||
-                    row['locationDate'] ||
-                    row['gpsLocDate'] ||
-                    row['gpsDate'] ||
-                    row['timestamp'];
+            const mappedArgos: ArgosMessage[] = [];
+            
+            for (const row of rawData) {
+                const rawPtt = row['PTT'] || row['Device ID'] || row['DeviceRef'] || row['Platform'] || row['Platform ID'] || row['platformId'] || row['platform_id'] || row['ptt'];
+                const platformId = normalizePttId(String(rawPtt || ''));
+                if (!platformId) continue;
 
-                let ts = new Date().toISOString();
-                if (locDateCandidate) {
-                    const parsed = safeParseTimestamp(locDateCandidate);
-                    if (!isNaN(parsed) && parsed > 0) {
-                        ts = new Date(parsed).toISOString();
-                    } else {
-                        const parsedD = new Date(locDateCandidate);
-                        if (!isNaN(parsedD.getTime())) ts = parsedD.toISOString();
-                    }
-                } else {
-                    const msgCandidate = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['Message Date'] || row['msgDatetime'];
-                    if (msgCandidate) {
-                        const parsed = safeParseTimestamp(msgCandidate);
-                        if (!isNaN(parsed) && parsed > 0) ts = new Date(parsed).toISOString();
+                const programId = String(row['Program Ref'] || row['programRef'] || row['Program'] || row['programId'] || 'Imported');
+                const unitType = String(row['Unit type'] || row['Unit Type'] || row['unitType'] || row.msgType || 'Houbara');
+                const satellite = String(row.satellite || row['Satellite'] || 'UNK');
+                const rawDataPayload = String(row['Raw data'] || row['rawData'] || '');
+
+                const msgDateRaw = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['Message Date'] || row['msgDatetime'];
+                const parsedMsgMs = safeParseTimestamp(msgDateRaw);
+                const messageDateIso = !isNaN(parsedMsgMs) && parsedMsgMs > 0 ? new Date(parsedMsgMs).toISOString() : undefined;
+
+                // 1. Check if row is from a CLS 'positions' export (clean, one fix per row)
+                const locDateRaw = row['Location date (UTC)'] || row['Location date'] || row['Location Date (UTC)'] || row['Location Date'];
+                if (locDateRaw) {
+                    const locDateMs = safeParseTimestamp(locDateRaw);
+                    if (!isNaN(locDateMs) && locDateMs > 0) {
+                        const lat = parseFloat(String(row['Latitude'] || row['lat'] || row['Lat']));
+                        let lon = parseFloat(String(row['Longitude'] || row['lon'] || row['Lon']));
+                        if (isValidCoordinate(lat, lon)) {
+                            if (platformId === '242086' && lon < 0) lon = Math.abs(lon);
+
+                            const locTypeRaw = String(row['Location type'] || row['Location Type'] || '').trim().toUpperCase();
+                            const isGps = locTypeRaw.includes('GPS') || (!locTypeRaw && !row['Location class']);
+                            const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
+
+                            const locClass = locType === 'GPS' ? null : (row['Location class'] || row['Location Class'] || 'Z');
+                            const errRadiusM = locType === 'GPS' ? 0 : (parseFloat(String(row['Error radius (m)'] || row['Error radius'] || row['Doppler Error radius (m)'] || 0)) || 0);
+                            const locDateIso = new Date(locDateMs).toISOString();
+                            const docId = makeDeterministicFixDocId(platformId, locType, locDateMs);
+                            const delayMin = messageDateIso ? Math.max(0, Math.round((parsedMsgMs - locDateMs) / 60000)) : 0;
+
+                            mappedArgos.push({
+                                id: docId,
+                                programId,
+                                platformId,
+                                timestamp: locDateIso,
+                                lat: lat.toFixed(4),
+                                lon: lon.toFixed(4),
+                                lc: locType === 'GPS' ? 'GPS' : String(locClass || 'Z'),
+                                msgType: unitType,
+                                satellite,
+                                rawData: rawDataPayload,
+                                locationType: locType,
+                                locationClass: locClass,
+                                errorRadiusM: errRadiusM,
+                                dopplerError: String(errRadiusM),
+                                messageDate: messageDateIso || locDateIso,
+                                locationDate: locDateIso,
+                                deliveryCount: 1,
+                                lagMinutes: delayMin
+                            });
+                            continue;
+                        }
                     }
                 }
 
-                const msgDateRaw = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['msgDatetime'];
-                const messageDate = msgDateRaw ? (safeParseTimestamp(msgDateRaw) ? new Date(safeParseTimestamp(msgDateRaw)).toISOString() : String(msgDateRaw)) : undefined;
+                // 2. Check if row is from a CLS 'messages' export (may contain GPS fix, Doppler fix, or both)
+                let extractedFixFromRow = false;
 
-                const doppler = row['Doppler Error radius (m)'] || row['Doppler Error (m)'] || row['Doppler Error'] || row.dopplerError || '';
-                const rawDataPayload = row['Raw data'] || row['rawData'] || (doppler ? `Doppler: ${doppler}` : '');
+                // 2A. GPS fix in messages row
+                const gpsDateRaw = row['GPS Date of position (UTC)'] || row['GPS Date of position'] || row['GPS Date of Position (UTC)'] || row['GPS Date of Position'] || row['Date of position (UTC)'] || row['Date of position'] || row['Date of Position'] || row['gpsLocDate'] || row['gpsDate'];
+                const gpsLat = parseFloat(String(row['GPS Latitude'] || row['Latitude'] || row['lat'] || row['Lat']));
+                let gpsLon = parseFloat(String(row['GPS Longitude'] || row['Longitude'] || row['lon'] || row['Lon']));
 
-                return {
-                    id: `msg-${Math.random().toString(36).substr(2,9)}`,
-                    programId: String(row['Program Ref'] || row['programRef'] || 'Imported'),
-                    platformId: platformId,
-                    timestamp: ts,
-                    lat: String(lat),
-                    lon: String(lon),
-                    lc: row['Location class'] || row['Location Class'] || row.lc || '',
-                    msgType: row['Unit type'] || row['Unit Type'] || row.msgType || '',
-                    satellite: row.satellite || row['Satellite'] || 'UNK',
-                    rawData: rawDataPayload,
-                    locationType: row['Location type'] || row['Location Type'] || '',
-                    dopplerError: doppler,
-                    messageDate: messageDate,
-                    locationDate: ts
-                };
-            }).filter((m: any) => 
-                m.platformId && 
-                m.platformId !== 'Unknown' && 
-                m.lat && m.lon &&
-                isValidCoordinate(Number(m.lat), Number(m.lon)) // Filter out (0,0) coordinates
-            );
+                if (gpsDateRaw && isValidCoordinate(gpsLat, gpsLon)) {
+                    if (platformId === '242086' && gpsLon < 0) gpsLon = Math.abs(gpsLon);
+                    const gpsDateMs = safeParseTimestamp(gpsDateRaw);
+                    if (!isNaN(gpsDateMs) && gpsDateMs > 0) {
+                        const gpsDateIso = new Date(gpsDateMs).toISOString();
+                        const docId = makeDeterministicFixDocId(platformId, 'GPS', gpsDateMs);
+                        const delayMin = messageDateIso ? Math.max(0, Math.round((parsedMsgMs - gpsDateMs) / 60000)) : 0;
 
-            // Reorganize chronologically by Location Date
-            mappedArgos.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+                        mappedArgos.push({
+                            id: docId,
+                            programId,
+                            platformId,
+                            timestamp: gpsDateIso,
+                            lat: gpsLat.toFixed(4),
+                            lon: gpsLon.toFixed(4),
+                            lc: 'GPS',
+                            msgType: unitType,
+                            satellite,
+                            rawData: rawDataPayload,
+                            locationType: 'GPS',
+                            locationClass: null,
+                            errorRadiusM: 0,
+                            dopplerError: '0',
+                            messageDate: messageDateIso || gpsDateIso,
+                            locationDate: gpsDateIso,
+                            deliveryCount: 1,
+                            lagMinutes: delayMin
+                        });
+                        extractedFixFromRow = true;
+                    }
+                }
 
-            const invalidCount = rawData.length - mappedArgos.length;
-            
+                // 2B. Doppler fix in messages row
+                const dopDateRaw = row['Doppler Date (UTC)'] || row['Doppler Date'] || row['Doppler date'] || (!gpsDateRaw ? (row['Location date (UTC)'] || row['Location date']) : undefined);
+                const dopLat = parseFloat(String(row['Doppler Latitude'] || (!gpsDateRaw ? (row['Latitude'] || row['lat'] || row['Lat']) : NaN)));
+                let dopLon = parseFloat(String(row['Doppler Longitude'] || (!gpsDateRaw ? (row['Longitude'] || row['lon'] || row['Lon']) : NaN)));
+
+                if (dopDateRaw && isValidCoordinate(dopLat, dopLon)) {
+                    if (platformId === '242086' && dopLon < 0) dopLon = Math.abs(dopLon);
+                    const dopDateMs = safeParseTimestamp(dopDateRaw);
+                    if (!isNaN(dopDateMs) && dopDateMs > 0) {
+                        const dopDateIso = new Date(dopDateMs).toISOString();
+                        const docId = makeDeterministicFixDocId(platformId, 'DOPPLER', dopDateMs);
+                        const dopClass = String(row['Doppler Class'] || row['Location class'] || row['Location Class'] || 'Z');
+                        const dopErr = parseFloat(String(row['Doppler Error radius (m)'] || row['Error radius (m)'] || row['Doppler Error'] || 0)) || 0;
+                        const delayMin = messageDateIso ? Math.max(0, Math.round((parsedMsgMs - dopDateMs) / 60000)) : 0;
+
+                        mappedArgos.push({
+                            id: docId,
+                            programId,
+                            platformId,
+                            timestamp: dopDateIso,
+                            lat: dopLat.toFixed(4),
+                            lon: dopLon.toFixed(4),
+                            lc: dopClass,
+                            msgType: unitType,
+                            satellite,
+                            rawData: rawDataPayload,
+                            locationType: 'DOPPLER',
+                            locationClass: dopClass,
+                            errorRadiusM: dopErr,
+                            dopplerError: String(dopErr),
+                            messageDate: messageDateIso || dopDateIso,
+                            locationDate: dopDateIso,
+                            deliveryCount: 1,
+                            lagMinutes: delayMin
+                        });
+                        extractedFixFromRow = true;
+                    }
+                }
+
+                // 2C. Fallback for generic/legacy rows
+                if (!extractedFixFromRow) {
+                    const fallbackLat = parseFloat(String(row['Latitude'] || row['lat'] || row['Lat']));
+                    let fallbackLon = parseFloat(String(row['Longitude'] || row['lon'] || row['Lon']));
+                    const fallbackDateRaw = row['timestamp'] || row['date'] || msgDateRaw;
+                    if (fallbackDateRaw && isValidCoordinate(fallbackLat, fallbackLon)) {
+                        if (platformId === '242086' && fallbackLon < 0) fallbackLon = Math.abs(fallbackLon);
+                        const fbDateMs = safeParseTimestamp(fallbackDateRaw);
+                        if (!isNaN(fbDateMs) && fbDateMs > 0) {
+                            const fbDateIso = new Date(fbDateMs).toISOString();
+                            const locType = classifyLocationType(row.lc, row.locationType, satellite);
+                            const docId = makeDeterministicFixDocId(platformId, locType, fbDateMs);
+                            mappedArgos.push({
+                                id: docId,
+                                programId,
+                                platformId,
+                                timestamp: fbDateIso,
+                                lat: fallbackLat.toFixed(4),
+                                lon: fallbackLon.toFixed(4),
+                                lc: String(row.lc || (locType === 'GPS' ? 'GPS' : 'Z')),
+                                msgType: unitType,
+                                satellite,
+                                rawData: rawDataPayload,
+                                locationType: locType,
+                                locationClass: locType === 'GPS' ? null : String(row.lc || 'Z'),
+                                errorRadiusM: locType === 'GPS' ? 0 : (parseFloat(String(row.dopplerError || 0)) || 0),
+                                messageDate: messageDateIso || fbDateIso,
+                                locationDate: fbDateIso,
+                                deliveryCount: 1,
+                                lagMinutes: 0
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Sort chronologically by Location Date ASC
+            mappedArgos.sort((a, b) => safeParseTimestamp(a.locationDate || a.timestamp) - safeParseTimestamp(b.locationDate || b.timestamp));
+
             await syncArgosToFirebase(mappedArgos, []);
-            
-            setUploadMessage(`Imported ${mappedArgos.length} messages sorted by Location Date (${invalidCount > 0 ? `${invalidCount} invalid rows filtered` : 'all valid'}). Data synced to Firebase.`);
+            setUploadMessage(`Imported ${mappedArgos.length} position fixes sorted by Location Date. Data synced to Firebase.`);
         }
 
         setUploadStatus('success');

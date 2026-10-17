@@ -64,6 +64,32 @@ export interface Transmitter {
   longitude?: number;
   last_latitude?: number;
   last_longitude?: number;
+  live?: {
+    lastFix?: {
+      type: 'GPS' | 'DOPPLER';
+      date: string;
+      lat: number;
+      lon: number;
+      class?: string | null;
+      errorRadiusM?: number;
+    };
+    lastGps?: {
+      date: string;
+      lat: number;
+      lon: number;
+    };
+    lastDoppler?: {
+      date: string;
+      lat: number;
+      lon: number;
+      class: string;
+      errorRadiusM: number;
+    };
+    lastMessageAt?: string;
+    firstFixAt?: string;
+    fixCount?: number;
+    updatedByRun?: string;
+  };
 }
 
 export interface StaticTestPeriod {
@@ -104,9 +130,15 @@ export interface Position {
   speed_kmh: number;
   course: number;
   satellite: string;
-  locationType?: 'GPS' | 'Doppler'; // Added field
+  locationType?: 'GPS' | 'DOPPLER' | 'Doppler'; // GPS or Doppler fix
+  locationClass?: string | null;
+  errorRadiusM?: number;
+  firstMessageDate?: string; // First satellite message delivery
+  lastMessageDate?: string; // Latest satellite message delivery
+  deliveryCount?: number; // Times re-sent
+  lagMinutes?: number; // Delivery lag in minutes
   messageDate?: string; // Satellite transmission/reception date
-  locationDate?: string; // Actual location fix date
+  locationDate?: string; // Actual location fix date (UTC)
 }
 
 export interface Alert {
@@ -133,15 +165,22 @@ export interface ArgosMessage {
   id: string;
   programId: string;
   platformId: string;
+  pttId?: string;
   timestamp: string;
   lat: string;
   lon: string;
   lc: string;
+  locationClass?: string | null;
   msgType: string;
   satellite: string;
   rawData?: string;
-  locationType?: string;
+  locationType?: 'GPS' | 'DOPPLER' | 'Doppler' | string;
   dopplerError?: string;
+  errorRadiusM?: number;
+  firstMessageDate?: string;
+  lastMessageDate?: string;
+  deliveryCount?: number;
+  lagMinutes?: number;
   messageDate?: string; // Original satellite reception date
   locationDate?: string; // GPS / Location fix date
 }
