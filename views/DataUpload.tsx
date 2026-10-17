@@ -6,6 +6,7 @@ import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird 
 import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
 import { formatDateTime, isValidCoordinate, safeParseTimestamp, normalizePttId, classifyLocationType, makeDeterministicFixDocId } from '../utils/formatting';
+import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
 import { mapArgosApiData, mapArgosDevices, extractLocationDate } from '../services/argosService';
 
 // --- HELPERS ---
@@ -245,7 +246,26 @@ export const DataUpload = () => {
         result.push(obj);
       }
       return result;
-    } catch (e: any) { throw new Error("Failed to parse Excel file."); }
+    } catch {
+      throw new Error("Failed to parse Excel file.");
+    }
+  };
+
+  const parseJSON = async (file: File): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result as string;
+          const parsed = JSON.parse(text);
+          resolve(Array.isArray(parsed) ? parsed : [parsed]);
+        } catch {
+          reject(new Error("Failed to parse JSON file. Please ensure it is valid JSON."));
+        }
+      };
+      reader.onerror = () => reject(new Error("Read error on JSON file."));
+      reader.readAsText(file);
+    });
   };
 
   const handleUpload = async () => {
@@ -259,8 +279,10 @@ export const DataUpload = () => {
             rawData = await parseCSV(file);
         } else if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
             rawData = await parseExcel(file);
+        } else if (file.name.toLowerCase().endsWith('.json')) {
+            rawData = await parseJSON(file);
         } else {
-            throw new Error("Unsupported file type. Please upload .csv, .xlsx, or .xls");
+            throw new Error("Unsupported file type. Please upload .csv, .xlsx, .xls, or .json");
         }
         
         if (rawData.length === 0) throw new Error("No data found in file");
@@ -321,61 +343,49 @@ export const DataUpload = () => {
             setUploadMessage(`Successfully imported ${mappedBirds.length} birds. ${linkedCount > 0 ? `Linked ${linkedCount} birds to PTTs.` : ''}`);
         }
         else if (uploadType === 'argos_data') {
-            const mappedArgos: ArgosMessage[] = [];
-            
+            const rawFixes: RawFix[] = [];
+
             for (const row of rawData) {
-                const rawPtt = row['PTT'] || row['Device ID'] || row['DeviceRef'] || row['Platform'] || row['Platform ID'] || row['platformId'] || row['platform_id'] || row['ptt'];
+                const rawPtt = row['PTT'] || row['Device ID'] || row['DeviceRef'] || row['Platform'] || row['Platform ID'] || row['platformId'] || row['platform_id'] || row['ptt'] || row['pttId'];
                 const platformId = normalizePttId(String(rawPtt || ''));
                 if (!platformId) continue;
 
-                const programId = String(row['Program Ref'] || row['programRef'] || row['Program'] || row['programId'] || 'Imported');
                 const unitType = String(row['Unit type'] || row['Unit Type'] || row['unitType'] || row.msgType || 'Houbara');
                 const satellite = String(row.satellite || row['Satellite'] || 'UNK');
-                const rawDataPayload = String(row['Raw data'] || row['rawData'] || '');
 
-                const msgDateRaw = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['Message Date'] || row['msgDatetime'];
+                const msgDateRaw = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['Message Date'] || row['msgDatetime'] || row['messageDate'];
                 const parsedMsgMs = safeParseTimestamp(msgDateRaw);
                 const messageDateIso = !isNaN(parsedMsgMs) && parsedMsgMs > 0 ? new Date(parsedMsgMs).toISOString() : undefined;
 
                 // 1. Check if row is from a CLS 'positions' export (clean, one fix per row)
-                const locDateRaw = row['Location date (UTC)'] || row['Location date'] || row['Location Date (UTC)'] || row['Location Date'];
+                const locDateRaw = row['Location date (UTC)'] || row['Location date'] || row['Location Date (UTC)'] || row['Location Date'] || row.locationDate || row.location_date;
                 if (locDateRaw) {
                     const locDateMs = safeParseTimestamp(locDateRaw);
                     if (!isNaN(locDateMs) && locDateMs > 0) {
-                        const lat = parseFloat(String(row['Latitude'] || row['lat'] || row['Lat']));
-                        let lon = parseFloat(String(row['Longitude'] || row['lon'] || row['Lon']));
+                        const lat = parseFloat(String(row['Latitude'] !== undefined ? row['Latitude'] : (row['lat'] !== undefined ? row['lat'] : (row['Lat'] !== undefined ? row['Lat'] : row.latitude))));
+                        let lon = parseFloat(String(row['Longitude'] !== undefined ? row['Longitude'] : (row['lon'] !== undefined ? row['lon'] : (row['Lon'] !== undefined ? row['Lon'] : row.longitude))));
                         if (isValidCoordinate(lat, lon)) {
                             if (platformId === '242086' && lon < 0) lon = Math.abs(lon);
 
-                            const locTypeRaw = String(row['Location type'] || row['Location Type'] || '').trim().toUpperCase();
-                            const isGps = locTypeRaw.includes('GPS') || (!locTypeRaw && !row['Location class']);
+                            const locTypeRaw = String(row['Location type'] || row['Location Type'] || row.locationType || '').trim().toUpperCase();
+                            const rawLc = String(row['Location class'] || row['Location Class'] || row.locationClass || row.lc || '').trim().toUpperCase();
+                            const isGps = locTypeRaw.includes('GPS') || (!locTypeRaw && (!rawLc || rawLc === 'GPS'));
                             const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
 
-                            const locClass = locType === 'GPS' ? null : (row['Location class'] || row['Location Class'] || 'Z');
-                            const errRadiusM = locType === 'GPS' ? 0 : (parseFloat(String(row['Error radius (m)'] || row['Error radius'] || row['Doppler Error radius (m)'] || 0)) || 0);
-                            const locDateIso = new Date(locDateMs).toISOString();
-                            const docId = makeDeterministicFixDocId(platformId, locType, locDateMs);
-                            const delayMin = messageDateIso ? Math.max(0, Math.round((parsedMsgMs - locDateMs) / 60000)) : 0;
+                            const locClass = locType === 'GPS' ? null : (rawLc !== 'GPS' && rawLc ? rawLc : 'Z');
+                            const errRadiusM = locType === 'GPS' ? 0 : (parseFloat(String(row['Error radius (m)'] || row['Error radius'] || row['Doppler Error radius (m)'] || row.errorRadiusM || 0)) || 0);
 
-                            mappedArgos.push({
-                                id: docId,
-                                programId,
-                                platformId,
-                                timestamp: locDateIso,
-                                lat: lat.toFixed(4),
-                                lon: lon.toFixed(4),
-                                lc: locType === 'GPS' ? 'GPS' : String(locClass || 'Z'),
-                                msgType: unitType,
-                                satellite,
-                                rawData: rawDataPayload,
+                            rawFixes.push({
+                                pttId: platformId,
+                                unitType,
                                 locationType: locType,
                                 locationClass: locClass,
                                 errorRadiusM: errRadiusM,
-                                dopplerError: String(errRadiusM),
-                                messageDate: messageDateIso || locDateIso,
-                                locationDate: locDateIso,
-                                deliveryCount: 1,
-                                lagMinutes: delayMin
+                                locationDate: locDateRaw,
+                                lat,
+                                lon,
+                                messageDate: messageDateIso || null,
+                                deliveries: Number(row.deliveries || row.deliveryCount || 1)
                             });
                             continue;
                         }
@@ -394,29 +404,17 @@ export const DataUpload = () => {
                     if (platformId === '242086' && gpsLon < 0) gpsLon = Math.abs(gpsLon);
                     const gpsDateMs = safeParseTimestamp(gpsDateRaw);
                     if (!isNaN(gpsDateMs) && gpsDateMs > 0) {
-                        const gpsDateIso = new Date(gpsDateMs).toISOString();
-                        const docId = makeDeterministicFixDocId(platformId, 'GPS', gpsDateMs);
-                        const delayMin = messageDateIso ? Math.max(0, Math.round((parsedMsgMs - gpsDateMs) / 60000)) : 0;
-
-                        mappedArgos.push({
-                            id: docId,
-                            programId,
-                            platformId,
-                            timestamp: gpsDateIso,
-                            lat: gpsLat.toFixed(4),
-                            lon: gpsLon.toFixed(4),
-                            lc: 'GPS',
-                            msgType: unitType,
-                            satellite,
-                            rawData: rawDataPayload,
+                        rawFixes.push({
+                            pttId: platformId,
+                            unitType,
                             locationType: 'GPS',
                             locationClass: null,
                             errorRadiusM: 0,
-                            dopplerError: '0',
-                            messageDate: messageDateIso || gpsDateIso,
-                            locationDate: gpsDateIso,
-                            deliveryCount: 1,
-                            lagMinutes: delayMin
+                            locationDate: gpsDateRaw,
+                            lat: gpsLat,
+                            lon: gpsLon,
+                            messageDate: messageDateIso || null,
+                            deliveries: Number(row.deliveries || row.deliveryCount || 1)
                         });
                         extractedFixFromRow = true;
                     }
@@ -431,31 +429,19 @@ export const DataUpload = () => {
                     if (platformId === '242086' && dopLon < 0) dopLon = Math.abs(dopLon);
                     const dopDateMs = safeParseTimestamp(dopDateRaw);
                     if (!isNaN(dopDateMs) && dopDateMs > 0) {
-                        const dopDateIso = new Date(dopDateMs).toISOString();
-                        const docId = makeDeterministicFixDocId(platformId, 'DOPPLER', dopDateMs);
                         const dopClass = String(row['Doppler Class'] || row['Location class'] || row['Location Class'] || 'Z');
                         const dopErr = parseFloat(String(row['Doppler Error radius (m)'] || row['Error radius (m)'] || row['Doppler Error'] || 0)) || 0;
-                        const delayMin = messageDateIso ? Math.max(0, Math.round((parsedMsgMs - dopDateMs) / 60000)) : 0;
-
-                        mappedArgos.push({
-                            id: docId,
-                            programId,
-                            platformId,
-                            timestamp: dopDateIso,
-                            lat: dopLat.toFixed(4),
-                            lon: dopLon.toFixed(4),
-                            lc: dopClass,
-                            msgType: unitType,
-                            satellite,
-                            rawData: rawDataPayload,
+                        rawFixes.push({
+                            pttId: platformId,
+                            unitType,
                             locationType: 'DOPPLER',
                             locationClass: dopClass,
                             errorRadiusM: dopErr,
-                            dopplerError: String(dopErr),
-                            messageDate: messageDateIso || dopDateIso,
-                            locationDate: dopDateIso,
-                            deliveryCount: 1,
-                            lagMinutes: delayMin
+                            locationDate: dopDateRaw,
+                            lat: dopLat,
+                            lon: dopLon,
+                            messageDate: messageDateIso || null,
+                            deliveries: Number(row.deliveries || row.deliveryCount || 1)
                         });
                         extractedFixFromRow = true;
                     }
@@ -470,35 +456,53 @@ export const DataUpload = () => {
                         if (platformId === '242086' && fallbackLon < 0) fallbackLon = Math.abs(fallbackLon);
                         const fbDateMs = safeParseTimestamp(fallbackDateRaw);
                         if (!isNaN(fbDateMs) && fbDateMs > 0) {
-                            const fbDateIso = new Date(fbDateMs).toISOString();
                             const locType = classifyLocationType(row.lc, row.locationType, satellite);
-                            const docId = makeDeterministicFixDocId(platformId, locType, fbDateMs);
-                            mappedArgos.push({
-                                id: docId,
-                                programId,
-                                platformId,
-                                timestamp: fbDateIso,
-                                lat: fallbackLat.toFixed(4),
-                                lon: fallbackLon.toFixed(4),
-                                lc: String(row.lc || (locType === 'GPS' ? 'GPS' : 'Z')),
-                                msgType: unitType,
-                                satellite,
-                                rawData: rawDataPayload,
+                            rawFixes.push({
+                                pttId: platformId,
+                                unitType,
                                 locationType: locType,
                                 locationClass: locType === 'GPS' ? null : String(row.lc || 'Z'),
                                 errorRadiusM: locType === 'GPS' ? 0 : (parseFloat(String(row.dopplerError || 0)) || 0),
-                                messageDate: messageDateIso || fbDateIso,
-                                locationDate: fbDateIso,
-                                deliveryCount: 1,
-                                lagMinutes: 0
+                                locationDate: fallbackDateRaw,
+                                lat: fallbackLat,
+                                lon: fallbackLon,
+                                messageDate: messageDateIso || null,
+                                deliveries: 1
                             });
                         }
                     }
                 }
             }
 
-            // Sort chronologically by Location Date ASC
-            mappedArgos.sort((a, b) => safeParseTimestamp(a.locationDate || a.timestamp) - safeParseTimestamp(b.locationDate || b.timestamp));
+            const { fixes: canonicalFixes } = buildFixes(rawFixes);
+
+            const mappedArgos: ArgosMessage[] = canonicalFixes.map(fix => {
+                const locDateIso = new Date(fix.t).toISOString();
+                const validMsgDateMs = fix.firstMessageMs || fix.t;
+                const msgDateIso = new Date(validMsgDateMs).toISOString();
+                const lagMinutes = Math.max(0, Math.round((validMsgDateMs - fix.t) / 60000));
+
+                return {
+                    id: fix.id,
+                    programId: 'Imported',
+                    platformId: fix.pttId,
+                    timestamp: locDateIso,
+                    lat: String(fix.lat),
+                    lon: String(fix.lon),
+                    lc: fix.type === 'GPS' ? 'GPS' : String(fix.cls || 'Z'),
+                    msgType: fix.unitTypes[0] || 'Houbara',
+                    satellite: fix.type === 'GPS' ? 'GPS' : 'UNK',
+                    rawData: '',
+                    locationType: fix.type,
+                    locationClass: fix.cls,
+                    errorRadiusM: fix.errorRadiusM,
+                    dopplerError: String(fix.errorRadiusM),
+                    messageDate: msgDateIso,
+                    locationDate: locDateIso,
+                    deliveryCount: fix.deliveries,
+                    lagMinutes
+                };
+            });
 
             await syncArgosToFirebase(mappedArgos, []);
             setUploadMessage(`Imported ${mappedArgos.length} position fixes sorted by Location Date. Data synced to Firebase.`);

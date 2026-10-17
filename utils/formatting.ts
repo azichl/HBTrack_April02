@@ -307,10 +307,53 @@ export const formatCoordinateSystems = (lat: number, lon: number) => {
   };
 };
 
-export function makeDeterministicFixDocId(pttId: string, locationType: string, locationDateEpochMs: number): string {
+import { 
+  fixId, 
+  canonType, 
+  parseUtc, 
+  buildFixes, 
+  byDateAsc, 
+  byDateDesc, 
+  filterFixes, 
+  lastFix, 
+  buildTrack, 
+  presetWindow, 
+  haversineKm, 
+  type LocType, 
+  type TypeFilter, 
+  type RawFix, 
+  type Fix, 
+  type Track, 
+  type FilterOpts, 
+  type TrackOpts 
+} from './positionsEngine';
+
+export { 
+  fixId, 
+  canonType, 
+  parseUtc, 
+  buildFixes, 
+  byDateAsc, 
+  byDateDesc, 
+  filterFixes, 
+  lastFix, 
+  buildTrack, 
+  presetWindow, 
+  haversineKm, 
+  type LocType, 
+  type TypeFilter, 
+  type RawFix, 
+  type Fix, 
+  type Track, 
+  type FilterOpts, 
+  type TrackOpts 
+};
+
+export function makeDeterministicFixDocId(pttId: string | number, locationType: string, locationDateEpochMs: number): string {
   const normPtt = normalizePttId(pttId);
-  const typeTag = String(locationType).toUpperCase().includes('GPS') ? 'GPS' : 'DOP';
-  return `${normPtt}_${typeTag}_${locationDateEpochMs}`;
+  const typeTag: LocType = String(locationType).toUpperCase().includes('GPS') ? 'GPS' : 'DOPPLER';
+  return fixId(normPtt, typeTag, locationDateEpochMs);
 }
+
 
 

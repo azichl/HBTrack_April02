@@ -1,0 +1,35 @@
+[
+ {
+  "pttId": "43574",
+  "unitType": "DS",
+  "locationClass": "B",
+  "locationType": "DOPPLER",
+  "errorRadiusM": 1970,
+  "locationDate": "2026-10-17T07:41:41.943Z",
+  "messageDate": "2026-10-17T07:41:41.943Z",
+  "lon": 73.3337,
+  "lat": 43.8706
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "DOPPLER",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T07:41:41.943Z",
+  "messageDate": "2026-10-17T07:41:41.943Z",
+  "lon": 73.3337,
+  "lat": 43.8706
+ },
+ {
+  "pttId": "43574",
+  "unitType": "DS",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T07:39:41.963Z",
+  "messageDate": "2026-10-17T07:39:41.963Z",
+  "lon": 73.3075,
+  "lat": 43.873
+ }
+]

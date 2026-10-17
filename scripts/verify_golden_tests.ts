@@ -36,7 +36,7 @@ assert('G1.1', normPtt === '43574', `normalizePttId('trans-043574') === '43574' 
 
 const docId1 = makeDeterministicFixDocId(normPtt, 'GPS', 1729134000000);
 const docId2 = makeDeterministicFixDocId('43574', 'GPS', 1729134000000);
-assert('G1.2', docId1 === '43574_GPS_1729134000000' && docId1 === docId2, `Deterministic ID match: ${docId1}`);
+assert('G1.2', docId1 === '43574_GPS_1729134000' && docId1 === docId2, `Deterministic ID match: ${docId1}`);
 
 // Simulated positions import (53 GPS + 255 DOPPLER = 308 docs)
 const mockDocs = new Map<string, any>();

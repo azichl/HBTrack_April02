@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { safeParseTimestamp, getYearMonthKey, getCurrentYearMonthKey, classifyLocationType, isHighQualityFix, isValidCoordinate, normalizePttId, makeDeterministicFixDocId } from '../utils/formatting';
+import { buildFixes, lastFix, type RawFix, type Fix } from '../utils/positionsEngine';
 import { ArgosMessage, StatusHistoryRecord, Transmitter, Position } from '../types';
 import { KNOWN_CLS_RAW_LOCATION_DATES, decodeBatteryVoltage } from './argosService';
 import { trackedGetDocs, trackedGetDoc, trackedOnSnapshot, trackedOnDocSnapshot } from '../src/perf/firestoreTracked';
@@ -465,76 +466,96 @@ export const batchWriteArgosPositions = async (
 ): Promise<number> => {
   if (messages.length === 0) return 0;
 
-  // In-batch deduplication accumulating deliveryCount, firstMessageDate, lastMessageDate, lagMinutes
-  const dedupedFixes = new Map<string, any>();
+  const rawFixes: RawFix[] = [];
+  const metaMap = new Map<string, { programId: string; satellite: string; rawData: string; source: string }>();
+
   for (const msg of messages) {
     const pidStr = normalizePttId(msg.platformId || (msg as any).pttId || (msg as any).deviceRef);
     if (!pidStr) continue;
 
-    let lat = parseFloat(String(msg.lat));
-    let lon = parseFloat(String(msg.lon));
+    let lat = typeof msg.lat === 'number' ? msg.lat : parseFloat(String(msg.lat));
+    let lon = typeof msg.lon === 'number' ? msg.lon : parseFloat(String(msg.lon));
     if (!isValidCoordinate(lat, lon)) continue;
     if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
 
     const locType: 'GPS' | 'DOPPLER' = classifyLocationType(msg.lc, msg.locationType, msg.satellite);
-    const locDateMs = safeParseTimestamp(msg.locationDate || msg.timestamp);
-    if (isNaN(locDateMs) || locDateMs <= 0) continue;
-    const locDateIso = new Date(locDateMs).toISOString();
+    const locDate = msg.locationDate || msg.timestamp;
+    const msgDate = msg.messageDate || (msg as any).msgDatetime || locDate;
+    const errRadiusM = locType === 'GPS' 
+      ? 0 
+      : (typeof msg.errorRadiusM === 'number' ? msg.errorRadiusM : (parseFloat(String(msg.dopplerError || '0')) || 0));
+    const locClass = locType === 'GPS' ? null : (msg.locationClass || (msg.lc !== 'GPS' ? msg.lc : null) || null);
+    const unitType = String((msg as any).unitType || msg.msgType || 'Houbara');
 
-    const docId = makeDeterministicFixDocId(pidStr, locType, locDateMs);
-    const msgDateMs = safeParseTimestamp(msg.messageDate || (msg as any).msgDatetime || locDateIso);
-    const validMsgDateMs = (!isNaN(msgDateMs) && msgDateMs > 0) ? msgDateMs : locDateMs;
+    rawFixes.push({
+      pttId: pidStr,
+      unitType,
+      locationType: locType,
+      locationClass: locClass,
+      errorRadiusM: errRadiusM,
+      locationDate: locDate,
+      lat,
+      lon,
+      messageDate: msgDate,
+      deliveries: msg.deliveryCount || 1
+    });
 
-    const existing = dedupedFixes.get(docId);
-    if (existing) {
-      existing.deliveryCount = (existing.deliveryCount || 1) + (msg.deliveryCount || 1);
-      if (validMsgDateMs < existing.firstMessageMs) {
-        existing.firstMessageMs = validMsgDateMs;
-        existing.firstMessageDate = new Date(validMsgDateMs).toISOString();
-      }
-      if (validMsgDateMs > existing.lastMessageMs) {
-        existing.lastMessageMs = validMsgDateMs;
-        existing.lastMessageDate = new Date(validMsgDateMs).toISOString();
-      }
-      existing.lagMinutes = Math.max(0, Math.round((existing.firstMessageMs - locDateMs) / 60000));
-    } else {
-      const errorRad = locType === 'GPS' 
-        ? 0 
-        : (typeof msg.errorRadiusM === 'number' ? msg.errorRadiusM : (parseFloat(String(msg.dopplerError || '0')) || 0));
-      const lcVal = locType === 'GPS' ? null : (msg.locationClass || msg.lc || null);
-      
-      dedupedFixes.set(docId, {
-        docId,
-        pttId: pidStr,
-        platformId: pidStr,
-        locationType: locType,
-        locationDate: locDateIso,
-        locationDateMs: locDateMs,
-        timestamp: locDateIso, // for backward-compatible queries
-        lat,
-        lon,
-        locationClass: lcVal,
-        lc: locType === 'GPS' ? 'GPS' : String(msg.lc || ''),
-        errorRadiusM: errorRad,
-        dopplerError: String(errorRad),
-        firstMessageMs: validMsgDateMs,
-        firstMessageDate: new Date(validMsgDateMs).toISOString(),
-        lastMessageMs: validMsgDateMs,
-        lastMessageDate: new Date(validMsgDateMs).toISOString(),
-        deliveryCount: msg.deliveryCount || 1,
-        lagMinutes: Math.max(0, Math.round((validMsgDateMs - locDateMs) / 60000)),
-        unitType: String(msg.msgType || 'Houbara'),
-        msgType: String(msg.msgType || 'Houbara'),
+    const key = `${pidStr}_${locType}_${locDate}`;
+    if (!metaMap.has(key)) {
+      metaMap.set(key, {
         programId: String(msg.programId || ''),
         satellite: String(msg.satellite || ''),
         rawData: String(msg.rawData || ''),
-        source: (msg as any).source || 'cls-api',
-        ingestedAt: new Date().toISOString()
+        source: (msg as any).source || 'cls-api'
       });
     }
   }
 
-  const items = Array.from(dedupedFixes.values());
+  const { fixes } = buildFixes(rawFixes);
+
+  const items = fixes.map((fix: Fix) => {
+    const locDateIso = new Date(fix.t).toISOString();
+    const meta = metaMap.get(`${fix.pttId}_${fix.type}_${locDateIso}`) || {
+      programId: '',
+      satellite: fix.type === 'GPS' ? 'GPS' : '',
+      rawData: '',
+      source: 'cls-positions'
+    };
+    const validMsgDateMs = fix.firstMessageMs || fix.t;
+    const msgDateIso = new Date(validMsgDateMs).toISOString();
+    const lagMinutes = Math.max(0, Math.round((validMsgDateMs - fix.t) / 60000));
+
+    return {
+      docId: fix.id,
+      pttId: fix.pttId,
+      platformId: fix.pttId,
+      locationType: fix.type,
+      locationDate: locDateIso,
+      locationDateMs: fix.t,
+      timestamp: locDateIso,
+      lat: fix.lat,
+      lon: fix.lon,
+      locationClass: fix.cls,
+      lc: fix.type === 'GPS' ? 'GPS' : String(fix.cls || 'Z'),
+      errorRadiusM: fix.errorRadiusM,
+      dopplerError: String(fix.errorRadiusM),
+      firstMessageMs: validMsgDateMs,
+      firstMessageDate: msgDateIso,
+      lastMessageMs: validMsgDateMs,
+      lastMessageDate: msgDateIso,
+      deliveryCount: fix.deliveries,
+      lagMinutes,
+      unitType: fix.unitTypes[0] || 'Houbara',
+      unitTypes: fix.unitTypes,
+      msgType: fix.unitTypes[0] || 'Houbara',
+      programId: meta.programId,
+      satellite: meta.satellite,
+      rawData: meta.rawData,
+      source: meta.source,
+      ingestedAt: new Date().toISOString()
+    };
+  });
+
   const BATCH_LIMIT = 400;
   let totalWritten = 0;
 
@@ -816,16 +837,9 @@ export const syncTransmittersFromArgosData = async (): Promise<{
       const pid = normalizePttId(rawPid);
       if (!pid) continue;
 
-      let maxLocDateMs = -Infinity;
-      let minLocDateMs = Infinity;
-      let latestRecord: any = null;
-      let latestGpsRecord: any = null;
-      let latestDopplerRecord: any = null;
-      let maxMessageMs = -Infinity;
-      let validFixCount = 0;
       let bestBattery: number | undefined;
-
-      const validFixesForStatus: any[] = [];
+      let maxMessageMs = -Infinity;
+      const rawFixes: RawFix[] = [];
 
       records.forEach(r => {
         const rawLat = r.lat !== undefined ? r.lat : r.latitude;
@@ -833,103 +847,98 @@ export const syncTransmittersFromArgosData = async (): Promise<{
         const lat = Number(rawLat);
         let lon = Number(rawLon);
         if (pid === '242086' && !isNaN(lon) && lon < 0) lon = Math.abs(lon);
+        if (!isValidCoordinate(lat, lon)) return;
 
         const locType: 'GPS' | 'DOPPLER' = classifyLocationType(r.lc, r.locationType, r.satellite);
         const locDateStr = r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition || r.timestamp;
         const locDateMs = safeParseTimestamp(locDateStr);
-        const msgDateMs = safeParseTimestamp(r.messageDate || r.firstMessageDate || r.msgDatetime || locDateStr);
+        if (isNaN(locDateMs) || locDateMs <= 0) return;
 
+        const msgDateMs = safeParseTimestamp(r.messageDate || r.firstMessageDate || r.msgDatetime || locDateStr);
         if (!isNaN(msgDateMs) && msgDateMs > maxMessageMs) {
           maxMessageMs = msgDateMs;
         }
 
-        if (!isNaN(locDateMs) && isValidCoordinate(lat, lon)) {
-          validFixCount++;
-          if (locDateMs < minLocDateMs) minLocDateMs = locDateMs;
-          const locDateIso = new Date(locDateMs).toISOString();
-          const recObj = { ...r, lat, lon, locDateMs, locDateIso, locType };
-
-          validFixesForStatus.push(recObj);
-
-          if (locDateMs > maxLocDateMs) {
-            maxLocDateMs = locDateMs;
-            latestRecord = recObj;
-          }
-          if (locType === 'GPS' && (!latestGpsRecord || locDateMs > latestGpsRecord.locDateMs)) {
-            latestGpsRecord = recObj;
-          }
-          if (locType === 'DOPPLER' && (!latestDopplerRecord || locDateMs > latestDopplerRecord.locDateMs)) {
-            latestDopplerRecord = recObj;
-          }
-        }
-
         if (r.rawData) {
           const v = decodeBatteryVoltage(r.rawData);
-          if (v !== undefined) {
-            if (bestBattery === undefined || v > bestBattery) bestBattery = v;
-          }
+          if (v !== undefined && (bestBattery === undefined || v > bestBattery)) bestBattery = v;
         } else if (r.battery_voltage) {
           const bv = Number(r.battery_voltage);
-          if (!isNaN(bv) && bv > 0) {
-            if (bestBattery === undefined || bv > bestBattery) bestBattery = bv;
-          }
+          if (!isNaN(bv) && bv > 0 && (bestBattery === undefined || bv > bestBattery)) bestBattery = bv;
         }
 
-        // If this record is from argos_positions with valid coordinates, ensure it exists in positions
-        if (r._col === 'argos_positions' && isValidCoordinate(lat, lon) && !isNaN(locDateMs)) {
-          const isoTs = new Date(locDateMs).toISOString();
-          const posId = `pos-${pid}-${locType === 'GPS' ? 'GPS' : 'DOP'}-${locDateMs}`;
-          missingPositionsDocs.push({
-            id: posId,
-            transmitter_id: pid,
-            timestamp: isoTs,
-            lat: lat,
-            lon: lon,
-            lc: locType === 'GPS' ? 'GPS' : (r.locationClass || r.lc || '3'),
-            locationClass: locType === 'GPS' ? null : (r.locationClass || r.lc || '3'),
-            is_kalman: false,
-            speed_kmh: Number(r.speed_kmh || r.speed || 0),
-            course: Number(r.course || 0),
-            satellite: r.satellite || 'GPS',
-            locationType: locType,
-            messageDate: r.messageDate || r.firstMessageDate || isoTs,
-            locationDate: isoTs,
-            errorRadiusM: locType === 'GPS' ? 0 : (typeof r.errorRadiusM === 'number' ? r.errorRadiusM : (parseFloat(String(r.dopplerError || '0')) || 0))
-          });
-        }
+        rawFixes.push({
+          pttId: pid,
+          unitType: r.unitType || r.msgType || 'Houbara',
+          locationType: locType,
+          locationClass: locType === 'GPS' ? null : (r.locationClass || r.lc || null),
+          errorRadiusM: locType === 'GPS' ? 0 : (typeof r.errorRadiusM === 'number' ? r.errorRadiusM : (parseFloat(String(r.dopplerError || '0')) || 0)),
+          locationDate: new Date(locDateMs).toISOString(),
+          lat,
+          lon,
+          messageDate: r.messageDate || r.firstMessageDate || r.msgDatetime || null,
+          deliveries: r.deliveryCount || 1
+        });
+      });
+
+      const { fixes: pttFixes } = buildFixes(rawFixes);
+      const latestRecord = lastFix(pttFixes, 'ALL');
+      const latestGpsRecord = lastFix(pttFixes, 'GPS');
+      const latestDopplerRecord = lastFix(pttFixes, 'DOPPLER');
+
+      // Ensure every canonical fix exists in positions collection
+      pttFixes.forEach(f => {
+        const isoTs = new Date(f.t).toISOString();
+        missingPositionsDocs.push({
+          id: f.id,
+          transmitter_id: pid,
+          timestamp: isoTs,
+          lat: f.lat,
+          lon: f.lon,
+          lc: (f.type === 'GPS' ? 'GPS' : (f.cls || '3')) as any,
+          locationClass: f.cls,
+          is_kalman: false,
+          speed_kmh: 0,
+          course: 0,
+          satellite: f.type === 'GPS' ? 'GPS' : 'Argos',
+          locationType: f.type,
+          messageDate: f.firstMessageMs ? new Date(f.firstMessageMs).toISOString() : isoTs,
+          locationDate: isoTs,
+          errorRadiusM: f.errorRadiusM
+        });
       });
 
       const liveDerived: any = {
         lastFix: latestRecord ? {
-          type: latestRecord.locType,
-          date: latestRecord.locDateIso,
+          type: latestRecord.type,
+          date: new Date(latestRecord.t).toISOString(),
           lat: latestRecord.lat,
           lon: latestRecord.lon,
-          class: latestRecord.locType === 'GPS' ? null : (latestRecord.locationClass || latestRecord.lc || null),
-          errorRadiusM: latestRecord.locType === 'GPS' ? 0 : (typeof latestRecord.errorRadiusM === 'number' ? latestRecord.errorRadiusM : (parseFloat(String(latestRecord.dopplerError || '0')) || 0))
+          class: latestRecord.cls,
+          errorRadiusM: latestRecord.errorRadiusM
         } : undefined,
         lastGps: latestGpsRecord ? {
-          date: latestGpsRecord.locDateIso,
+          date: new Date(latestGpsRecord.t).toISOString(),
           lat: latestGpsRecord.lat,
           lon: latestGpsRecord.lon
         } : undefined,
         lastDoppler: latestDopplerRecord ? {
-          date: latestDopplerRecord.locDateIso,
+          date: new Date(latestDopplerRecord.t).toISOString(),
           lat: latestDopplerRecord.lat,
           lon: latestDopplerRecord.lon,
-          class: latestDopplerRecord.locationClass || latestDopplerRecord.lc || 'Z',
-          errorRadiusM: typeof latestDopplerRecord.errorRadiusM === 'number' ? latestDopplerRecord.errorRadiusM : (parseFloat(String(latestDopplerRecord.dopplerError || '0')) || 0)
+          class: latestDopplerRecord.cls || 'Z',
+          errorRadiusM: latestDopplerRecord.errorRadiusM
         } : undefined,
-        lastMessageAt: maxMessageMs > 0 ? new Date(maxMessageMs).toISOString() : (latestRecord ? latestRecord.locDateIso : undefined),
-        firstFixAt: minLocDateMs < Infinity ? new Date(minLocDateMs).toISOString() : undefined,
-        fixCount: validFixCount,
+        lastMessageAt: maxMessageMs > 0 ? new Date(maxMessageMs).toISOString() : (latestRecord ? new Date(latestRecord.t).toISOString() : undefined),
+        firstFixAt: pttFixes.length > 0 ? new Date(pttFixes[0].t).toISOString() : undefined,
+        fixCount: pttFixes.length,
         updatedByRun: `run-${Date.now()}`
       };
 
       const existingTx = transmittersMap.get(pid);
       if (!existingTx) {
         // Discovered a new transmitter from tracking data (e.g. 244289)! Create it in Firestore!
-        const latestFixIso = latestRecord ? latestRecord.locDateIso : new Date().toISOString();
+        const latestFixIso = latestRecord ? new Date(latestRecord.t).toISOString() : new Date().toISOString();
         const newTx: Transmitter = {
           id: pid,
           platform_id: pid,
@@ -955,7 +964,7 @@ export const syncTransmittersFromArgosData = async (): Promise<{
       } else {
         // Transmitter exists, update with latest derived state strictly based on max(locationDate)
         const currLastFixMs = safeParseTimestamp(existingTx.last_fix);
-        const isNewer = isNaN(currLastFixMs) || (latestRecord && latestRecord.locDateMs >= currLastFixMs) || !existingTx.lat || !existingTx.lon;
+        const isNewer = isNaN(currLastFixMs) || (latestRecord && latestRecord.t >= currLastFixMs) || !existingTx.lat || !existingTx.lon;
         
         const updates: Partial<Transmitter> = {
           id: pid,
@@ -965,7 +974,7 @@ export const syncTransmittersFromArgosData = async (): Promise<{
         };
 
         if (isNewer && latestRecord) {
-          updates.last_fix = latestRecord.locDateIso;
+          updates.last_fix = new Date(latestRecord.t).toISOString();
           updates.lat = latestRecord.lat;
           updates.lon = latestRecord.lon;
           updates.latitude = latestRecord.lat;
@@ -1266,9 +1275,15 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   const endMs   = endDate.getTime();
   const allResults: any[] = [];
 
-  // Helper: process a Firestore doc snapshot into a position record
-  const processDoc = (docSnap: any, pidStr: string, seenKeys: Set<string>): any | null => {
+  const processDocToRawFix = (docSnap: any, pidStr: string): RawFix | null => {
     const d = docSnap.data();
+    const rawLat = d.lat !== undefined ? d.lat : d.latitude;
+    const rawLon = d.lon !== undefined ? d.lon : d.longitude;
+    const lat = Number(rawLat);
+    let lon = Number(rawLon);
+    if (!isValidCoordinate(lat, lon)) return null;
+    if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
+
     const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
     const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
     let rawTs = (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
@@ -1281,43 +1296,30 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       rawTs = d.timestamp || d.date || d.msgDatetime || d.bestDate;
     }
 
-    const rawLat = d.lat !== undefined ? d.lat : d.latitude;
-    const rawLon = d.lon !== undefined ? d.lon : d.longitude;
-    const lat = Number(rawLat);
-    let lon = Number(rawLon);
-    if (!isValidCoordinate(lat, lon)) return null;
-
-    let docTs = safeParseTimestamp(rawTs);
-    if (isNaN(docTs)) return null;
-
-    if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
-
-    const dedupeKey = `${docTs}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
-    if (seenKeys.has(dedupeKey)) return null;
-    seenKeys.add(dedupeKey);
+    const locDateMs = safeParseTimestamp(rawTs);
+    if (isNaN(locDateMs) || locDateMs <= 0) return null;
 
     const locType = classifyLocationType(d.lc, d.locationType, d.satellite);
+    const locClass = locType === 'GPS' ? null : (d.locationClass || (d.lc !== 'GPS' ? d.lc : null) || null);
+    const errRadiusM = locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
 
     return {
-      id: docSnap.id,
-      transmitter_id: pidStr,
-      platformId: pidStr,
-      lat, lon,
-      timestamp: rawTs,
-      locationDate: rawTs,
-      lc: locType === 'GPS' ? 'GPS' : String(d.locationClass || d.lc || 'Z'),
-      locationClass: locType === 'GPS' ? null : (d.locationClass || d.lc || 'Z'),
-      errorRadiusM: locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0)),
-      lagMinutes: d.lagMinutes !== undefined ? d.lagMinutes : (d.latencyMin || 0),
-      satellite: d.satellite || '',
+      pttId: pidStr,
+      unitType: d.unitType || d.msgType || 'Houbara',
       locationType: locType,
-      speed_kmh: d.speed_kmh || 0,
+      locationClass: locClass,
+      errorRadiusM: errRadiusM,
+      locationDate: new Date(locDateMs).toISOString(),
+      lat,
+      lon,
+      messageDate: d.messageDate || d.firstMessageDate || d.msgDatetime || null,
+      deliveries: d.deliveryCount || 1
     };
   };
 
   try {
     for (const pttId of transmitterIds) {
-      const pidStr = String(pttId);
+      const pidStr = normalizePttId(pttId);
       const idNum = Number(pttId);
       const isNumValid = !isNaN(idNum);
 
@@ -1333,8 +1335,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       }
 
       // 2. Fetch from Firestore with parallel targeted queries
-      const seenKeys = new Set<string>();
-      const pttDocs: any[] = [];
+      const rawFixesForPtt: RawFix[] = [];
 
       const queryPromises: Promise<any>[] = [
         getDocs(query(collection(db, 'argos_positions'), where('platformId', '==', pidStr))).catch(() => null),
@@ -1350,9 +1351,31 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       snapshots.forEach(snap => {
         if (!snap) return;
         snap.forEach((ds: any) => {
-          const rec = processDoc(ds, pidStr, seenKeys);
-          if (rec) pttDocs.push(rec);
+          const rawFix = processDocToRawFix(ds, pidStr);
+          if (rawFix) rawFixesForPtt.push(rawFix);
         });
+      });
+
+      const { fixes } = buildFixes(rawFixesForPtt);
+
+      const pttDocs = fixes.map((f: Fix) => {
+        const locDateIso = new Date(f.t).toISOString();
+        return {
+          id: f.id,
+          transmitter_id: f.pttId,
+          platformId: f.pttId,
+          lat: f.lat,
+          lon: f.lon,
+          timestamp: locDateIso,
+          locationDate: locDateIso,
+          lc: (f.type === 'GPS' ? 'GPS' : String(f.cls || 'Z')) as any,
+          locationClass: f.cls,
+          errorRadiusM: f.errorRadiusM,
+          lagMinutes: f.firstMessageMs ? Math.max(0, Math.round((f.firstMessageMs - f.t) / 60000)) : 0,
+          satellite: f.type === 'GPS' ? 'GPS' : '',
+          locationType: f.type,
+          speed_kmh: 0,
+        };
       });
 
       // Cache all positions for this transmitter

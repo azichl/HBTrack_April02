@@ -4,7 +4,8 @@ import { Download, Search, Trash2, Database, ChevronLeft, ChevronRight, RefreshC
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
-import { formatDateTime, formatUtcDateTime, normalizePttId, safeParseTimestamp } from '../utils/formatting';
+import { formatDateTime, formatUtcDateTime, normalizePttId, safeParseTimestamp, isValidCoordinate } from '../utils/formatting';
+import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
 import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, clearAllTrackingData, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
@@ -124,88 +125,100 @@ export const ArgosData = () => {
         data = data.filter(d => selectedTransmitterIds.includes(String(d.platformId || d.transmitter_id || '')));
       }
 
-      if (filterLocationType === 'GPS') {
-        data = data.filter(d => {
-          const lc = d.lc || '';
-          return lc.trim() === '' || (!['0','1','2','3','A','B','Z'].includes(lc));
-        });
-      } else if (filterLocationType === 'Doppler') {
-        data = data.filter(d => {
-          const lc = d.lc || '';
-          return ['0','1','2','3','A','B','Z'].includes(lc);
-        });
-      }
-
-      // Enrich rows with classification fields, locationDate vs messageDate, latency, deliveries
-      const enriched = data.map((d) => {
+      // Build canonical fixes using positionsEngine
+      const rawFixes: RawFix[] = [];
+      data.forEach(d => {
         const rawLc = String(d.locationClass || d.lc || '').trim();
         const latNum = Number(d.lat !== undefined ? d.lat : d.latitude);
         const lonNum = Number(d.lon !== undefined ? d.lon : d.longitude);
+        if (isNaN(latNum) || isNaN(lonNum)) return;
+
         const rawLocType = String(d.locationType || '').toUpperCase();
-        const isGps = rawLocType === 'GPS' || (!d.locationType && (!rawLc || rawLc === 'GPS'));
+        const isGps = rawLocType.includes('GPS') || (!d.locationType && (!rawLc || rawLc === 'GPS'));
         const locationType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
         const locationClass = isGps ? null : (rawLc !== 'GPS' && rawLc ? rawLc : 'Z');
         const errorRadiusM = isGps ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
 
         const locDateStr = d.locationDate || d.fixTime || d.gpsLocDate || d.timestamp || d.date || '';
-        const locDateMs = safeParseTimestamp(locDateStr);
-        const locationDateIso = !isNaN(locDateMs) && locDateMs > 0 ? new Date(locDateMs).toISOString() : locDateStr;
-
-        const receivedAtStr = d.firstMessageDate || d.receivedAt || d.messageDate || locationDateIso;
-        const receivedAtMs = safeParseTimestamp(receivedAtStr);
-        const receivedAtIso = !isNaN(receivedAtMs) && receivedAtMs > 0 ? new Date(receivedAtMs).toISOString() : receivedAtStr;
-
-        const delayMin = d.lagMinutes !== undefined 
-          ? d.lagMinutes 
-          : (!isNaN(receivedAtMs) && !isNaN(locDateMs) ? Math.max(0, Math.round((receivedAtMs - locDateMs) / 60000)) : 0);
-
         const pttId = normalizePttId(String(d.pttId || d.platformId || d.transmitter_id || ''));
+        if (!pttId) return;
+
+        const receivedAtStr = d.firstMessageDate || d.receivedAt || d.messageDate;
         const unitType = String(d.unitType || d.msgType || 'Houbara');
-        const deliveryCount = Number(d.deliveryCount || 1);
 
-        let quality = d.quality;
-        let accepted = d.accepted !== undefined ? d.accepted : true;
-        let rejectReason = d.rejectReason || null;
+        rawFixes.push({
+          pttId,
+          unitType,
+          locationType,
+          locationClass,
+          errorRadiusM,
+          locationDate: locDateStr,
+          lat: latNum,
+          lon: lonNum,
+          messageDate: receivedAtStr,
+          deliveries: Number(d.deliveryCount || 1)
+        });
+      });
 
-        if (!quality) {
-          if (isGps || ['3', '2', '1'].includes(String(locationClass))) quality = 'High';
-          else if (locationClass === '0') quality = 'Medium';
-          else if (['A', 'B'].includes(String(locationClass))) quality = 'Low';
-          else {
-            quality = 'Invalid';
-            accepted = false;
-            rejectReason = 'LC_Z';
-          }
+      const { fixes: canonicalFixes } = buildFixes(rawFixes);
+
+      let targetFixes = canonicalFixes;
+      if (filterLocationType === 'GPS') {
+        targetFixes = targetFixes.filter(f => f.type === 'GPS');
+      } else if (filterLocationType === 'Doppler') {
+        targetFixes = targetFixes.filter(f => f.type === 'DOPPLER');
+      }
+
+      const enriched = targetFixes.map((fix: Fix) => {
+        const locDateIso = new Date(fix.t).toISOString();
+        const receivedAtIso = fix.firstMessageMs ? new Date(fix.firstMessageMs).toISOString() : locDateIso;
+        const delayMin = fix.firstMessageMs ? Math.max(0, Math.round((fix.firstMessageMs - fix.t) / 60000)) : 0;
+        const isGps = fix.type === 'GPS';
+
+        let quality = 'High';
+        let accepted = true;
+        let rejectReason: string | null = null;
+
+        if (isGps || ['3', '2', '1'].includes(String(fix.cls))) quality = 'High';
+        else if (fix.cls === '0') quality = 'Medium';
+        else if (['A', 'B'].includes(String(fix.cls))) quality = 'Low';
+        else {
+          quality = 'Invalid';
+          accepted = false;
+          rejectReason = 'LC_Z';
         }
 
-        if (isNaN(latNum) || isNaN(lonNum) || (latNum === 0 && lonNum === 0) || Math.abs(latNum) > 90 || Math.abs(lonNum) > 180) {
+        if (!isValidCoordinate(fix.lat, fix.lon)) {
           accepted = false;
           if (!rejectReason) rejectReason = 'OUT_OF_RANGE';
         }
 
+        const unitType = fix.unitTypes[0] || 'Houbara';
+
         return {
-          ...d,
-          pttId,
-          platformId: pttId,
+          id: fix.id,
+          pttId: fix.pttId,
+          platformId: fix.pttId,
           unitType,
           msgType: unitType,
-          locationClass,
-          lc: isGps ? 'GPS' : (locationClass || 'Z'),
-          locationType,
-          errorRadiusM,
-          locationDate: locationDateIso,
-          fixTime: locationDateIso,
-          timestamp: locationDateIso,
+          locationClass: fix.cls,
+          lc: isGps ? 'GPS' : (fix.cls || 'Z'),
+          locationType: fix.type,
+          errorRadiusM: fix.errorRadiusM,
+          locationDate: locDateIso,
+          fixTime: locDateIso,
+          timestamp: locDateIso,
           receivedAt: receivedAtIso,
           firstMessageDate: receivedAtIso,
           lagMinutes: delayMin,
           latencyMin: delayMin,
-          deliveryCount,
-          lat: !isNaN(latNum) ? latNum.toFixed(5) : '-',
-          lon: !isNaN(lonNum) ? lonNum.toFixed(5) : '-',
-          quality: quality || 'High',
+          deliveryCount: fix.deliveries,
+          lat: fix.lat,
+          lon: fix.lon,
+          quality,
           accepted,
           rejectReason,
+          _collection: 'argos_positions'
         };
       });
 
@@ -348,7 +361,7 @@ export const ArgosData = () => {
       'PTT': row.pttId || row.platformId,
       'Unit type': row.unitType || row.msgType || 'Houbara',
       'Location class': row.locationType === 'GPS' ? '' : (row.locationClass || row.lc || ''),
-      'Location type': row.locationType || (row.lc === 'GPS' ? 'GPS' : 'DOPPLER'),
+      'Location type': row.locationType === 'GPS' ? 'GPS' : 'Doppler',
       'Error radius (m)': row.locationType === 'GPS' ? 0 : (row.errorRadiusM ?? 0),
       'Location date (UTC)': row.locationDate ? formatUtcDateTime(row.locationDate) : '',
       'Longitude': row.lon,

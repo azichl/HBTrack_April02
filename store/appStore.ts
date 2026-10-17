@@ -1702,20 +1702,31 @@ export const useAppStore = create<AppState>()(
               const pLat = Number(t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude));
               const pLon = Number(t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude));
               const txAny = t as any;
+              const lastFixObj = t.live?.lastFix;
+              const locType = (lastFixObj?.type || 'GPS') as 'GPS' | 'DOPPLER';
+              const locClass = locType === 'GPS' ? null : (lastFixObj?.class || '3');
+              const errRadius = locType === 'GPS' ? 0 : (lastFixObj?.errorRadiusM || 0);
+              const fixDate = lastFixObj?.date || t.last_fix || txAny.updatedAt || new Date().toISOString();
+              const fixLat = lastFixObj?.lat !== undefined ? lastFixObj.lat : pLat;
+              const fixLon = lastFixObj?.lon !== undefined ? lastFixObj.lon : pLon;
+
               return {
                 id: `pos-${t.platform_id}-latest`,
                 transmitter_id: String(t.platform_id),
-                timestamp: String(t.last_fix || txAny.updatedAt || new Date().toISOString()),
-                lat: pLat,
-                lon: pLon,
-                lc: '3' as const,
+                timestamp: fixDate,
+                locationDate: fixDate,
+                lat: fixLat,
+                lon: fixLon,
+                lc: (locType === 'GPS' ? 'GPS' : (locClass || '3')) as any,
+                locationClass: locClass,
+                errorRadiusM: errRadius,
                 is_kalman: false,
                 speed_kmh: Number(txAny.speed_kmh || 0),
                 course: Number(txAny.course || 0),
                 altitude: Number(txAny.altitude || 0),
                 battery_voltage: t.battery_voltage,
-                satellite: 'GPS',
-                locationType: 'GPS' as const
+                satellite: locType === 'GPS' ? 'GPS' : 'Argos',
+                locationType: locType
               };
             });
 
@@ -2057,20 +2068,31 @@ export const useAppStore = create<AppState>()(
               const pLat = Number(t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude));
               const pLon = Number(t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude));
               const txAny = t as any;
+              const lastFixObj = t.live?.lastFix;
+              const locType = (lastFixObj?.type || 'GPS') as 'GPS' | 'DOPPLER';
+              const locClass = locType === 'GPS' ? null : (lastFixObj?.class || '3');
+              const errRadius = locType === 'GPS' ? 0 : (lastFixObj?.errorRadiusM || 0);
+              const fixDate = lastFixObj?.date || t.last_fix || txAny.updatedAt || new Date().toISOString();
+              const fixLat = lastFixObj?.lat !== undefined ? lastFixObj.lat : pLat;
+              const fixLon = lastFixObj?.lon !== undefined ? lastFixObj.lon : pLon;
+
               return {
                 id: `pos-${t.platform_id}-latest`,
                 transmitter_id: String(t.platform_id),
-                timestamp: String(t.last_fix || txAny.updatedAt || new Date().toISOString()),
-                lat: pLat,
-                lon: pLon,
-                lc: '3' as const,
+                timestamp: fixDate,
+                locationDate: fixDate,
+                lat: fixLat,
+                lon: fixLon,
+                lc: (locType === 'GPS' ? 'GPS' : (locClass || '3')) as any,
+                locationClass: locClass,
+                errorRadiusM: errRadius,
                 is_kalman: false,
                 speed_kmh: Number(txAny.speed_kmh || 0),
                 course: Number(txAny.course || 0),
                 altitude: Number(txAny.altitude || 0),
                 battery_voltage: t.battery_voltage,
-                satellite: 'GPS',
-                locationType: 'GPS' as const
+                satellite: locType === 'GPS' ? 'GPS' : 'Argos',
+                locationType: locType
               };
             });
 

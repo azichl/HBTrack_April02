@@ -8,6 +8,7 @@ import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import { FIXED_FIELD_CAMPS } from '../constants';
 import { formatDateTime, formatUtcDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
+import { canonType, type TypeFilter } from '../utils/positionsEngine';
 import { isVisibleOnLiveMap } from '../utils/statusCalculator';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -1639,7 +1640,8 @@ const LiveTrackingInner = () => {
 
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
         const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
-        if (showHistory && selectedTransmitterIds.length > 0 && historyFixType !== 'All' && locType !== historyFixType) return;
+        const reqType: TypeFilter = historyFixType === 'GPS' ? 'GPS' : (historyFixType === 'Doppler' ? 'DOPPLER' : 'ALL');
+        if (showHistory && selectedTransmitterIds.length > 0 && reqType !== 'ALL' && locType !== reqType) return;
 
         const currentTs = safeParseTimestamp(p.timestamp);
         // Skip invalid dates
@@ -1667,8 +1669,17 @@ const LiveTrackingInner = () => {
       if (selectedTransmitterIds.length > 0 && !selectedTransmitterIds.includes(pid)) return;
 
       if (!latestMap.has(pid)) {
-        let rawLat = (t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat;
-        let rawLon = (t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon;
+        const liveMeta = t.live;
+        const targetLiveFix = (historyFixType === 'GPS' 
+          ? liveMeta?.lastGps 
+          : (historyFixType === 'Doppler' ? liveMeta?.lastDoppler : liveMeta?.lastFix)) || liveMeta?.lastFix;
+
+        let rawLat = targetLiveFix ? targetLiveFix.lat : ((t as any).latitude !== undefined ? (t as any).latitude : (t as any).lat);
+        let rawLon = targetLiveFix ? targetLiveFix.lon : ((t as any).longitude !== undefined ? (t as any).longitude : (t as any).lon);
+        let rawTs = (targetLiveFix as any)?.date || t.last_fix;
+        let rawLocType = (targetLiveFix as any)?.type || (historyFixType === 'GPS' ? 'GPS' : (historyFixType === 'Doppler' ? 'DOPPLER' : 'GPS'));
+        let rawLc = (targetLiveFix as any)?.class || (rawLocType === 'GPS' ? 'GPS' : 'Z');
+        let rawErr = (targetLiveFix as any)?.errorRadiusM || 0;
 
         if (rawLat === undefined || rawLon === undefined || Number(rawLat) === 0 || Number(rawLon) === 0) {
           const matchPos = positions.find(p => {
@@ -1679,6 +1690,9 @@ const LiveTrackingInner = () => {
           if (matchPos) {
             rawLat = matchPos.lat;
             rawLon = matchPos.lon;
+            rawTs = matchPos.timestamp || rawTs;
+            rawLocType = matchPos.locationType || rawLocType;
+            rawLc = matchPos.lc || rawLc;
           }
         }
 
@@ -1696,15 +1710,17 @@ const LiveTrackingInner = () => {
         latestMap.set(pid, {
             id: `pos-fallback-${pid}`,
             transmitter_id: pid,
-            timestamp: t.last_fix || new Date().toISOString(),
+            timestamp: rawTs || new Date().toISOString(),
             lat: numLat,
             lon: numLon,
-            lc: '3',
+            lc: rawLc,
             is_kalman: false,
             speed_kmh: 0,
             course: 0,
             satellite: 'Fallback',
-            locationType: 'GPS'
+            locationType: rawLocType,
+            locationClass: rawLocType === 'GPS' ? null : rawLc,
+            errorRadiusM: rawErr
         } as any);
       }
     });
@@ -1723,7 +1739,9 @@ const LiveTrackingInner = () => {
                     lat: lastPoint.lat,
                     lon: lastPoint.lon,
                     timestamp: lastPoint.timestamp,
-                    locationType: lastPoint.type || (historyFixType !== 'All' ? historyFixType : 'Unknown')
+                    locationType: lastPoint.type || (historyFixType === 'GPS' ? 'GPS' : (historyFixType === 'Doppler' ? 'DOPPLER' : 'GPS')),
+                    lc: (lastPoint as any).locationClass || (lastPoint.type === 'GPS' ? 'GPS' : 'Z'),
+                    errorRadiusM: (lastPoint as any).errorRadiusM || 0
                 };
                 
                 latestMap.set(hp.id, overridePos as any);
@@ -1868,21 +1886,16 @@ const LiveTrackingInner = () => {
         // Sort track points chronologically
         track.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
 
-        // Deduplicate points sharing the same timestamp window (< 60s), preferring GPS over Doppler
+        // Deduplicate points sharing the same canonical key (pttId, type, epoch second)
+        const seenFixKeys = new Set<string>();
         const dedupedTrack: typeof track = [];
         for (const p of track) {
           const pMs = safeParseTimestamp(p.timestamp);
-          const existingIdx = dedupedTrack.findIndex(existing => {
-            const eMs = safeParseTimestamp(existing.timestamp);
-            return Math.abs(eMs - pMs) < 60000;
-          });
-          if (existingIdx === -1) {
+          const fType = canonType(p.locationType || p.lc);
+          const fKey = `${pttId}_${fType}_${Math.round(pMs / 1000)}`;
+          if (!seenFixKeys.has(fKey)) {
+            seenFixKeys.add(fKey);
             dedupedTrack.push(p);
-          } else {
-            const existing = dedupedTrack[existingIdx];
-            if (p.locationType === 'GPS' && existing.locationType !== 'GPS') {
-              dedupedTrack[existingIdx] = p; // replace Doppler with higher quality GPS
-            }
           }
         }
         track = dedupedTrack;

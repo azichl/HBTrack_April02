@@ -120,10 +120,16 @@ export const decodeBatteryVoltage = (rawData: string, model: string = 'Unknown')
 };
 
 
+import { buildFixes, RawFix, Fix } from '../utils/positionsEngine';
+
 // Map Argos API data
 export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
     if (!Array.isArray(apiData)) return [];
-    const mapped = apiData.map((item: any) => {
+
+    const rawFixes: RawFix[] = [];
+    const itemMetaMap = new Map<string, { programId: string; satellite: string; rawData: string }>();
+
+    for (const item of apiData) {
         const lat = item.gpsLocLat !== undefined ? item.gpsLocLat : (item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.location?.latitude || 0));
         const lon = item.gpsLocLon !== undefined ? item.gpsLocLon : (item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.location?.longitude || 0));
         
@@ -140,12 +146,9 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
             locationType = 'GPS';
             if (!lc || lc.trim() === '') lc = 'GPS';
         } else if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) {
-            // Rule: When the "Class Type" provided by CLS = 1, 2, 3, 0, A, B, Z and NO GPS coordinate is provided, the "Location Type" is Doppler
             locationType = 'Doppler';
         }
 
-        // Rule: Always CLS when provide "GPS" in "location Type" provide "Location Class" blank 
-        // so if you have all Doppler error =0 and you have coordinate collected the "Location Class" is GPS
         if (dopplerError === '0' && (!rawLc || rawLc.trim() === '')) {
             lc = 'GPS';
             locationType = 'GPS';
@@ -156,14 +159,14 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         // Strictly prioritize Location Date (GPS / Doppler fix date) over Message reception date
         const { locationDate, messageDate } = extractLocationDate(item);
         const platformId = normalizePttId(item.deviceRef || item.platformId || item.ptt || '');
-        if (!platformId) return null;
+        if (!platformId) continue;
 
         let numLat = Number(lat);
         let numLon = Number(lon);
         
         // Reject zero/invalid coordinates at ingestion
         if (!isValidCoordinate(numLat, numLon)) {
-            return null;
+            continue;
         }
 
         // Auto-correct negative longitude to positive for transmitter 242086
@@ -172,34 +175,67 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
         }
 
         const canonicalLocType: 'GPS' | 'DOPPLER' = locationType === 'GPS' ? 'GPS' : 'DOPPLER';
-        const locDateMs = safeParseTimestamp(locationDate);
-        const deterministicId = makeDeterministicFixDocId(platformId, canonicalLocType, locDateMs);
         const errRadiusM = canonicalLocType === 'GPS' ? 0 : (parseFloat(dopplerError) || 0);
         const locClass = canonicalLocType === 'GPS' ? null : (item.dopplerLocClass || item.location?.locationClass || (rawLc !== 'GPS' ? rawLc : null) || null);
+        const unitType = String(item.unitType || item.transType || 'DS');
 
-        return {
-            id: deterministicId,
-            programId: String(item.programRef || item.programNumber || 'Unknown'),
-            platformId: platformId,
-            timestamp: locationDate,
-            lat: numLat.toFixed(4),
-            lon: numLon.toFixed(4),
-            lc: String(lc),
-            msgType: String(item.unitType || item.transType || 'DS'), 
-            satellite: item.kineisMetadata?.sat || item.satellite || 'UNK',
-            rawData: item.rawData || '',
-            locationType: canonicalLocType, 
+        rawFixes.push({
+            pttId: platformId,
+            unitType,
+            locationType: canonicalLocType,
             locationClass: locClass,
             errorRadiusM: errRadiusM,
-            dopplerError: dopplerError,
-            messageDate: messageDate,
-            locationDate: locationDate
-        };
-    }).filter(Boolean) as ArgosMessage[];
+            locationDate,
+            lat: numLat,
+            lon: numLon,
+            messageDate: messageDate || null,
+            deliveries: 1
+        });
 
-    // Reorganize by Location Date in ascending chronological order
-    mapped.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
-    return mapped;
+        const key = `${platformId}_${locationDate}`;
+        if (!itemMetaMap.has(key)) {
+            itemMetaMap.set(key, {
+                programId: String(item.programRef || item.programNumber || 'Unknown'),
+                satellite: item.kineisMetadata?.sat || item.satellite || 'UNK',
+                rawData: item.rawData || ''
+            });
+        }
+    }
+
+    const { fixes } = buildFixes(rawFixes);
+
+    return fixes.map((fix: Fix) => {
+        const isoDate = new Date(fix.t).toISOString();
+        const meta = itemMetaMap.get(`${fix.pttId}_${isoDate}`) || {
+            programId: 'Unknown',
+            satellite: fix.type === 'GPS' ? 'GPS' : 'UNK',
+            rawData: ''
+        };
+
+        const msgDateIso = fix.firstMessageMs ? new Date(fix.firstMessageMs).toISOString() : isoDate;
+        const delayMin = fix.firstMessageMs ? Math.max(0, Math.round((fix.firstMessageMs - fix.t) / 60000)) : 0;
+
+        return {
+            id: fix.id,
+            programId: meta.programId,
+            platformId: fix.pttId,
+            timestamp: isoDate,
+            lat: fix.lat as any,
+            lon: fix.lon as any,
+            lc: (fix.type === 'GPS' ? 'GPS' : (fix.cls || 'Z')) as any,
+            msgType: fix.unitTypes[0] || 'Houbara',
+            satellite: meta.satellite,
+            rawData: meta.rawData,
+            locationType: fix.type,
+            locationClass: fix.cls,
+            errorRadiusM: fix.errorRadiusM,
+            dopplerError: String(fix.errorRadiusM),
+            messageDate: msgDateIso,
+            locationDate: isoDate,
+            deliveryCount: fix.deliveries,
+            lagMinutes: delayMin
+        } as ArgosMessage;
+    });
 };
 
 export const mapArgosDevices = (apiData: any[]): ArgosDevice[] => {
