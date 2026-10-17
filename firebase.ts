@@ -22,7 +22,11 @@ import { getFunctions } from "firebase/functions";
 // Export instances to use in the app with IndexedDB persistent caching to minimize billable Firestore reads
 export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+    cacheSizeBytes: 100 * 1024 * 1024 // 100 MB bound to prevent IndexedDB ballooning
+  }),
+  experimentalAutoDetectLongPolling: true
 });
 export const functions = getFunctions(app);
-export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+export const analytics = null;

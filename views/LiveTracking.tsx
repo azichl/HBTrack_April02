@@ -13,6 +13,7 @@ import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { fetchAllLayers } from '../services/qgisLayerService';
 import Draggable from 'react-draggable';
+import { mark } from '../src/diagnostics/bootProfiler';
 
 const DraggableComponent = Draggable as any;
 // Use exact user-requested hex colors for the map markers, adjusted size
@@ -1257,6 +1258,10 @@ const LiveTrackingInner = () => {
   
   // View Mode State
   const [viewMode, setViewMode] = useState<'tracking' | 'weather' | 'weather2'>('tracking');
+
+  useEffect(() => {
+    mark('live_map:first_paint');
+  }, []);
 
   // Load QGIS layers metadata from Firestore on mount
   useEffect(() => {

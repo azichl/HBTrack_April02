@@ -31,6 +31,9 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           output: {
             manualChunks(id) {
+              if (id.includes('preload-helper') || id.includes('vite/') || id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/scheduler/')) {
+                return 'vendor-react';
+              }
               if (id.includes('node_modules/firebase') || id.includes('@firebase')) {
                 return 'vendor-firebase';
               }

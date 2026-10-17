@@ -11,8 +11,8 @@ import { logUserActivity } from './services/activityLogger';
 import { Login } from './views/Login';
 import { Sidebar } from './components/Sidebar';
 import { useAppStore } from './store/appStore';
-import { Dashboard } from './views/Dashboard';
 import { Role } from './types';
+import { mark, bootReport } from './src/diagnostics/bootProfiler';
 import { IOSBottomNav } from './components/IOSBottomNav';
 import { Bell, Search, UserCircle, Menu, LogOut, Radio, X, AlertTriangle, CheckCircle, Info, Tent } from 'lucide-react';
 import { HoubaraIcon } from './components/HoubaraIcon';
@@ -29,6 +29,7 @@ if (typeof window !== 'undefined') {
 
 
 // Lazy-loaded heavy views for fast initial load
+const Dashboard = React.lazy(() => import('./views/Dashboard').then(m => ({ default: m.Dashboard })));
 const LiveTracking = React.lazy(() => import('./views/LiveTracking').then(m => ({ default: m.LiveTracking })));
 const GeofenceAlerts = React.lazy(() => import('./views/GeofenceAlerts').then(m => ({ default: m.GeofenceAlerts })));
 const AIPredictions = React.lazy(() => import('./views/AIPredictions').then(m => ({ default: m.AIPredictions })));
@@ -436,11 +437,15 @@ const App = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && !firestoreInitialized.current) {
+        mark('auth:ready');
         try {
-          // Verify App Access
-          const userDoc = await trackedGetDoc('user profile (users)', doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
+          // Parallelize user profile verification and store initialization (1 RTT)
+          const [userDoc] = await Promise.all([
+            trackedGetDoc('user profile (users)', doc(db, 'users', user.uid)),
+            initializeFromFirestore()
+          ]);
 
+          if (userDoc.exists()) {
              const userData = userDoc.data();
              const appAccess = userData.appAccess || ['web', 'ios'];
              
@@ -483,6 +488,7 @@ const App = () => {
                setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users'], ['web', 'ios', 'ios_data_upload'], true, 'all', []);
              }
           }
+          mark('role:ready');
         } catch (err) {
           console.error("Failed to verify user access", err);
         }
@@ -493,18 +499,27 @@ const App = () => {
         // Log Session Start when user successfully authenticates
         logUserActivity(user.uid, user.email || '', 'SESSION_START', 'User logged in');
         
-        await initializeFromFirestore();
         liveUnsubRef.current = subscribeToLivePositions();
+        mark('data:first');
         setAuthLoading(false);
+        setShowAppIntro(false);
+        mark('shell:visible');
+        mark('ui:interactive');
+        bootReport();
       } else if (user) {
         // If already initialized, just set user
+        mark('auth:ready');
         setCurrentUser(user);
         setAuthLoading(false);
+        setShowAppIntro(false);
+        mark('ui:interactive');
+        bootReport();
       }
 
       if (!user) {
         setCurrentUser(null);
         setAuthLoading(false);
+        setShowAppIntro(false);
         firestoreInitialized.current = false;
         if (liveUnsubRef.current) {
           liveUnsubRef.current();
@@ -539,14 +554,7 @@ const App = () => {
   const urlTab = searchParams.get('tab');
   const currentView = (isStandalone && urlTab) ? urlTab : activeTab;
 
-  const [showAppIntro, setShowAppIntro] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowAppIntro(false);
-    }, 1600);
-    return () => clearTimeout(timer);
-  }, []);
+  const [showAppIntro, setShowAppIntro] = useState(false);
 
   useEffect(() => {
     if (!authLoading) {

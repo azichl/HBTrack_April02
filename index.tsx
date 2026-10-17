@@ -1,3 +1,6 @@
+import { mark } from './src/diagnostics/bootProfiler';
+mark('app:start');
+
 import React, { ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
 import '@fontsource/ibm-plex-sans-arabic/400.css';

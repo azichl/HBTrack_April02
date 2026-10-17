@@ -1654,13 +1654,11 @@ export const useAppStore = create<AppState>()(
           // purgeZeroCoordinates disabled on init — zero coords are now filtered at ingestion time
           // get().purgeZeroCoordinates().catch(err => console.warn('[AppStore] Zero purge error:', err));
           
-          const [fsTransmittersRaw, fsBirdsRaw, fsAlerts, fsUsers, fsStaticPeriods, fsStatusHistory, fsLastIngest] = await Promise.all([
+          const [fsTransmittersRaw, fsBirdsRaw, fsAlerts, fsUsers, fsLastIngest] = await Promise.all([
             fetchAllTransmittersFromFirestore(),
             fetchAllBirdsFromFirestore(),
             loadRecentAlerts<Alert>(),
             loadCollection<User>('users'),
-            loadCollection<StaticTestPeriod>('static_test_periods'),
-            loadAllStatusHistory(),
             loadLastIngestTime()
           ]);
 
@@ -1668,7 +1666,7 @@ export const useAppStore = create<AppState>()(
           const { deduplicated: fsTransmitters, deletedDocIds: txDupIds, updatedCanonicalDocs: txUpdatedDocs } = deduplicateTransmitters(fsTransmittersRaw);
           const { deduplicated: fsBirds, deletedDocIds: birdDupIds, updatedCanonicalDocs: birdUpdatedDocs } = deduplicateBirds(fsBirdsRaw);
 
-          // Clean up duplicate Firestore documents in background
+          // Clean up duplicate Firestore documents in background (non-blocking)
           if (txDupIds.length > 0 || txUpdatedDocs.length > 0) {
             fireAndForget(async () => {
               for (const doc of txUpdatedDocs) {
@@ -1693,29 +1691,33 @@ export const useAppStore = create<AppState>()(
             });
           }
 
-          // Load only the latest GPS and Doppler position for each transmitter
-          const fsPositions = await loadLatestPositionsPerTransmitter(fsTransmitters.map(t => t.platform_id));
-
-          // Auto-discover and synchronize any transmitters existing in argos_positions/positions but missing in transmitters (e.g. 244289)
-          try {
-            const { transmitters: syncedTx, positions: syncedPositions } = await syncTransmittersFromArgosData();
-            syncedTx.forEach(st => {
-              const pid = String(st.platform_id).replace(/^trans-/, '').trim();
-              const existingIdx = fsTransmitters.findIndex(t => String(t.platform_id).replace(/^trans-/, '').trim() === pid);
-              if (existingIdx === -1) {
-                fsTransmitters.push(st);
-              } else if (st.last_fix && (!fsTransmitters[existingIdx].last_fix || safeParseDate(st.last_fix) > safeParseDate(fsTransmitters[existingIdx].last_fix))) {
-                fsTransmitters[existingIdx] = { ...fsTransmitters[existingIdx], ...st };
-              }
+          // FAST BOOT: Derive initial live positions directly from transmitter summary docs (0 network reads, 0 ms)
+          const fsPositions: Position[] = fsTransmitters
+            .filter(t => {
+              const rawLat = t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude);
+              const rawLon = t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude);
+              return isValidCoordinate(rawLat, rawLon);
+            })
+            .map(t => {
+              const pLat = Number(t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude));
+              const pLon = Number(t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude));
+              const txAny = t as any;
+              return {
+                id: `pos-${t.platform_id}-latest`,
+                transmitter_id: String(t.platform_id),
+                timestamp: String(t.last_fix || txAny.updatedAt || new Date().toISOString()),
+                lat: pLat,
+                lon: pLon,
+                lc: '3' as const,
+                is_kalman: false,
+                speed_kmh: Number(txAny.speed_kmh || 0),
+                course: Number(txAny.course || 0),
+                altitude: Number(txAny.altitude || 0),
+                battery_voltage: t.battery_voltage,
+                satellite: 'GPS',
+                locationType: 'GPS' as const
+              };
             });
-            syncedPositions.forEach(sp => {
-              if (!fsPositions.some(p => p.id === sp.id)) {
-                fsPositions.push(sp);
-              }
-            });
-          } catch (e) {
-            console.warn('[AppStore] Could not sync from Argos data during init:', e);
-          }
 
           // Ensure bidirectional ID linking between transmitters and birds
           fsTransmitters.forEach(t => {
@@ -1801,8 +1803,8 @@ export const useAppStore = create<AppState>()(
             positions: finalPositions,
             alerts: finalAlerts,
             users: mergedUsers,
-            staticTestPeriods: fsStaticPeriods || [],
-            statusHistoryRecords: fsStatusHistory || [],
+            staticTestPeriods: get().staticTestPeriods || [],
+            statusHistoryRecords: get().statusHistoryRecords || [],
             lastIngestTime: fsLastIngest || null,
             firestoreReady: true,
             currentUserRole: role,
@@ -2009,9 +2011,14 @@ export const useAppStore = create<AppState>()(
       subscribeToLivePositions: () => {
         // Real-time listener for last data update / ingestion timestamp
         let isAutoRefreshing = false;
+        let initialIngestSeen = false;
         const unsubIngest = subscribeToLastIngestTime((ts) => {
           if (ts) {
             set({ lastIngestTime: ts });
+            if (!initialIngestSeen) {
+              initialIngestSeen = true;
+              return; // Prevent duplicate heavy re-sync on initial boot snapshot
+            }
             if (!isAutoRefreshing) {
               isAutoRefreshing = true;
               get().refreshMonitoringData().finally(() => {
@@ -2038,7 +2045,36 @@ export const useAppStore = create<AppState>()(
           });
 
           const filteredTransmitters = filterTransmittersForUser(deduplicated, currentUserIosPttVisibility, currentUserIosVisiblePtts);
-          set({ transmitters: filteredTransmitters, lastSaved: new Date().toISOString() });
+          
+          // Keep positions synchronized in real-time from transmitter updates without extra collection reads
+          const syncPositions: Position[] = filteredTransmitters
+            .filter(t => {
+              const rawLat = t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude);
+              const rawLon = t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude);
+              return isValidCoordinate(rawLat, rawLon);
+            })
+            .map(t => {
+              const pLat = Number(t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude));
+              const pLon = Number(t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude));
+              const txAny = t as any;
+              return {
+                id: `pos-${t.platform_id}-latest`,
+                transmitter_id: String(t.platform_id),
+                timestamp: String(t.last_fix || txAny.updatedAt || new Date().toISOString()),
+                lat: pLat,
+                lon: pLon,
+                lc: '3' as const,
+                is_kalman: false,
+                speed_kmh: Number(txAny.speed_kmh || 0),
+                course: Number(txAny.course || 0),
+                altitude: Number(txAny.altitude || 0),
+                battery_voltage: t.battery_voltage,
+                satellite: 'GPS',
+                locationType: 'GPS' as const
+              };
+            });
+
+          set({ transmitters: filteredTransmitters, positions: syncPositions, lastSaved: new Date().toISOString() });
         });
 
         // Real-time listener for birds collection updates (ring IDs, names, status)
@@ -2066,8 +2102,8 @@ export const useAppStore = create<AppState>()(
           });
         });
 
-        // Only listen for new positions generated from recent 7 days to avoid huge reads
-        const unsubPositions = subscribeToRecentPositions(7, (firestorePositions) => {
+        // Listen only for new positions generated within the last 24 hours to avoid huge reads
+        const unsubPositions = subscribeToRecentPositions(1, (firestorePositions) => {
           // Merge incoming new positions into the store (retaining older ones loaded initially)
           set((state) => {
             const currentPositions = [...state.positions];

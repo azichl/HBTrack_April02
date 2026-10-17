@@ -109,7 +109,10 @@ const transmitter43574: Transmitter = {
   platform_id: '43574',
   status: 'Active',
   derived_status: 'Active',
-  last_fix: '2026-10-17 05:10:39'
+  last_fix: '2026-10-17 05:10:39',
+  model: 'Solar PTT',
+  bird_id: '',
+  duty_cycle: '24h'
 };
 const evalResult = evaluateTransmitterStatus(transmitter43574, [
   { lat: 43.87, lon: 73.29, timestamp: '2026-10-17 05:10:39', locationType: 'DOPPLER' } as any
