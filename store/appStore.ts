@@ -269,9 +269,14 @@ interface AppState {
 export const filterTransmittersForUser = (
   transmitters: Transmitter[],
   visibility: 'all' | 'custom' | undefined,
-  visiblePtts: string[] | undefined
+  visiblePtts: string[] | undefined,
+  role?: Role
 ): Transmitter[] => {
-  if (visibility === 'custom' && Array.isArray(visiblePtts)) {
+  // Administrators and Managers always have full access to all transmitters on the Web management platform
+  if (role === 'Administrator' || role === 'Manager') {
+    return transmitters;
+  }
+  if (visibility === 'custom' && Array.isArray(visiblePtts) && visiblePtts.length > 0) {
     const visibleSet = new Set(visiblePtts.map(id => String(id)));
     return transmitters.filter(t => visibleSet.has(String(t.platform_id)));
   }
@@ -282,9 +287,13 @@ export const filterPositionsForUser = (
   positions: Position[],
   transmitters: Transmitter[],
   visibility: 'all' | 'custom' | undefined,
-  visiblePtts: string[] | undefined
+  visiblePtts: string[] | undefined,
+  role?: Role
 ): Position[] => {
-  if (visibility === 'custom' && Array.isArray(visiblePtts)) {
+  if (role === 'Administrator' || role === 'Manager') {
+    return positions;
+  }
+  if (visibility === 'custom' && Array.isArray(visiblePtts) && visiblePtts.length > 0) {
     const visibleSet = new Set(visiblePtts.map(id => String(id)));
     return positions.filter(p => {
       const t = transmitters.find(tx => String(tx.platform_id) === String(p.transmitter_id) || tx.id === p.transmitter_id);
@@ -298,9 +307,13 @@ export const filterAlertsForUser = (
   alerts: Alert[],
   transmitters: Transmitter[],
   visibility: 'all' | 'custom' | undefined,
-  visiblePtts: string[] | undefined
+  visiblePtts: string[] | undefined,
+  role?: Role
 ): Alert[] => {
-  if (visibility === 'custom' && Array.isArray(visiblePtts)) {
+  if (role === 'Administrator' || role === 'Manager') {
+    return alerts;
+  }
+  if (visibility === 'custom' && Array.isArray(visiblePtts) && visiblePtts.length > 0) {
     const visibleSet = new Set(visiblePtts.map(id => String(id)));
     return alerts.filter(a => {
       const t = transmitters.find(tx => String(tx.platform_id) === String(a.transmitter_id) || tx.id === a.transmitter_id);
@@ -1117,7 +1130,7 @@ export const useAppStore = create<AppState>()(
               
               const allTransmitters = Array.from(transMap.values());
               fireAndForget(() => syncTransmitters(allTransmitters));
-              const filtered = filterTransmittersForUser(allTransmitters, state.currentUserIosPttVisibility, state.currentUserIosVisiblePtts);
+              const filtered = filterTransmittersForUser(allTransmitters, state.currentUserIosPttVisibility, state.currentUserIosVisiblePtts, state.currentUserRole);
               return { transmitters: filtered, lastSaved: new Date().toISOString() };
           });
       },
@@ -1231,7 +1244,7 @@ export const useAppStore = create<AppState>()(
       // Argos API → mapArgosApiData() → syncArgosToFirebase() → Firebase
       // NO data is stored in zustand state arrays. NO LocalStorage.
       syncArgosToFirebase: async (incomingMessages, incomingDevices = [], onProgress) => {
-          const { transmitters, positions, addAlert, currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
+          const { transmitters, positions, addAlert, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole } = get();
           let existingDbTransmitters: Transmitter[] = [];
           try {
             existingDbTransmitters = await loadCollection<Transmitter>('transmitters');
@@ -1495,8 +1508,8 @@ export const useAppStore = create<AppState>()(
           const nowIso = new Date().toISOString();
           await saveLastIngestTime(nowIso);
 
-          const filteredTransmitters = filterTransmittersForUser(newTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
-          const filteredPositions = filterPositionsForUser(cappedPositions, newTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+          const filteredTransmitters = filterTransmittersForUser(newTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
+          const filteredPositions = filterPositionsForUser(cappedPositions, newTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
 
           set({ 
               transmitters: filteredTransmitters, 
@@ -1622,8 +1635,8 @@ export const useAppStore = create<AppState>()(
 
               // Update in-memory state with final status results
               if (statusUpdated) {
-                const { currentUserIosPttVisibility: vis, currentUserIosVisiblePtts: visPtts } = get();
-                const updatedFiltered = filterTransmittersForUser(bgTransmitters, vis, visPtts);
+                const { currentUserIosPttVisibility: vis, currentUserIosVisiblePtts: visPtts, currentUserRole: userRole } = get();
+                const updatedFiltered = filterTransmittersForUser(bgTransmitters, vis, visPtts, userRole);
                 set({ transmitters: updatedFiltered });
                 console.log('[AppStore] Background: status evaluation complete, UI updated.');
               }
@@ -1825,9 +1838,9 @@ export const useAppStore = create<AppState>()(
             }
           }
 
-          const finalTransmitters = filterTransmittersForUser(mergedTransmitters, iosPttVisibility as any, iosVisiblePtts);
-          const finalPositions = filterPositionsForUser(recentPositions, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts);
-          const finalAlerts = filterAlertsForUser(mergedAlerts, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts);
+          const finalTransmitters = filterTransmittersForUser(mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, role);
+          const finalPositions = filterPositionsForUser(recentPositions, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, role);
+          const finalAlerts = filterAlertsForUser(mergedAlerts, mergedTransmitters, iosPttVisibility as any, iosVisiblePtts, role);
 
           set({
             transmitters: finalTransmitters,
@@ -1976,8 +1989,8 @@ export const useAppStore = create<AppState>()(
           if (updated > 0) {
             const freshTransmitters = await loadCollection<Transmitter>('transmitters');
             const { deduplicated: deduplicatedFresh } = deduplicateTransmitters(freshTransmitters);
-            const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
-            const filteredTransmitters = filterTransmittersForUser(deduplicatedFresh, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+            const { currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole } = get();
+            const filteredTransmitters = filterTransmittersForUser(deduplicatedFresh, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
             set({ transmitters: filteredTransmitters });
             onProgress?.(`Updated derived_status for ${updated} transmitters.`);
           } else {
@@ -2014,9 +2027,9 @@ export const useAppStore = create<AppState>()(
           });
 
           // 5. Apply user visibility filtering
-          const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
-          const filteredTransmitters = filterTransmittersForUser(dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
-          const filteredPositions = filterPositionsForUser(syncedPositions, dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+          const { currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole } = get();
+          const filteredTransmitters = filterTransmittersForUser(dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
+          const filteredPositions = filterPositionsForUser(syncedPositions, dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
 
           set({
             transmitters: filteredTransmitters,
@@ -2064,7 +2077,7 @@ export const useAppStore = create<AppState>()(
         const unsubTransmitters = subscribeToCollection<Transmitter>('transmitters', (rawTransmitters) => {
           if (!rawTransmitters || rawTransmitters.length === 0) return;
           const { deduplicated } = deduplicateTransmitters(rawTransmitters);
-          const { currentUserIosPttVisibility, currentUserIosVisiblePtts, birds } = get();
+          const { currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole, birds } = get();
 
           deduplicated.forEach(t => {
             const matched = findBirdForTransmitter(birds, t);
@@ -2076,7 +2089,7 @@ export const useAppStore = create<AppState>()(
             }
           });
 
-          const filteredTransmitters = filterTransmittersForUser(deduplicated, currentUserIosPttVisibility, currentUserIosVisiblePtts);
+          const filteredTransmitters = filterTransmittersForUser(deduplicated, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
           
           // Keep positions synchronized in real-time from transmitter updates without extra collection reads
           const syncPositions: Position[] = filteredTransmitters
@@ -2155,11 +2168,11 @@ export const useAppStore = create<AppState>()(
             const currentPositions = [...state.positions];
             let changed = false;
 
-            const { currentUserIosPttVisibility, currentUserIosVisiblePtts } = get();
+            const { currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole } = get();
             
-            // Filter incoming live positions based on user visibility settings
+            // Filter incoming live positions based on user visibility settings (Administrators and Managers see all)
             let visibleIds: Set<string> | null = null;
-            if (currentUserIosPttVisibility === 'custom') {
+            if (currentUserRole !== 'Administrator' && currentUserRole !== 'Manager' && currentUserIosPttVisibility === 'custom') {
                visibleIds = new Set((currentUserIosVisiblePtts || []).map(id => String(id)));
             }
 
