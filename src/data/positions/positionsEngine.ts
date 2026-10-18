@@ -3,13 +3,19 @@
  * Single source of truth for: parsing CLS rows, de-duplication, classification, ordering,
  * filtering (time window / GPS-Doppler), "last position" and the history path.
  *
- * RULES (from the CLS "Positions" export):
+ * TRACK v4 RULES (from the CLS "Positions" export and specification):
  *  1. The only time that matters is LOCATION date (when the position was computed/acquired).
  *     Message/arrival date is metadata only and is NEVER used to order, filter or pick "latest".
  *  2. One fix = one record, keyed by (pttId, type, locationDate rounded to the second).
  *     "Unit type" (Houbara / DS …) is NOT part of the key — it produced duplicate rows.
  *  3. GPS and DOPPLER are separate types; the ALL/GPS/DOPPLER filter is exact.
- *  4. Coordinates are stored with full precision (5+ decimals), never rounded for storage.
+ *  4. Continuous history path through ALL points of the selected type.
+ *     No line breaking, no Douglas-Peucker simplification, no outlier/zig-zag suppression or point hiding.
+ *     Exactly ONE continuous polyline.
+ *  5. Doppler points with error radius > 2000 m (configurable setting, default 2000) are rejected:
+ *     not drawn, not "last", not counted. Unknown error (0/null) is kept. GPS is NEVER affected.
+ *  6. Coordinates are stored with full precision (5+ decimals), never rounded for storage.
+ *  7. In true CLS GPS fixes, seconds = 0 and ms = 0. If seconds != 0, it is suspect (message arrival date).
  */
 
 export type LocType = 'GPS' | 'DOPPLER';
@@ -49,7 +55,7 @@ export const normalizePttId = (v: string | number): string =>
 export function parseUtc(v: string | number | Date): number {
   if (v instanceof Date) return v.getTime();
   if (typeof v === 'number') return v;
-  const s = v.trim().replace(' ', 'T');
+  const s = String(v).trim().replace(' ', 'T');
   const hasZone = /(Z|[+-]\d\d:?\d\d)$/.test(s);
   const t = Date.parse(hasZone ? s : `${s}Z`);
   if (Number.isNaN(t)) throw new Error(`Invalid date: ${v}`);
@@ -68,6 +74,20 @@ export const fixId = (ptt: string, type: LocType, tMs: number) =>
 const decimals = (n: number) => (String(n).split('.')[1] ?? '').length;
 const validCoord = (lat: number, lon: number) =>
   Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !(lat === 0 && lon === 0);
+
+/**
+ * In CLS Argos telemetry, true GPS fixes always have whole minutes (seconds = 0, ms = 0).
+ * If a GPS fix date has seconds != 0 or ms != 0, it is suspect (message arrival date).
+ */
+export function isSuspectGpsDate(v: string | number | Date): boolean {
+  try {
+    const t = typeof v === 'number' ? v : parseUtc(v);
+    const d = new Date(t);
+    return d.getUTCSeconds() !== 0 || d.getUTCMilliseconds() !== 0;
+  } catch {
+    return true;
+  }
+}
 
 /** Normalise + de-duplicate. Order of input is irrelevant. Invalid rows are returned in `rejected`. */
 export function buildFixes(raws: RawFix[]): { fixes: Fix[]; rejected: { row: RawFix; reason: string }[] } {
@@ -106,7 +126,8 @@ export function buildFixes(raws: RawFix[]): { fixes: Fix[]; rejected: { row: Raw
   return { fixes: [...map.values()].sort(byDateAsc), rejected };
 }
 
-export const byDateAsc = (a: Fix, b: Fix) => a.t - b.t || (a.type === b.type ? 0 : a.type === 'GPS' ? -1 : 1) || a.id.localeCompare(b.id);
+export const byDateAsc = (a: Fix, b: Fix) => a.t - b.t || (a.type === b.type ? 0 : a.type === 'GPS' ? -1 : 1) || a.id.localeCompare(idString(a));
+const idString = (f: Fix) => f.id;
 export const byDateDesc = (a: Fix, b: Fix) => byDateAsc(b, a);
 
 export interface FilterOpts {
@@ -114,26 +135,56 @@ export interface FilterOpts {
   type?: TypeFilter;
   fromMs?: number;                  // inclusive, LOCATION date
   toMs?: number;                    // inclusive, LOCATION date
-  dopplerMaxErrorM?: number;        // optional quality gate (default: off)
+  dopplerMaxErrorM?: number;        // default 2000 (0 or null = no error radius filter; GPS never affected)
   excludeClasses?: string[];        // e.g. ['Z']
 }
 
 export function filterFixes(fixes: Fix[], o: FilterOpts = {}): Fix[] {
   const ptts = o.pttIds?.length ? new Set(o.pttIds.map(normalizePttId)) : null;
+  const maxDopplerErr = o.dopplerMaxErrorM !== undefined ? o.dopplerMaxErrorM : 2000;
+
   return fixes.filter((f) =>
     (!ptts || ptts.has(f.pttId)) &&
     (!o.type || o.type === 'ALL' || f.type === o.type) &&
     (o.fromMs == null || f.t >= o.fromMs) &&
     (o.toMs == null || f.t <= o.toMs) &&
-    !(f.type === 'DOPPLER' && o.dopplerMaxErrorM != null && f.errorRadiusM > o.dopplerMaxErrorM) &&
+    !(f.type === 'DOPPLER' && maxDopplerErr > 0 && f.errorRadiusM > 0 && f.errorRadiusM > maxDopplerErr) &&
     !(f.cls && o.excludeClasses?.includes(f.cls)));
 }
 
-/** Newest by LOCATION date inside the active type filter. */
-export function lastFix(fixes: Fix[], type: TypeFilter = 'ALL'): Fix | null {
-  let best: Fix | null = null;
+/** Partition fixes into accepted vs rejected based on Doppler error > 2000 m or suspect GPS dates */
+export interface QualityPartition {
+  accepted: Fix[];
+  rejected: { fix: Fix; reason: string }[];
+}
+
+export function partitionByQuality(fixes: Fix[], dopplerMaxErrorM = 2000): QualityPartition {
+  const accepted: Fix[] = [];
+  const rejected: { fix: Fix; reason: string }[] = [];
   for (const f of fixes) {
-    if (type !== 'ALL' && f.type !== type) continue;
+    if (f.type === 'GPS') {
+      if (isSuspectGpsDate(f.t)) {
+        rejected.push({ fix: f, reason: 'suspect_gps_date' });
+      } else {
+        accepted.push(f);
+      }
+    } else if (f.type === 'DOPPLER') {
+      if (dopplerMaxErrorM > 0 && f.errorRadiusM > 0 && f.errorRadiusM > dopplerMaxErrorM) {
+        rejected.push({ fix: f, reason: 'doppler_error_gt_2000' });
+      } else {
+        accepted.push(f);
+      }
+    }
+  }
+  return { accepted, rejected };
+}
+
+/** Newest by LOCATION date inside the active type filter, respecting Doppler error threshold. */
+export function lastFix(fixes: Fix[], type: TypeFilter = 'ALL', dopplerMaxErrorM = 2000): Fix | null {
+  const filtered = filterFixes(fixes, { type, dopplerMaxErrorM });
+  if (!filtered.length) return null;
+  let best: Fix | null = null;
+  for (const f of filtered) {
     if (!best || byDateDesc(f, best) < 0) best = f;
   }
   return best;
@@ -147,31 +198,48 @@ export function haversineKm(aLat: number, aLon: number, bLat: number, bLon: numb
 }
 
 export interface TrackOpts extends FilterOpts {
-  maxGapHours?: number;   // break the line on gaps longer than this (default 48)
-  maxSpeedKmh?: number;   // break the line when implied speed exceeds this (default 120)
+  maxGapHours?: number;   // default undefined (do NOT break lines)
+  maxSpeedKmh?: number;   // default undefined (do NOT break lines)
 }
 export interface Track { points: Fix[]; segments: Fix[][]; distanceKm: number }
 
-/** History path: filtered fixes, strictly chronological by LOCATION date, split on gaps/speed jumps. */
+/**
+ * History path: filtered fixes, strictly chronological by LOCATION date.
+ * Track v4 rule: ONE continuous polyline through ALL points of the filter.
+ * No cutting, no gap/speed breaks by default unless explicitly configured > 0.
+ */
 export function buildTrack(fixes: Fix[], o: TrackOpts = {}): Track {
   const pts = filterFixes(fixes, o).sort(byDateAsc);
-  const maxGap = (o.maxGapHours ?? 48) * 3_600_000;
-  const maxSpeed = o.maxSpeedKmh ?? 120;
-  const segments: Fix[][] = [];
-  let cur: Fix[] = [];
   let dist = 0;
-  for (const p of pts) {
-    const prev = cur[cur.length - 1];
-    if (prev) {
-      const dt = p.t - prev.t;
-      const d = haversineKm(prev.lat, prev.lon, p.lat, p.lon);
-      const speed = dt > 0 ? d / (dt / 3_600_000) : 0;
-      if (dt > maxGap || speed > maxSpeed) { segments.push(cur); cur = []; }
-      else dist += d;
-    }
-    cur.push(p);
+  for (let i = 1; i < pts.length; i++) {
+    dist += haversineKm(pts[i - 1].lat, pts[i - 1].lon, pts[i].lat, pts[i].lon);
   }
-  if (cur.length) segments.push(cur);
+
+  // Only break line if explicitly requested with positive thresholds:
+  if ((o.maxGapHours != null && o.maxGapHours > 0) || (o.maxSpeedKmh != null && o.maxSpeedKmh > 0)) {
+    const maxGap = (o.maxGapHours ?? Infinity) * 3_600_000;
+    const maxSpeed = o.maxSpeedKmh ?? Infinity;
+    const segments: Fix[][] = [];
+    let cur: Fix[] = [];
+    for (const p of pts) {
+      const prev = cur[cur.length - 1];
+      if (prev) {
+        const dt = p.t - prev.t;
+        const d = haversineKm(prev.lat, prev.lon, p.lat, p.lon);
+        const speed = dt > 0 ? d / (dt / 3_600_000) : 0;
+        if (dt > maxGap || speed > maxSpeed) {
+          if (cur.length) segments.push(cur);
+          cur = [];
+        }
+      }
+      cur.push(p);
+    }
+    if (cur.length) segments.push(cur);
+    return { points: pts, segments, distanceKm: dist };
+  }
+
+  // Default: Exactly ONE continuous line through all points
+  const segments: Fix[][] = pts.length ? [pts] : [];
   return { points: pts, segments, distanceKm: dist };
 }
 
@@ -183,36 +251,53 @@ export function presetWindow(preset: 'LAST_POSITION' | '24H' | '7D' | '30D' | '1
 }
 
 /* ------------------------------------------------------------------------------------------------
- * Map layers — what the Live Map draws for each LOCATION TYPE button.
- *  GPS     : line + markers = GPS only
- *  DOPPLER : line + markers = Doppler only
- *  ALL     : line = GPS only (more accurate); Doppler shown as small hollow DOTS, not connected.
- *            Optional: Doppler fixes that fall inside a GPS gap (> gapFillHours with no GPS) are added
- *            to the line so a long GPS outage is not drawn as one straight jump.
+ * Map layers — what the Live Map draws for each LOCATION TYPE button (Track v4):
+ *  GPS     : line + markers = GPS only, 1 continuous segment
+ *  DOPPLER : line + markers = Doppler only (<=2000m error), 1 continuous segment
+ *  ALL     : line + markers = ALL points (GPS + Doppler <= 2000m), 1 continuous segment!
+ *  Styling only: styledSegments allows styling GPS->GPS segments differently from Doppler segments
+ *  without hiding any points.
  * ---------------------------------------------------------------------------------------------- */
+export type SegmentKind = 'GPS' | 'TOUCHING_DOPPLER';
+
+export interface StyledSegment {
+  points: [number, number][];
+  kind: SegmentKind;
+}
+
 export interface LayerOpts extends TrackOpts {
   type: TypeFilter;
-  fillGapsWithDoppler?: boolean; // default false
-  gapFillHours?: number;         // default 3
+  fillGapsWithDoppler?: boolean; // legacy compatibility option
+  gapFillHours?: number;
 }
-export interface MapLayers { line: Track; markers: Fix[]; dopplerDots: Fix[] }
+
+export interface MapLayers {
+  line: Track;
+  markers: Fix[];
+  dopplerDots: Fix[];
+  styledSegments?: StyledSegment[];
+}
 
 export function mapLayers(fixes: Fix[], o: LayerOpts): MapLayers {
-  const base = { ...o, type: 'ALL' as TypeFilter };
-  if (o.type === 'GPS' || o.type === 'DOPPLER') {
-    const line = buildTrack(fixes, { ...o, type: o.type });
-    return { line, markers: line.points, dopplerDots: [] };
+  const dopMax = o.dopplerMaxErrorM !== undefined ? o.dopplerMaxErrorM : 2000;
+  const line = buildTrack(fixes, { ...o, dopplerMaxErrorM: dopMax });
+
+  const styledSegments: StyledSegment[] = [];
+  const pts = line.points;
+  for (let i = 1; i < pts.length; i++) {
+    const p1 = pts[i - 1];
+    const p2 = pts[i];
+    const kind: SegmentKind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
+    styledSegments.push({
+      points: [[p1.lat, p1.lon], [p2.lat, p2.lon]],
+      kind
+    });
   }
-  const gps = filterFixes(fixes, { ...base, type: 'GPS' }).sort(byDateAsc);
-  const dop = filterFixes(fixes, { ...base, type: 'DOPPLER' }).sort(byDateAsc);
-  let lineSrc = gps;
-  if (o.fillGapsWithDoppler && gps.length) {
-    const H = (o.gapFillHours ?? 3) * 3_600_000;
-    const fill = dop.filter((d) => !gps.some((g) => Math.abs(g.t - d.t) <= H));
-    lineSrc = [...gps, ...fill].sort(byDateAsc);
-  } else if (o.fillGapsWithDoppler && !gps.length) {
-    lineSrc = dop;
-  }
-  const line = buildTrack(lineSrc, { ...o, type: 'ALL' });
-  return { line, markers: gps, dopplerDots: dop };
+
+  return {
+    line,
+    markers: line.points,
+    dopplerDots: [], // in v4, all filtered points are in line and markers
+    styledSegments
+  };
 }

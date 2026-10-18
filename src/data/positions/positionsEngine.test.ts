@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { buildFixes, buildTrack, filterFixes, lastFix, mapLayers, parseUtc, type RawFix } from './positionsEngine';
+import {
+  buildFixes,
+  buildTrack,
+  filterFixes,
+  lastFix,
+  mapLayers,
+  parseUtc,
+  isSuspectGpsDate,
+  partitionByQuality,
+  type RawFix
+} from './positionsEngine';
 
 const cls: RawFix[] = JSON.parse(readFileSync(new URL('./fixtures/cls_positions_43574.json', import.meta.url), 'utf8'));
 const app: RawFix[] = JSON.parse(readFileSync(new URL('./fixtures/app_export_43574.json', import.meta.url), 'utf8'));
@@ -87,28 +97,84 @@ describe('Why message date must never be used', () => {
   });
 });
 
-describe('Map layers per LOCATION TYPE button', () => {
+describe('Doppler quality gate & rejection (>2000m)', () => {
   const { fixes } = buildFixes(cls);
-  it('GPS button: only GPS in line and markers', () => {
+
+  it('rejects Doppler fixes with error > 2000 m by default (53 accepted, 12 rejected out of 65)', () => {
+    const dopAll = filterFixes(fixes, { ...W, type: 'DOPPLER', dopplerMaxErrorM: 0 });
+    expect(dopAll).toHaveLength(65);
+
+    const dopAccepted = filterFixes(fixes, { ...W, type: 'DOPPLER' }); // default 2000m
+    expect(dopAccepted).toHaveLength(53);
+
+    const partition = partitionByQuality(dopAll);
+    expect(partition.accepted).toHaveLength(53);
+    expect(partition.rejected).toHaveLength(12);
+    expect(partition.rejected.every(r => r.reason === 'doppler_error_gt_2000')).toBe(true);
+  });
+
+  it('GPS fixes (error 0) are never affected by Doppler error threshold', () => {
+    const gpsAccepted = filterFixes(fixes, { ...W, type: 'GPS', dopplerMaxErrorM: 500 });
+    expect(gpsAccepted).toHaveLength(12);
+  });
+
+  it('Doppler fixes with unknown error (0 or null) are kept', () => {
+    const syntheticDop: RawFix = {
+      pttId: '43574',
+      locationType: 'DOPPLER',
+      locationDate: '2026-10-17T05:00:00.000Z',
+      lat: 43.87,
+      lon: 73.33,
+      errorRadiusM: 0
+    };
+    const { fixes: synFixes } = buildFixes([syntheticDop]);
+    const filtered = filterFixes(synFixes, { dopplerMaxErrorM: 2000 });
+    expect(filtered).toHaveLength(1);
+  });
+});
+
+describe('Map layers per LOCATION TYPE button (Track v4)', () => {
+  const { fixes } = buildFixes(cls);
+
+  it('GPS button: only GPS in line and markers (12 points, 1 segment)', () => {
     const l = mapLayers(fixes, { ...W, type: 'GPS' });
     expect(l.markers.every((f) => f.type === 'GPS')).toBe(true);
     expect(l.line.points.every((f) => f.type === 'GPS')).toBe(true);
+    expect(l.line.points).toHaveLength(12);
+    expect(l.line.segments).toHaveLength(1);
     expect(l.dopplerDots).toHaveLength(0);
   });
-  it('DOPPLER button: only Doppler', () => {
+
+  it('DOPPLER button: only Doppler <= 2000m in line and markers (53 points, 1 segment)', () => {
     const l = mapLayers(fixes, { ...W, type: 'DOPPLER' });
     expect(l.line.points.every((f) => f.type === 'DOPPLER')).toBe(true);
-    expect(l.markers).toHaveLength(65);
+    expect(l.line.points).toHaveLength(53);
+    expect(l.markers).toHaveLength(53);
+    expect(l.line.segments).toHaveLength(1);
+    expect(l.line.points.every(f => f.errorRadiusM <= 2000)).toBe(true);
   });
-  it('ALL button: line is GPS only (12 pts, ~1.6 km) and Doppler are separate dots', () => {
+
+  it('ALL button: one continuous polyline through all 65 points (12 GPS + 53 Doppler), exactly 1 segment', () => {
     const l = mapLayers(fixes, { ...W, type: 'ALL' });
-    expect(l.line.points).toHaveLength(12);
-    expect(l.line.distanceKm).toBeLessThan(1.7);
-    expect(l.dopplerDots).toHaveLength(65);
+    expect(l.line.points).toHaveLength(65);
+    expect(l.markers).toHaveLength(65);
+    expect(l.line.segments).toHaveLength(1);
+    expect(l.dopplerDots).toHaveLength(0);
   });
-  it('ALL + fill gaps: Doppler inside the 13 h GPS outage (12:01 -> 01:01) are added to the line', () => {
-    const l = mapLayers(fixes, { ...W, type: 'ALL', fillGapsWithDoppler: true, gapFillHours: 3 });
-    expect(l.line.points.length).toBeGreaterThan(12);
+
+  it('styledSegments distinguishes GPS->GPS segments from Doppler segments without hiding points', () => {
+    const l = mapLayers(fixes, { ...W, type: 'ALL' });
+    expect(l.styledSegments).toBeDefined();
+    expect(l.styledSegments?.length).toBe(64); // 65 points => 64 segment segments
+  });
+});
+
+describe('GPS date validity checking (isSuspectGpsDate)', () => {
+  it('flags GPS dates with seconds != 0 or ms != 0 and accepts whole-minute dates', () => {
+    expect(isSuspectGpsDate('2026-10-17T07:00:00.000Z')).toBe(false);
+    expect(isSuspectGpsDate('2026-10-17T02:01:00.000Z')).toBe(false);
+    expect(isSuspectGpsDate('2026-10-17T07:39:41.963Z')).toBe(true);
+    expect(isSuspectGpsDate('2026-10-17T14:38:10.000Z')).toBe(true);
   });
 });
 

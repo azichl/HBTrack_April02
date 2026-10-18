@@ -209,6 +209,11 @@ export const ArgosData = () => {
           if (!rejectReason) rejectReason = 'OUT_OF_RANGE';
         }
 
+        if (!isGps && fix.errorRadiusM > 2000) {
+          accepted = false;
+          if (!rejectReason) rejectReason = 'DOPPLER_ERROR_GT_2000';
+        }
+
         const unitType = fix.unitTypes[0] || 'Houbara';
 
         return {
@@ -598,15 +603,18 @@ export const ArgosData = () => {
           <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 mr-1">Classification:</span>
-              {(['accepted', 'all', 'high', 'medium', 'degraded', 'rejected'] as const).map((q) => {
-                const labelMap: Record<string, string> = {
-                  accepted: 'Accepted Only',
-                  all: 'All Statuses',
-                  high: 'High (GPS/3/2/1)',
-                  medium: 'Medium (0)',
-                  degraded: 'Degraded (A/B)',
-                  rejected: 'Rejected (Z/Invalid)'
-                };
+              {(() => {
+                const rejectedCount = allData.filter(r => r.accepted === false || r.quality === 'Invalid' || r.lc === 'Z').length;
+                const acceptedCount = allData.filter(r => r.accepted !== false && r.quality !== 'Invalid' && r.lc !== 'Z').length;
+                return (['accepted', 'all', 'high', 'medium', 'degraded', 'rejected'] as const).map((q) => {
+                  const labelMap: Record<string, string> = {
+                    accepted: `Accepted (${acceptedCount})`,
+                    all: 'All Statuses',
+                    high: 'High (GPS/3/2/1)',
+                    medium: 'Medium (0)',
+                    degraded: 'Degraded (A/B)',
+                    rejected: `Rejected (${rejectedCount})`
+                  };
                 const colorMap: Record<string, string> = {
                   accepted: qualityFilter === 'accepted' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200',
                   all: qualityFilter === 'all' ? 'bg-slate-700 text-white shadow-xs' : 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200',
@@ -624,7 +632,8 @@ export const ArgosData = () => {
                     {labelMap[q]}
                   </button>
                 );
-              })}
+              });
+            })()}
             </div>
 
             {/* Reject Reason filter dropdown */}

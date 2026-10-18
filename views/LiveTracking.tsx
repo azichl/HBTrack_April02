@@ -530,6 +530,8 @@ interface TransmitterMarkerProps {
     latestPositions?: any[];
     transmitters?: any[];
     birds?: any[];
+    historyPaths?: any[];
+    historyFixType?: string;
 }
 
 // Component to dynamically fetch and display 2-m Air Temp for the latest position
@@ -578,7 +580,9 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
     isTrackingUser,
     latestPositions = [],
     transmitters = [],
-    birds = []
+    birds = [],
+    historyPaths = [],
+    historyFixType = 'All'
 }) => {
     const { setActiveTab, currentUserRole, unmarkTransmitterDead, markTransmitterDead, currentUser, currentUserPermissions } = useAppStore();
     const [isOpen, setIsOpen] = useState(false);
@@ -600,6 +604,22 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
 
     // Use current active single pos (either initial pos or user-clicked item in list)
     const currentPos = selectedSinglePos || pos;
+    const activePttId = String(currentPos.transmitter_id);
+    const activeHistoryTrack = historyPaths?.find(hp => String(hp.id) === activePttId);
+    const newestTrackPoint = activeHistoryTrack?.path && activeHistoryTrack.path.length > 0
+        ? activeHistoryTrack.path[activeHistoryTrack.path.length - 1]
+        : null;
+
+    // Track v4: Last fix follows the active button (GPS -> newest GPS, DOPPLER -> newest accepted Doppler, ALL -> newest of both)
+    const displayPos = newestTrackPoint || currentPos;
+    const isDisplayGps = String(displayPos.type || displayPos.locationType || (displayPos.lc === 'GPS' ? 'GPS' : '')).toUpperCase() === 'GPS';
+    const displayType = isDisplayGps ? 'GPS' : 'DOPPLER';
+    const displayClass = isDisplayGps ? null : (displayPos.locationClass || displayPos.cls || (displayPos.lc !== 'GPS' ? displayPos.lc : null));
+    const displayErr = isDisplayGps ? 0 : (Number(displayPos.errorRadiusM) || 0);
+    const displayTs = displayPos.timestamp || displayPos.locationDate;
+    const displayContact = displayPos.firstMessageDate || displayPos.receivedAt || displayPos.messageDate;
+    const displayDelay = displayPos.delay !== undefined ? displayPos.delay : displayPos.lagMinutes;
+
     const currentTransmitter = transmitters.find(t => String(t.platform_id) === String(currentPos.transmitter_id)) || transmitter;
     const currentBird = findBirdForTransmitter(birds, currentTransmitter?.bird_id) || bird;
 
@@ -737,9 +757,49 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                     <span className="text-gray-500 flex items-center gap-1"><CircleDot size={12}/> Ring ID</span>
                                     <span className="font-medium text-gray-800 dark:text-gray-200">{currentBird?.ring_id || 'Unassigned'}</span>
                                 </div>
-                                <div className="flex justify-between items-start">
-                                    <span className="text-gray-500 flex items-center gap-1 mt-0.5"><Clock size={12}/> Last Fix</span>
-                                    <LocationTimestamp timestamp={currentPos.timestamp} lat={currentPos.lat} lon={currentPos.lon} fallbackTimeZone={timeZone} />
+                                <div className="space-y-1.5 py-1 border-t border-b border-gray-100 dark:border-slate-700 my-1">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-gray-500 flex items-center gap-1 mt-0.5"><Clock size={12}/> Last Fix</span>
+                                        <div className="flex flex-col items-end leading-tight text-right min-w-[130px]">
+                                            <span className="font-mono font-bold text-gray-900 dark:text-white text-[11px]">
+                                                {formatUtcDateTime(displayTs)}
+                                            </span>
+                                            <span className="text-[9px] text-brand-600 font-medium">
+                                                Local: {formatDateTime(displayTs, timeZone)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500 flex items-center gap-1"><Navigation size={12}/> Type</span>
+                                        <div className="flex items-center gap-1">
+                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${isDisplayGps ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'}`}>
+                                                {displayType}
+                                            </span>
+                                            {!isDisplayGps && displayClass && (
+                                                <span className="text-[10px] px-1 py-0.5 rounded font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                                    Class {displayClass}
+                                                </span>
+                                            )}
+                                            {!isDisplayGps && displayErr > 0 && (
+                                                <span className="text-[9px] px-1 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 font-mono">
+                                                    ±{Math.round(displayErr)}m
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {(displayContact || displayDelay !== undefined) && (
+                                        <div className="flex justify-between items-center text-[10px]">
+                                            <span className="text-gray-500 flex items-center gap-1"><Satellite size={12}/> Last Contact</span>
+                                            <div className="text-right text-gray-700 dark:text-gray-300">
+                                                {displayContact && <span>{formatUtcDateTime(displayContact)}</span>}
+                                                {displayDelay !== undefined && displayDelay !== null && (
+                                                    <span className="ml-1 text-brand-600 font-semibold">
+                                                        (+{typeof displayDelay === 'number' ? (displayDelay >= 60 ? `${(displayDelay / 60).toFixed(1)}h` : `${Math.round(displayDelay)}m`) : displayDelay})
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-gray-500 flex items-center gap-1"><Battery size={12}/> Battery</span>
@@ -750,23 +810,15 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                                         {formatBattery(currentTransmitter?.battery_voltage)}
                                     </span>
                                 </div>
-                                {currentPos.locationType && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-500 flex items-center gap-1"><Navigation size={12}/> Type</span>
-                                        <span className="font-medium text-blue-600">
-                                            {currentPos.locationType}
-                                        </span>
-                                    </div>
-                                )}
                                 <div className="flex justify-between items-center">
                                     <span className="text-gray-500 flex items-center gap-1"><ThermometerSun size={12}/> Air Temp (2m)</span>
-                                    <LastFixAirTemp lat={Number(currentPos.lat)} lon={Number(currentPos.lon)} timestamp={currentPos.timestamp} />
+                                    <LastFixAirTemp lat={Number(displayPos.lat)} lon={Number(displayPos.lon)} timestamp={displayTs} />
                                 </div>
                             </div>
 
-                            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700 flex justify-between text-xs text-gray-400">
-                                <span>Lat: {currentPos.lat?.toFixed(4)}</span>
-                                <span>Lon: {currentPos.lon?.toFixed(4)}</span>
+                            <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700 flex justify-between text-xs text-gray-500 font-mono">
+                                <span>Lat: {Number(displayPos.lat)?.toFixed(5)}</span>
+                                <span>Lon: {Number(displayPos.lon)?.toFixed(5)}</span>
                             </div>
                             
                             <div className="mt-3">
@@ -853,7 +905,9 @@ const TransmitterMarker = React.memo(TransmitterMarkerInner, (prevProps, nextPro
         prevProps.isTrackingUser === nextProps.isTrackingUser &&
         prevProps.latestPositions === nextProps.latestPositions &&
         prevProps.transmitters === nextProps.transmitters &&
-        prevProps.birds === nextProps.birds
+        prevProps.birds === nextProps.birds &&
+        prevProps.historyPaths === nextProps.historyPaths &&
+        prevProps.historyFixType === nextProps.historyFixType
     );
 });
 
@@ -1007,6 +1061,8 @@ interface StaticTestClusteredMarkersProps {
     setShowHistory: (show: boolean) => void;
     setNavTarget?: (target: {id: string, lat: number, lon: number} | null) => void;
     isTrackingUser?: boolean;
+    historyPaths?: any[];
+    historyFixType?: string;
 }
 
 const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
@@ -1017,7 +1073,9 @@ const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
     setSelectedTransmitterIds,
     setShowHistory,
     setNavTarget,
-    isTrackingUser
+    isTrackingUser,
+    historyPaths = [],
+    historyFixType = 'All'
 }) => {
     const map = useMap();
     const [mapVersion, setMapVersion] = useState(0);
@@ -1081,6 +1139,8 @@ const StaticTestClusteredMarkers: React.FC<StaticTestClusteredMarkersProps> = ({
                             latestPositions={staticTestPositions}
                             transmitters={transmitters}
                             birds={birds}
+                            historyPaths={historyPaths}
+                            historyFixType={historyFixType}
                         />
                     );
                 }
@@ -1451,6 +1511,8 @@ const LiveTrackingInner = () => {
       delay?: number | string;
     }>;
     segments?: Array<Array<[number, number]>>;
+    polyline?: Array<[number, number]>;
+    styledSegments?: Array<{ points: [number, number][]; kind: 'GPS' | 'TOUCHING_DOPPLER' }>;
     color: string;
   }>>([]);
 
@@ -1640,16 +1702,17 @@ const LiveTrackingInner = () => {
             return;
         }
 
-        // Quality & Degraded filter: Exclude rejected fixes (LC Z, invalid coords, accepted === false)
+        // Quality & Rejection filter: Exclude invalid fixes (LC Z, invalid coords, accepted === false)
         const rawLc = String(p.lc || '').trim();
         const isRejected = (p as any).accepted === false || (p as any).quality === 'Invalid' || rawLc === 'Z';
         if (isRejected) return;
 
-        const isDegraded = ['A', 'B'].includes(rawLc) || (p as any).quality === 'Low';
-        if (isDegraded && !showDegradedFixes) return;
+        // Track v4: Doppler error radius > 2000 m is rejected (GPS is never affected)
+        const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
+        const errRadiusM = Number((p as any).errorRadiusM || (p as any).dopplerError || 0);
+        if (locType === 'DOPPLER' && errRadiusM > 2000) return;
 
         // Filter by historyFixType (Location Type) only when history tracking is active for selected transmitters
-        const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
         const reqType: TypeFilter = historyFixType === 'GPS' ? 'GPS' : (historyFixType === 'Doppler' ? 'DOPPLER' : 'ALL');
         if (showHistory && selectedTransmitterIds.length > 0 && reqType !== 'ALL' && locType !== reqType) return;
 
@@ -1839,15 +1902,6 @@ const LiveTrackingInner = () => {
           track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
         }
 
-        // Filter out degraded fixes if not toggled on
-        if (!showDegradedFixes) {
-          track = track.filter(p => {
-            const rawLc = String(p.lc || p.locationClass || '').trim();
-            const isDegraded = ['A', 'B'].includes(rawLc) || (p as any).quality === 'Low';
-            return !isDegraded;
-          });
-        }
-
         const pttFixes: Fix[] = track.map(p => {
           const locTs = safeParseTimestamp(p.timestamp || p.locationDate);
           const fType: 'GPS' | 'DOPPLER' = canonType(p.locationType || p.lc) === 'GPS' ? 'GPS' : 'DOPPLER';
@@ -1868,14 +1922,13 @@ const LiveTrackingInner = () => {
         }).filter(f => isValidCoordinate(f.lat, f.lon) && !isNaN(f.t) && f.t > 0);
 
         const engineType: TypeFilter = historyFixType === 'GPS' ? 'GPS' : (historyFixType === 'Doppler' ? 'DOPPLER' : 'ALL');
+        // Track v4: Continuous history path through ALL points of selected type, Doppler > 2000 m rejected
         const layers = mapLayers(pttFixes, {
           type: engineType,
-          maxGapHours: 48,
-          maxSpeedKmh: 120,
-          fillGapsWithDoppler: false
+          dopplerMaxErrorM: 2000
         });
 
-        const segments: Array<Array<[number, number]>> = layers.line.segments.map(seg => seg.map(f => [f.lat, f.lon] as [number, number]));
+        const polylineCoords: Array<[number, number]> = layers.line.points.map(f => [f.lat, f.lon] as [number, number]);
 
         const formatPoint = (f: Fix) => ({
           lat: f.lat,
@@ -1889,21 +1942,22 @@ const LiveTrackingInner = () => {
         });
 
         const markers = layers.markers.map(formatPoint);
-        const dopplerDots = layers.dopplerDots.map(formatPoint);
 
-        if (markers.length > 0 || dopplerDots.length > 0) {
+        if (markers.length > 0) {
           newPaths.push({
             id: pttId,
             path: markers,
-            dopplerDots,
-            segments,
+            dopplerDots: [],
+            polyline: polylineCoords,
+            segments: polylineCoords.length > 0 ? [polylineCoords] : [],
+            styledSegments: layers.styledSegments,
             color: colors[index % colors.length]
           });
         }
     });
     
     setHistoryPaths(newPaths);
-  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current, showDegradedFixes]);
+  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current]);
 
   // Filter transmitters for search suggestion
   const searchResults = useMemo(() => {
@@ -2509,30 +2563,19 @@ const LiveTrackingInner = () => {
             {/* Historical Tracks */}
             {showHistory && historyPaths.map((hp) => (
                 <React.Fragment key={hp.id}>
-                    {/* The line connecting filtered points by segment */}
-                    {(hp.segments && hp.segments.length > 0 ? hp.segments : (hp.path.length > 1 ? [hp.path.map(p => [p.lat, p.lon] as [number, number])] : [])).map((seg, sIdx) => (
+                    {/* Continuous history polyline through ALL filtered points */}
+                    {((hp.polyline && hp.polyline.length > 1) ? hp.polyline : (hp.path.length > 1 ? hp.path.map(p => [p.lat, p.lon] as [number, number]) : null)) && (
                         <Polyline 
-                            key={`${hp.id}-seg-${sIdx}`}
-                            positions={seg} 
-                            pathOptions={{ color: hp.color, weight: 3, opacity: 0.6 }} 
+                            key={`${hp.id}-line`}
+                            positions={(hp.polyline && hp.polyline.length > 1) ? hp.polyline : hp.path.map(p => [p.lat, p.lon] as [number, number])} 
+                            pathOptions={{ color: hp.color, weight: 3, opacity: 0.7 }} 
                         />
-                    ))}
+                    )}
                     
-                    {/* Dots for primary markers */}
+                    {/* Markers for all points */}
                     {hp.path.map((point, idx) => (
                          <HistoricalMarker
                             key={`${hp.id}-${point.timestamp}-${idx}`}
-                            point={point}
-                            pttId={hp.id}
-                            color={hp.color}
-                            timeZone={timeZone}
-                         />
-                    ))}
-
-                    {/* Doppler hollow dots in ALL mode */}
-                    {(hp.dopplerDots || []).map((point, idx) => (
-                         <HistoricalMarker
-                            key={`${hp.id}-dop-${point.timestamp}-${idx}`}
                             point={point}
                             pttId={hp.id}
                             color={hp.color}
@@ -2570,6 +2613,8 @@ const LiveTrackingInner = () => {
                             latestPositions={latestPositions}
                             transmitters={transmitters}
                             birds={birds}
+                            historyPaths={historyPaths}
+                            historyFixType={historyFixType}
                         />
                     );
                 })
@@ -2589,6 +2634,8 @@ const LiveTrackingInner = () => {
                 setShowHistory={setShowHistory}
                 setNavTarget={setNavTarget}
                 isTrackingUser={isTrackingUser}
+                historyPaths={historyPaths}
+                historyFixType={historyFixType}
             />
 
 
