@@ -7,9 +7,21 @@ import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
 import { formatDateTime, isValidCoordinate, safeParseTimestamp, normalizePttId, classifyLocationType, makeDeterministicFixDocId } from '../utils/formatting';
 import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
-import { mapArgosApiData, mapArgosDevices, extractLocationDate } from '../services/argosService';
+import { mapArgosApiData, mapArgosDevices, extractLocationDate, fetchArgosPositions } from '../services/argosService';
+import { API_OPERATIONS, opById, ApiOperation as RegistryApiOperation, OpId } from '../src/data/api/apiOperations';
+import { mapClsPositions } from '../src/data/positions/clsPositionsMapper';
 
 // --- HELPERS ---
+
+const maskSensitive = (str: string): string => {
+    if (!str) return str;
+    return str
+        .replace(/"access_token"\s*:\s*"[^"]+"/g, '"access_token": "[REDACTED]"')
+        .replace(/"refresh_token"\s*:\s*"[^"]+"/g, '"refresh_token": "[REDACTED]"')
+        .replace(/"password"\s*:\s*"[^"]+"/g, '"password": "[REDACTED]"')
+        .replace(/password=[^&]+/gi, 'password=[REDACTED]')
+        .replace(/Bearer\s+[A-Za-z0-9-_=.]+/gi, 'Bearer [REDACTED]');
+};
 
 const mapArgosDoppler = (apiData: any[]): ArgosDoppler[] => {
     if (!Array.isArray(apiData)) return [];
@@ -27,10 +39,24 @@ const mapArgosDoppler = (apiData: any[]): ArgosDoppler[] => {
     }));
 };
 
-type ApiOperation = 'retrieve-bulk' | 'retrieve-bulk-count' | 'retrieve-device-list' | 'retrieve-realtime' | 'retrieve-doppler';
+export type ApiOperation = 'retrieve-positions' | 'retrieve-bulk' | 'retrieve-realtime' | 'retrieve-device-list' | 'retrieve-doppler' | 'retrieve-bulk-count';
+const opIdMap: Record<ApiOperation, OpId> = {
+    'retrieve-positions': 'positions',
+    'retrieve-bulk': 'bulkMessages',
+    'retrieve-realtime': 'realtimeCheckpoint',
+    'retrieve-device-list': 'deviceInventory',
+    'retrieve-doppler': 'dopplerData',
+    'retrieve-bulk-count': 'messageCountCheck',
+};
 type UploadType = 'transmitters' | 'birds' | 'argos_data';
 
 const generateMockArgosData = (operation: ApiOperation): any[] => {
+    if (operation === 'retrieve-positions') {
+        return [
+            { 'Device ID': '43571', 'Unit type': 'Houbara', 'Location class': null, 'Location type': 'GPS', 'Doppler Error radius (m)': 0, 'Location date': '2026-10-18 03:00:00', Longitude: 74.5123, Latitude: 43.1 },
+            { 'Device ID': '43571', 'Unit type': 'Houbara', 'Location class': 'B', 'Location type': 'Doppler', 'Doppler Error radius (m)': 1970, 'Location date': '2026-10-18 03:41:42.003', Longitude: 74.52, Latitude: 43.11 }
+        ];
+    }
     if (operation === 'retrieve-device-list') {
         return [
             { deviceRef: '189021', programRef: 'PROG-01', manufacturer: 'Microwave', model: 'GeoTrack', active: true, transType: 'Argos', deployDate: new Date().toISOString() },
@@ -101,7 +127,14 @@ export const DataUpload = () => {
       end: new Date().toISOString().split('T')[0]
   });
 
-  const [selectedOperation, setSelectedOperation] = useState<ApiOperation>('retrieve-bulk');
+  const [selectedOperation, setSelectedOperation] = useState<ApiOperation>('retrieve-positions');
+  const [selectedLocationType, setSelectedLocationType] = useState<'ALL' | 'GPS' | 'DOPPLER'>('ALL');
+  const [selectedDevicePtt, setSelectedDevicePtt] = useState<string>('ALL');
+  const [overlapSafetyDays, setOverlapSafetyDays] = useState<number>(14);
+  const [isPreviewDryRun, setIsPreviewDryRun] = useState<boolean>(false);
+  const [showOpInfoPopover, setShowOpInfoPopover] = useState<boolean>(false);
+  const [opInfoLang, setOpInfoLang] = useState<'en' | 'ar'>('en');
+
   const [isSimulationMode, setIsSimulationMode] = useState(false);
   const [authMode, setAuthMode] = useState<'user' | 'service_account'>('user');
   const [useCorsProxy, setUseCorsProxy] = useState(true);
@@ -123,7 +156,8 @@ export const DataUpload = () => {
   const [showLogModal, setShowLogModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
-  const operations = [
+  const operations: { value: ApiOperation; label: string; badge?: string; badgeAr?: string }[] = [
+    { value: "retrieve-positions", label: "Positions (GPS + Doppler)", badge: "Recommended", badgeAr: "موصى به" },
     { value: "retrieve-bulk", label: "Bulk Message Retrieval" },
     { value: "retrieve-realtime", label: "Realtime Stream (Checkpoint)" },
     { value: "retrieve-device-list", label: "Device Inventory List" },
@@ -132,7 +166,7 @@ export const DataUpload = () => {
   ];
 
   const addLog = (msg: string) => {
-    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev]);
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${maskSensitive(msg)}`, ...prev]);
   };
 
   const getUrl = (url: string) => {
@@ -734,19 +768,25 @@ export const DataUpload = () => {
         setTimeout(async () => {
             setApiStatus('success');
             addLog(`Authenticated (Simulation).`);
-            setRawResponse(JSON.stringify({ success: true, simulated: true }));
+            setRawResponse(maskSensitive(JSON.stringify({ success: true, simulated: true })));
             
             const newData = generateMockArgosData(selectedOperation);
             setPreviewData(newData);
 
-            if (selectedOperation === 'retrieve-device-list') {
+            if (selectedOperation === 'retrieve-positions') {
+                const mapRes = mapClsPositions(newData);
+                const { fixes } = buildFixes(mapRes.rows);
+                addLog(`[SIMULATION] Mapped ${fixes.length} fixes (${fixes.filter(f => f.type === 'GPS').length} GPS, ${fixes.filter(f => f.type === 'DOPPLER').length} Doppler).`);
+                setSyncStats({ transmitters: 1, positions: fixes.length });
+            } else if (selectedOperation === 'retrieve-device-list') {
                 await syncArgosToFirebase([], newData as ArgosDevice[]);
+                setSyncStats({ transmitters: newData.length, positions: 0 });
             } else {
                 await syncArgosToFirebase(newData as ArgosMessage[], []);
+                setSyncStats({ transmitters: 0, positions: newData.length });
             }
             
-            addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items. Synced to Firebase.`);
-            setSyncStats({transmitters: 0, positions: 0});
+            addLog(`IMPORT SUCCESS: Retrieved ${newData.length} simulated items.`);
             if (isMobileScreen) {
               setShowSuccessToast(true);
               setTimeout(() => setShowLogModal(false), 2000);
@@ -767,7 +807,110 @@ export const DataUpload = () => {
         let rawData: any[] = [];
         let stats = { transmittersUpdated: 0, positionsCreated: 0 };
 
-        if (selectedOperation === 'retrieve-bulk') {
+        if (selectedOperation === 'retrieve-positions') {
+            const startStr = `${dateRange.start}T00:00:00.001Z`;
+            const endStr = `${dateRange.end}T23:59:59.999Z`;
+            addLog(`Executing Positions (GPS + Doppler) Fetch [Location Date: ${startStr} to ${endStr}, Type: ${selectedLocationType}]...`);
+
+            const startTime = Date.now();
+            const deviceIds = selectedDevicePtt && selectedDevicePtt !== 'ALL' ? [selectedDevicePtt.trim()] : [];
+            rawData = await fetchArgosPositions(token, apiConfig, startStr, endStr, selectedLocationType, deviceIds, (msg) => addLog(maskSensitive(msg)));
+            const durationMs = Date.now() - startTime;
+            addLog(`Fetched ${rawData.length} rows from CLS Positions in ${durationMs}ms.`);
+
+            // Map rows using tolerant mapper
+            const mapRes = mapClsPositions(rawData);
+            if (mapRes.missing.length > 0) {
+                const err = `Missing required fields from CLS Positions: ${mapRes.missing.join(', ')}`;
+                addLog(`ERROR: ${err}`);
+                throw new Error(err);
+            }
+
+            if (mapRes.unmappedKeys.length > 0) {
+                addLog(`Notice: Unmapped keys in response: ${mapRes.unmappedKeys.join(', ')}`);
+            }
+
+            if (mapRes.skipped.length > 0) {
+                const reasons: Record<string, number> = {};
+                mapRes.skipped.forEach(s => {
+                    reasons[s.reason] = (reasons[s.reason] || 0) + 1;
+                });
+                addLog(`Skipped ${mapRes.skipped.length} invalid rows: ${JSON.stringify(reasons)}`);
+            }
+
+            addLog(`Successfully mapped ${mapRes.rows.length} valid position records.`);
+
+            // Filter by location type if user selected GPS or DOPPLER
+            let targetRows = mapRes.rows;
+            if (selectedLocationType !== 'ALL') {
+                targetRows = mapRes.rows.filter(r =>
+                    selectedLocationType === 'GPS' ? /gps/i.test(r.locationType) : !/gps/i.test(r.locationType)
+                );
+            }
+
+            // Build fixes (deterministic deduplication)
+            const { fixes: canonicalFixes } = buildFixes(targetRows);
+            addLog(`Built ${canonicalFixes.length} canonical position fixes.`);
+
+            // Compute newest GPS and Doppler per PTT
+            const newestGps: Record<string, string> = {};
+            const newestDoppler: Record<string, string> = {};
+            canonicalFixes.forEach(f => {
+                const dateStr = new Date(f.t).toISOString();
+                if (f.type === 'GPS') {
+                    if (!newestGps[f.pttId] || dateStr > newestGps[f.pttId]) newestGps[f.pttId] = dateStr;
+                } else {
+                    if (!newestDoppler[f.pttId] || dateStr > newestDoppler[f.pttId]) newestDoppler[f.pttId] = dateStr;
+                }
+            });
+
+            const ptts = Array.from(new Set([...Object.keys(newestGps), ...Object.keys(newestDoppler)]));
+            ptts.forEach(p => {
+                addLog(`PTT ${p} summary: Newest GPS = ${newestGps[p] || 'None'}, Newest Doppler = ${newestDoppler[p] || 'None'}`);
+            });
+
+            if (isPreviewDryRun) {
+                addLog(`[DRY RUN PREVIEW] Complete. No writes committed to database.`);
+                addLog(`Preview: ${canonicalFixes.length} fixes (${canonicalFixes.filter(f => f.type === 'GPS').length} GPS, ${canonicalFixes.filter(f => f.type === 'DOPPLER').length} Doppler).`);
+                setPreviewData(canonicalFixes);
+                setSyncStats({ transmitters: ptts.length, positions: canonicalFixes.length });
+                setApiStatus('success');
+                return;
+            }
+
+            // Write canonical fixes to Firestore
+            const mappedArgos: ArgosMessage[] = canonicalFixes.map(fix => {
+                const locDateIso = new Date(fix.t).toISOString();
+                const validMsgDateMs = fix.firstMessageMs || fix.t;
+                const msgDateIso = new Date(validMsgDateMs).toISOString();
+                const lagMinutes = Math.max(0, Math.round((validMsgDateMs - fix.t) / 60000));
+
+                return {
+                    id: fix.id,
+                    programId: 'CLS-API',
+                    platformId: fix.pttId,
+                    timestamp: locDateIso,
+                    lat: String(fix.lat),
+                    lon: String(fix.lon),
+                    lc: fix.type === 'GPS' ? 'GPS' : String(fix.cls || 'Z'),
+                    msgType: fix.unitTypes[0] || 'Houbara',
+                    satellite: fix.type === 'GPS' ? 'GPS' : 'UNK',
+                    rawData: '',
+                    locationType: fix.type,
+                    locationClass: fix.cls,
+                    errorRadiusM: fix.errorRadiusM,
+                    dopplerError: String(fix.errorRadiusM),
+                    messageDate: msgDateIso,
+                    locationDate: locDateIso,
+                    deliveryCount: fix.deliveries,
+                    lagMinutes
+                };
+            });
+
+            const syncResult = await syncArgosToFirebase(mappedArgos, [], (msg) => addLog(maskSensitive(msg)));
+            stats = syncResult;
+            addLog(`✅ Successfully synced ${canonicalFixes.length} positions to database. Duration: ${durationMs}ms.`);
+        } else if (selectedOperation === 'retrieve-bulk') {
             rawData = await fetchBulkData(token);
         } else if (selectedOperation === 'retrieve-realtime') {
             rawData = await fetchRealtimeData(token);
@@ -779,7 +922,7 @@ export const DataUpload = () => {
                  body: JSON.stringify({})
              });
              const text = await res.text();
-             setRawResponse(text);
+             setRawResponse(maskSensitive(text));
              if(!res.ok) throw new Error(res.statusText);
              rawData = JSON.parse(text);
         } else if (selectedOperation === 'retrieve-doppler') {
@@ -791,33 +934,53 @@ export const DataUpload = () => {
                  body: JSON.stringify(body)
              });
              const text = await res.text();
-             setRawResponse(text);
+             setRawResponse(maskSensitive(text));
              if(!res.ok) throw new Error(res.statusText);
              const json = JSON.parse(text);
              rawData = json.contents || [];
+        } else if (selectedOperation === 'retrieve-bulk-count') {
+             addLog('Checking Message Count...');
+             const body = { 
+                 fromDatetime: `${dateRange.start}T00:00:00.001Z`,
+                 toDatetime: `${dateRange.end}T23:59:59.999Z`
+             };
+             const res = await fetch(getUrl(`${apiConfig.baseUrl}/retrieve-bulk-count`), {
+                 method: 'POST',
+                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                 body: JSON.stringify(body)
+             });
+             const text = await res.text();
+             setRawResponse(maskSensitive(text));
+             if(!res.ok) throw new Error(res.statusText);
+             const json = JSON.parse(text);
+             const count = json.count || (json.contents ? json.contents.length : 0);
+             addLog(`Message Count for window: ${count}`);
+             stats = { transmittersUpdated: 0, positionsCreated: 0 };
+             setPreviewData([{ operation: 'Message Count Check', count, start: dateRange.start, end: dateRange.end }]);
         } else {
              addLog('Operation not implemented for live fetch yet.');
              rawData = [];
         }
 
-        addLog(`Fetched ${rawData.length} items.`);
-        setPreviewData(rawData);
+        if (selectedOperation !== 'retrieve-positions' && selectedOperation !== 'retrieve-bulk-count') {
+            addLog(`Fetched ${rawData.length} items.`);
+            setPreviewData(rawData);
 
-        // Map and Store
-        if (selectedOperation === 'retrieve-device-list') {
-             const devices = mapArgosDevices(rawData);
-             const syncResult = await syncArgosToFirebase([], devices);
-             stats = syncResult;
-        } else if (selectedOperation === 'retrieve-doppler') {
-             // Doppler data mapped as positions
-             const msgs = mapArgosApiData(rawData);
-             const syncResult = await syncArgosToFirebase(msgs, [], (msg) => addLog(msg));
-             stats = syncResult;
-        } else if (selectedOperation === 'retrieve-bulk' || selectedOperation === 'retrieve-realtime') {
-             const msgs = mapArgosApiData(rawData);
-             const syncResult = await syncArgosToFirebase(msgs, [], (msg) => addLog(msg));
-             stats = syncResult;
-             addLog(`Synced ${msgs.length} messages to Firebase database.`);
+            // Map and Store
+            if (selectedOperation === 'retrieve-device-list') {
+                 const devices = mapArgosDevices(rawData);
+                 const syncResult = await syncArgosToFirebase([], devices);
+                 stats = syncResult;
+            } else if (selectedOperation === 'retrieve-doppler') {
+                 const msgs = mapArgosApiData(rawData);
+                 const syncResult = await syncArgosToFirebase(msgs, [], (msg) => addLog(maskSensitive(msg)));
+                 stats = syncResult;
+            } else if (selectedOperation === 'retrieve-bulk' || selectedOperation === 'retrieve-realtime') {
+                 const msgs = mapArgosApiData(rawData);
+                 const syncResult = await syncArgosToFirebase(msgs, [], (msg) => addLog(maskSensitive(msg)));
+                 stats = syncResult;
+                 addLog(`Synced ${msgs.length} messages to Firebase database.`);
+            }
         }
         
         setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
@@ -1167,7 +1330,14 @@ export const DataUpload = () => {
                                                         }`}
                                                         style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                                                     >
-                                                        {op.label}
+                                                        <span className="flex items-center justify-between">
+                                                            <span>{op.label}</span>
+                                                            {op.badge && (
+                                                                <span className="ml-2 px-1.5 py-0.5 text-[9px] font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded-full">
+                                                                    {op.badge}
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -1326,9 +1496,65 @@ export const DataUpload = () => {
                     </div>
 
                     <div className="bg-gray-50 dark:bg-slate-900 p-5 rounded-xl border border-gray-200 dark:border-slate-700">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
-                            <Activity size={16} /> Operation Parameters
-                        </h3>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Activity size={16} /> Operation Parameters
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => setShowOpInfoPopover(!showOpInfoPopover)}
+                                className="px-2 py-1 text-xs font-semibold bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/40 text-brand-700 dark:text-brand-300 rounded-md border border-brand-200 dark:border-brand-800 flex items-center gap-1.5 transition-colors"
+                            >
+                                <Info size={13} />
+                                <span>{showOpInfoPopover ? 'Hide Info' : 'Operation Details (i)'}</span>
+                            </button>
+                        </div>
+
+                        {/* Detailed Popover Card */}
+                        {showOpInfoPopover && (
+                            <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-xl border border-brand-300 dark:border-brand-700 shadow-md">
+                                <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-700 pb-2 mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-sm text-gray-900 dark:text-white">
+                                            {opById(opIdMap[selectedOperation]).label[opInfoLang]}
+                                        </span>
+                                        {opById(opIdMap[selectedOperation]).badge && (
+                                            <span className="px-2 py-0.5 text-[10px] font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded-full">
+                                                {opById(opIdMap[selectedOperation]).badge?.[opInfoLang]}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 p-0.5 rounded-md text-[11px]">
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpInfoLang('en')}
+                                            className={`px-2 py-0.5 rounded font-bold transition-all ${opInfoLang === 'en' ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-xs' : 'text-gray-500'}`}
+                                        >
+                                            EN
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpInfoLang('ar')}
+                                            className={`px-2 py-0.5 rounded font-bold transition-all ${opInfoLang === 'ar' ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-xs' : 'text-gray-500'}`}
+                                        >
+                                            AR
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="text-xs space-y-1.5 text-gray-600 dark:text-gray-300" dir={opInfoLang === 'ar' ? 'rtl' : 'ltr'}>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        {opById(opIdMap[selectedOperation]).details[opInfoLang].map((bullet, idx) => (
+                                            <li key={idx} className="leading-relaxed">{bullet}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className="mt-3 pt-2 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap gap-2 text-[10px] text-gray-500 dark:text-gray-400">
+                                    <span className="bg-gray-100 dark:bg-slate-700/80 px-2 py-0.5 rounded">Role: <b>{opById(opIdMap[selectedOperation]).role}</b></span>
+                                    <span className="bg-gray-100 dark:bg-slate-700/80 px-2 py-0.5 rounded">Window: <b>{opById(opIdMap[selectedOperation]).windowBy}</b></span>
+                                    <span className="bg-gray-100 dark:bg-slate-700/80 px-2 py-0.5 rounded">Writes: <b>{opById(opIdMap[selectedOperation]).writesTo.join(', ')}</b></span>
+                                </div>
+                            </div>
+                        )}
 
                         <div className="space-y-4">
                              <div>
@@ -1339,8 +1565,15 @@ export const DataUpload = () => {
                                         className="w-full flex items-center justify-between px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
                                         style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                                     >
-                                        <span>{operations.find(op => op.value === selectedOperation)?.label}</span>
-                                        <ChevronDown size={14} className="text-gray-500" />
+                                        <span className="flex items-center gap-2 truncate">
+                                            <span>{operations.find(op => op.value === selectedOperation)?.label}</span>
+                                            {operations.find(op => op.value === selectedOperation)?.badge && (
+                                                <span className="px-1.5 py-0.5 text-[10px] font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded-full">
+                                                    {operations.find(op => op.value === selectedOperation)?.badge}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <ChevronDown size={14} className="text-gray-500 ml-2 flex-shrink-0" />
                                     </button>
                                     
                                     {isOperationOpen && (
@@ -1354,17 +1587,134 @@ export const DataUpload = () => {
                                                             setSelectedOperation(op.value as any);
                                                             setIsOperationOpen(false);
                                                         }}
-                                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors ${selectedOperation === op.value ? 'bg-brand-50 text-brand-700 dark:bg-slate-700 dark:text-brand-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}
+                                                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between ${selectedOperation === op.value ? 'bg-brand-50 text-brand-700 dark:bg-slate-700 dark:text-brand-400 font-bold' : 'text-gray-700 dark:text-gray-300'}`}
                                                         style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}
                                                     >
-                                                        {op.label}
+                                                        <span>{op.label}</span>
+                                                        {op.badge && (
+                                                            <span className="ml-2 px-1.5 py-0.5 text-[9px] font-bold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded-full">
+                                                                {op.badge}
+                                                            </span>
+                                                        )}
                                                     </button>
                                                 ))}
                                             </div>
                                         </>
                                     )}
                                 </div>
+
+                                {/* Summary Box under Select */}
+                                <div className="mt-2 p-2.5 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg text-xs">
+                                    <p className="text-blue-900 dark:text-blue-200 leading-relaxed font-medium">
+                                        {opById(opIdMap[selectedOperation]).summary.en}
+                                    </p>
+                                    <p className="mt-1 text-blue-800/80 dark:text-blue-300/80 leading-relaxed font-arabic text-[12px]" dir="rtl">
+                                        {opById(opIdMap[selectedOperation]).summary.ar}
+                                    </p>
+                                </div>
                              </div>
+
+                             {/* PARAMETERS FOR POSITIONS */}
+                             {selectedOperation === 'retrieve-positions' && (
+                                 <div className="space-y-3 pt-1 border-t border-gray-200/60 dark:border-slate-700/60">
+                                     {/* Device selector */}
+                                     <div>
+                                         <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
+                                             Device (PTT) Selection
+                                         </label>
+                                         <select
+                                             value={selectedDevicePtt}
+                                             onChange={(e) => setSelectedDevicePtt(e.target.value)}
+                                             className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                         >
+                                             <option value="ALL">All Registered Devices (PTTs)</option>
+                                             {transmitters.map(t => (
+                                                 <option key={t.id} value={t.platform_id}>
+                                                     PTT {t.platform_id} {t.bird_id ? `(${t.bird_id})` : ''} - {t.model || 'Transmitter'}
+                                                 </option>
+                                             ))}
+                                         </select>
+                                     </div>
+
+                                     {/* Date Range UTC by Location Date */}
+                                     <div className="grid grid-cols-2 gap-3">
+                                         <div>
+                                             <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
+                                                 From (Location Date UTC)
+                                             </label>
+                                             <input 
+                                                 type="date" 
+                                                 value={dateRange.start}
+                                                 onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                                                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                             />
+                                         </div>
+                                         <div>
+                                             <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
+                                                 To (Location Date UTC)
+                                             </label>
+                                             <input 
+                                                 type="date" 
+                                                 value={dateRange.end}
+                                                 onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                                                 className="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                             />
+                                         </div>
+                                     </div>
+
+                                     {/* Location Type Filter */}
+                                     <div>
+                                         <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
+                                             Location Type Filter
+                                         </label>
+                                         <div className="grid grid-cols-3 gap-2">
+                                             {(['ALL', 'GPS', 'DOPPLER'] as const).map(type => (
+                                                 <button
+                                                     key={type}
+                                                     type="button"
+                                                     onClick={() => setSelectedLocationType(type)}
+                                                     className={`py-1.5 text-xs font-bold rounded-lg border transition-all ${
+                                                         selectedLocationType === type
+                                                             ? 'bg-brand-600 text-white border-brand-600 shadow-xs'
+                                                             : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-slate-600 hover:bg-gray-50'
+                                                     }`}
+                                                 >
+                                                     {type}
+                                                 </button>
+                                             ))}
+                                         </div>
+                                     </div>
+
+                                     {/* Overlap safety days & Dry run preview */}
+                                     <div className="grid grid-cols-2 gap-3 items-center pt-1">
+                                         <div>
+                                             <label className="block text-xs font-bold text-gray-600 dark:text-gray-300 mb-1">
+                                                 Overlap Safety (Days)
+                                             </label>
+                                             <input 
+                                                 type="number"
+                                                 min={1}
+                                                 max={90}
+                                                 value={overlapSafetyDays}
+                                                 onChange={(e) => setOverlapSafetyDays(parseInt(e.target.value) || 14)}
+                                                 className="w-full px-3 py-1.5 border border-gray-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                             />
+                                         </div>
+                                         <div className="pt-4">
+                                             <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-gray-700 dark:text-gray-300">
+                                                 <input 
+                                                     type="checkbox"
+                                                     checked={isPreviewDryRun}
+                                                     onChange={(e) => setIsPreviewDryRun(e.target.checked)}
+                                                     className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                                                 />
+                                                 <span>Dry Run Preview</span>
+                                             </label>
+                                             <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Test without saving to DB</p>
+                                         </div>
+                                     </div>
+                                 </div>
+                             )}
 
                              {(selectedOperation === 'retrieve-bulk' || selectedOperation === 'retrieve-doppler' || selectedOperation === 'retrieve-bulk-count') && (
                                  <div className="grid grid-cols-2 gap-3">
@@ -1412,7 +1762,7 @@ export const DataUpload = () => {
                                 className={`w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all flex items-center justify-center gap-2 shadow-md ${apiStatus === 'testing' ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700'}`}
                              >
                                 {apiStatus === 'testing' ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
-                                Execute Request
+                                {isPreviewDryRun && selectedOperation === 'retrieve-positions' ? 'Run Preview (Dry Run)' : 'Execute Request'}
                              </button>
                         </div>
                     </div>

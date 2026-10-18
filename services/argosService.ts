@@ -400,6 +400,113 @@ export const fetchArgosBulkData = async (initialToken: string, apiConfig: any, s
     return allData;
 };
 
+export const fetchArgosPositions = async (
+    initialToken: string,
+    apiConfig: any,
+    startDateStr: string,
+    endDateStr: string,
+    locationType: 'ALL' | 'GPS' | 'DOPPLER' = 'ALL',
+    deviceIds: string[] = [],
+    addLog: (msg: string) => void
+): Promise<any[]> => {
+    let token = initialToken;
+    const { baseUrl } = apiConfig;
+    let allData: any[] = [];
+    let currentCursor: string | null = null;
+    const limit = 100;
+    let hasMore = true;
+    let page = 1;
+    const maxPages = 500;
+
+    addLog(`Starting Positions Fetch (Location Date: ${startDateStr} to ${endDateStr}, Type: ${locationType})...`);
+
+    while (hasMore && page <= maxPages) {
+        addLog(`Fetching Positions Page ${page}${currentCursor ? ` (Cursor: ...${currentCursor.slice(-8)})` : ''}...`);
+
+        const body: any = {
+            limit,
+            fromDatetime: startDateStr,
+            toDatetime: endDateStr,
+            datetimeFormat: "DATETIME"
+        };
+        if (locationType !== 'ALL') {
+            body.locationType = locationType;
+        }
+        if (deviceIds && deviceIds.length > 0) {
+            body.deviceIds = deviceIds;
+        }
+        if (currentCursor) {
+            body.pagination = { after: currentCursor };
+        }
+
+        let retries = 0;
+        let json: any = null;
+
+        while (retries < 3) {
+            try {
+                let targetUrl = getUrl(`${baseUrl}/positions`);
+                let res = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (res.status === 404) {
+                    targetUrl = getUrl(`${baseUrl}/retrieve-positions`);
+                    res = await fetch(targetUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(body)
+                    });
+                }
+
+                if (res.status === 401) {
+                    addLog(`Token expired (401) on page ${page}. Check credentials.`);
+                    throw new Error("Auth Failed");
+                }
+
+                const text = await res.text();
+                if (!res.ok) throw new Error(`Positions Fetch Failed (${res.status}): ${text.substring(0, 100)}`);
+
+                json = JSON.parse(text);
+                break;
+            } catch (e: any) {
+                if (e.message.includes('Auth Failed')) throw e;
+                retries++;
+                if (retries >= 3) throw e;
+                addLog(`Network error on page ${page}, retrying (${retries}/3)...`);
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+
+        if (json) {
+            const items = json.contents || json.positions || (Array.isArray(json) ? json : []);
+            if (items.length > 0) {
+                allData = [...allData, ...items];
+                page++;
+                if (json.pageInfo && json.pageInfo.hasNextPage && json.pageInfo.endCursor) {
+                    currentCursor = json.pageInfo.endCursor;
+                } else {
+                    hasMore = false;
+                }
+            } else {
+                hasMore = false;
+            }
+        } else {
+            hasMore = false;
+        }
+    }
+    return allData;
+};
+
 export const performGlobalArgosSync = async (
     apiConfig: any, 
     syncArgosToFirebase: (msgs: ArgosMessage[], devices: ArgosDevice[], onProgress?: (msg: string) => void) => Promise<{ transmittersUpdated: number; positionsCreated: number }>,

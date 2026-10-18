@@ -700,6 +700,67 @@ exports.ingestClsCallable = onCall({
 });
 
 /**
+ * Ingest Positions Fast Loop (Scheduled every 10 minutes)
+ * Window: last 36 h by location date.
+ */
+exports.ingestPositionsFast = onSchedule({
+  schedule: "every 10 minutes",
+  timeZone: "UTC",
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (event) => {
+  console.log("[ingestPositionsFast] Fast positions loop started at", new Date().toISOString());
+  try {
+    const result = await clsPipeline.ingestPositionsCore(db, { lookbackHours: 36 }, (msg) => console.log(msg));
+    console.log("[ingestPositionsFast] Result:", JSON.stringify(result));
+  } catch (err) {
+    console.error("[ingestPositionsFast] Error:", err);
+  }
+});
+
+/**
+ * Ingest Positions Sweep (Scheduled every 6 hours)
+ * Window: last 14 days by location date.
+ */
+exports.ingestPositionsSweep = onSchedule({
+  schedule: "every 6 hours",
+  timeZone: "UTC",
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (event) => {
+  console.log("[ingestPositionsSweep] Sweep positions loop started at", new Date().toISOString());
+  try {
+    const result = await clsPipeline.ingestPositionsCore(db, { lookbackHours: 14 * 24 }, (msg) => console.log(msg));
+    console.log("[ingestPositionsSweep] Result:", JSON.stringify(result));
+  } catch (err) {
+    console.error("[ingestPositionsSweep] Error:", err);
+  }
+});
+
+/**
+ * Callable version of ingestPositions ("Run Positions" / UI execution)
+ */
+exports.ingestPositionsCallable = onCall({
+  cors: true,
+  maxInstances: 5,
+  timeoutSeconds: 540,
+  memory: "512MiB",
+}, async (req) => {
+  if (!req.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required to ingest CLS positions.");
+  }
+  console.log(`[ingestPositionsCallable] Triggered by ${req.auth.token.email || req.auth.uid}`);
+  try {
+    const options = req.data || {};
+    const result = await clsPipeline.ingestPositionsCore(db, options, (msg) => console.log(msg));
+    return result;
+  } catch (err) {
+    console.error("[ingestPositionsCallable] Error:", err);
+    throw new HttpsError("internal", err.message);
+  }
+});
+
+/**
  * 2. classifyAndPromote (Firestore trigger)
  * Triggered on write to argos_raw/{rawId}.
  * Evaluates fixTime, quality classification, and updates transmitters (pipeline-owned fields).

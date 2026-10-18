@@ -12,6 +12,7 @@
 
 const crypto = require("crypto");
 const admin = require("firebase-admin");
+const { mapClsPositions } = require("./clsPositionsMapper");
 
 // ─── Constants & Configuration ───────────────────────────────────────────────
 
@@ -944,6 +945,275 @@ async function rebuildTransmitterSummariesCore(db, onProgress, triggeredBy = "ma
   return { ok: true, runId, ...result };
 }
 
+/**
+ * 5. ingestPositionsCore: Ingests CLS Positions (GPS + Doppler).
+ * Deterministic doc IDs `{ptt}_{GPS|DOP}_{epochSeconds}`, writes to argos_positions,
+ * positions, and updates transmitters live summary strictly by location date.
+ */
+async function ingestPositionsCore(db, options = {}, onProgress) {
+  const log = onProgress || console.log;
+  const startTime = Date.now();
+  log("[IngestPositions] Starting Positions (GPS + Doppler) ingestion...");
+
+  let apiConfig = options.apiConfig;
+  if (!apiConfig || !apiConfig.username || !apiConfig.password) {
+    const settingsDoc = await db.collection("settings").doc("clsApi").get();
+    if (settingsDoc.exists) {
+      apiConfig = settingsDoc.data();
+    }
+  }
+
+  if (!apiConfig || !apiConfig.username || !apiConfig.password) {
+    const msg = "No CLS credentials configured in settings/clsApi or arguments";
+    log(`[IngestPositions] ${msg}`);
+    return { ok: false, error: msg };
+  }
+
+  const authUrl = apiConfig.authUrl || "https://account.groupcls.com/auth/realms/cls/protocol/openid-connect/token";
+  const baseUrl = apiConfig.baseUrl || "https://api.groupcls.com/telemetry/api/v1";
+  const clientId = apiConfig.clientId || "api-telemetry";
+
+  const toDatetime = options.toDatetime || new Date().toISOString();
+  const defaultLookbackMs = (options.lookbackHours || 36) * 3600 * 1000;
+  const fromDatetime = options.fromDatetime || new Date(Date.now() - defaultLookbackMs).toISOString();
+  const locationTypeFilter = options.locationType || "ALL";
+  const deviceIds = options.deviceIds || [];
+
+  log(`[IngestPositions] Window (Location Date): ${fromDatetime} -> ${toDatetime}, Filter: ${locationTypeFilter}`);
+
+  const params = new URLSearchParams();
+  params.append("grant_type", "password");
+  params.append("username", apiConfig.username);
+  params.append("password", apiConfig.password);
+  params.append("client_id", clientId);
+
+  const authRes = await fetch(authUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  });
+
+  if (!authRes.ok) {
+    const errText = await authRes.text();
+    const errMsg = `CLS Auth Failed (${authRes.status}): ${errText.substring(0, 200)}`;
+    log(`[IngestPositions] ${errMsg}`);
+    return { ok: false, error: errMsg };
+  }
+
+  const authData = await authRes.json();
+  const token = authData.access_token;
+  if (!token) return { ok: false, error: "No access token returned from CLS" };
+
+  let cursor = null;
+  let hasMore = true;
+  let page = 1;
+  const maxPages = 500;
+  const rawRows = [];
+
+  while (hasMore && page <= maxPages) {
+    const body = {
+      limit: 100,
+      fromDatetime,
+      toDatetime,
+      datetimeFormat: "DATETIME",
+    };
+    if (locationTypeFilter !== "ALL") {
+      body.locationType = locationTypeFilter;
+    }
+    if (deviceIds && deviceIds.length > 0) {
+      body.deviceIds = deviceIds;
+    }
+    if (cursor) body.pagination = { after: cursor };
+
+    let posRes = await fetch(`${baseUrl}/positions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (posRes.status === 404) {
+      posRes = await fetch(`${baseUrl}/retrieve-positions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    }
+
+    if (!posRes.ok) {
+      const errText = await posRes.text();
+      log(`[IngestPositions] Fetch failed page ${page} (${posRes.status}): ${errText.substring(0, 200)}`);
+      break;
+    }
+
+    const posData = await posRes.json();
+    const items = posData.contents || posData.positions || (Array.isArray(posData) ? posData : []);
+    if (!items.length) {
+      hasMore = false;
+      break;
+    }
+
+    rawRows.push(...items);
+    page++;
+
+    if (posData.pageInfo && posData.pageInfo.hasNextPage && posData.pageInfo.endCursor) {
+      cursor = posData.pageInfo.endCursor;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  log(`[IngestPositions] Fetched ${rawRows.length} raw rows from CLS`);
+
+  const mapResult = mapClsPositions(rawRows);
+  if (mapResult.missing && mapResult.missing.length > 0) {
+    const errMsg = `CLS Positions missing required fields: ${mapResult.missing.join(", ")}`;
+    log(`[IngestPositions] ERROR: ${errMsg}`);
+    return { ok: false, error: errMsg, missing: mapResult.missing };
+  }
+
+  log(`[IngestPositions] Valid mapped rows: ${mapResult.rows.length}, Skipped: ${mapResult.skipped.length}`);
+
+  const fixes = [];
+  const newestGpsPerPtt = {};
+  const newestDopplerPerPtt = {};
+
+  for (const row of mapResult.rows) {
+    const ptt = normalizePtt(row.pttId);
+    if (!ptt) continue;
+    const locDateMs = safeParseTimestamp(row.locationDate);
+    if (isNaN(locDateMs) || locDateMs <= 0) continue;
+
+    const locType = /gps/i.test(row.locationType) ? "GPS" : "DOPPLER";
+    const epochSec = Math.floor(locDateMs / 1000);
+    const docId = `${ptt}_${locType === "GPS" ? "GPS" : "DOP"}_${epochSec}`;
+    const isoDate = new Date(locDateMs).toISOString();
+
+    const fixObj = {
+      docId,
+      id: docId,
+      pttId: ptt,
+      platformId: ptt,
+      type: locType,
+      locationType: locType,
+      locationClass: locType === "GPS" ? null : (row.locationClass || "Z"),
+      lc: locType === "GPS" ? "GPS" : (row.locationClass || "Z"),
+      errorRadiusM: row.errorRadiusM || 0,
+      dopplerError: String(row.errorRadiusM || 0),
+      fixTime: isoDate,
+      locationDate: isoDate,
+      timestamp: isoDate,
+      lat: row.lat,
+      lon: row.lon,
+      latitude: row.lat,
+      longitude: row.lon,
+      unitTypes: row.unitType ? [row.unitType] : ["Houbara"],
+      msgType: row.unitType || "Houbara",
+      source: "cls-positions",
+      updatedAt: new Date().toISOString(),
+    };
+
+    fixes.push(fixObj);
+
+    if (locType === "GPS") {
+      if (!newestGpsPerPtt[ptt] || locDateMs > newestGpsPerPtt[ptt].ms) {
+        newestGpsPerPtt[ptt] = { ms: locDateMs, iso: isoDate };
+      }
+    } else {
+      if (!newestDopplerPerPtt[ptt] || locDateMs > newestDopplerPerPtt[ptt].ms) {
+        newestDopplerPerPtt[ptt] = { ms: locDateMs, iso: isoDate };
+      }
+    }
+  }
+
+  let newDocs = 0;
+  let batch = db.batch();
+  let countInBatch = 0;
+
+  for (const fix of fixes) {
+    const docRef = db.collection("argos_positions").doc(fix.docId);
+    const posRef = db.collection("positions").doc(fix.docId);
+    const argosDataRef = db.collection("argos_data").doc(fix.docId);
+
+    batch.set(docRef, fix, { merge: true });
+    countInBatch++;
+    batch.set(posRef, fix, { merge: true });
+    countInBatch++;
+    batch.set(argosDataRef, fix, { merge: true });
+    countInBatch++;
+    newDocs++;
+
+    if (countInBatch >= BATCH_SIZE) {
+      await batch.commit();
+      batch = db.batch();
+      countInBatch = 0;
+    }
+  }
+
+  if (countInBatch > 0) {
+    await batch.commit();
+  }
+
+  const allPtts = new Set([...Object.keys(newestGpsPerPtt), ...Object.keys(newestDopplerPerPtt)]);
+  for (const ptt of allPtts) {
+    const latestGps = newestGpsPerPtt[ptt]?.iso;
+    const latestDop = newestDopplerPerPtt[ptt]?.iso;
+    const maxDate = (newestGpsPerPtt[ptt]?.ms || 0) >= (newestDopplerPerPtt[ptt]?.ms || 0)
+      ? latestGps
+      : latestDop;
+
+    const txRef = db.collection("transmitters").doc(`trans-${ptt}`);
+    const updateData = {};
+    if (maxDate) {
+      updateData.last_fix = maxDate;
+      updateData["live.lastFix"] = maxDate;
+    }
+    if (latestGps) {
+      updateData.last_gps = latestGps;
+      updateData["live.lastGps"] = latestGps;
+    }
+    if (latestDop) {
+      updateData.last_doppler = latestDop;
+      updateData["live.lastDoppler"] = latestDop;
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await txRef.set(updateData, { merge: true });
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+  const runRecord = {
+    timestamp: new Date().toISOString(),
+    operation: "positions",
+    windowStart: fromDatetime,
+    windowEnd: toDatetime,
+    locationTypeFilter,
+    rowsFetched: rawRows.length,
+    validFixes: fixes.length,
+    skipped: mapResult.skipped.length,
+    newDocs,
+    durationMs,
+    newestGpsPerPtt: Object.fromEntries(Object.entries(newestGpsPerPtt).map(([k, v]) => [k, v.iso])),
+    newestDopplerPerPtt: Object.fromEntries(Object.entries(newestDopplerPerPtt).map(([k, v]) => [k, v.iso])),
+  };
+
+  await db.collection("ingest_runs").add(runRecord);
+  log(`[IngestPositions] Completed in ${durationMs}ms. Stored ${fixes.length} fixes.`);
+
+  return {
+    ok: true,
+    ...runRecord,
+  };
+}
+
 module.exports = {
   normalizePtt,
   isValidCoordinate,
@@ -953,5 +1223,6 @@ module.exports = {
   classifyAndPromoteBatch,
   verifyAndRepairPipeline,
   ingestClsCore,
+  ingestPositionsCore,
   rebuildTransmitterSummariesCore,
 };
