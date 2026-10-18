@@ -7,6 +7,7 @@ import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime, formatUtcDateTime, normalizePttId, safeParseTimestamp, isValidCoordinate } from '../utils/formatting';
 import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
 import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, clearAllTrackingData, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
+import { KNOWN_CLS_RAW_LOCATION_DATES } from '../services/argosService';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
@@ -139,11 +140,26 @@ export const ArgosData = () => {
         const locationClass = isGps ? null : (rawLc !== 'GPS' && rawLc ? rawLc : 'Z');
         const errorRadiusM = isGps ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
 
-        const locDateStr = d.locationDate || d.fixTime || d.gpsLocDate || d.timestamp || d.date || '';
+        const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
+        let locDateStr = d.locationDate || d.fixTime || d.gpsLocDate || d.dateOfPosition || d.location?.locationDate;
+        if (!locDateStr) {
+          if (isGps) {
+            if (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+              locDateStr = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
+            } else {
+              // Rule 1: Never fall back to message arrival date for GPS fixes!
+              return;
+            }
+          } else {
+            locDateStr = d.timestamp || d.date || d.msgDatetime;
+          }
+        }
+        if (!locDateStr) return;
+
         const pttId = normalizePttId(String(d.pttId || d.platformId || d.transmitter_id || ''));
         if (!pttId) return;
 
-        const receivedAtStr = d.firstMessageDate || d.receivedAt || d.messageDate;
+        const receivedAtStr = d.firstMessageDate || d.receivedAt || d.messageDate || d.timestamp;
         const unitType = String(d.unitType || d.msgType || 'Houbara');
 
         rawFixes.push({
@@ -364,9 +380,9 @@ export const ArgosData = () => {
       'Location type': row.locationType === 'GPS' ? 'GPS' : 'Doppler',
       'Error radius (m)': row.locationType === 'GPS' ? 0 : (row.errorRadiusM ?? 0),
       'Location date (UTC)': row.locationDate ? formatUtcDateTime(row.locationDate) : '',
-      'Longitude': row.lon,
-      'Latitude': row.lat,
-      'Received (first message)': row.receivedAt ? formatUtcDateTime(row.receivedAt) : '',
+      'Longitude': typeof row.lon === 'number' ? Number(row.lon.toFixed(5)) : row.lon,
+      'Latitude': typeof row.lat === 'number' ? Number(row.lat.toFixed(5)) : row.lat,
+      'Received (first message)': row.receivedAt ? formatUtcDateTime(row.receivedAt) : (row.firstMessageDate ? formatUtcDateTime(row.firstMessageDate) : (row.messageDate ? formatUtcDateTime(row.messageDate) : '')),
       'Delay': row.lagMinutes !== undefined ? (row.lagMinutes >= 60 ? `+${(row.lagMinutes / 60).toFixed(1)}h` : `+${row.lagMinutes}m`) : '',
       'Deliveries': row.deliveryCount || 1
     }));

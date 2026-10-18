@@ -451,12 +451,13 @@ export const DataUpload = () => {
                 if (!extractedFixFromRow) {
                     const fallbackLat = parseFloat(String(row['Latitude'] || row['lat'] || row['Lat']));
                     let fallbackLon = parseFloat(String(row['Longitude'] || row['lon'] || row['Lon']));
-                    const fallbackDateRaw = row['timestamp'] || row['date'] || msgDateRaw;
+                    const locType = classifyLocationType(row.lc, row.locationType, satellite);
+                    const isGps = locType === 'GPS';
+                    const fallbackDateRaw = row['locationDate'] || row['fixTime'] || row['timestamp'] || row['date'] || (!isGps ? msgDateRaw : undefined);
                     if (fallbackDateRaw && isValidCoordinate(fallbackLat, fallbackLon)) {
                         if (platformId === '242086' && fallbackLon < 0) fallbackLon = Math.abs(fallbackLon);
                         const fbDateMs = safeParseTimestamp(fallbackDateRaw);
                         if (!isNaN(fbDateMs) && fbDateMs > 0) {
-                            const locType = classifyLocationType(row.lc, row.locationType, satellite);
                             rawFixes.push({
                                 pttId: platformId,
                                 unitType,

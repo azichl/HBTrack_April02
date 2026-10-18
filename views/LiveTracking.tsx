@@ -8,7 +8,7 @@ import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import { FIXED_FIELD_CAMPS } from '../constants';
 import { formatDateTime, formatUtcDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
-import { canonType, type TypeFilter } from '../utils/positionsEngine';
+import { canonType, mapLayers, type TypeFilter, type Fix } from '../utils/positionsEngine';
 import { isVisibleOnLiveMap } from '../utils/statusCalculator';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -1440,6 +1440,16 @@ const LiveTrackingInner = () => {
       errorRadiusM?: number;
       delay?: number | string;
     }>;
+    dopplerDots?: Array<{
+      lat: number;
+      lon: number;
+      timestamp: string;
+      type?: string;
+      isDegraded?: boolean;
+      locationClass?: string | null;
+      errorRadiusM?: number;
+      delay?: number | string;
+    }>;
     segments?: Array<Array<[number, number]>>;
     color: string;
   }>>([]);
@@ -1728,8 +1738,10 @@ const LiveTrackingInner = () => {
     // OVERRIDE WITH HISTORY IF ACTIVE
     if (showHistory && historyPaths.length > 0) {
         historyPaths.forEach(hp => {
-            if (hp.path.length > 0) {
-                const lastPoint = hp.path[hp.path.length - 1];
+            const allPoints = [...(hp.path || []), ...(hp.dopplerDots || [])];
+            allPoints.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+            if (allPoints.length > 0) {
+                const lastPoint = allPoints[allPoints.length - 1];
                 const existingPos = latestMap.get(hp.id);
                 
                 const overridePos = {
@@ -1820,167 +1832,73 @@ const LiveTrackingInner = () => {
     selectedTransmitterIds.forEach((pttId, index) => {
         let track = rawPositions.filter(p => p.transmitter_id === pttId);
 
-        // Include the transmitter's up-to-date latest fix (green marker position) so track reaches the latest position
-        const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
-        const lp = latestPositions.find(p => String(p.transmitter_id) === String(pttId) || String((p as any).platformId) === String(pttId));
-        const latestLat = lp ? Number(lp.lat) : Number((tr as any)?.last_latitude ?? (tr as any)?.latitude ?? (tr as any)?.lat);
-        const latestLon = lp ? Number(lp.lon) : Number((tr as any)?.last_longitude ?? (tr as any)?.longitude ?? (tr as any)?.lon);
-        const latestTs = lp?.timestamp || tr?.last_fix;
-        const fixType = lp?.locationType || (lp?.lc ? classifyLocationType(lp.lc, lp.locationType, lp.satellite) : 'GPS');
-
-        if (latestTs && isValidCoordinate(latestLat, latestLon)) {
-          const latestParsedMs = safeParseTimestamp(latestTs);
-          const alreadyInTrack = track.some(p => {
-            const pMs = safeParseTimestamp(p.timestamp);
-            return Math.abs(pMs - latestParsedMs) < 60000 && Math.abs(Number(p.lat) - latestLat) < 0.0005 && Math.abs(Number(p.lon) - latestLon) < 0.0005;
-          });
-          if (!alreadyInTrack) {
-            track.push({
-              id: `latest-${pttId}`,
-              transmitter_id: pttId,
-              platformId: pttId,
-              lat: latestLat,
-              lon: latestLon,
-              timestamp: latestTs,
-              lc: lp?.lc || 'GPS',
-              satellite: lp?.satellite || 'GPS',
-              locationType: fixType,
-              locationClass: (lp as any)?.locationClass || null,
-              errorRadiusM: (lp as any)?.errorRadiusM || 0,
-              lagMinutes: (lp as any)?.lagMinutes ?? (lp as any)?.delay,
-              speed_kmh: lp?.speed_kmh || 0
-            });
-          }
-        }
-
         // For Static Test tags, only display positions from the current calendar month on live map history track
+        const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
         const st = tr?.derived_status || tr?.status;
         if (st === 'Static test' || st === 'Static Test' || st === 'static') {
           track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
         }
 
-        // Classify all fixes and filter valid coordinates
-        track = track.filter(p => {
-            const numLat = Number(p.lat);
-            const numLon = Number(p.lon);
-            const validCoords = isValidCoordinate(numLat, numLon);
-            if (!validCoords) return false;
-
-            const rawLc = String(p.lc || '').trim();
-            const isRejected = (p as any).accepted === false || (p as any).quality === 'Invalid' || rawLc === 'Z';
-            if (isRejected) return false;
-
+        // Filter out degraded fixes if not toggled on
+        if (!showDegradedFixes) {
+          track = track.filter(p => {
+            const rawLc = String(p.lc || p.locationClass || '').trim();
             const isDegraded = ['A', 'B'].includes(rawLc) || (p as any).quality === 'Low';
-            if (isDegraded && !showDegradedFixes) return false;
+            return !isDegraded;
+          });
+        }
 
-            const fixType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
-            p.locationType = fixType;
-            (p as any).isDegraded = isDegraded;
+        const pttFixes: Fix[] = track.map(p => {
+          const locTs = safeParseTimestamp(p.timestamp || p.locationDate);
+          const fType: 'GPS' | 'DOPPLER' = canonType(p.locationType || p.lc) === 'GPS' ? 'GPS' : 'DOPPLER';
+          const validFirstMsg = p.firstMessageDate ? safeParseTimestamp(p.firstMessageDate) : (p.lagMinutes !== undefined ? locTs + (p.lagMinutes * 60000) : undefined);
+          return {
+            id: p.id,
+            pttId,
+            type: fType,
+            cls: fType === 'GPS' ? null : (p.locationClass || (p.lc !== 'GPS' ? p.lc : null) || null),
+            errorRadiusM: fType === 'GPS' ? 0 : (Number(p.errorRadiusM) || 0),
+            t: locTs,
+            lat: Number(p.lat),
+            lon: Number(p.lon),
+            firstMessageMs: validFirstMsg,
+            deliveries: p.deliveryCount || 1,
+            unitTypes: [p.unitType || 'Houbara']
+          };
+        }).filter(f => isValidCoordinate(f.lat, f.lon) && !isNaN(f.t) && f.t > 0);
 
-            // GPS / Doppler / All filter
-            if (historyFixType === 'GPS') return fixType === 'GPS';
-            if (historyFixType === 'Doppler') return fixType === 'DOPPLER';
-            return true; // 'All': show all fixes (GPS + Doppler)
+        const engineType: TypeFilter = historyFixType === 'GPS' ? 'GPS' : (historyFixType === 'Doppler' ? 'DOPPLER' : 'ALL');
+        const layers = mapLayers(pttFixes, {
+          type: engineType,
+          maxGapHours: 48,
+          maxSpeedKmh: 120,
+          fillGapsWithDoppler: false
         });
 
-        // Sort track points chronologically
-        track.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+        const segments: Array<Array<[number, number]>> = layers.line.segments.map(seg => seg.map(f => [f.lat, f.lon] as [number, number]));
 
-        // Deduplicate points sharing the same canonical key (pttId, type, epoch second)
-        const seenFixKeys = new Set<string>();
-        const dedupedTrack: typeof track = [];
-        for (const p of track) {
-          const pMs = safeParseTimestamp(p.timestamp);
-          const fType = canonType(p.locationType || p.lc);
-          const fKey = `${pttId}_${fType}_${Math.round(pMs / 1000)}`;
-          if (!seenFixKeys.has(fKey)) {
-            seenFixKeys.add(fKey);
-            dedupedTrack.push(p);
-          }
-        }
-        track = dedupedTrack;
+        const formatPoint = (f: Fix) => ({
+          lat: f.lat,
+          lon: f.lon,
+          timestamp: new Date(f.t).toISOString(),
+          type: f.type,
+          isDegraded: f.cls === 'A' || f.cls === 'B',
+          locationClass: f.cls,
+          errorRadiusM: f.errorRadiusM,
+          delay: f.firstMessageMs ? Math.max(0, Math.round((f.firstMessageMs - f.t) / 60000)) : 0
+        });
 
-        // Telemetry spike / bounce filter: eliminate impossible teleportation artifacts
-        // (points jumping > 12 km away and bouncing right back to the previous position cluster)
-        if (track.length >= 3) {
-          const calcDistKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-            return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-          };
+        const markers = layers.markers.map(formatPoint);
+        const dopplerDots = layers.dopplerDots.map(formatPoint);
 
-          const filteredTrack: typeof track = [];
-          for (let i = 0; i < track.length; i++) {
-            if (i > 0 && i < track.length - 1) {
-              const prev = filteredTrack[filteredTrack.length - 1] || track[i - 1];
-              const curr = track[i];
-              const next = track[i + 1];
-              const d1 = calcDistKm(Number(prev.lat), Number(prev.lon), Number(curr.lat), Number(curr.lon));
-              const d2 = calcDistKm(Number(curr.lat), Number(curr.lon), Number(next.lat), Number(next.lon));
-              const dBase = calcDistKm(Number(prev.lat), Number(prev.lon), Number(next.lat), Number(next.lon));
-              const dtHours = Math.abs(safeParseTimestamp(next.timestamp) - safeParseTimestamp(prev.timestamp)) / (1000 * 3600);
-
-              if (d1 > 12 && d2 > 12 && dBase < 6 && dtHours < 4) {
-                // False bounce point (teleported away and back), skip it
-                continue;
-              }
-            }
-            filteredTrack.push(track[i]);
-          }
-          track = filteredTrack;
-        }
-
-        // Break polyline into segments where time gap > 48 h or implied speed > 120 km/h (with dt > 0.05 h)
-        const segments: Array<Array<[number, number]>> = [];
-        let currentSegment: Array<[number, number]> = [];
-
-        for (let i = 0; i < track.length; i++) {
-          const p = track[i];
-          const coord: [number, number] = [Number(p.lat), Number(p.lon)];
-          if (currentSegment.length === 0) {
-            currentSegment.push(coord);
-          } else {
-            const prev = track[i - 1];
-            const prevMs = safeParseTimestamp(prev.timestamp);
-            const currMs = safeParseTimestamp(p.timestamp);
-            const dtHours = Math.abs(currMs - prevMs) / (1000 * 3600);
-            const distMeters = haversineDistMeters(Number(prev.lat), Number(prev.lon), Number(p.lat), Number(p.lon));
-            const distKm = distMeters / 1000;
-            const speedKmh = dtHours > 0.01 ? (distKm / dtHours) : 0;
-
-            const shouldBreak = dtHours > 48 || (speedKmh > 120 && dtHours > 0.05);
-
-            if (shouldBreak) {
-              if (currentSegment.length > 1) {
-                segments.push(currentSegment);
-              }
-              currentSegment = [coord];
-            } else {
-              currentSegment.push(coord);
-            }
-          }
-        }
-        if (currentSegment.length > 1) {
-          segments.push(currentSegment);
-        }
-
-        if (track.length > 0) {
-             newPaths.push({
-                 id: pttId,
-                 path: track.map(p => ({ 
-                     lat: p.lat, 
-                     lon: p.lon, 
-                     timestamp: p.timestamp, 
-                     type: p.locationType,
-                     isDegraded: Boolean((p as any).isDegraded),
-                     locationClass: (p as any).locationClass || null,
-                     errorRadiusM: (p as any).errorRadiusM || 0,
-                     delay: (p as any).lagMinutes !== undefined ? (p as any).lagMinutes : (p as any).delay
-                 })),
-                 segments,
-                 color: colors[index % colors.length]
-             });
+        if (markers.length > 0 || dopplerDots.length > 0) {
+          newPaths.push({
+            id: pttId,
+            path: markers,
+            dopplerDots,
+            segments,
+            color: colors[index % colors.length]
+          });
         }
     });
     
@@ -2600,10 +2518,21 @@ const LiveTrackingInner = () => {
                         />
                     ))}
                     
-                    {/* Dots for every filtered fix */}
+                    {/* Dots for primary markers */}
                     {hp.path.map((point, idx) => (
                          <HistoricalMarker
                             key={`${hp.id}-${point.timestamp}-${idx}`}
+                            point={point}
+                            pttId={hp.id}
+                            color={hp.color}
+                            timeZone={timeZone}
+                         />
+                    ))}
+
+                    {/* Doppler hollow dots in ALL mode */}
+                    {(hp.dopplerDots || []).map((point, idx) => (
+                         <HistoricalMarker
+                            key={`${hp.id}-dop-${point.timestamp}-${idx}`}
                             point={point}
                             pttId={hp.id}
                             color={hp.color}

@@ -190,11 +190,19 @@ export async function reconcileFromArgos(opts?: {
 
         const rawDataStr = String(r.rawData || r.raw_data || '').trim().toLowerCase();
         const isGps = r.locationType === 'GPS' || (!r.locationType && (!r.lc || r.lc === 'GPS'));
-        const rawTs = (r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition)
-          ? (r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition)
-          : (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-              ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-              : (r.timestamp || r.date || r.msgDatetime));
+        let rawTs: string | undefined = undefined;
+        const explicitLocDate = r.locationDate || r.gpsLocDate || r.location?.locationDate || r.dateOfPosition;
+
+        if (explicitLocDate) {
+          rawTs = explicitLocDate;
+        } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+          rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
+        } else if (!isGps) {
+          rawTs = r.timestamp || r.date || r.msgDatetime;
+        } else {
+          // Rule 1: Never fall back to message arrival date for GPS fixes!
+          return;
+        }
 
         const tsMs = safeParseTimestamp(rawTs);
 

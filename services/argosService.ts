@@ -49,12 +49,13 @@ export const KNOWN_CLS_RAW_LOCATION_DATES: Record<string, string> = {
  * (gpsLocDate / locationDate) reflects when the bird was actually at that location.
  * Classification and map presentation MUST be based on the location date.
  */
-export const extractLocationDate = (item: any): { locationDate: string; messageDate?: string } => {
+export const extractLocationDate = (item: any, isDopplerExplicit?: boolean): { locationDate: string | null; messageDate?: string } => {
     const rawDataStr = String(item.rawData || item.raw_data || '').trim().toLowerCase();
-    const msgDate = item.msgDatetime || item.bestDate || item.date;
+    const msgDate = item.msgDatetime || item.bestDate || item.date || item.messageDate || item.receivedDate;
 
-    const isDoppler = item.locationType === 'Doppler' || 
-        (item.gpsLocLat === undefined && (item.dopplerLocLat !== undefined || item.dopplerLocClass !== undefined));
+    const isDoppler = isDopplerExplicit !== undefined 
+        ? isDopplerExplicit 
+        : (item.locationType === 'Doppler' || item.locationType === 'DOPPLER' || (item.gpsLocLat === undefined && (item.dopplerLocLat !== undefined || item.dopplerLocClass !== undefined)));
 
     // 1. Strict Location Date candidate extraction from CLS raw item (Date of position fix)
     const locDateCandidate = 
@@ -72,11 +73,25 @@ export const extractLocationDate = (item: any): { locationDate: string; messageD
         rawTs = String(locDateCandidate);
     } else if (!isDoppler && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
         rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
+    } else if (isDoppler) {
+        // Doppler is computed during satellite pass, so msgDate is valid pass time
+        rawTs = msgDate;
     } else {
-        rawTs = msgDate || new Date().toISOString();
+        // Rule 1: Never fall back to message arrival date for GPS fixes!
+        let formattedMsg: string | undefined = undefined;
+        if (msgDate) {
+            const parsedMsg = safeParseTimestamp(msgDate);
+            if (!isNaN(parsedMsg) && parsedMsg > 0) {
+                formattedMsg = new Date(parsedMsg).toISOString();
+            }
+        }
+        return {
+            locationDate: null,
+            messageDate: formattedMsg
+        };
     }
 
-    let formattedLocationDate = rawTs;
+    let formattedLocationDate: string | null = null;
     const parsedTs = safeParseTimestamp(rawTs);
     if (!isNaN(parsedTs) && parsedTs > 0) {
         formattedLocationDate = new Date(parsedTs).toISOString();
@@ -130,75 +145,81 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
     const itemMetaMap = new Map<string, { programId: string; satellite: string; rawData: string }>();
 
     for (const item of apiData) {
-        const lat = item.gpsLocLat !== undefined ? item.gpsLocLat : (item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.location?.latitude || 0));
-        const lon = item.gpsLocLon !== undefined ? item.gpsLocLon : (item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.location?.longitude || 0));
-        
-        const dopplerError = item.dopplerLocErrorRadius ? String(item.dopplerLocErrorRadius) : '0';
-        
-        let rawLc = '';
-        if (item.dopplerLocClass) rawLc = item.dopplerLocClass;
-        else if (item.location?.locationClass) rawLc = item.location.locationClass;
-
-        let locationType = item.gpsLocLat !== undefined ? 'GPS' : 'Doppler';
-        let lc = rawLc;
-
-        if (item.gpsLocLat !== undefined) {
-            locationType = 'GPS';
-            if (!lc || lc.trim() === '') lc = 'GPS';
-        } else if (['0', '1', '2', '3', 'A', 'B', 'Z'].includes(rawLc)) {
-            locationType = 'Doppler';
-        }
-
-        if (dopplerError === '0' && (!rawLc || rawLc.trim() === '')) {
-            lc = 'GPS';
-            locationType = 'GPS';
-        }
-
-        if (!lc) lc = 'Z'; // fallback
-
-        // Strictly prioritize Location Date (GPS / Doppler fix date) over Message reception date
-        const { locationDate, messageDate } = extractLocationDate(item);
-        const platformId = normalizePttId(item.deviceRef || item.platformId || item.ptt || '');
+        const platformId = normalizePttId(item.deviceRef || item.platformId || item.ptt || item.transmitter_id || '');
         if (!platformId) continue;
 
-        let numLat = Number(lat);
-        let numLon = Number(lon);
-        
-        // Reject zero/invalid coordinates at ingestion
-        if (!isValidCoordinate(numLat, numLon)) {
-            continue;
+        const programId = String(item.programRef || item.programNumber || item.programId || 'Unknown');
+        const satellite = item.kineisMetadata?.sat || item.satellite || 'UNK';
+        const rawData = item.rawData || item.raw_data || '';
+        const unitType = String(item.unitType || item.transType || item.msgType || 'Houbara');
+
+        // 1. Check for GPS fix in this item
+        const hasGpsCoords = item.gpsLocLat !== undefined && item.gpsLocLon !== undefined;
+        const isExplicitGps = item.locationType === 'GPS' || item.lc === 'GPS';
+        if (hasGpsCoords || isExplicitGps) {
+            const gpsLat = Number(item.gpsLocLat !== undefined ? item.gpsLocLat : (item.lat || item.latitude || item.location?.latitude));
+            let gpsLon = Number(item.gpsLocLon !== undefined ? item.gpsLocLon : (item.lon || item.longitude || item.location?.longitude));
+            if (platformId === '242086' && gpsLon < 0) gpsLon = Math.abs(gpsLon);
+
+            if (isValidCoordinate(gpsLat, gpsLon)) {
+                const { locationDate, messageDate } = extractLocationDate(item, false);
+                if (locationDate) {
+                    rawFixes.push({
+                        pttId: platformId,
+                        unitType,
+                        locationType: 'GPS',
+                        locationClass: null,
+                        errorRadiusM: 0,
+                        locationDate,
+                        lat: gpsLat,
+                        lon: gpsLon,
+                        messageDate: messageDate || null,
+                        deliveries: Number(item.deliveryCount || 1)
+                    });
+
+                    const key = `${platformId}_GPS_${locationDate}`;
+                    if (!itemMetaMap.has(key)) {
+                        itemMetaMap.set(key, { programId, satellite: 'GPS', rawData });
+                    }
+                }
+            }
         }
 
-        // Auto-correct negative longitude to positive for transmitter 242086
-        if (platformId === '242086' && numLon < 0) {
-            numLon = Math.abs(numLon);
-        }
+        // 2. Check for Doppler fix in this item
+        const hasDopCoords = item.dopplerLocLat !== undefined && item.dopplerLocLon !== undefined;
+        const isExplicitDop = item.locationType === 'Doppler' || item.locationType === 'DOPPLER' || (!hasGpsCoords && !isExplicitGps && (item.lat !== undefined || item.latitude !== undefined || item.location?.latitude !== undefined));
 
-        const canonicalLocType: 'GPS' | 'DOPPLER' = locationType === 'GPS' ? 'GPS' : 'DOPPLER';
-        const errRadiusM = canonicalLocType === 'GPS' ? 0 : (parseFloat(dopplerError) || 0);
-        const locClass = canonicalLocType === 'GPS' ? null : (item.dopplerLocClass || item.location?.locationClass || (rawLc !== 'GPS' ? rawLc : null) || null);
-        const unitType = String(item.unitType || item.transType || 'DS');
+        if (hasDopCoords || isExplicitDop) {
+            const dopLat = Number(item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.lat || item.latitude || item.location?.latitude));
+            let dopLon = Number(item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.lon || item.longitude || item.location?.longitude));
+            if (platformId === '242086' && dopLon < 0) dopLon = Math.abs(dopLon);
 
-        rawFixes.push({
-            pttId: platformId,
-            unitType,
-            locationType: canonicalLocType,
-            locationClass: locClass,
-            errorRadiusM: errRadiusM,
-            locationDate,
-            lat: numLat,
-            lon: numLon,
-            messageDate: messageDate || null,
-            deliveries: 1
-        });
+            if (isValidCoordinate(dopLat, dopLon)) {
+                const { locationDate, messageDate } = extractLocationDate(item, true);
+                if (locationDate) {
+                    let rawLc = item.dopplerLocClass || item.location?.locationClass || item.lc || 'Z';
+                    if (rawLc === 'GPS') rawLc = '3';
+                    const errRadiusM = parseFloat(String(item.dopplerLocErrorRadius || item.errorRadiusM || item.dopplerError || '0')) || 0;
 
-        const key = `${platformId}_${locationDate}`;
-        if (!itemMetaMap.has(key)) {
-            itemMetaMap.set(key, {
-                programId: String(item.programRef || item.programNumber || 'Unknown'),
-                satellite: item.kineisMetadata?.sat || item.satellite || 'UNK',
-                rawData: item.rawData || ''
-            });
+                    rawFixes.push({
+                        pttId: platformId,
+                        unitType,
+                        locationType: 'DOPPLER',
+                        locationClass: rawLc,
+                        errorRadiusM: errRadiusM,
+                        locationDate,
+                        lat: dopLat,
+                        lon: dopLon,
+                        messageDate: messageDate || null,
+                        deliveries: Number(item.deliveryCount || 1)
+                    });
+
+                    const key = `${platformId}_DOPPLER_${locationDate}`;
+                    if (!itemMetaMap.has(key)) {
+                        itemMetaMap.set(key, { programId, satellite, rawData });
+                    }
+                }
+            }
         }
     }
 
@@ -206,7 +227,8 @@ export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
 
     return fixes.map((fix: Fix) => {
         const isoDate = new Date(fix.t).toISOString();
-        const meta = itemMetaMap.get(`${fix.pttId}_${isoDate}`) || {
+        const metaKey = `${fix.pttId}_${fix.type}_${isoDate}`;
+        const meta = itemMetaMap.get(metaKey) || {
             programId: 'Unknown',
             satellite: fix.type === 'GPS' ? 'GPS' : 'UNK',
             rawData: ''

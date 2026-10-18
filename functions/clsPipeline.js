@@ -110,13 +110,14 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 /**
  * Extracts true fixTime (acquisition date) and receivedAt (satellite reception date).
  */
-function extractLocationDates(item) {
+function extractLocationDates(item, isDopplerExplicit) {
   const rawDataStr = String(item.rawData || item.raw_data || "").trim().toLowerCase();
-  const msgDate = item.msgDatetime || item.bestDate || item.date;
+  const msgDate = item.msgDatetime || item.bestDate || item.date || item.messageDate;
 
-  const isDoppler =
-    item.locationType === "Doppler" ||
-    (item.gpsLocLat === undefined && (item.dopplerLocLat !== undefined || item.dopplerLocClass !== undefined));
+  const isDoppler = isDopplerExplicit !== undefined 
+    ? isDopplerExplicit 
+    : (item.locationType === "Doppler" || item.locationType === "DOPPLER" ||
+       (item.gpsLocLat === undefined && (item.dopplerLocLat !== undefined || item.dopplerLocClass !== undefined)));
 
   const locDateCandidate =
     item.locationDate ||
@@ -127,21 +128,37 @@ function extractLocationDates(item) {
     item.dateOfPosition ||
     (isDoppler ? (item.dopplerLocDate || item.dopplerDate || item.location?.date) : undefined);
 
-  let rawTs;
+  let rawTs = null;
   let source = "argos";
 
   if (locDateCandidate) {
     rawTs = String(locDateCandidate);
-    source = item.gpsLocLat !== undefined ? "gps-decoded" : "argos";
+    source = isDoppler ? "argos" : "gps-decoded";
   } else if (!isDoppler && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
     rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
     source = "gps-decoded";
+  } else if (isDoppler) {
+    rawTs = msgDate;
   } else {
-    rawTs = msgDate || new Date().toISOString();
+    // Rule 1: Never fall back to msgDate for GPS fixes!
+    let receivedAt = new Date().toISOString();
+    if (msgDate) {
+      const parsedMsg = safeParseTimestamp(msgDate);
+      if (!isNaN(parsedMsg) && parsedMsg > 0) receivedAt = new Date(parsedMsg).toISOString();
+    }
+    return { fixTime: null, receivedAt, latencyMin: 0, source: "unverified-gps" };
   }
 
   const parsedTs = safeParseTimestamp(rawTs);
-  const fixTime = !isNaN(parsedTs) && parsedTs > 0 ? new Date(parsedTs).toISOString() : new Date().toISOString();
+  const fixTime = !isNaN(parsedTs) && parsedTs > 0 ? new Date(parsedTs).toISOString() : null;
+  if (!fixTime) {
+    let receivedAt = new Date().toISOString();
+    if (msgDate) {
+      const parsedMsg = safeParseTimestamp(msgDate);
+      if (!isNaN(parsedMsg) && parsedMsg > 0) receivedAt = new Date(parsedMsg).toISOString();
+    }
+    return { fixTime: null, receivedAt, latencyMin: 0, source: "invalid-date" };
+  }
 
   let receivedAt = fixTime;
   if (msgDate) {
@@ -237,54 +254,124 @@ async function classifyAndPromoteBatch(db, rawRecords, onProgress) {
     const pttId = normalizePtt(rawPid);
     if (!pttId) continue;
 
-    const latRaw = item.gpsLocLat !== undefined ? item.gpsLocLat : (item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.lat || item.latitude));
-    let lonRaw = item.gpsLocLon !== undefined ? item.gpsLocLon : (item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.lon || item.longitude));
-    let lat = Number(latRaw);
-    let lon = Number(lonRaw);
-
-    // Auto-correct negative longitude for transmitter 242086
-    if (pttId === "242086" && !isNaN(lon) && lon < 0) {
-      lon = Math.abs(lon);
-    }
-
-    const { fixTime, receivedAt, latencyMin, source } = extractLocationDates(item);
-    const { locationClass, quality, accepted, rejectReason } = classifyLocationQuality(item, fixTime, lat, lon);
-
     const rawData = item.rawData || item.raw_data || "";
     const battery = decodeBatteryVoltage(rawData) || (item.battery_voltage ? Number(item.battery_voltage) : undefined);
-    const dedupKey = item.dedupKey || computeDedupKey(pttId, item.msgDatetime || item.date || fixTime, rawData);
+    const satellite = item.kineisMetadata?.sat || item.satellite || "UNK";
+    const msgType = item.unitType || item.transType || item.msgType || "Houbara";
 
-    const fixDoc = {
-      dedupKey,
-      pttId,
-      platformId: pttId,
-      fixTime,
-      timestamp: fixTime,
-      receivedAt,
-      messageDate: receivedAt,
-      latencyMin,
-      lat,
-      lon,
-      latitude: lat,
-      longitude: lon,
-      locationClass,
-      lc: locationClass,
-      quality,
-      accepted,
-      rejectReason,
-      source,
-      rawData,
-      battery_voltage: battery,
-      satellite: item.kineisMetadata?.sat || item.satellite || "UNK",
-      msgType: item.unitType || item.transType || item.msgType || "Houbara",
-      ingestedAt: new Date().toISOString(),
-    };
+    // 1. Process GPS fix if present
+    const hasGpsCoords = item.gpsLocLat !== undefined && item.gpsLocLon !== undefined;
+    const isExplicitGps = item.locationType === "GPS" || item.lc === "GPS";
+    if (hasGpsCoords || isExplicitGps) {
+      let lat = Number(item.gpsLocLat !== undefined ? item.gpsLocLat : (item.lat || item.latitude));
+      let lon = Number(item.gpsLocLon !== undefined ? item.gpsLocLon : (item.lon || item.longitude));
+      if (pttId === "242086" && !isNaN(lon) && lon < 0) lon = Math.abs(lon);
 
-    classifiedFixes.push(fixDoc);
+      if (isValidCoordinate(lat, lon)) {
+        const { fixTime, receivedAt, latencyMin, source } = extractLocationDates(item, false);
+        if (fixTime) {
+          const { locationClass, quality, accepted, rejectReason } = classifyLocationQuality({ ...item, locationType: "GPS" }, fixTime, lat, lon);
+          const epochSec = Math.round(new Date(fixTime).getTime() / 1000);
+          const canonicalId = `${pttId}_GPS_${epochSec}`;
 
-    if (accepted && isValidCoordinate(lat, lon)) {
-      if (!fixesByPtt.has(pttId)) fixesByPtt.set(pttId, []);
-      fixesByPtt.get(pttId).push(fixDoc);
+          const fixDoc = {
+            docId: canonicalId,
+            dedupKey: canonicalId,
+            pttId,
+            platformId: pttId,
+            fixTime,
+            timestamp: fixTime,
+            locationDate: fixTime,
+            receivedAt,
+            messageDate: receivedAt,
+            firstMessageDate: receivedAt,
+            latencyMin,
+            lat,
+            lon,
+            latitude: lat,
+            longitude: lon,
+            locationType: "GPS",
+            locationClass: "GPS",
+            lc: "GPS",
+            errorRadiusM: 0,
+            quality,
+            accepted,
+            rejectReason,
+            source,
+            rawData,
+            battery_voltage: battery,
+            satellite: "GPS",
+            msgType,
+            unitType: msgType,
+            deliveryCount: item.deliveryCount || 1,
+            ingestedAt: new Date().toISOString(),
+          };
+
+          classifiedFixes.push(fixDoc);
+          if (accepted) {
+            if (!fixesByPtt.has(pttId)) fixesByPtt.set(pttId, []);
+            fixesByPtt.get(pttId).push(fixDoc);
+          }
+        }
+      }
+    }
+
+    // 2. Process Doppler fix if present
+    const hasDopCoords = item.dopplerLocLat !== undefined && item.dopplerLocLon !== undefined;
+    const isExplicitDop = item.locationType === "Doppler" || item.locationType === "DOPPLER" || (!hasGpsCoords && !isExplicitGps && (item.lat !== undefined || item.latitude !== undefined));
+    if (hasDopCoords || isExplicitDop) {
+      let lat = Number(item.dopplerLocLat !== undefined ? item.dopplerLocLat : (item.lat || item.latitude));
+      let lon = Number(item.dopplerLocLon !== undefined ? item.dopplerLocLon : (item.lon || item.longitude));
+      if (pttId === "242086" && !isNaN(lon) && lon < 0) lon = Math.abs(lon);
+
+      if (isValidCoordinate(lat, lon)) {
+        const { fixTime, receivedAt, latencyMin, source } = extractLocationDates(item, true);
+        if (fixTime) {
+          const { locationClass, quality, accepted, rejectReason } = classifyLocationQuality({ ...item, locationType: "Doppler" }, fixTime, lat, lon);
+          const epochSec = Math.round(new Date(fixTime).getTime() / 1000);
+          const canonicalId = `${pttId}_DOP_${epochSec}`;
+          const errRadiusM = parseFloat(String(item.dopplerLocErrorRadius || item.errorRadiusM || item.dopplerError || "0")) || 0;
+
+          const fixDoc = {
+            docId: canonicalId,
+            dedupKey: canonicalId,
+            pttId,
+            platformId: pttId,
+            fixTime,
+            timestamp: fixTime,
+            locationDate: fixTime,
+            receivedAt,
+            messageDate: receivedAt,
+            firstMessageDate: receivedAt,
+            latencyMin,
+            lat,
+            lon,
+            latitude: lat,
+            longitude: lon,
+            locationType: "DOPPLER",
+            locationClass,
+            lc: locationClass,
+            errorRadiusM: errRadiusM,
+            quality,
+            accepted,
+            rejectReason,
+            source,
+            rawData,
+            battery_voltage: battery,
+            satellite,
+            msgType,
+            unitType: msgType,
+            deliveryCount: item.deliveryCount || 1,
+            ingestedAt: new Date().toISOString(),
+          };
+
+          classifiedFixes.push(fixDoc);
+          if (accepted) {
+            if (!fixesByPtt.has(pttId)) fixesByPtt.set(pttId, []);
+            fixesByPtt.get(pttId).push(fixDoc);
+          }
+        }
+      }
     }
   }
 
@@ -294,7 +381,7 @@ async function classifyAndPromoteBatch(db, rawRecords, onProgress) {
   let countInBatch = 0;
 
   for (const fix of classifiedFixes) {
-    const docId = `fix-${fix.dedupKey.substring(0, 20)}`;
+    const docId = fix.docId;
     const argosDataRef = db.collection("argos_data").doc(docId);
     batch.set(argosDataRef, fix, { merge: true });
     countInBatch++;
@@ -305,7 +392,7 @@ async function classifyAndPromoteBatch(db, rawRecords, onProgress) {
     countInBatch++;
 
     if (fix.accepted) {
-      const posRef = db.collection("positions").doc(`pos-${fix.dedupKey.substring(0, 19)}`);
+      const posRef = db.collection("positions").doc(docId);
       batch.set(posRef, {
         id: posRef.id,
         transmitter_id: fix.pttId,

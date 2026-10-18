@@ -257,9 +257,11 @@ class ArgosAPIService {
                 ((item["location"] as? [String: Any])?["locationDate"] as? String) ??
                 knownLocDate
             
+            let isGps = locationType == "GPS"
             let msgDate = item["msgDatetime"] as? String ?? item["bestDate"] as? String ?? item["date"] as? String
-            let trueLocationDate = explicitLocDate ?? msgDate
-            let ts = trueLocationDate ?? DateFormatters.isoFormatter.string(from: Date())
+            let trueLocationDate = explicitLocDate ?? (isGps ? nil : msgDate)
+            guard let validLocationDate = trueLocationDate else { continue }
+            let ts = validLocationDate
             
             // Battery voltage heuristic decoding
             let decodedBattery = decodeBatteryVoltage(rawData: rawDataStr)

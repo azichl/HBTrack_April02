@@ -112,17 +112,25 @@ export function extractLocationDates(item: any): {
     item.dateOfPosition ||
     (isDoppler ? (item.dopplerLocDate || item.dopplerDate || item.location?.date) : undefined);
 
-  let rawTs: string;
+  let rawTs: string | null = null;
   let source: 'argos' | 'gps-decoded' = 'argos';
 
   if (locDateCandidate) {
     rawTs = String(locDateCandidate);
-    source = item.gpsLocLat !== undefined ? 'gps-decoded' : 'argos';
+    source = isDoppler ? 'argos' : 'gps-decoded';
   } else if (!isDoppler && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
     rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
     source = 'gps-decoded';
+  } else if (isDoppler) {
+    rawTs = msgDate;
   } else {
-    rawTs = msgDate || new Date().toISOString();
+    // Rule 1: Never fall back to msgDate for GPS fixes!
+    let receivedAt = new Date().toISOString();
+    if (msgDate) {
+      const parsedMsg = safeParseTimestamp(msgDate);
+      if (!isNaN(parsedMsg) && parsedMsg > 0) receivedAt = new Date(parsedMsg).toISOString();
+    }
+    return { fixTime: null as any, receivedAt, latencyMin: 0, source: 'unverified-gps' as any };
   }
 
   const parsedTs = safeParseTimestamp(rawTs);
@@ -315,6 +323,11 @@ async function main() {
     if (ptt === '242086' && !isNaN(lon) && lon < 0) lon = Math.abs(lon);
 
     const { fixTime, receivedAt, latencyMin, source } = extractLocationDates(r);
+    if (!fixTime) {
+      totalRejected++;
+      rejectedReasons['NO_TRUE_LOCATION_DATE'] = (rejectedReasons['NO_TRUE_LOCATION_DATE'] || 0) + 1;
+      continue;
+    }
     const { locationClass, quality, accepted, rejectReason } = classifyLocationQuality(r, fixTime, lat, lon);
 
     if (quality === 'High') totalHigh++;

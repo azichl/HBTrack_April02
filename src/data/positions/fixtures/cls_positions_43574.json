@@ -1,0 +1,772 @@
+[
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1970,
+  "locationDate": "2026-10-17T07:41:42.003Z",
+  "lon": 73.33373,
+  "lat": 43.87064
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1553,
+  "locationDate": "2026-10-17T07:37:42.023Z",
+  "lon": 73.33293,
+  "lat": 43.87289
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1512,
+  "locationDate": "2026-10-17T07:24:12.095Z",
+  "lon": 73.30137,
+  "lat": 43.86979
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1329,
+  "locationDate": "2026-10-17T07:18:42.117Z",
+  "lon": 73.30258,
+  "lat": 43.87565
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1718,
+  "locationDate": "2026-10-17T07:13:12.247Z",
+  "lon": 73.29976,
+  "lat": 43.87788
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T07:00:00.000Z",
+  "lon": 73.3084,
+  "lat": 43.8748
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1332,
+  "locationDate": "2026-10-17T06:51:45.989Z",
+  "lon": 73.32297,
+  "lat": 43.88878
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1205,
+  "locationDate": "2026-10-17T06:26:46.241Z",
+  "lon": 73.30752,
+  "lat": 43.88779
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 774,
+  "locationDate": "2026-10-17T06:22:16.151Z",
+  "lon": 73.30955,
+  "lat": 43.89328
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1822,
+  "locationDate": "2026-10-17T06:02:46.256Z",
+  "lon": 73.31988,
+  "lat": 43.89694
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T06:00:00.000Z",
+  "lon": 73.3064,
+  "lat": 43.8749
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 2723,
+  "locationDate": "2026-10-17T05:42:09.252Z",
+  "lon": 73.32674,
+  "lat": 43.89278
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1421,
+  "locationDate": "2026-10-17T05:15:39.156Z",
+  "lon": 73.33014,
+  "lat": 43.87416
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1067,
+  "locationDate": "2026-10-17T05:11:39.267Z",
+  "lon": 73.32953,
+  "lat": 43.87016
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T05:01:00.000Z",
+  "lon": 73.306,
+  "lat": 43.8747
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 2306,
+  "locationDate": "2026-10-17T04:51:32.960Z",
+  "lon": 73.34857,
+  "lat": 43.86435
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 2552,
+  "locationDate": "2026-10-17T04:39:33.013Z",
+  "lon": 73.34187,
+  "lat": 43.86352
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 991,
+  "locationDate": "2026-10-17T04:25:03.071Z",
+  "lon": 73.32503,
+  "lat": 43.87459
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1224,
+  "locationDate": "2026-10-17T04:19:03.085Z",
+  "lon": 73.31576,
+  "lat": 43.87132
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T04:00:00.000Z",
+  "lon": 73.3074,
+  "lat": 43.8736
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 2710,
+  "locationDate": "2026-10-17T03:41:27.958Z",
+  "lon": 73.28305,
+  "lat": 43.87006
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "A",
+  "locationType": "Doppler",
+  "errorRadiusM": 1133,
+  "locationDate": "2026-10-17T03:21:28.057Z",
+  "lon": 73.29526,
+  "lat": 43.86987
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 699,
+  "locationDate": "2026-10-17T03:17:28.057Z",
+  "lon": 73.29769,
+  "lat": 43.8689
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T03:00:00.000Z",
+  "lon": 73.3076,
+  "lat": 43.8729
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 2337,
+  "locationDate": "2026-10-17T02:55:49.012Z",
+  "lon": 73.30203,
+  "lat": 43.87115
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 2303,
+  "locationDate": "2026-10-17T02:51:48.932Z",
+  "lon": 73.30231,
+  "lat": 43.87078
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "A",
+  "locationType": "Doppler",
+  "errorRadiusM": 1723,
+  "locationDate": "2026-10-17T02:30:19.036Z",
+  "lon": 73.31212,
+  "lat": 43.86802
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1395,
+  "locationDate": "2026-10-17T02:26:19.276Z",
+  "lon": 73.31413,
+  "lat": 43.86844
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1003,
+  "locationDate": "2026-10-17T02:05:49.175Z",
+  "lon": 73.31402,
+  "lat": 43.86959
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T02:01:00.000Z",
+  "lon": 73.3075,
+  "lat": 43.873
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1457,
+  "locationDate": "2026-10-17T01:44:27.955Z",
+  "lon": 73.30923,
+  "lat": 43.87848
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1232,
+  "locationDate": "2026-10-17T01:40:28.085Z",
+  "lon": 73.30811,
+  "lat": 43.87768
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 3918,
+  "locationDate": "2026-10-17T01:16:28.083Z",
+  "lon": 73.30257,
+  "lat": 43.87675
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-17T01:01:00.000Z",
+  "lon": 73.3075,
+  "lat": 43.8731
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 986,
+  "locationDate": "2026-10-16T17:47:55.515Z",
+  "lon": 73.3081,
+  "lat": 43.87347
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 999,
+  "locationDate": "2026-10-16T17:40:25.553Z",
+  "lon": 73.30428,
+  "lat": 43.87309
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1263,
+  "locationDate": "2026-10-16T17:23:55.614Z",
+  "lon": 73.30542,
+  "lat": 43.86971
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "A",
+  "locationType": "Doppler",
+  "errorRadiusM": 3290,
+  "locationDate": "2026-10-16T16:55:25.758Z",
+  "lon": 73.30358,
+  "lat": 43.87187
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 3003,
+  "locationDate": "2026-10-16T16:46:25.798Z",
+  "lon": 73.30261,
+  "lat": 43.87006
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1548,
+  "locationDate": "2026-10-16T16:32:25.866Z",
+  "lon": 73.30287,
+  "lat": 43.869
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1946,
+  "locationDate": "2026-10-16T16:28:55.876Z",
+  "lon": 73.30294,
+  "lat": 43.87097
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 985,
+  "locationDate": "2026-10-16T16:14:25.936Z",
+  "lon": 73.30385,
+  "lat": 43.87133
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1217,
+  "locationDate": "2026-10-16T15:42:56.106Z",
+  "lon": 73.30447,
+  "lat": 43.87217
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 2004,
+  "locationDate": "2026-10-16T15:13:58.323Z",
+  "lon": 73.30331,
+  "lat": 43.86798
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1308,
+  "locationDate": "2026-10-16T15:02:28.534Z",
+  "lon": 73.30465,
+  "lat": 43.86962
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 519,
+  "locationDate": "2026-10-16T14:56:58.413Z",
+  "lon": 73.30145,
+  "lat": 43.8703
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 2316,
+  "locationDate": "2026-10-16T14:38:56.390Z",
+  "lon": 73.30923,
+  "lat": 43.88545
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 694,
+  "locationDate": "2026-10-16T14:17:58.624Z",
+  "lon": 73.30707,
+  "lat": 43.87077
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 683,
+  "locationDate": "2026-10-16T13:54:56.622Z",
+  "lon": 73.30402,
+  "lat": 43.87159
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1739,
+  "locationDate": "2026-10-16T13:39:26.697Z",
+  "lon": 73.30568,
+  "lat": 43.87146
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 791,
+  "locationDate": "2026-10-16T13:30:26.748Z",
+  "lon": 73.30697,
+  "lat": 43.87105
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 760,
+  "locationDate": "2026-10-16T13:04:26.849Z",
+  "lon": 73.30391,
+  "lat": 43.86939
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1487,
+  "locationDate": "2026-10-16T12:46:26.937Z",
+  "lon": 73.29914,
+  "lat": 43.87163
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1159,
+  "locationDate": "2026-10-16T12:42:26.951Z",
+  "lon": 73.29913,
+  "lat": 43.87157
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1193,
+  "locationDate": "2026-10-16T12:11:31.290Z",
+  "lon": 73.29848,
+  "lat": 43.87072
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-16T12:01:00.000Z",
+  "lon": 73.3029,
+  "lat": 43.8707
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 3071,
+  "locationDate": "2026-10-16T11:40:48.990Z",
+  "lon": 73.30328,
+  "lat": 43.87161
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1692,
+  "locationDate": "2026-10-16T11:11:49.118Z",
+  "lon": 73.30047,
+  "lat": 43.87177
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1598,
+  "locationDate": "2026-10-16T11:07:19.148Z",
+  "lon": 73.30012,
+  "lat": 43.87182
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-16T11:00:00.000Z",
+  "lon": 73.3024,
+  "lat": 43.8715
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "0",
+  "locationType": "Doppler",
+  "errorRadiusM": 1844,
+  "locationDate": "2026-10-16T10:38:47.961Z",
+  "lon": 73.29646,
+  "lat": 43.87533
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "A",
+  "locationType": "Doppler",
+  "errorRadiusM": 1721,
+  "locationDate": "2026-10-16T10:32:18.206Z",
+  "lon": 73.29934,
+  "lat": 43.86998
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1864,
+  "locationDate": "2026-10-16T10:07:18.113Z",
+  "lon": 73.30486,
+  "lat": 43.86201
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-16T10:00:00.000Z",
+  "lon": 73.3025,
+  "lat": 43.8712
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1160,
+  "locationDate": "2026-10-16T09:58:40.032Z",
+  "lon": 73.30702,
+  "lat": 43.86102
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1508,
+  "locationDate": "2026-10-16T09:36:10.000Z",
+  "lon": 73.3102,
+  "lat": 43.86614
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1213,
+  "locationDate": "2026-10-16T09:32:40.120Z",
+  "lon": 73.31049,
+  "lat": 43.86647
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1661,
+  "locationDate": "2026-10-16T09:12:40.106Z",
+  "lon": 73.29969,
+  "lat": 43.86852
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1419,
+  "locationDate": "2026-10-16T09:08:10.126Z",
+  "lon": 73.29934,
+  "lat": 43.8692
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-16T09:01:00.000Z",
+  "lon": 73.3024,
+  "lat": 43.8695
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1614,
+  "locationDate": "2026-10-16T08:50:04.928Z",
+  "lon": 73.28615,
+  "lat": 43.86893
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1288,
+  "locationDate": "2026-10-16T08:45:04.948Z",
+  "lon": 73.28509,
+  "lat": 43.86947
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1277,
+  "locationDate": "2026-10-16T08:22:05.064Z",
+  "lon": 73.2834,
+  "lat": 43.86716
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1554,
+  "locationDate": "2026-10-16T08:09:05.132Z",
+  "lon": 73.29891,
+  "lat": 43.86908
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "1",
+  "locationType": "Doppler",
+  "errorRadiusM": 1157,
+  "locationDate": "2026-10-16T08:06:05.152Z",
+  "lon": 73.30368,
+  "lat": 43.8665
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": null,
+  "locationType": "GPS",
+  "errorRadiusM": 0,
+  "locationDate": "2026-10-16T08:00:00.000Z",
+  "lon": 73.3016,
+  "lat": 43.8664
+ },
+ {
+  "pttId": "43574",
+  "unitType": "Houbara",
+  "locationClass": "B",
+  "locationType": "Doppler",
+  "errorRadiusM": 1865,
+  "locationDate": "2026-10-16T07:55:48.904Z",
+  "lon": 73.30692,
+  "lat": 43.86096
+ }
+]

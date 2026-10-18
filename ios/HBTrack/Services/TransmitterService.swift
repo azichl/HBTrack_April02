@@ -246,21 +246,27 @@ class TransmitterService {
                 let rawDataStr = (d["rawData"] as? String ?? d["raw_data"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                 let knownGpsDate = !rawDataStr.isEmpty ? ArgosAPIService.knownRawLocationDates[rawDataStr] : nil
                 
+                let rawLocType = (d["locationType"] as? String)?.uppercased() ?? ""
+                let rawLc = (d["lc"] as? String)?.uppercased() ?? ""
+                let isGps = rawLocType.contains("GPS") || (rawLocType.isEmpty && (rawLc.isEmpty || rawLc == "GPS"))
+                
                 // Prioritize actual GPS Location Date over satellite message reception date
                 let rawTs: String? = {
                     if let s = d["locationDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
                     if let s = d["gpsLocDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
                     if let loc = d["location"] as? [String: Any], let s = loc["locationDate"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return s }
                     if let known = knownGpsDate { return known }
-                    if let s = d["timestamp"] as? String { return s }
-                    if let s = d["date"] as? String { return s }
-                    if let s = d["msgDatetime"] as? String { return s }
-                    if let s = d["bestDate"] as? String { return s }
-                    if let ts = d["timestamp"] as? Timestamp {
-                        return ISO8601DateFormatter().string(from: ts.dateValue())
-                    }
-                    if let ts = d["date"] as? Timestamp {
-                        return ISO8601DateFormatter().string(from: ts.dateValue())
+                    if !isGps {
+                        if let s = d["timestamp"] as? String { return s }
+                        if let s = d["date"] as? String { return s }
+                        if let s = d["msgDatetime"] as? String { return s }
+                        if let s = d["bestDate"] as? String { return s }
+                        if let ts = d["timestamp"] as? Timestamp {
+                            return ISO8601DateFormatter().string(from: ts.dateValue())
+                        }
+                        if let ts = d["date"] as? Timestamp {
+                            return ISO8601DateFormatter().string(from: ts.dateValue())
+                        }
                     }
                     return nil
                 }()

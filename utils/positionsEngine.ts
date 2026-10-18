@@ -181,3 +181,38 @@ export function presetWindow(preset: 'LAST_POSITION' | '24H' | '7D' | '30D' | '1
   const span = { '24H': 24 * H, '7D': 168 * H, '30D': 720 * H, '1Y': 8760 * H, '2Y': 17520 * H } as const;
   return preset === 'LAST_POSITION' ? { fromMs: undefined, toMs: now } : { fromMs: now - span[preset], toMs: now };
 }
+
+/* ------------------------------------------------------------------------------------------------
+ * Map layers — what the Live Map draws for each LOCATION TYPE button.
+ *  GPS     : line + markers = GPS only
+ *  DOPPLER : line + markers = Doppler only
+ *  ALL     : line = GPS only (more accurate); Doppler shown as small hollow DOTS, not connected.
+ *            Optional: Doppler fixes that fall inside a GPS gap (> gapFillHours with no GPS) are added
+ *            to the line so a long GPS outage is not drawn as one straight jump.
+ * ---------------------------------------------------------------------------------------------- */
+export interface LayerOpts extends TrackOpts {
+  type: TypeFilter;
+  fillGapsWithDoppler?: boolean; // default false
+  gapFillHours?: number;         // default 3
+}
+export interface MapLayers { line: Track; markers: Fix[]; dopplerDots: Fix[] }
+
+export function mapLayers(fixes: Fix[], o: LayerOpts): MapLayers {
+  const base = { ...o, type: 'ALL' as TypeFilter };
+  if (o.type === 'GPS' || o.type === 'DOPPLER') {
+    const line = buildTrack(fixes, { ...o, type: o.type });
+    return { line, markers: line.points, dopplerDots: [] };
+  }
+  const gps = filterFixes(fixes, { ...base, type: 'GPS' }).sort(byDateAsc);
+  const dop = filterFixes(fixes, { ...base, type: 'DOPPLER' }).sort(byDateAsc);
+  let lineSrc = gps;
+  if (o.fillGapsWithDoppler && gps.length) {
+    const H = (o.gapFillHours ?? 3) * 3_600_000;
+    const fill = dop.filter((d) => !gps.some((g) => Math.abs(g.t - d.t) <= H));
+    lineSrc = [...gps, ...fill].sort(byDateAsc);
+  } else if (o.fillGapsWithDoppler && !gps.length) {
+    lineSrc = dop;
+  }
+  const line = buildTrack(lineSrc, { ...o, type: 'ALL' });
+  return { line, markers: gps, dopplerDots: dop };
+}

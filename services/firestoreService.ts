@@ -1286,22 +1286,29 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
 
     const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
     const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
-    let rawTs = (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
-      ? (d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition)
-      : (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-          ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-          : (d.timestamp || d.date || d.msgDatetime || d.bestDate));
+    
+    let rawTs: string | undefined = undefined;
+    const explicitLocDate = d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition;
 
-    if (!rawTs) {
+    if (explicitLocDate) {
+      rawTs = explicitLocDate;
+    } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+      rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
+    } else if (!isGps) {
       rawTs = d.timestamp || d.date || d.msgDatetime || d.bestDate;
+    } else {
+      // Rule 1: Never fall back to message arrival date for GPS fixes!
+      // GPS fixes without a true acquisition date must be rejected.
+      return null;
     }
 
     const locDateMs = safeParseTimestamp(rawTs);
     if (isNaN(locDateMs) || locDateMs <= 0) return null;
 
-    const locType = classifyLocationType(d.lc, d.locationType, d.satellite);
+    const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
     const locClass = locType === 'GPS' ? null : (d.locationClass || (d.lc !== 'GPS' ? d.lc : null) || null);
     const errRadiusM = locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
+    const arrivalDate = d.receivedAt || d.firstMessageDate || d.messageDate || d.msgDatetime || d.timestamp || null;
 
     return {
       pttId: pidStr,
@@ -1312,7 +1319,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       locationDate: new Date(locDateMs).toISOString(),
       lat,
       lon,
-      messageDate: d.messageDate || d.firstMessageDate || d.msgDatetime || null,
+      messageDate: arrivalDate,
       deliveries: d.deliveryCount || 1
     };
   };
