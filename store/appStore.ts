@@ -232,6 +232,11 @@ interface AppState {
   importTransmitters: (transmitters: Transmitter[]) => void;
   markTransmitterDead: (transmitterId: string, user: User) => Promise<void>;
   unmarkTransmitterDead: (transmitterId: string) => Promise<void>;
+  setTransmitterStatus: (
+    transmitterId: string, 
+    status: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead' | 'Auto', 
+    user?: User
+  ) => Promise<void>;
   loadStaticTestArchive: () => Promise<void>;
   
   // User Actions
@@ -535,6 +540,13 @@ const processTransmitterStatusUpdates = async (
   getBirds: () => Bird[]
 ): Promise<Partial<Transmitter>> => {
   const updates: Partial<Transmitter> = {};
+
+  if (t.manual_status_override) {
+    if (t.derived_status !== t.manual_status_override) {
+      updates.derived_status = t.manual_status_override;
+    }
+    return updates;
+  }
 
   if (t.derived_status !== derived) {
     if (t.derived_status === 'Active' && (derived === 'Potential Mortality' || derived === 'Inactive')) {
@@ -1219,6 +1231,62 @@ export const useAppStore = create<AppState>()(
         await get().recalculateTransmitterStatuses();
       },
 
+      setTransmitterStatus: async (transmitterId, newStatus, user) => {
+        const currentUser = user || get().currentUser;
+        const nowIso = new Date().toISOString();
+        const userName = currentUser?.name || currentUser?.email || 'User';
+
+        const t = get().transmitters.find(x => x.id === transmitterId || x.platform_id === transmitterId);
+        if (!t) return;
+        const pid = String(t.platform_id || t.id).replace(/^trans-/, '').trim();
+
+        if (newStatus === 'Auto') {
+          const updates = {
+            manual_status_override: null,
+            manual_status_set_by: null,
+            manual_status_set_at: null
+          };
+          await saveDocument('transmitters', t.id, updates);
+          set(state => ({
+            transmitters: state.transmitters.map(item => 
+              (item.id === t.id || item.platform_id === t.platform_id) 
+                ? { ...item, manual_status_override: undefined, manual_status_set_by: undefined, manual_status_set_at: undefined } 
+                : item
+            ),
+            lastSaved: nowIso
+          }));
+          await get().recalculateTransmitterStatuses();
+          notifySuccess(`PTT ${pid} reset to automatic status calculation`);
+        } else {
+          const updates: Partial<Transmitter> = {
+            manual_status_override: newStatus,
+            derived_status: newStatus,
+            status: newStatus.toLowerCase(),
+            manual_status_set_by: userName,
+            manual_status_set_at: nowIso
+          };
+          if (newStatus === 'Inactive') {
+            updates.inactive_since = nowIso;
+          } else if (newStatus !== 'Dead') {
+            updates.inactive_since = null as any;
+          }
+
+          set(state => ({
+            transmitters: state.transmitters.map(item => 
+              (item.id === t.id || item.platform_id === t.platform_id) 
+                ? { ...item, ...updates } 
+                : item
+            ),
+            lastSaved: nowIso
+          }));
+
+          await saveDocument('transmitters', t.id, updates);
+          await recordStatusTransition(pid, newStatus, t.bird_id, userName, `Manually set status to ${newStatus}`);
+          logUserActivity(currentUser?.id || currentUser?.email || 'system', currentUser?.email || '', 'DATA_UPDATE', `Set PTT ${pid} status to ${newStatus}`);
+          notifySuccess(`PTT ${pid} status updated to ${newStatus}`);
+        }
+      },
+
       loadStaticTestArchive: async () => {
         const periods = await loadCollection<StaticTestPeriod>('static_test_periods');
         set({ staticTestPeriods: periods });
@@ -1537,11 +1605,11 @@ export const useAppStore = create<AppState>()(
                 try {
                   // Fetch recent argos_positions and positions (ordered by timestamp desc)
                   const targetPid = String(t.platform_id || t.id).replace(/^trans-/, '').trim();
-                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', targetPid), orderBy('timestamp', 'desc'), limit(50));
+                  const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', targetPid), orderBy('timestamp', 'desc'), limit(300));
                   const snapArgos = await getDocs(qArgos);
                   const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', targetPid), orderBy('timestamp', 'desc'), limit(50));
+                  const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', targetPid), orderBy('timestamp', 'desc'), limit(300));
                   const snapPos = await getDocs(qPos);
                   const manualPositions = snapPos.docs.map(doc => doc.data());
 
@@ -1920,11 +1988,11 @@ export const useAppStore = create<AppState>()(
             try {
               const pidStr = String(t.platform_id || t.id).replace(/^trans-/, '').trim();
               
-              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr), orderBy('timestamp', 'desc'), limit(50));
+              const qArgos = query(collection(db, 'argos_positions'), where('platformId', '==', pidStr), orderBy('timestamp', 'desc'), limit(300));
               const snapArgos = await getDocs(qArgos);
               const argosPositions = snapArgos.docs.map(doc => doc.data());
 
-              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr), orderBy('timestamp', 'desc'), limit(50));
+              const qPos = query(collection(db, 'positions'), where('transmitter_id', '==', pidStr), orderBy('timestamp', 'desc'), limit(300));
               const snapPos = await getDocs(qPos);
               const manualPositions = snapPos.docs.map(doc => doc.data());
 

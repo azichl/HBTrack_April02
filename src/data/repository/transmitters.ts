@@ -18,7 +18,7 @@ export const TransmitterSchema = z.object({
     z.string()
   ),
   derived_status: z.enum(['Active', 'Potential Mortality', 'Inactive', 'Static test', 'Dead']).optional(),
-  manual_status_override: z.enum(['Dead']).nullable().optional(),
+  manual_status_override: z.enum(['Active', 'Potential Mortality', 'Inactive', 'Static test', 'Dead']).nullable().optional(),
   manual_status_set_by: z.string().optional(),
   manual_status_set_at: z.string().optional(),
   inactive_since: z.string().optional(),

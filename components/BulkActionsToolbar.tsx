@@ -67,13 +67,29 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
                 <option key={f.key} value={f.key}>{f.label}</option>
               ))}
             </select>
-            <input
-              type="text"
-              placeholder="New Value"
-              value={replaceValue}
-              onChange={(e) => setReplaceValue(e.target.value)}
-              className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500 w-48"
-            />
+            {replaceField === 'status' ? (
+              <select
+                value={replaceValue}
+                onChange={(e) => setReplaceValue(e.target.value)}
+                className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500 w-48"
+              >
+                <option value="">-- Select Status --</option>
+                <option value="Active">Active</option>
+                <option value="Potential Mortality">Potential Mortality</option>
+                <option value="Static test">Static test</option>
+                <option value="Dead">Dead</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Auto">Auto (Calculate)</option>
+              </select>
+            ) : (
+              <input
+                type="text"
+                placeholder="New Value"
+                value={replaceValue}
+                onChange={(e) => setReplaceValue(e.target.value)}
+                className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500 w-48"
+              />
+            )}
             <button
               onClick={handleReplace}
               disabled={isReplacing}

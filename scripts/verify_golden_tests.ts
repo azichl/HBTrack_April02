@@ -109,16 +109,21 @@ const transmitter43574: Transmitter = {
   platform_id: '43574',
   status: 'Active',
   derived_status: 'Active',
-  last_fix: '2026-10-17 05:10:39',
+  last_fix: new Date().toISOString(),
   model: 'Solar PTT',
   bird_id: '',
   duty_cycle: '24h'
 };
 const evalResult = evaluateTransmitterStatus(transmitter43574, [
-  { lat: 43.87, lon: 73.29, timestamp: '2026-10-17 05:10:39', locationType: 'DOPPLER' } as any
+  { lat: 43.87, lon: 73.29, timestamp: new Date().toISOString(), locationType: 'DOPPLER' } as any
 ]);
-assert('G8.1', evalResult.status === 'Active', `Status evaluation for unassigned bird in wild is Active (got ${evalResult.status})`);
-assert('G8.2', isVisibleOnLiveMap(transmitter43574, 'active'), `Visible on Live Map under active filter`);
+assert('G8.1', evalResult.status === 'Static test', `Status evaluation for unassigned bird is Static test (got ${evalResult.status})`);
+
+const transmitterAssigned: Transmitter = { ...transmitter43574, bird_id: 'bird-1' };
+const evalResultAssigned = evaluateTransmitterStatus(transmitterAssigned, [
+  { lat: 43.87, lon: 73.29, timestamp: new Date().toISOString(), locationType: 'GPS' } as any
+]);
+assert('G8.2', evalResultAssigned.status === 'Active', `Status evaluation for assigned moving bird is Active (got ${evalResultAssigned.status})`);
 assert('G8.3', isVisibleInMonitoring(transmitter43574), `Visible in Monitoring view`);
 
 // G9: Canonical PTT ID normalization

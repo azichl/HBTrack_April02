@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
-import { Edit, Trash2, Download, Check, X, Plus, Save, History, Clock, Activity, ShieldAlert, Loader2, FileSpreadsheet } from 'lucide-react';
+import { Edit, Trash2, Download, Check, X, Plus, Save, History, Clock, Activity, ShieldAlert, Loader2, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import { Transmitter, StatusHistoryRecord } from '../types';
 import { TransmittersBulkUploadModal } from '../src/components/TransmittersBulkUploadModal';
 import { exportToCSV } from '../utils/csvExport';
@@ -27,6 +27,8 @@ export const Transmitters = () => {
     setEditingRecordId,
     markTransmitterDead,
     unmarkTransmitterDead,
+    setTransmitterStatus,
+    recalculateTransmitterStatuses,
     staticTestPeriods,
     loadStaticTestArchive,
     statusHistoryRecords,
@@ -77,7 +79,14 @@ export const Transmitters = () => {
   };
 
   const handleBulkReplace = async (ids: string[], field: string, value: string) => {
-    await bulkUpdateTransmitters(ids, { [field]: value === 'true' ? true : value === 'false' ? false : value });
+    if (field === 'status') {
+      const isAuto = value.toLowerCase() === 'auto';
+      for (const id of ids) {
+        await setTransmitterStatus(id, isAuto ? 'Auto' : value as any, currentUser as any);
+      }
+    } else {
+      await bulkUpdateTransmitters(ids, { [field]: value === 'true' ? true : value === 'false' ? false : value });
+    }
   };
 
   const isAllSelected = sortedData.length > 0 && sortedData.every(r => selectedIds.has(r.id));
@@ -357,17 +366,36 @@ export const Transmitters = () => {
                       <span className="flex items-center gap-1 text-red-700 dark:text-red-400"><X size={14} /> No</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                      derivedStatus === 'Active' || derivedStatus === 'active' ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300' :
-                      derivedStatus === 'Potential Mortality' ? 'bg-[#FFAA33]/20 dark:bg-[#FFAA33]/30 text-[#FFAA33]' :
-                      derivedStatus === 'Static test' ? 'bg-[#FFEA00]/20 dark:bg-[#FFEA00]/30 text-[#e6b800] dark:text-[#FFEA00]' :
-                      derivedStatus === 'Inactive' || derivedStatus === 'inactive' ? 'bg-slate-900 text-white' :
-                      derivedStatus === 'Dead' || derivedStatus === 'dead' ? 'bg-red-600 text-white' :
-                      'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300'
-                    }`}>
-                      {derivedStatus}
-                    </span>
+                  <td className="px-4 py-3 whitespace-nowrap border-r border-gray-100 dark:border-slate-700" onClick={(e) => e.stopPropagation()}>
+                    <div className="relative inline-flex items-center">
+                      <select
+                        value={t.manual_status_override || t.derived_status || t.status || 'Active'}
+                        onChange={async (e) => {
+                          const val = e.target.value as any;
+                          await setTransmitterStatus(t.id, val, currentUser as any);
+                        }}
+                        className={`text-xs font-bold rounded-full pl-2.5 pr-6 py-1 cursor-pointer border appearance-none outline-none focus:ring-2 focus:ring-sky-500 shadow-sm transition-all ${
+                          derivedStatus === 'Active' || derivedStatus === 'active' ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100' :
+                          derivedStatus === 'Potential Mortality' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 hover:bg-amber-100' :
+                          derivedStatus === 'Static test' ? 'bg-yellow-50 dark:bg-yellow-950/40 border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-100' :
+                          derivedStatus === 'Inactive' || derivedStatus === 'inactive' ? 'bg-slate-900 border-slate-700 text-slate-100 hover:bg-slate-800' :
+                          derivedStatus === 'Dead' || derivedStatus === 'dead' ? 'bg-red-600 border-red-700 text-white hover:bg-red-700' :
+                          'bg-gray-100 border-gray-300 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+                        }`}
+                        title={t.manual_status_override ? `Manual Override: ${t.manual_status_override} (Click to change)` : `Auto Status: ${derivedStatus} (Click to override)`}
+                      >
+                        <option value="Active" className="bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400 font-medium">Active</option>
+                        <option value="Potential Mortality" className="bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 font-medium">Potential Mortality</option>
+                        <option value="Static test" className="bg-white dark:bg-slate-800 text-yellow-600 dark:text-yellow-400 font-medium">Static test</option>
+                        <option value="Dead" className="bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 font-medium">Dead</option>
+                        <option value="Inactive" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-medium">Inactive</option>
+                        <option value="Auto" className="bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 font-bold">↺ Reset to Auto</option>
+                      </select>
+                      <ChevronDown size={11} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                      {t.manual_status_override && (
+                        <span className="ml-1.5 w-2 h-2 rounded-full bg-sky-500 animate-pulse flex-shrink-0" title={`Manual Override set by ${t.manual_status_set_by || 'User'}`} />
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400 italic border-r border-gray-100 dark:border-slate-700 max-w-[150px] truncate" title={t.comment}>
                     {t.comment || '-'}
@@ -480,20 +508,34 @@ export const Transmitters = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                      <input 
-                        type="text" 
-                        list="status-options"
-                        value={formData.status || ''} 
-                        onChange={e => setFormData({...formData, status: e.target.value})} 
-                        className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" 
-                        placeholder="e.g. active, inactive, maintenance..."
-                      />
-                      <datalist id="status-options">
-                        <option value="active" />
-                        <option value="inactive" />
-                        <option value="maintenance" />
-                        <option value="lost" />
-                      </datalist>
+                      <select 
+                        value={formData.manual_status_override || formData.derived_status || formData.status || 'Active'} 
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === 'Auto') {
+                            setFormData({
+                              ...formData, 
+                              manual_status_override: null,
+                              derived_status: undefined
+                            });
+                          } else {
+                            setFormData({
+                              ...formData, 
+                              status: val.toLowerCase(),
+                              derived_status: val as any,
+                              manual_status_override: val as any
+                            });
+                          }
+                        }} 
+                        className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500 font-medium"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Potential Mortality">Potential Mortality</option>
+                        <option value="Static test">Static test</option>
+                        <option value="Dead">Dead</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Auto">↺ Auto (Calculate automatically)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -721,13 +763,11 @@ export const Transmitters = () => {
               <div className="flex justify-end">
                 <button
                   onClick={async () => {
-                    const userName = currentUser?.displayName || currentUser?.email || 'User';
-                    await recordStatusTransition(
+                    if (!selectedHistoryPlatformId) return;
+                    await setTransmitterStatus(
                       selectedHistoryPlatformId,
                       manualStatusChoice,
-                      transmitters.find(t => String(t.platform_id) === String(selectedHistoryPlatformId))?.bird_id,
-                      userName,
-                      manualStatusComment || `Manual status update to ${manualStatusChoice}`
+                      currentUser as any
                     );
                     setManualStatusComment('');
                     loadStatusHistory(selectedHistoryPlatformId);

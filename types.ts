@@ -39,7 +39,7 @@ export interface Transmitter {
   model: string;
   status: string;
   derived_status?: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead';
-  manual_status_override?: 'Dead' | null;
+  manual_status_override?: 'Active' | 'Potential Mortality' | 'Inactive' | 'Static test' | 'Dead' | null;
   manual_status_set_by?: string;
   manual_status_set_at?: string;
   inactive_since?: string;
