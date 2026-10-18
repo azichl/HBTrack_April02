@@ -1463,15 +1463,33 @@ export const useAppStore = create<AppState>()(
           incomingMessages.forEach(m => { if (m.platformId) affectedPids.add(String(m.platformId).replace(/^trans-/, '').trim()); });
           incomingDevices.forEach(d => { if (d.deviceRef) affectedPids.add(String(d.deviceRef).replace(/^trans-/, '').trim()); });
 
-          // 5. Update in-memory state with recent data only (for live map) — do this FIRST so UI unblocks
+          // 5. Update in-memory state: always retain the latest position for every transmitter + recent fixes
           const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-          const recentNewPositions = newPositionDocs.filter(p => {
-              const t = new Date(p.timestamp).getTime();
-              return !isNaN(t) && t >= sevenDaysAgo;
+          const posByTx = new Map<string, Position>();
+          // Seed with existing positions
+          positions.forEach(p => {
+            const pid = String(p.transmitter_id || (p as any).platformId);
+            const curr = posByTx.get(pid);
+            if (!curr || safeParseDate(p.timestamp) >= safeParseDate(curr.timestamp)) {
+              posByTx.set(pid, p);
+            }
           });
-          const mergedPositions = [...positions, ...recentNewPositions];
-          const cappedPositions = mergedPositions.length > 2000 
-              ? mergedPositions.slice(mergedPositions.length - 2000) 
+          // Update with incoming positions (both latest per tx AND recent within 7 days)
+          const recentPositions: Position[] = [];
+          newPositionDocs.forEach(p => {
+            const pid = String(p.transmitter_id || (p as any).platformId);
+            const curr = posByTx.get(pid);
+            if (!curr || safeParseDate(p.timestamp) >= safeParseDate(curr.timestamp)) {
+              posByTx.set(pid, p);
+            }
+            const t = safeParseDate(p.timestamp);
+            if (!isNaN(t) && t >= sevenDaysAgo) {
+              recentPositions.push(p);
+            }
+          });
+          const mergedPositions = Array.from(new Set([...posByTx.values(), ...recentPositions]));
+          const cappedPositions = mergedPositions.length > 5000 
+              ? mergedPositions.slice(mergedPositions.length - 5000) 
               : mergedPositions;
 
           const nowIso = new Date().toISOString();
@@ -1694,29 +1712,32 @@ export const useAppStore = create<AppState>()(
           // FAST BOOT: Derive initial live positions directly from transmitter summary docs (0 network reads, 0 ms)
           const fsPositions: Position[] = fsTransmitters
             .filter(t => {
-              const rawLat = t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude);
-              const rawLon = t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude);
+              const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+              const rawLat = liveFix?.lat ?? t.lat ?? t.latitude ?? t.last_latitude;
+              const rawLon = liveFix?.lon ?? t.lon ?? t.longitude ?? t.last_longitude;
               return isValidCoordinate(rawLat, rawLon);
             })
             .map(t => {
-              const pLat = Number(t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude));
-              const pLon = Number(t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude));
+              const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+              const rawLat = liveFix?.lat ?? t.lat ?? t.latitude ?? t.last_latitude;
+              const rawLon = liveFix?.lon ?? t.lon ?? t.longitude ?? t.last_longitude;
+              const pLat = Number(rawLat);
+              let pLon = Number(rawLon);
+              if (String(t.platform_id) === '242086' && pLon < 0) pLon = Math.abs(pLon);
+
               const txAny = t as any;
-              const lastFixObj = t.live?.lastFix;
-              const locType = (lastFixObj?.type || 'GPS') as 'GPS' | 'DOPPLER';
-              const locClass = locType === 'GPS' ? null : (lastFixObj?.class || '3');
-              const errRadius = locType === 'GPS' ? 0 : (lastFixObj?.errorRadiusM || 0);
-              const fixDate = lastFixObj?.date || t.last_fix || txAny.updatedAt || new Date().toISOString();
-              const fixLat = lastFixObj?.lat !== undefined ? lastFixObj.lat : pLat;
-              const fixLon = lastFixObj?.lon !== undefined ? lastFixObj.lon : pLon;
+              const locType = ((liveFix as any)?.type || 'GPS') as 'GPS' | 'DOPPLER';
+              const locClass = locType === 'GPS' ? null : ((liveFix as any)?.class || '3');
+              const errRadius = locType === 'GPS' ? 0 : ((liveFix as any)?.errorRadiusM || 0);
+              const fixDate = liveFix?.date || t.last_fix || txAny.lastFixAt || txAny.updatedAt || new Date().toISOString();
 
               return {
                 id: `pos-${t.platform_id}-latest`,
                 transmitter_id: String(t.platform_id),
                 timestamp: fixDate,
                 locationDate: fixDate,
-                lat: fixLat,
-                lon: fixLon,
+                lat: pLat,
+                lon: pLon,
                 lc: (locType === 'GPS' ? 'GPS' : (locClass || '3')) as any,
                 locationClass: locClass,
                 errorRadiusM: errRadius,
@@ -2060,29 +2081,32 @@ export const useAppStore = create<AppState>()(
           // Keep positions synchronized in real-time from transmitter updates without extra collection reads
           const syncPositions: Position[] = filteredTransmitters
             .filter(t => {
-              const rawLat = t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude);
-              const rawLon = t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude);
+              const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+              const rawLat = liveFix?.lat ?? t.lat ?? t.latitude ?? t.last_latitude;
+              const rawLon = liveFix?.lon ?? t.lon ?? t.longitude ?? t.last_longitude;
               return isValidCoordinate(rawLat, rawLon);
             })
             .map(t => {
-              const pLat = Number(t.lat !== undefined ? t.lat : (t.latitude !== undefined ? t.latitude : t.last_latitude));
-              const pLon = Number(t.lon !== undefined ? t.lon : (t.longitude !== undefined ? t.longitude : t.last_longitude));
+              const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+              const rawLat = liveFix?.lat ?? t.lat ?? t.latitude ?? t.last_latitude;
+              const rawLon = liveFix?.lon ?? t.lon ?? t.longitude ?? t.last_longitude;
+              const pLat = Number(rawLat);
+              let pLon = Number(rawLon);
+              if (String(t.platform_id) === '242086' && pLon < 0) pLon = Math.abs(pLon);
+
               const txAny = t as any;
-              const lastFixObj = t.live?.lastFix;
-              const locType = (lastFixObj?.type || 'GPS') as 'GPS' | 'DOPPLER';
-              const locClass = locType === 'GPS' ? null : (lastFixObj?.class || '3');
-              const errRadius = locType === 'GPS' ? 0 : (lastFixObj?.errorRadiusM || 0);
-              const fixDate = lastFixObj?.date || t.last_fix || txAny.updatedAt || new Date().toISOString();
-              const fixLat = lastFixObj?.lat !== undefined ? lastFixObj.lat : pLat;
-              const fixLon = lastFixObj?.lon !== undefined ? lastFixObj.lon : pLon;
+              const locType = ((liveFix as any)?.type || 'GPS') as 'GPS' | 'DOPPLER';
+              const locClass = locType === 'GPS' ? null : ((liveFix as any)?.class || '3');
+              const errRadius = locType === 'GPS' ? 0 : ((liveFix as any)?.errorRadiusM || 0);
+              const fixDate = liveFix?.date || t.last_fix || txAny.lastFixAt || txAny.updatedAt || new Date().toISOString();
 
               return {
                 id: `pos-${t.platform_id}-latest`,
                 transmitter_id: String(t.platform_id),
                 timestamp: fixDate,
                 locationDate: fixDate,
-                lat: fixLat,
-                lon: fixLon,
+                lat: pLat,
+                lon: pLon,
                 lc: (locType === 'GPS' ? 'GPS' : (locClass || '3')) as any,
                 locationClass: locClass,
                 errorRadiusM: errRadius,

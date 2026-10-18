@@ -521,7 +521,18 @@ export const Database = () => {
         </div>
 
         {/* View Actions */}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Quick Sync Button for connecting all tables */}
+          <button
+            onClick={handleReSyncAll}
+            disabled={isSyncing}
+            className="flex items-center gap-1.5 px-3 py-2 bg-brand-50 hover:bg-brand-100 dark:bg-brand-900/30 dark:hover:bg-brand-900/50 border border-brand-200 dark:border-brand-800 text-brand-700 dark:text-brand-300 rounded-lg text-xs font-bold transition-all shadow-xs disabled:opacity-50"
+            title="Synchronize data across Argos Data, Transmitters, and Monitoring tables"
+          >
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync Tables'}</span>
+          </button>
+
           {/* Manage Data Dropdown */}
           <div className="relative">
             <button

@@ -324,15 +324,9 @@ export function isVisibleOnLiveMap(
   return true;
 }
 
-/**
- * Shared visibility filter for Monitoring view.
- */
 export function isVisibleInMonitoring(transmitter: Transmitter, hasCurrentMonthFix: boolean = true): boolean {
-  const st = transmitter.derived_status || transmitter.status || 'Active';
-  const isStatic = st === 'Static test' || st === 'Static Test' || st === 'static';
-  if (isStatic && !hasCurrentMonthFix) {
-    return false;
-  }
+  // Transmitters in the registry should remain visible in Live Monitoring.
+  // Never silently filter out valid transmitters.
   return true;
 }
 

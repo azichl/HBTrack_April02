@@ -99,6 +99,7 @@ export const DataUpload = () => {
   const { 
       syncArgosToFirebase, 
       importTransmitters, importBirds, assignTransmitterToBird, transmitters,
+      refreshMonitoringData,
   } = useAppStore();
 
   const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
@@ -540,7 +541,8 @@ export const DataUpload = () => {
             });
 
             await syncArgosToFirebase(mappedArgos, []);
-            setUploadMessage(`Imported ${mappedArgos.length} position fixes sorted by Location Date. Data synced to Firebase.`);
+            refreshMonitoringData().catch(console.warn);
+            setUploadMessage(`Imported ${mappedArgos.length} position fixes sorted by Location Date. Data synchronized across all tables.`);
         }
 
         setUploadStatus('success');
@@ -550,10 +552,15 @@ export const DataUpload = () => {
     }
   };
 
-  const handleSyncManual = () => {
-      // Manual sync now triggers a re-read from Firebase
-      addLog(`Data is already synced to Firebase automatically. Use 'Execute Request' to fetch new data.`);
-      setSyncStats({transmitters: 0, positions: 0});
+  const handleSyncManual = async () => {
+      addLog('Synchronizing Argos data across Transmitters and Monitoring tables...');
+      try {
+        const res = await refreshMonitoringData();
+        addLog(`✅ Complete: ${res.transmittersCount} transmitters and ${res.positionsCount} tracking fixes synchronized across all tables.`);
+        setSyncStats({ transmitters: res.transmittersCount, positions: res.positionsCount });
+      } catch (err: any) {
+        addLog(`Sync error: ${err.message}`);
+      }
   };
 
   // --- API INTEGRATION ---
@@ -983,9 +990,10 @@ export const DataUpload = () => {
             }
         }
         
+        refreshMonitoringData().catch(console.warn);
         setSyncStats({transmitters: stats.transmittersUpdated, positions: stats.positionsCreated});
         setApiStatus('success');
-        addLog(`Operation Complete. Store Updated.`);
+        addLog(`Operation Complete. Store & Monitoring Updated.`);
 
         if (isMobileScreen) {
           setShowSuccessToast(true);

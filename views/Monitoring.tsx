@@ -7,10 +7,8 @@ import { Position } from '../types';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
 import { isVisibleInMonitoring } from '../utils/statusCalculator';
 import Draggable from 'react-draggable';
-import { saveDocument, deleteCoordinateRecord, resetTransmitterCoordinates, resetAllTransmitterCoordinates, deleteArgosPositions, clearTransmitterHistoryCache } from '../services/firestoreService';
+import { saveDocument, deleteCoordinateRecord, resetTransmitterCoordinates, resetAllTransmitterCoordinates, deleteArgosPositions, clearTransmitterHistoryCache, loadLatestPositionsPerTransmitter } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
-
-// Safely parse dates including DD/MM/YYYY HH:mm:ss format from Argos API
 const safeParseDate = (ts: any): number => {
     if (!ts) return NaN;
     if (typeof ts === 'number') return ts;
@@ -96,6 +94,32 @@ export const Monitoring = () => {
     setIsModalOpen(false);
   };
 
+  // Auto-synchronize latest positions for transmitters from database on mount / when transmitters change
+  useEffect(() => {
+    let isCancelled = false;
+    const syncLatest = async () => {
+      if (!transmitters || transmitters.length === 0) return;
+      try {
+        const pids = transmitters.map(t => String(t.platform_id || t.id)).filter(Boolean);
+        const latestFromDb = await loadLatestPositionsPerTransmitter(pids);
+        if (!isCancelled && latestFromDb.length > 0) {
+          const store = useAppStore.getState();
+          const currentPositions = store.positions || [];
+          const posMap = new Map<string, Position>();
+          currentPositions.forEach(p => posMap.set(String(p.transmitter_id || (p as any).platformId), p));
+          latestFromDb.forEach(p => {
+            if (p) posMap.set(String(p.transmitter_id), p);
+          });
+          useAppStore.setState({ positions: Array.from(posMap.values()) });
+        }
+      } catch (err) {
+        console.warn('[Monitoring] Auto-load latest positions error:', err);
+      }
+    };
+    syncLatest();
+    return () => { isCancelled = true; };
+  }, [transmitters.length]);
+
   // 1. Prepare Flattened Data for Table
   const latestPositions = useMemo(() => {
     const map = new Map<string, Position>();
@@ -129,26 +153,23 @@ export const Monitoring = () => {
 
   const tableData = useMemo<MonitoringTableRow[]>(() => {
     return transmitters
-      .filter(t => {
-        const hasCurrentMonthFix = Boolean(hasCurrentMonthFixesMap.get(String(t.platform_id)) || (t.last_fix && getYearMonthKey(t.last_fix) === currentYearMonthKey));
-        return isVisibleInMonitoring(t, hasCurrentMonthFix);
-      })
+      .filter(t => isVisibleInMonitoring(t, true))
       .map(t => {
         const bird = findBirdForTransmitter(birds, t);
-        const pid = String(t.platform_id);
+        const pid = String(t.platform_id || t.id);
         const pos = latestPositions.get(pid);
 
-        // Determine the true latest timestamp by comparing position store and transmitter metadata
-        const posTs = pos ? safeParseDate(pos.timestamp) : NaN;
-        const lastFixTs = safeParseDate(t.last_fix);
-
-        // Pick the maximum valid timestamp
-        const candidates = [posTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
-        const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
-        const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || t.last_fix);
-
-        const rawLat = pos?.lat ?? (t as any).latitude ?? t.lat;
-        const rawLon = pos?.lon ?? (t as any).longitude ?? t.lon;
+        // Fallback hierarchy for coordinates:
+        // 1. pos from latestPositions (derived from positions + argos_positions)
+        // 2. t.live?.lastFix
+        // 3. t.live?.lastGps
+        // 4. t.live?.lastDoppler
+        // 5. t.lat / t.latitude / t.last_latitude
+        const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+        
+        const rawLat = pos?.lat ?? pos?.latitude ?? liveFix?.lat ?? t.lat ?? (t as any).latitude ?? (t as any).last_latitude;
+        const rawLon = pos?.lon ?? pos?.longitude ?? liveFix?.lon ?? t.lon ?? (t as any).longitude ?? (t as any).last_longitude;
+        
         let displayLat = (rawLat !== null && rawLat !== undefined && rawLat !== '' && !isNaN(Number(rawLat))) ? Number(rawLat) : undefined;
         let displayLon = (rawLon !== null && rawLon !== undefined && rawLon !== '' && !isNaN(Number(rawLon))) ? Number(rawLon) : undefined;
 
@@ -161,6 +182,15 @@ export const Monitoring = () => {
           displayLon = Math.abs(displayLon);
         }
 
+        // Determine the true latest timestamp by comparing position store and transmitter metadata
+        const posTs = pos ? safeParseDate(pos.timestamp || pos.locationDate) : NaN;
+        const lastFixTs = safeParseDate(liveFix?.date || t.last_fix || (t as any).lastFixAt);
+
+        // Pick the maximum valid timestamp
+        const candidates = [posTs, lastFixTs].filter(ts => !isNaN(ts) && ts > 0);
+        const bestTs = candidates.length > 0 ? Math.max(...candidates) : NaN;
+        const bestTimestamp = !isNaN(bestTs) ? new Date(bestTs).toISOString() : (pos?.timestamp || liveFix?.date || t.last_fix);
+
         const hasValidFix = !!pos || (displayLat !== undefined && displayLon !== undefined);
         const displayTimestamp = hasValidFix ? bestTimestamp : undefined;
 
@@ -169,12 +199,12 @@ export const Monitoring = () => {
           platform_id: t.platform_id,
           bird_ring_id: bird?.ring_id || 'Unassigned',
           bird_id: t.bird_id,
-          status: hasValidFix ? (t.derived_status || t.status) : 'Inactive',
+          status: hasValidFix ? (t.derived_status || t.status || 'Active') : (t.status || 'Inactive'),
           model: t.model,
           lat: displayLat,
           lon: displayLon,
-          battery_voltage: t.battery_voltage,
-          speed: pos?.speed_kmh,
+          battery_voltage: t.battery_voltage ?? pos?.battery_voltage,
+          speed: pos?.speed_kmh ?? (t as any).speed_kmh ?? (t as any).speed,
           timestamp: displayTimestamp,
           hasPos: hasValidFix
         };
