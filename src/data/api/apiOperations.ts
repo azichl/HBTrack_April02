@@ -3,7 +3,7 @@
  * The UI renders: the select (labels), a one-paragraph description under it, and an (i) popover with `details`.
  * Descriptions of the 5 EXISTING operations are verified against the current code (what endpoint it calls, what it writes).
  */
-export type OpId = 'positions' | 'bulkMessages' | 'realtimeCheckpoint' | 'deviceInventory' | 'dopplerData' | 'messageCountCheck';
+export type OpId = 'positions' | 'positionsFallback' | 'bulkMessages' | 'realtimeCheckpoint' | 'deviceInventory' | 'dopplerData' | 'messageCountCheck';
 export type OpRole = 'primary' | 'supporting' | 'fallback' | 'diagnostic';
 
 export interface ApiOperation {
@@ -48,7 +48,31 @@ export const API_OPERATIONS: ApiOperation[] = [
     },
   },
   {
-    id: 'bulkMessages', order: 2, role: 'supporting', returns: 'messages', windowBy: 'messageDate', usesCheckpoint: false,
+    id: 'positionsFallback', order: 2, role: 'fallback', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
+    writesTo: ['argos_positions (one doc per fix)', 'transmitters.live.*'],
+    badge: { en: 'Safe Fallback', ar: 'احتياطي آمن' },
+    label: { en: 'Positions (from messages) [Fallback]', ar: 'المواقع (من الرسائل) [احتياطي]' },
+    summary: {
+      en: 'Reconstructs clean GPS and Doppler positions directly from satellite messages using genuine fix dates, rejecting Doppler error > 2000m. Use until the CLS Positions REST route is verified.',
+      ar: 'يعيد بناء مواقع GPS ودوبلر النظيفة مباشرة من رسائل الأقمار الصناعية باستخدام التواريخ الحقيقية، مع استبعاد دوبلر > 2000م. استخدمه حتى يتم التحقق من مسار المواقع لدى CLS.',
+    },
+    details: {
+      en: [
+        'Extracts GPS Date of position and Doppler Date (never uses message arrival date).',
+        'Collapses duplicate transmissions into single canonical fixes.',
+        'Automatically rejects Doppler fixes with error radius > 2000m.',
+        'Ensures live tracks and Argos Data remain 100% accurate without depending on the CLS /positions route.',
+      ],
+      ar: [
+        'يستخرج تاريخ موقع GPS وتاريخ دوبلر (لا يستخدم تاريخ وصول الرسالة أبداً).',
+        'يدمج الرسائل المتكررة في موقع قياسي واحد.',
+        'يستبعد تلقائياً مواقع دوبلر التي يتجاوز نصف قطر خطئها 2000 متر.',
+        'يضمن دقة المسارات وجدول Argos Data بنسبة 100% دون الاعتماد على مسار /positions.',
+      ],
+    },
+  },
+  {
+    id: 'bulkMessages', order: 3, role: 'supporting', returns: 'messages', windowBy: 'messageDate', usesCheckpoint: false,
     writesTo: ['argos_messages (payload, sensors, delivery stats)'],
     label: { en: 'Bulk Message Retrieval', ar: 'استرجاع الرسائل بالجملة' },
     summary: {
@@ -92,7 +116,7 @@ export const API_OPERATIONS: ApiOperation[] = [
     },
   },
   {
-    id: 'deviceInventory', order: 4, role: 'supporting', returns: 'devices', windowBy: 'none', usesCheckpoint: false,
+    id: 'deviceInventory', order: 5, role: 'supporting', returns: 'devices', windowBy: 'none', usesCheckpoint: false,
     writesTo: ['transmitters (create / refresh identity fields only)'],
     label: { en: 'Device Inventory List', ar: 'قائمة الأجهزة' },
     summary: {
@@ -105,7 +129,7 @@ export const API_OPERATIONS: ApiOperation[] = [
     },
   },
   {
-    id: 'dopplerData', order: 5, role: 'fallback', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
+    id: 'dopplerData', order: 6, role: 'fallback', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
     writesTo: ['argos_positions (type DOPPLER only)'],
     label: { en: 'Doppler Data', ar: 'بيانات دوبلر' },
     summary: {
@@ -118,7 +142,7 @@ export const API_OPERATIONS: ApiOperation[] = [
     },
   },
   {
-    id: 'messageCountCheck', order: 6, role: 'diagnostic', returns: 'count', windowBy: 'messageDate', usesCheckpoint: false,
+    id: 'messageCountCheck', order: 7, role: 'diagnostic', returns: 'count', windowBy: 'messageDate', usesCheckpoint: false,
     writesTo: [],
     label: { en: 'Message Count Check', ar: 'فحص عدد الرسائل' },
     summary: {

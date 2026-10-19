@@ -136,6 +136,7 @@ export const decodeBatteryVoltage = (rawData: string, model: string = 'Unknown')
 
 
 import { buildFixes, RawFix, Fix } from '../utils/positionsEngine';
+import { classifyResponse, normalizeWindow, maskSecrets, ClsApiError } from '../utils/clsApiClient';
 
 // Map Argos API data
 export const mapArgosApiData = (apiData: any[]): ArgosMessage[] => {
@@ -418,15 +419,28 @@ export const fetchArgosPositions = async (
     let page = 1;
     const maxPages = 500;
 
-    addLog(`Starting Positions Fetch (Location Date: ${startDateStr} to ${endDateStr}, Type: ${locationType})...`);
+    // Normalise date window: whole seconds, 'to' clamped to now
+    let fromIso = startDateStr;
+    let toIso = endDateStr;
+    try {
+        const fromMs = safeParseTimestamp(startDateStr);
+        const toMs = safeParseTimestamp(endDateStr);
+        const norm = normalizeWindow(fromMs, toMs, Date.now());
+        fromIso = new Date(norm.from).toISOString().replace(/\.\d{3}Z$/, 'Z');
+        toIso = new Date(norm.to).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    } catch (e: any) {
+        addLog(`Window normalisation notice: ${e.message}`);
+    }
+
+    addLog(`Starting Positions Fetch (Location Date: ${fromIso} to ${toIso}, Type: ${locationType})...`);
 
     while (hasMore && page <= maxPages) {
         addLog(`Fetching Positions Page ${page}${currentCursor ? ` (Cursor: ...${currentCursor.slice(-8)})` : ''}...`);
 
         const body: any = {
             limit,
-            fromDatetime: startDateStr,
-            toDatetime: endDateStr,
+            fromDatetime: fromIso,
+            toDatetime: toIso,
             datetimeFormat: "DATETIME"
         };
         if (locationType !== 'ALL') {
@@ -441,11 +455,14 @@ export const fetchArgosPositions = async (
 
         let retries = 0;
         let json: any = null;
+        const maxRetries = 3;
 
-        while (retries < 3) {
+        while (true) {
+            const targetPath = `${baseUrl}/positions`;
+            const targetUrl = getUrl(targetPath);
+            addLog(`POST /positions (page ${page})`);
             try {
-                let targetUrl = getUrl(`${baseUrl}/positions`);
-                let res = await fetch(targetUrl, {
+                const res = await fetch(targetUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -455,35 +472,42 @@ export const fetchArgosPositions = async (
                     body: JSON.stringify(body)
                 });
 
-                if (res.status === 404) {
-                    targetUrl = getUrl(`${baseUrl}/retrieve-positions`);
-                    res = await fetch(targetUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify(body)
-                    });
-                }
-
-                if (res.status === 401) {
-                    addLog(`Token expired (401) on page ${page}. Check credentials.`);
-                    throw new Error("Auth Failed");
-                }
-
                 const text = await res.text();
-                if (!res.ok) throw new Error(`Positions Fetch Failed (${res.status}): ${text.substring(0, 100)}`);
+                const err = classifyResponse(res.status, res.headers.get('content-type') || '', text);
+                if (err) {
+                    addLog(`[${err.kind}] ${err.message}`);
+                    if (!err.retryable || retries >= maxRetries) {
+                        throw err;
+                    }
+                    retries++;
+                    const wait = Math.min(30000, 1000 * Math.pow(2, retries));
+                    addLog(`Retrying (${retries}/${maxRetries}) in ${wait}ms...`);
+                    await new Promise(r => setTimeout(r, wait));
+                    continue;
+                }
 
-                json = JSON.parse(text);
+                try {
+                    json = JSON.parse(text);
+                } catch {
+                    const parseErr = new ClsApiError('NOT_JSON', `200 but body is not valid JSON: ${maskSecrets(text.slice(0, 120))}`, res.status, false);
+                    addLog(`[NOT_JSON] ${parseErr.message}`);
+                    throw parseErr;
+                }
                 break;
             } catch (e: any) {
-                if (e.message.includes('Auth Failed')) throw e;
+                if (e instanceof ClsApiError) {
+                    throw e;
+                }
+                // Network drop
+                const netErr = new ClsApiError('NETWORK', `Network error: ${e.message} (in a browser this is usually CORS — call from the server)`, undefined, true);
+                if (retries >= maxRetries) {
+                    addLog(`[NETWORK] Max retries exceeded: ${netErr.message}`);
+                    throw netErr;
+                }
                 retries++;
-                if (retries >= 3) throw e;
-                addLog(`Network error on page ${page}, retrying (${retries}/3)...`);
-                await new Promise(r => setTimeout(r, 2000));
+                const wait = Math.min(30000, 1000 * Math.pow(2, retries));
+                addLog(`Network error on page ${page}, retrying (${retries}/${maxRetries}) in ${wait}ms...`);
+                await new Promise(r => setTimeout(r, wait));
             }
         }
 

@@ -7,20 +7,17 @@ import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
 import { formatDateTime, isValidCoordinate, safeParseTimestamp, normalizePttId, classifyLocationType, makeDeterministicFixDocId } from '../utils/formatting';
 import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
-import { mapArgosApiData, mapArgosDevices, extractLocationDate, fetchArgosPositions } from '../services/argosService';
+import { mapArgosApiData, mapArgosDevices, extractLocationDate, fetchArgosPositions, fetchArgosBulkData } from '../services/argosService';
 import { API_OPERATIONS, opById, ApiOperation as RegistryApiOperation, OpId } from '../src/data/api/apiOperations';
 import { mapClsPositions } from '../src/data/positions/clsPositionsMapper';
+import { maskSecrets, classifyResponse, ClsApiError } from '../utils/clsApiClient';
+import { messagesToRawFixes } from '../utils/messagesToRawFixes';
 
 // --- HELPERS ---
 
 const maskSensitive = (str: string): string => {
     if (!str) return str;
-    return str
-        .replace(/"access_token"\s*:\s*"[^"]+"/g, '"access_token": "[REDACTED]"')
-        .replace(/"refresh_token"\s*:\s*"[^"]+"/g, '"refresh_token": "[REDACTED]"')
-        .replace(/"password"\s*:\s*"[^"]+"/g, '"password": "[REDACTED]"')
-        .replace(/password=[^&]+/gi, 'password=[REDACTED]')
-        .replace(/Bearer\s+[A-Za-z0-9-_=.]+/gi, 'Bearer [REDACTED]');
+    return maskSecrets(str);
 };
 
 const mapArgosDoppler = (apiData: any[]): ArgosDoppler[] => {
@@ -39,9 +36,10 @@ const mapArgosDoppler = (apiData: any[]): ArgosDoppler[] => {
     }));
 };
 
-export type ApiOperation = 'retrieve-positions' | 'retrieve-bulk' | 'retrieve-realtime' | 'retrieve-device-list' | 'retrieve-doppler' | 'retrieve-bulk-count';
+export type ApiOperation = 'retrieve-positions' | 'retrieve-positions-fallback' | 'retrieve-bulk' | 'retrieve-realtime' | 'retrieve-device-list' | 'retrieve-doppler' | 'retrieve-bulk-count';
 const opIdMap: Record<ApiOperation, OpId> = {
     'retrieve-positions': 'positions',
+    'retrieve-positions-fallback': 'positionsFallback',
     'retrieve-bulk': 'bulkMessages',
     'retrieve-realtime': 'realtimeCheckpoint',
     'retrieve-device-list': 'deviceInventory',
@@ -51,7 +49,7 @@ const opIdMap: Record<ApiOperation, OpId> = {
 type UploadType = 'transmitters' | 'birds' | 'argos_data';
 
 const generateMockArgosData = (operation: ApiOperation): any[] => {
-    if (operation === 'retrieve-positions') {
+    if (operation === 'retrieve-positions' || operation === 'retrieve-positions-fallback') {
         return [
             { 'Device ID': '43571', 'Unit type': 'Houbara', 'Location class': null, 'Location type': 'GPS', 'Doppler Error radius (m)': 0, 'Location date': '2026-10-18 03:00:00', Longitude: 74.5123, Latitude: 43.1 },
             { 'Device ID': '43571', 'Unit type': 'Houbara', 'Location class': 'B', 'Location type': 'Doppler', 'Doppler Error radius (m)': 1970, 'Location date': '2026-10-18 03:41:42.003', Longitude: 74.52, Latitude: 43.11 }
@@ -122,9 +120,9 @@ export const DataUpload = () => {
     baseUrl: 'https://api.groupcls.com/telemetry/api/v1'
   });
   
-  // Date State for Bulk (Default last 3 days)
+  // Date State for Positions / Bulk (Default last 24 hours: From = now - 24h, To = now)
   const [dateRange, setDateRange] = useState({
-      start: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Default last 3 days
+      start: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       end: new Date().toISOString().split('T')[0]
   });
 
@@ -159,6 +157,7 @@ export const DataUpload = () => {
 
   const operations: { value: ApiOperation; label: string; badge?: string; badgeAr?: string }[] = [
     { value: "retrieve-positions", label: "Positions (GPS + Doppler)", badge: "Recommended", badgeAr: "موصى به" },
+    { value: "retrieve-positions-fallback", label: "Positions (from messages) [Fallback]", badge: "Safe Fallback", badgeAr: "احتياطي آمن" },
     { value: "retrieve-bulk", label: "Bulk Message Retrieval" },
     { value: "retrieve-realtime", label: "Realtime Stream (Checkpoint)" },
     { value: "retrieve-device-list", label: "Device Inventory List" },
@@ -757,6 +756,91 @@ export const DataUpload = () => {
       return json.contents || []; 
   };
 
+  const handleTestPositionsConnection = async () => {
+    setApiStatus('testing');
+    setActiveLogTab('logs');
+    setLogs([]);
+    setRawResponse('');
+    if (isMobileScreen) {
+      setShowLogModal(true);
+    }
+    addLog('[Test Connection] Testing CLS Positions endpoint...');
+
+    try {
+        const token = await authenticate();
+        addLog('Authentication Successful. Token acquired.');
+
+        const testPtt = selectedDevicePtt && selectedDevicePtt !== 'ALL' 
+            ? selectedDevicePtt.trim() 
+            : (transmitters[0]?.platform_id || '43571');
+
+        const now = Date.now();
+        const from24h = new Date(now - 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+        const toNow = new Date(now).toISOString().replace(/\.\d{3}Z$/, 'Z');
+        
+        const testBody = {
+            limit: 5,
+            fromDatetime: from24h,
+            toDatetime: toNow,
+            datetimeFormat: "DATETIME",
+            deviceIds: [testPtt]
+        };
+
+        const targetUrl = getUrl(`${apiConfig.baseUrl}/positions`);
+        addLog(`POST ${apiConfig.baseUrl}/positions (1 device: ${testPtt}, limit: 5, window: ${from24h} .. ${toNow})`);
+
+        const res = await fetch(targetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(testBody)
+        });
+
+        const contentType = res.headers.get('content-type') || 'unknown';
+        const bodyText = await res.text();
+        setRawResponse(maskSecrets(bodyText));
+
+        addLog(`HTTP Status: ${res.status} ${res.statusText}`);
+        addLog(`Content-Type: ${contentType}`);
+
+        const classified = classifyResponse(res.status, contentType, bodyText);
+        if (classified) {
+            addLog(`Classification: [${classified.kind}] ${classified.message}`);
+            if (classified.kind === 'ENDPOINT_NOT_FOUND') {
+                addLog('👉 Action: Provide capture.har from CLS web app to extract the real endpoint, or use "Positions (from messages) [Fallback]".');
+            }
+            setApiStatus('error');
+            return;
+        }
+
+        let parsed: any;
+        try {
+            parsed = JSON.parse(bodyText);
+        } catch {
+            addLog(`Error: Response body is not valid JSON.`);
+            setApiStatus('error');
+            return;
+        }
+
+        const items = parsed.contents || parsed.positions || (Array.isArray(parsed) ? parsed : []);
+        addLog(`Row Count: ${items.length}`);
+        if (items.length > 0) {
+            addLog(`First Row Keys: ${Object.keys(items[0]).join(', ')}`);
+            const mapRes = mapClsPositions(items);
+            addLog(`Mapper Result: missing=[${mapRes.missing.join(', ')}], unmappedKeys=[${mapRes.unmappedKeys.join(', ')}], valid=${mapRes.rows.length}`);
+        } else {
+            addLog(`No rows returned for device ${testPtt} in the last 24h.`);
+        }
+        setApiStatus('success');
+    } catch (err: any) {
+        addLog(`[Test Connection Error] ${err.message}`);
+        setApiStatus('error');
+    }
+  };
+
   const handleExecuteApi = async () => {
     // ... (Same execute logic)
     setApiStatus('testing');
@@ -780,7 +864,7 @@ export const DataUpload = () => {
             const newData = generateMockArgosData(selectedOperation);
             setPreviewData(newData);
 
-            if (selectedOperation === 'retrieve-positions') {
+            if (selectedOperation === 'retrieve-positions' || selectedOperation === 'retrieve-positions-fallback') {
                 const mapRes = mapClsPositions(newData);
                 const { fixes } = buildFixes(mapRes.rows);
                 addLog(`[SIMULATION] Mapped ${fixes.length} fixes (${fixes.filter(f => f.type === 'GPS').length} GPS, ${fixes.filter(f => f.type === 'DOPPLER').length} Doppler).`);
@@ -814,50 +898,71 @@ export const DataUpload = () => {
         let rawData: any[] = [];
         let stats = { transmittersUpdated: 0, positionsCreated: 0 };
 
-        if (selectedOperation === 'retrieve-positions') {
-            const startStr = `${dateRange.start}T00:00:00.001Z`;
-            const endStr = `${dateRange.end}T23:59:59.999Z`;
-            addLog(`Executing Positions (GPS + Doppler) Fetch [Location Date: ${startStr} to ${endStr}, Type: ${selectedLocationType}]...`);
+        if (selectedOperation === 'retrieve-positions' || selectedOperation === 'retrieve-positions-fallback') {
+            const nowIso = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+            const startStr = `${dateRange.start}T00:00:00Z`;
+            let endStr = `${dateRange.end}T23:59:59Z`;
+            if (endStr > nowIso) endStr = nowIso;
 
             const startTime = Date.now();
             const deviceIds = selectedDevicePtt && selectedDevicePtt !== 'ALL' ? [selectedDevicePtt.trim()] : [];
-            rawData = await fetchArgosPositions(token, apiConfig, startStr, endStr, selectedLocationType, deviceIds, (msg) => addLog(maskSensitive(msg)));
-            const durationMs = Date.now() - startTime;
-            addLog(`Fetched ${rawData.length} rows from CLS Positions in ${durationMs}ms.`);
+            let targetRows: RawFix[] = [];
 
-            // Map rows using tolerant mapper
-            const mapRes = mapClsPositions(rawData);
-            if (mapRes.missing.length > 0) {
-                const err = `Missing required fields from CLS Positions: ${mapRes.missing.join(', ')}`;
-                addLog(`ERROR: ${err}`);
-                throw new Error(err);
+            if (selectedOperation === 'retrieve-positions') {
+                addLog(`Executing Positions (GPS + Doppler) Fetch [Location Date: ${startStr} to ${endStr}, Type: ${selectedLocationType}]...`);
+                try {
+                    rawData = await fetchArgosPositions(token, apiConfig, startStr, endStr, selectedLocationType, deviceIds, (msg) => addLog(maskSensitive(msg)));
+                    addLog(`Fetched ${rawData.length} rows from CLS Positions in ${Date.now() - startTime}ms.`);
+
+                    // Map rows using tolerant mapper
+                    const mapRes = mapClsPositions(rawData);
+                    if (mapRes.missing.length > 0) {
+                        const err = `Missing required fields from CLS Positions: ${mapRes.missing.join(', ')}`;
+                        addLog(`ERROR: ${err}`);
+                        throw new Error(err);
+                    }
+
+                    if (mapRes.unmappedKeys.length > 0) {
+                        addLog(`Notice: Unmapped keys in response: ${mapRes.unmappedKeys.join(', ')}`);
+                    }
+
+                    if (mapRes.skipped.length > 0) {
+                        addLog(`Skipped ${mapRes.skipped.length} invalid rows.`);
+                    }
+
+                    addLog(`Successfully mapped ${mapRes.rows.length} valid position records.`);
+                    targetRows = mapRes.rows;
+                } catch (e: any) {
+                    if (e?.kind === 'ENDPOINT_NOT_FOUND' || e?.message?.includes('404')) {
+                        addLog(`⚠️ [ENDPOINT_NOT_FOUND] The CLS Positions endpoint does not exist on this API route (404).`);
+                        addLog(`Switching to Positions (from messages) [Fallback] to extract genuine GPS/Doppler fixes...`);
+                        const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)));
+                        const conv = messagesToRawFixes(bulkRaw);
+                        addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date).`);
+                        targetRows = conv.rows;
+                    } else {
+                        throw e;
+                    }
+                }
+            } else {
+                addLog(`Executing Positions (from messages) [Fallback] [Window: ${startStr} to ${endStr}]...`);
+                const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)));
+                const conv = messagesToRawFixes(bulkRaw);
+                addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date).`);
+                targetRows = conv.rows;
             }
-
-            if (mapRes.unmappedKeys.length > 0) {
-                addLog(`Notice: Unmapped keys in response: ${mapRes.unmappedKeys.join(', ')}`);
-            }
-
-            if (mapRes.skipped.length > 0) {
-                const reasons: Record<string, number> = {};
-                mapRes.skipped.forEach(s => {
-                    reasons[s.reason] = (reasons[s.reason] || 0) + 1;
-                });
-                addLog(`Skipped ${mapRes.skipped.length} invalid rows: ${JSON.stringify(reasons)}`);
-            }
-
-            addLog(`Successfully mapped ${mapRes.rows.length} valid position records.`);
 
             // Filter by location type if user selected GPS or DOPPLER
-            let targetRows = mapRes.rows;
             if (selectedLocationType !== 'ALL') {
-                targetRows = mapRes.rows.filter(r =>
+                targetRows = targetRows.filter(r =>
                     selectedLocationType === 'GPS' ? /gps/i.test(r.locationType) : !/gps/i.test(r.locationType)
                 );
             }
 
             // Build fixes (deterministic deduplication)
             const { fixes: canonicalFixes } = buildFixes(targetRows);
-            addLog(`Built ${canonicalFixes.length} canonical position fixes.`);
+            const durationMs = Date.now() - startTime;
+            addLog(`Built ${canonicalFixes.length} canonical position fixes in ${durationMs}ms.`);
 
             // Compute newest GPS and Doppler per PTT
             const newestGps: Record<string, string> = {};
@@ -1623,7 +1728,7 @@ export const DataUpload = () => {
                              </div>
 
                              {/* PARAMETERS FOR POSITIONS */}
-                             {selectedOperation === 'retrieve-positions' && (
+                             {(selectedOperation === 'retrieve-positions' || selectedOperation === 'retrieve-positions-fallback') && (
                                  <div className="space-y-3 pt-1 border-t border-gray-200/60 dark:border-slate-700/60">
                                      {/* Device selector */}
                                      <div>
@@ -1669,6 +1774,11 @@ export const DataUpload = () => {
                                              />
                                          </div>
                                      </div>
+                                     {((new Date(dateRange.end).getTime() - new Date(dateRange.start).getTime()) > 31 * 86400000) && (
+                                         <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1 font-medium">
+                                             <AlertTriangle size={12} /> Notice: Date range &gt; 31 days will be automatically chunked in requests.
+                                         </p>
+                                     )}
 
                                      {/* Location Type Filter */}
                                      <div>
@@ -1764,14 +1874,28 @@ export const DataUpload = () => {
                                 <span className="text-xs text-brand-600 dark:text-brand-400 font-medium">Secured with Firebase API Proxy ✓</span>
                              </div>
 
-                             <button 
-                                onClick={handleExecuteApi}
-                                disabled={apiStatus === 'testing'}
-                                className={`w-full py-2.5 rounded-lg text-sm font-bold text-white transition-all flex items-center justify-center gap-2 shadow-md ${apiStatus === 'testing' ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700'}`}
-                             >
-                                {apiStatus === 'testing' ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
-                                {isPreviewDryRun && selectedOperation === 'retrieve-positions' ? 'Run Preview (Dry Run)' : 'Execute Request'}
-                             </button>
+                             <div className="flex gap-2">
+                                 <button 
+                                    onClick={handleExecuteApi}
+                                    disabled={apiStatus === 'testing'}
+                                    className={`flex-1 py-2.5 rounded-lg text-sm font-bold text-white transition-all flex items-center justify-center gap-2 shadow-md ${apiStatus === 'testing' ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-700'}`}
+                                 >
+                                    {apiStatus === 'testing' ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
+                                    {isPreviewDryRun && (selectedOperation === 'retrieve-positions' || selectedOperation === 'retrieve-positions-fallback') ? 'Run Preview (Dry Run)' : 'Execute Request'}
+                                 </button>
+                                 {(selectedOperation === 'retrieve-positions' || selectedOperation === 'retrieve-positions-fallback') && (
+                                     <button
+                                         type="button"
+                                         onClick={handleTestPositionsConnection}
+                                         disabled={apiStatus === 'testing'}
+                                         className="px-3.5 py-2.5 rounded-lg text-xs font-bold border border-brand-500 text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-slate-800 transition-all flex items-center gap-1.5"
+                                         title="Test Positions connection with 1 device for the last 24h"
+                                     >
+                                         <Activity size={14} />
+                                         Test Connection
+                                     </button>
+                                 )}
+                             </div>
                         </div>
                     </div>
                 </div>

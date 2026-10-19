@@ -13,6 +13,7 @@
 const crypto = require("crypto");
 const admin = require("firebase-admin");
 const { mapClsPositions } = require("./clsPositionsMapper");
+const { messagesToRawFixes } = require("./messagesToRawFixes");
 
 // ─── Constants & Configuration ───────────────────────────────────────────────
 
@@ -979,7 +980,21 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
   const locationTypeFilter = options.locationType || "ALL";
   const deviceIds = options.deviceIds || [];
 
-  log(`[IngestPositions] Window (Location Date): ${fromDatetime} -> ${toDatetime}, Filter: ${locationTypeFilter}`);
+  // Normalise dates: whole seconds, 'to' never in the future
+  let normFrom = fromDatetime;
+  let normTo = toDatetime;
+  try {
+    const fMs = Math.floor(new Date(fromDatetime).getTime() / 1000) * 1000;
+    const tMs = Math.min(Math.floor(new Date(toDatetime).getTime() / 1000) * 1000, Date.now());
+    if (fMs < tMs) {
+      normFrom = new Date(fMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
+      normTo = new Date(tMs).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    }
+  } catch (e) {
+    log(`[IngestPositions] Date normalization warning: ${e.message}`);
+  }
+
+  log(`[IngestPositions] Window (Location Date): ${normFrom} -> ${normTo}, Filter: ${locationTypeFilter}`);
 
   const params = new URLSearchParams();
   params.append("grant_type", "password");
@@ -1008,13 +1023,14 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
   let hasMore = true;
   let page = 1;
   const maxPages = 500;
-  const rawRows = [];
+  let rawRows = [];
+  let is404Endpoint = false;
 
   while (hasMore && page <= maxPages) {
     const body = {
       limit: 100,
-      fromDatetime,
-      toDatetime,
+      fromDatetime: normFrom,
+      toDatetime: normTo,
       datetimeFormat: "DATETIME",
     };
     if (locationTypeFilter !== "ALL") {
@@ -1025,7 +1041,7 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
     }
     if (cursor) body.pagination = { after: cursor };
 
-    let posRes = await fetch(`${baseUrl}/positions`, {
+    const posRes = await fetch(`${baseUrl}/positions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -1036,15 +1052,11 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
     });
 
     if (posRes.status === 404) {
-      posRes = await fetch(`${baseUrl}/retrieve-positions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(body),
-      });
+      is404Endpoint = true;
+      const snippet = (await posRes.text()).replace(/\s+/g, ' ').substring(0, 160);
+      log(`[IngestPositions] 404 ENDPOINT_NOT_FOUND: The CLS Positions endpoint was not found at ${baseUrl}/positions (Snippet: ${snippet}). Do not guess URLs — please capture the real endpoint using har_extract_cls_positions.py.`);
+      hasMore = false;
+      break;
     }
 
     if (!posRes.ok) {
@@ -1071,6 +1083,72 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
   }
 
   log(`[IngestPositions] Fetched ${rawRows.length} raw rows from CLS`);
+
+  // Safe Fallback: Rebuild positions from messages using true GPS/Doppler fix dates
+  if (rawRows.length === 0 && (is404Endpoint || options.allowFallback !== false)) {
+    log(`[IngestPositions] Primary Positions route returned 0 rows (404=${is404Endpoint}). Executing safe fallback via messages (retrieve-bulk)...`);
+    try {
+      let bulkCursor = null;
+      let bulkHasMore = true;
+      let bulkPage = 1;
+      const allMessages = [];
+
+      while (bulkHasMore && bulkPage <= 20) {
+        const bulkBody = {
+          limit: 100,
+          retrieveMetadata: true,
+          retrieveRawData: true,
+          retrieveDoppler: true,
+          retrieveGpsLoc: true,
+          retrieveSensors: true,
+          fromDatetime: normFrom,
+          toDatetime: normTo,
+          datetimeFormat: "DATETIME",
+        };
+        if (deviceIds && deviceIds.length > 0) {
+          bulkBody.deviceIds = deviceIds;
+        }
+        if (bulkCursor) bulkBody.pagination = { after: bulkCursor };
+
+        const bRes = await fetch(`${baseUrl}/retrieve-bulk`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(bulkBody),
+        });
+
+        if (!bRes.ok) {
+          log(`[IngestPositions Fallback] Bulk fetch page ${bulkPage} returned ${bRes.status}`);
+          break;
+        }
+
+        const bData = await bRes.json();
+        const bItems = bData.contents || [];
+        if (bItems.length > 0) {
+          allMessages.push(...bItems);
+          bulkPage++;
+          if (bData.pageInfo && bData.pageInfo.hasNextPage && bData.pageInfo.endCursor) {
+            bulkCursor = bData.pageInfo.endCursor;
+          } else {
+            bulkHasMore = false;
+          }
+        } else {
+          bulkHasMore = false;
+        }
+      }
+
+      if (allMessages.length > 0) {
+        const conv = messagesToRawFixes(allMessages);
+        log(`[IngestPositions Fallback] Converted ${allMessages.length} messages into ${conv.rows.length} fixes (${conv.skippedNoDate} skipped without position date).`);
+        rawRows = conv.rows;
+      }
+    } catch (fbErr) {
+      log(`[IngestPositions Fallback] Fallback execution error: ${fbErr.message}`);
+    }
+  }
 
   const mapResult = mapClsPositions(rawRows);
   if (mapResult.missing && mapResult.missing.length > 0) {
