@@ -312,7 +312,14 @@ export const authenticateArgos = async (apiConfig: any, authMode: 'user' | 'serv
     return authData.access_token;
 };
 
-export const fetchArgosBulkData = async (initialToken: string, apiConfig: any, startDateStr: string, endDateStr: string, addLog: (msg: string) => void) => {
+export const fetchArgosBulkData = async (
+    initialToken: string,
+    apiConfig: any,
+    startDateStr: string,
+    endDateStr: string,
+    addLog: (msg: string) => void,
+    deviceIds: string[] = []
+): Promise<any[]> => {
     let token = initialToken;
     const { baseUrl } = apiConfig;
     let allData: any[] = [];
@@ -325,13 +332,13 @@ export const fetchArgosBulkData = async (initialToken: string, apiConfig: any, s
     const rawUrl = `${baseUrl}/retrieve-bulk`;
     const targetUrl = getUrl(rawUrl);
 
-    addLog(`Starting Bulk Fetch From ${startDateStr} to ${endDateStr}...`);
+    addLog(`Starting Bulk Fetch From ${startDateStr} to ${endDateStr}${deviceIds.length ? ` (Devices: ${deviceIds.join(',')})` : ''}...`);
 
     while (hasMore && page <= maxPages) {
-        addLog(`Fetching Page ${page}${currentCursor ? ` (Cursor: ${currentCursor.substring(0, 8)}...)` : ''}`);
+        addLog(`Fetching Bulk Page ${page}${currentCursor ? ` (Cursor: ...${currentCursor.slice(-10)})` : ''}`);
         
         const body: any = {
-            limit: limit,
+            pagination: { first: limit },
             retrieveMetadata: true,
             retrieveRawData: true,
             retrieveDoppler: true,
@@ -342,15 +349,20 @@ export const fetchArgosBulkData = async (initialToken: string, apiConfig: any, s
             toDatetime: endDateStr,
             datetimeFormat: "DATETIME"
         };
-        
+
+        if (deviceIds && deviceIds.length > 0) {
+            body.deviceIds = deviceIds;
+        }
+
         if (currentCursor) {
-            body.pagination = { after: currentCursor };
+            body.pagination.after = currentCursor;
         }
 
         let retries = 0;
         let json: any = null;
+        const maxRetries = 3;
 
-        while (retries < 3) {
+        while (true) {
             try {
                 const res = await fetch(targetUrl, {
                     method: 'POST',
@@ -362,22 +374,41 @@ export const fetchArgosBulkData = async (initialToken: string, apiConfig: any, s
                     body: JSON.stringify(body)
                 });
                 
-                if (res.status === 401) {
-                    addLog(`Token expired (401) on page ${page}. Check credentials.`);
-                    throw new Error("Auth Failed");
+                const text = await res.text();
+                const err = classifyResponse(res.status, res.headers.get('content-type') || '', text);
+                if (err) {
+                    addLog(`[${err.kind}] ${err.message}`);
+                    if (!err.retryable || retries >= maxRetries) {
+                        throw err;
+                    }
+                    retries++;
+                    const wait = Math.min(30000, 1000 * Math.pow(2, retries));
+                    addLog(`Retrying (${retries}/${maxRetries}) in ${wait}ms...`);
+                    await new Promise(r => setTimeout(r, wait));
+                    continue;
                 }
 
-                const text = await res.text();
-                if (!res.ok) throw new Error(`Bulk Fetch Failed (${res.status}): ${text.substring(0, 100)}`);
-                
-                json = JSON.parse(text);
+                try {
+                    json = JSON.parse(text);
+                } catch {
+                    const parseErr = new ClsApiError('NOT_JSON', `200 but body is not valid JSON: ${maskSecrets(text.slice(0, 120))}`, res.status, false);
+                    addLog(`[NOT_JSON] ${parseErr.message}`);
+                    throw parseErr;
+                }
                 break;
             } catch (e: any) {
-                if (e.message.includes('Auth Failed')) throw e;
+                if (e instanceof ClsApiError) {
+                    throw e;
+                }
+                const netErr = new ClsApiError('NETWORK', `Network error: ${e.message}`, undefined, true);
+                if (retries >= maxRetries) {
+                    addLog(`[NETWORK] Max retries exceeded: ${netErr.message}`);
+                    throw netErr;
+                }
                 retries++;
-                if (retries >= 3) throw e;
-                addLog(`Network error on page ${page}, retrying (${retries}/3)...`);
-                await new Promise(r => setTimeout(r, 2000));
+                const wait = Math.min(30000, 1000 * Math.pow(2, retries));
+                addLog(`Network error on page ${page}, retrying (${retries}/${maxRetries}) in ${wait}ms...`);
+                await new Promise(r => setTimeout(r, wait));
             }
         }
 

@@ -11,6 +11,8 @@
  *   - Secrets are masked in every log line.
  */
 
+import { parseConstraintViolation, describeViolations } from './clsDiagnostics';
+
 export type ErrorKind = 'ENDPOINT_NOT_FOUND' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'BAD_REQUEST' | 'RATE_LIMITED' | 'SERVER' | 'NETWORK' | 'NOT_JSON' | 'CONFIG';
 export class ClsApiError extends Error {
   constructor(public kind: ErrorKind, message: string, public status?: number, public retryable = false) { super(message); this.name = 'ClsApiError'; }
@@ -97,7 +99,11 @@ export function classifyResponse(status: number, contentType: string, bodyText: 
   if (status === 403) return new ClsApiError('FORBIDDEN', '403: the account/client has no access to Positions (role/scope or device list).', 403, false);
   if (status === 429) return new ClsApiError('RATE_LIMITED', '429: rate limited.', 429, true);
   if (status >= 500) return new ClsApiError('SERVER', `${status}: CLS server error. ${snippet}`, status, true);
-  if (status >= 400) return new ClsApiError('BAD_REQUEST', `${status}: request rejected (parameters/date format/device list). ${snippet}`, status, false);
+  if (status >= 400) {
+    const pv = parseConstraintViolation(bodyText);
+    const detail = pv ? describeViolations(pv).join(' | ') : maskSecrets(bodyText.replace(/\s+/g, ' ').slice(0, 1500));   // FULL text, never cut at 100 chars
+    return new ClsApiError('BAD_REQUEST', `${status}: request rejected — ${detail}`, status, false);
+  }
   if (isHtml) return new ClsApiError('NOT_JSON', `200 but the body is HTML, not JSON (gateway/login/proxy page). ${snippet}`, status, false);
   return null;
 }

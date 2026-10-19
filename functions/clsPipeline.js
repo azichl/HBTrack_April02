@@ -1095,12 +1095,13 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
 
       while (bulkHasMore && bulkPage <= 20) {
         const bulkBody = {
-          limit: 100,
+          pagination: { first: 100 },
           retrieveMetadata: true,
           retrieveRawData: true,
           retrieveDoppler: true,
           retrieveGpsLoc: true,
           retrieveSensors: true,
+          retrieveAdditionnalProperties: true,
           fromDatetime: normFrom,
           toDatetime: normTo,
           datetimeFormat: "DATETIME",
@@ -1108,7 +1109,7 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
         if (deviceIds && deviceIds.length > 0) {
           bulkBody.deviceIds = deviceIds;
         }
-        if (bulkCursor) bulkBody.pagination = { after: bulkCursor };
+        if (bulkCursor) bulkBody.pagination.after = bulkCursor;
 
         const bRes = await fetch(`${baseUrl}/retrieve-bulk`, {
           method: "POST",
@@ -1121,7 +1122,8 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
         });
 
         if (!bRes.ok) {
-          log(`[IngestPositions Fallback] Bulk fetch page ${bulkPage} returned ${bRes.status}`);
+          const bErr = await bRes.text();
+          log(`[IngestPositions Fallback] Bulk fetch page ${bulkPage} returned ${bRes.status}: ${bErr.substring(0, 200)}`);
           break;
         }
 
@@ -1142,7 +1144,11 @@ async function ingestPositionsCore(db, options = {}, onProgress) {
 
       if (allMessages.length > 0) {
         const conv = messagesToRawFixes(allMessages);
-        log(`[IngestPositions Fallback] Converted ${allMessages.length} messages into ${conv.rows.length} fixes (${conv.skippedNoDate} skipped without position date).`);
+        log(`[IngestPositions Fallback] Converted ${allMessages.length} messages into ${conv.rows.length} fixes (${conv.skippedNoDate} skipped without position date, ${conv.withoutPosition} without coordinates).`);
+        if (conv.rows.length === 0) {
+          const sampleKeys = allMessages[0] ? Object.keys(allMessages[0]).join(', ') : 'none';
+          log(`[IngestPositions Fallback] WARNING: 0 fixes extracted from ${allMessages.length} messages. Message keys: ${sampleKeys}`);
+        }
         rawRows = conv.rows;
       }
     } catch (fbErr) {

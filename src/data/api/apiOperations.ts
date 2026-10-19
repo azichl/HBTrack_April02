@@ -22,52 +22,48 @@ export interface ApiOperation {
 
 export const API_OPERATIONS: ApiOperation[] = [
   {
-    id: 'positions', order: 1, role: 'primary', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
+    id: 'positionsFallback', order: 1, role: 'primary', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
     writesTo: ['argos_positions (one doc per fix)', 'transmitters.live.*'],
-    badge: { en: 'Recommended', ar: 'موصى به' },
-    label: { en: 'Positions (GPS + Doppler)', ar: 'المواقع (GPS + دوبلر)' },
+    badge: { en: 'Active Route', ar: 'المسار النشط' },
+    label: { en: 'Positions (from messages) — Active', ar: 'المواقع (من الرسائل) — نشط' },
     summary: {
-      en: 'Positions exactly as organised by CLS: one row per position, with its own Location date, class and error radius. Feeds Argos Data, the Live Map history path and reports.',
-      ar: 'المواقع كما ينظمها CLS: صف واحد لكل موقع مع تاريخ الموقع الخاص به ودرجة الدقة ونصف قطر الخطأ. هي مصدر جدول Argos Data ومسار التاريخ في الخريطة الحية والتقارير.',
-    },
-    details: {
-      en: [
-        'One row = one position (GPS or Doppler). No repeated rows.',
-        'Date range and ordering use LOCATION date (when the position was acquired), never message date.',
-        'Columns: Device ID, Unit type, Location class, Location type, Error radius (m), Location date, Longitude, Latitude.',
-        'GPS: class empty, error 0. Doppler: class 0/1/2/3/A/B/Z and error radius.',
-        'Safe to re-run: the same position is never stored twice. Overlapping date ranges are fine.',
-      ],
-      ar: [
-        'الصف = موقع واحد (GPS أو دوبلر) دون تكرار.',
-        'النطاق الزمني والترتيب يعتمدان على تاريخ الموقع (وقت الحصول على الموقع) وليس تاريخ الرسالة.',
-        'الأعمدة: رقم الجهاز، نوع الوحدة، درجة الموقع، نوع الموقع، نصف قطر الخطأ، تاريخ الموقع، خط الطول، خط العرض.',
-        'GPS: بدون درجة والخطأ 0. دوبلر: درجة 0/1/2/3/A/B/Z مع نصف قطر الخطأ.',
-        'آمن عند إعادة التشغيل: لا يُخزَّن الموقع نفسه مرتين، ويمكن تداخل النطاقات الزمنية.',
-      ],
-    },
-  },
-  {
-    id: 'positionsFallback', order: 2, role: 'fallback', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
-    writesTo: ['argos_positions (one doc per fix)', 'transmitters.live.*'],
-    badge: { en: 'Safe Fallback', ar: 'احتياطي آمن' },
-    label: { en: 'Positions (from messages) [Fallback]', ar: 'المواقع (من الرسائل) [احتياطي]' },
-    summary: {
-      en: 'Reconstructs clean GPS and Doppler positions directly from satellite messages using genuine fix dates, rejecting Doppler error > 2000m. Use until the CLS Positions REST route is verified.',
-      ar: 'يعيد بناء مواقع GPS ودوبلر النظيفة مباشرة من رسائل الأقمار الصناعية باستخدام التواريخ الحقيقية، مع استبعاد دوبلر > 2000م. استخدمه حتى يتم التحقق من مسار المواقع لدى CLS.',
+      en: 'Reconstructs clean GPS and Doppler positions directly from satellite messages using genuine fix dates, rejecting Doppler error > 2000m. Active production route.',
+      ar: 'يعيد بناء مواقع GPS ودوبلر النظيفة مباشرة من رسائل الأقمار الصناعية باستخدام التواريخ الحقيقية، مع استبعاد دوبلر > 2000م. المسار الإنتاجي النشط.',
     },
     details: {
       en: [
         'Extracts GPS Date of position and Doppler Date (never uses message arrival date).',
         'Collapses duplicate transmissions into single canonical fixes.',
         'Automatically rejects Doppler fixes with error radius > 2000m.',
-        'Ensures live tracks and Argos Data remain 100% accurate without depending on the CLS /positions route.',
+        'Ensures live tracks and Argos Data remain 100% accurate.',
       ],
       ar: [
         'يستخرج تاريخ موقع GPS وتاريخ دوبلر (لا يستخدم تاريخ وصول الرسالة أبداً).',
         'يدمج الرسائل المتكررة في موقع قياسي واحد.',
         'يستبعد تلقائياً مواقع دوبلر التي يتجاوز نصف قطر خطئها 2000 متر.',
-        'يضمن دقة المسارات وجدول Argos Data بنسبة 100% دون الاعتماد على مسار /positions.',
+        'يضمن دقة المسارات وجدول Argos Data بنسبة 100%.',
+      ],
+    },
+  },
+  {
+    id: 'positions', order: 2, role: 'fallback', returns: 'positions', windowBy: 'locationDate', usesCheckpoint: false,
+    writesTo: ['argos_positions (one doc per fix)', 'transmitters.live.*'],
+    badge: { en: 'Needs HAR', ar: 'يتطلب HAR' },
+    label: { en: 'Positions (direct REST) [Unconfigured]', ar: 'المواقع (مباشر) [غير مهيأ]' },
+    summary: {
+      en: 'Direct Positions REST route on api.groupcls.com. Unconfigured until the real path is extracted from a browser HAR file using har_extract_cls_positions.py. Use "Positions (from messages)" instead.',
+      ar: 'مسار المواقع المباشر على api.groupcls.com. غير مهيأ حتى يتم استخراج المسار الحقيقي من ملف HAR. استخدم «المواقع (من الرسائل)» بدلاً منه.',
+    },
+    details: {
+      en: [
+        'Requires a capture.har saved from the CLS web app Positions tab.',
+        'CLS does not publish this route on api-telemetry publicly.',
+        'Safe fallback is active above to keep tracking 100% functional.',
+      ],
+      ar: [
+        'يتطلب ملف capture.har محفوظ من تبويب المواقع في موقع CLS.',
+        'لا تنشر CLS هذا المسار علناً على api-telemetry.',
+        'المسار البديل النشط أعلاه يضمن استمرار التتبع بدقة 100%.',
       ],
     },
   },

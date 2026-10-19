@@ -126,7 +126,7 @@ export const DataUpload = () => {
       end: new Date().toISOString().split('T')[0]
   });
 
-  const [selectedOperation, setSelectedOperation] = useState<ApiOperation>('retrieve-positions');
+  const [selectedOperation, setSelectedOperation] = useState<ApiOperation>('retrieve-positions-fallback');
   const [selectedLocationType, setSelectedLocationType] = useState<'ALL' | 'GPS' | 'DOPPLER'>('ALL');
   const [selectedDevicePtt, setSelectedDevicePtt] = useState<string>('ALL');
   const [overlapSafetyDays, setOverlapSafetyDays] = useState<number>(14);
@@ -155,9 +155,9 @@ export const DataUpload = () => {
   const [showLogModal, setShowLogModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
-  const operations: { value: ApiOperation; label: string; badge?: string; badgeAr?: string }[] = [
-    { value: "retrieve-positions", label: "Positions (GPS + Doppler)", badge: "Recommended", badgeAr: "موصى به" },
-    { value: "retrieve-positions-fallback", label: "Positions (from messages) [Fallback]", badge: "Safe Fallback", badgeAr: "احتياطي آمن" },
+  const operations: { value: ApiOperation; label: string; badge?: string; badgeAr?: string; disabled?: boolean }[] = [
+    { value: "retrieve-positions-fallback", label: "Positions (from messages) — Active", badge: "Active", badgeAr: "نشط" },
+    { value: "retrieve-positions", label: "Positions (direct REST) — [Needs HAR config]", badge: "Needs HAR", badgeAr: "يتطلب HAR", disabled: true },
     { value: "retrieve-bulk", label: "Bulk Message Retrieval" },
     { value: "retrieve-realtime", label: "Realtime Stream (Checkpoint)" },
     { value: "retrieve-device-list", label: "Device Inventory List" },
@@ -764,7 +764,17 @@ export const DataUpload = () => {
     if (isMobileScreen) {
       setShowLogModal(true);
     }
-    addLog('[Test Connection] Testing CLS Positions endpoint...');
+
+    if (selectedOperation === 'retrieve-positions') {
+      addLog('[Test Connection] Operation "Positions (direct REST)" requires endpoint configuration.');
+      addLog('⚠️ The direct REST /positions endpoint is not yet configured (returns 404 on current CLS server).');
+      addLog('👉 Please provide capture.har from the CLS web app Positions tab to configure the REST URL.');
+      addLog('💡 "Positions (from messages) — Active" is currently selected as the operational default route.');
+      setApiStatus('error');
+      return;
+    }
+
+    addLog('[Test Connection] Testing CLS Positions Fallback route (via retrieve-bulk messages)...');
 
     try {
         const token = await authenticate();
@@ -779,15 +789,21 @@ export const DataUpload = () => {
         const toNow = new Date(now).toISOString().replace(/\.\d{3}Z$/, 'Z');
         
         const testBody = {
-            limit: 5,
+            pagination: { first: 5 },
+            retrieveMetadata: true,
+            retrieveRawData: true,
+            retrieveDoppler: true,
+            retrieveGpsLoc: true,
+            retrieveSensors: true,
+            retrieveAdditionnalProperties: true,
             fromDatetime: from24h,
             toDatetime: toNow,
             datetimeFormat: "DATETIME",
             deviceIds: [testPtt]
         };
 
-        const targetUrl = getUrl(`${apiConfig.baseUrl}/positions`);
-        addLog(`POST ${apiConfig.baseUrl}/positions (1 device: ${testPtt}, limit: 5, window: ${from24h} .. ${toNow})`);
+        const targetUrl = getUrl(`${apiConfig.baseUrl}/retrieve-bulk`);
+        addLog(`POST ${apiConfig.baseUrl}/retrieve-bulk (1 device: ${testPtt}, limit: 5, window: ${from24h} .. ${toNow})`);
 
         const res = await fetch(targetUrl, {
             method: 'POST',
@@ -809,9 +825,6 @@ export const DataUpload = () => {
         const classified = classifyResponse(res.status, contentType, bodyText);
         if (classified) {
             addLog(`Classification: [${classified.kind}] ${classified.message}`);
-            if (classified.kind === 'ENDPOINT_NOT_FOUND') {
-                addLog('👉 Action: Provide capture.har from CLS web app to extract the real endpoint, or use "Positions (from messages) [Fallback]".');
-            }
             setApiStatus('error');
             return;
         }
@@ -825,14 +838,20 @@ export const DataUpload = () => {
             return;
         }
 
-        const items = parsed.contents || parsed.positions || (Array.isArray(parsed) ? parsed : []);
-        addLog(`Row Count: ${items.length}`);
+        const items = parsed.contents || parsed.messages || (Array.isArray(parsed) ? parsed : []);
+        addLog(`Message Count: ${items.length}`);
         if (items.length > 0) {
-            addLog(`First Row Keys: ${Object.keys(items[0]).join(', ')}`);
-            const mapRes = mapClsPositions(items);
-            addLog(`Mapper Result: missing=[${mapRes.missing.join(', ')}], unmappedKeys=[${mapRes.unmappedKeys.join(', ')}], valid=${mapRes.rows.length}`);
+            addLog(`Sample Message Keys: ${Object.keys(items[0]).join(', ')}`);
+            const conv = messagesToRawFixes(items);
+            const gpsCount = conv.rows.filter(r => r.locationType === 'GPS').length;
+            const dopplerCount = conv.rows.filter(r => r.locationType === 'DOPPLER').length;
+            addLog(`Extracted Fixes: ${conv.rows.length} total (${gpsCount} GPS, ${dopplerCount} Doppler).`);
+            addLog(`Skipped without position: ${conv.withoutPosition}, Skipped without date: ${conv.skippedNoDate}`);
+            if (conv.rows.length > 0) {
+                addLog(`First Fix Keys: ${Object.keys(conv.rows[0]).join(', ')}`);
+            }
         } else {
-            addLog(`No rows returned for device ${testPtt} in the last 24h.`);
+            addLog(`No messages returned for device ${testPtt} in the last 24h.`);
         }
         setApiStatus('success');
     } catch (err: any) {
@@ -936,9 +955,15 @@ export const DataUpload = () => {
                     if (e?.kind === 'ENDPOINT_NOT_FOUND' || e?.message?.includes('404')) {
                         addLog(`⚠️ [ENDPOINT_NOT_FOUND] The CLS Positions endpoint does not exist on this API route (404).`);
                         addLog(`Switching to Positions (from messages) [Fallback] to extract genuine GPS/Doppler fixes...`);
-                        const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)));
+                        const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)), deviceIds);
                         const conv = messagesToRawFixes(bulkRaw);
-                        addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date).`);
+                        if (conv.messages > 0 && conv.rows.length === 0) {
+                            const sampleKeys = bulkRaw[0] ? Object.keys(bulkRaw[0]).join(', ') : 'none';
+                            const errMsg = `Mapping Guard Error: ${conv.messages} messages retrieved, but 0 fixes extracted. Sample message keys: [${sampleKeys}]`;
+                            addLog(`ERROR: ${errMsg}`);
+                            throw new Error(errMsg);
+                        }
+                        addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date, ${conv.withoutPosition} without coordinates).`);
                         targetRows = conv.rows;
                     } else {
                         throw e;
@@ -946,9 +971,15 @@ export const DataUpload = () => {
                 }
             } else {
                 addLog(`Executing Positions (from messages) [Fallback] [Window: ${startStr} to ${endStr}]...`);
-                const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)));
+                const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)), deviceIds);
                 const conv = messagesToRawFixes(bulkRaw);
-                addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date).`);
+                if (conv.messages > 0 && conv.rows.length === 0) {
+                    const sampleKeys = bulkRaw[0] ? Object.keys(bulkRaw[0]).join(', ') : 'none';
+                    const errMsg = `Mapping Guard Error: ${conv.messages} messages retrieved, but 0 fixes extracted. Sample message keys: [${sampleKeys}]`;
+                    addLog(`ERROR: ${errMsg}`);
+                    throw new Error(errMsg);
+                }
+                addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date, ${conv.withoutPosition} without coordinates).`);
                 targetRows = conv.rows;
             }
 
