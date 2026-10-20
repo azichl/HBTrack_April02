@@ -1,36 +1,76 @@
 /**
  * CommonJS fallback when the CLS "Positions" endpoint is not reachable:
  * rebuild positions from CLS *messages* WITHOUT using the message date.
+ * Supports both export table headers and CLS API JSON names.
  */
-const pick = (r, names) => {
-  const norm = (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const map = new Map(Object.keys(r).map((k) => [norm(k), k]));
-  for (const n of names) {
-    const k = map.get(norm(n));
-    if (k !== undefined && r[k] !== null && r[k] !== undefined && r[k] !== '') return r[k];
-  }
-  return undefined;
+
+const norm = (k) => k.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const KEYS = {
+  ptt: ['deviceid', 'pttid', 'deviceref'],
+  msgDate: ['messagedate', 'msgdatetime'],
+  gpsDate: ['gpsdateofposition', 'gpsdate', 'gpslocdatetime'],
+  gpsLat: ['gpslatitude', 'gpslat', 'gpsloclat'],
+  gpsLon: ['gpslongitude', 'gpslon', 'gpsloclon'],
+  dopDate: ['dopplerdate', 'dopplerdatetime'],
+  dopLat: ['dopplerlatitude', 'dopplerlat', 'dopplerloclat'],
+  dopLon: ['dopplerlongitude', 'dopplerlon', 'dopplerloclon'],
+  dopErr: ['dopplererrorradius', 'dopplererrorradiusm', 'dopplerlocerrorradius', 'errorradius'],
+  dopClass: ['dopplerclass', 'dopplerlocclass', 'locationclass'],
+  dopId: ['dopplerlocid'],
+  dopRev: ['dopplerrevision'],
+  unit: ['category', 'unittype'],
 };
 
-function messagesToRawFixes(messages) {
-  const out = { rows: [], messages: messages.length, skippedNoDate: 0, withoutPosition: 0 };
+function findKey(row, names, force) {
+  const map = new Map(Object.keys(row).map((k) => [norm(k), k]));
+  if (force) return map.get(norm(force));
+  for (const n of names) {
+    const k = map.get(n);
+    if (k !== undefined) return k;
+  }
+  return undefined;
+}
+
+const val = (r, k) => (k && r[k] !== null && r[k] !== undefined && r[k] !== '' ? r[k] : undefined);
+
+function messagesToRawFixes(messages, opt = {}) {
+  const out = { rows: [], messages: messages.length, skippedNoDate: 0, withoutPosition: 0, mapping: {} };
+  if (!messages || !messages.length) return out;
+  const sample = messages[0];
+  const k = {
+    ptt: findKey(sample, KEYS.ptt, opt.idField),
+    msg: findKey(sample, KEYS.msgDate),
+    gDate: findKey(sample, KEYS.gpsDate),
+    gLat: findKey(sample, KEYS.gpsLat),
+    gLon: findKey(sample, KEYS.gpsLon),
+    dDate: findKey(sample, KEYS.dopDate, opt.dopplerDateField),
+    dLat: findKey(sample, KEYS.dopLat),
+    dLon: findKey(sample, KEYS.dopLon),
+    dErr: findKey(sample, KEYS.dopErr),
+    dCls: findKey(sample, KEYS.dopClass),
+    dRev: findKey(sample, KEYS.dopRev),
+    unit: findKey(sample, KEYS.unit),
+  };
+  out.mapping = k;
+  if (!k.ptt) return out;
+
   for (const m of messages) {
-    const ptt = pick(m, ['Device ID', 'deviceId', 'pttId']);
-    const msgDate = pick(m, ['Message date', 'messageDate']);
+    const ptt = val(m, k.ptt);
     if (ptt === undefined) continue;
+    const msgDate = val(m, k.msg);
+    const unit = val(m, k.unit);
     let any = false;
 
-    const gDate = pick(m, ['GPS Date of position', 'gpsDateOfPosition', 'gpsDate']);
-    const gLat = pick(m, ['GPS Latitude', 'gpsLatitude', 'gpsLat']);
-    const gLon = pick(m, ['GPS Longitude', 'gpsLongitude', 'gpsLon']);
+    const gLat = val(m, k.gLat), gLon = val(m, k.gLon), gDate = val(m, k.gDate);
     if (gLat !== undefined && gLon !== undefined) {
       if (gDate === undefined) {
-        out.skippedNoDate++; // never fall back to the message date
+        out.skippedNoDate++;
       } else {
         any = true;
         out.rows.push({
           pttId: String(ptt),
-          unitType: null,
+          unitType: unit != null ? String(unit) : null,
           locationType: 'GPS',
           locationClass: null,
           errorRadiusM: 0,
@@ -42,9 +82,7 @@ function messagesToRawFixes(messages) {
       }
     }
 
-    const dDate = pick(m, ['Doppler Date', 'dopplerDate']);
-    const dLat = pick(m, ['Doppler Latitude', 'dopplerLatitude', 'dopplerLat']);
-    const dLon = pick(m, ['Doppler Longitude', 'dopplerLongitude', 'dopplerLon']);
+    const dLat = val(m, k.dLat), dLon = val(m, k.dLon), dDate = val(m, k.dDate);
     if (dLat !== undefined && dLon !== undefined) {
       if (dDate === undefined) {
         out.skippedNoDate++;
@@ -52,14 +90,15 @@ function messagesToRawFixes(messages) {
         any = true;
         out.rows.push({
           pttId: String(ptt),
-          unitType: null,
+          unitType: unit != null ? String(unit) : null,
           locationType: 'DOPPLER',
-          locationClass: pick(m, ['Doppler Class', 'dopplerClass', 'locationClass']) || null,
-          errorRadiusM: Number(pick(m, ['Doppler Error radius', 'dopplerErrorRadius', 'errorRadius']) || 0),
+          locationClass: val(m, k.dCls) != null ? String(val(m, k.dCls)) : null,
+          errorRadiusM: Number(val(m, k.dErr) || 0),
           locationDate: dDate,
           lat: Number(dLat),
           lon: Number(dLon),
           messageDate: msgDate || null,
+          revision: val(m, k.dRev) != null ? Number(val(m, k.dRev)) : null,
         });
       }
     }
@@ -68,4 +107,4 @@ function messagesToRawFixes(messages) {
   return out;
 }
 
-module.exports = { messagesToRawFixes };
+module.exports = { messagesToRawFixes, KEYS };

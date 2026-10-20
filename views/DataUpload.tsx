@@ -6,12 +6,12 @@ import { ArgosMessage, ArgosDevice, ArgosDoppler, ArgosCount, Transmitter, Bird 
 import { exportToCSV } from '../utils/csvExport';
 import readXlsxFile from 'read-excel-file';
 import { formatDateTime, isValidCoordinate, safeParseTimestamp, normalizePttId, classifyLocationType, makeDeterministicFixDocId } from '../utils/formatting';
-import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
+import { buildFixes, partitionByQuality, isSuspectGpsDate, type RawFix, type Fix } from '../utils/positionsEngine';
 import { mapArgosApiData, mapArgosDevices, extractLocationDate, fetchArgosPositions, fetchArgosBulkData } from '../services/argosService';
 import { API_OPERATIONS, opById, ApiOperation as RegistryApiOperation, OpId } from '../src/data/api/apiOperations';
 import { mapClsPositions } from '../src/data/positions/clsPositionsMapper';
 import { maskSecrets, classifyResponse, ClsApiError } from '../utils/clsApiClient';
-import { messagesToRawFixes } from '../utils/messagesToRawFixes';
+import { messagesToRawFixes, inspectMessageSchema, calibrateDopplerDate } from '../utils/messagesToRawFixes';
 
 // --- HELPERS ---
 
@@ -841,8 +841,25 @@ export const DataUpload = () => {
         const items = parsed.contents || parsed.messages || (Array.isArray(parsed) ? parsed : []);
         addLog(`Message Count: ${items.length}`);
         if (items.length > 0) {
-            addLog(`Sample Message Keys: ${Object.keys(items[0]).join(', ')}`);
-            const conv = messagesToRawFixes(items);
+            const knownPtts = transmitters.map(t => t.platform_id).filter(Boolean);
+            const schemaReport = inspectMessageSchema(items, knownPtts);
+            addLog(`[Schema Inspection] Mapping: ${JSON.stringify(schemaReport.mapping)}`);
+            if (schemaReport.idChosen) {
+                addLog(`[Schema Inspection] Selected PTT key: "${schemaReport.idChosen}"`);
+            }
+            if (schemaReport.idCandidates.length > 0) {
+                const candSummary = schemaReport.idCandidates.map(c => `${c.key} (samples: [${c.sample.join(', ')}], matches: ${c.matchesKnownPtts ?? 'N/A'})`).join('; ');
+                addLog(`[Schema Inspection] PTT Candidates: ${candSummary}`);
+            }
+            if (schemaReport.unmappedKeys.length > 0) {
+                addLog(`[Schema Inspection] Unmapped keys: [${schemaReport.unmappedKeys.join(', ')}]`);
+            }
+            if (schemaReport.warnings.length > 0) {
+                schemaReport.warnings.forEach(w => addLog(`⚠️ [Schema Warning] ${w}`));
+            }
+            addLog(`[Sample Values] ${JSON.stringify(schemaReport.sampleValues)}`);
+
+            const conv = messagesToRawFixes(items, { idField: schemaReport.idChosen, dopplerDateField: 'dopplerDatetime' });
             const gpsCount = conv.rows.filter(r => r.locationType === 'GPS').length;
             const dopplerCount = conv.rows.filter(r => r.locationType === 'DOPPLER').length;
             addLog(`Extracted Fixes: ${conv.rows.length} total (${gpsCount} GPS, ${dopplerCount} Doppler).`);
@@ -956,11 +973,30 @@ export const DataUpload = () => {
                         addLog(`⚠️ [ENDPOINT_NOT_FOUND] The CLS Positions endpoint does not exist on this API route (404).`);
                         addLog(`Switching to Positions (from messages) [Fallback] to extract genuine GPS/Doppler fixes...`);
                         const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)), deviceIds);
-                        const conv = messagesToRawFixes(bulkRaw);
+                        
+                        const knownPtts = transmitters.map(t => t.platform_id).filter(Boolean);
+                        const schemaReport = inspectMessageSchema(bulkRaw, knownPtts);
+                        addLog(`[Schema Inspection] Mapping: ${JSON.stringify(schemaReport.mapping)}`);
+                        if (schemaReport.idChosen) {
+                            addLog(`[Schema Inspection] Selected PTT key: "${schemaReport.idChosen}"`);
+                        }
+                        if (schemaReport.idCandidates.length > 0) {
+                            const candSummary = schemaReport.idCandidates.map(c => `${c.key} (samples: [${c.sample.join(', ')}], matches: ${c.matchesKnownPtts ?? 'N/A'})`).join('; ');
+                            addLog(`[Schema Inspection] PTT Candidates: ${candSummary}`);
+                        }
+                        if (schemaReport.unmappedKeys.length > 0) {
+                            addLog(`[Schema Inspection] Unmapped keys: [${schemaReport.unmappedKeys.join(', ')}]`);
+                        }
+                        if (schemaReport.warnings.length > 0) {
+                            schemaReport.warnings.forEach(w => addLog(`⚠️ [Schema Warning] ${w}`));
+                        }
+                        if (bulkRaw.length > 0) {
+                            addLog(`[Sample Values] ${JSON.stringify(schemaReport.sampleValues)}`);
+                        }
+
+                        const conv = messagesToRawFixes(bulkRaw, { idField: schemaReport.idChosen, dopplerDateField: 'dopplerDatetime' });
                         if (conv.messages > 0 && conv.rows.length === 0) {
-                            const sampleKeys = bulkRaw[0] ? Object.keys(bulkRaw[0]).join(', ') : 'none';
-                            const errMsg = `Mapping Guard Error: ${conv.messages} messages retrieved, but 0 fixes extracted. Sample message keys: [${sampleKeys}]`;
-                            addLog(`ERROR: ${errMsg}`);
+                            const errMsg = `Mapping Guard Error: ${conv.messages} messages retrieved, but 0 fixes extracted. Mapping: ${JSON.stringify(conv.mapping)}, Unmapped keys: [${schemaReport.unmappedKeys.join(', ')}], Skipped (no date): ${conv.skippedNoDate}, Without position: ${conv.withoutPosition}`;
                             throw new Error(errMsg);
                         }
                         addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date, ${conv.withoutPosition} without coordinates).`);
@@ -972,11 +1008,30 @@ export const DataUpload = () => {
             } else {
                 addLog(`Executing Positions (from messages) [Fallback] [Window: ${startStr} to ${endStr}]...`);
                 const bulkRaw = await fetchArgosBulkData(token, apiConfig, startStr, endStr, (msg) => addLog(maskSensitive(msg)), deviceIds);
-                const conv = messagesToRawFixes(bulkRaw);
+                
+                const knownPtts = transmitters.map(t => t.platform_id).filter(Boolean);
+                const schemaReport = inspectMessageSchema(bulkRaw, knownPtts);
+                addLog(`[Schema Inspection] Mapping: ${JSON.stringify(schemaReport.mapping)}`);
+                if (schemaReport.idChosen) {
+                    addLog(`[Schema Inspection] Selected PTT key: "${schemaReport.idChosen}"`);
+                }
+                if (schemaReport.idCandidates.length > 0) {
+                    const candSummary = schemaReport.idCandidates.map(c => `${c.key} (samples: [${c.sample.join(', ')}], matches: ${c.matchesKnownPtts ?? 'N/A'})`).join('; ');
+                    addLog(`[Schema Inspection] PTT Candidates: ${candSummary}`);
+                }
+                if (schemaReport.unmappedKeys.length > 0) {
+                    addLog(`[Schema Inspection] Unmapped keys: [${schemaReport.unmappedKeys.join(', ')}]`);
+                }
+                if (schemaReport.warnings.length > 0) {
+                    schemaReport.warnings.forEach(w => addLog(`⚠️ [Schema Warning] ${w}`));
+                }
+                if (bulkRaw.length > 0) {
+                    addLog(`[Sample Values] ${JSON.stringify(schemaReport.sampleValues)}`);
+                }
+
+                const conv = messagesToRawFixes(bulkRaw, { idField: schemaReport.idChosen, dopplerDateField: 'dopplerDatetime' });
                 if (conv.messages > 0 && conv.rows.length === 0) {
-                    const sampleKeys = bulkRaw[0] ? Object.keys(bulkRaw[0]).join(', ') : 'none';
-                    const errMsg = `Mapping Guard Error: ${conv.messages} messages retrieved, but 0 fixes extracted. Sample message keys: [${sampleKeys}]`;
-                    addLog(`ERROR: ${errMsg}`);
+                    const errMsg = `Mapping Guard Error: ${conv.messages} messages retrieved, but 0 fixes extracted. Mapping: ${JSON.stringify(conv.mapping)}, Unmapped keys: [${schemaReport.unmappedKeys.join(', ')}], Skipped (no date): ${conv.skippedNoDate}, Without position: ${conv.withoutPosition}`;
                     throw new Error(errMsg);
                 }
                 addLog(`Fallback extracted ${conv.rows.length} fixes from ${conv.messages} messages (${conv.skippedNoDate} skipped without fix date, ${conv.withoutPosition} without coordinates).`);
@@ -995,10 +1050,24 @@ export const DataUpload = () => {
             const durationMs = Date.now() - startTime;
             addLog(`Built ${canonicalFixes.length} canonical position fixes in ${durationMs}ms.`);
 
+            // Doppler quality partition (> 2000m rejected)
+            const { accepted: qualityAccepted, rejected: qualityRejected } = partitionByQuality(canonicalFixes);
+            if (qualityRejected.length > 0) {
+                addLog(`Doppler Quality Filter: ${qualityRejected.length} fixes flagged as rejected (error radius > 2000m).`);
+            }
+
+            // Whole-minute GPS check / quarantine
+            const suspectGps = qualityAccepted.filter(isSuspectGpsDate);
+            if (suspectGps.length > 0) {
+                addLog(`⚠️ Quarantined ${suspectGps.length} GPS fixes with suspect non-whole-minute dates (arrival time stamps).`);
+            }
+            const activeFixes = qualityAccepted.filter(f => !isSuspectGpsDate(f));
+            addLog(`Active fixes for database commit: ${activeFixes.length} (${activeFixes.filter(f => f.type === 'GPS').length} GPS, ${activeFixes.filter(f => f.type === 'DOPPLER').length} Doppler).`);
+
             // Compute newest GPS and Doppler per PTT
             const newestGps: Record<string, string> = {};
             const newestDoppler: Record<string, string> = {};
-            canonicalFixes.forEach(f => {
+            activeFixes.forEach(f => {
                 const dateStr = new Date(f.t).toISOString();
                 if (f.type === 'GPS') {
                     if (!newestGps[f.pttId] || dateStr > newestGps[f.pttId]) newestGps[f.pttId] = dateStr;
@@ -1014,15 +1083,15 @@ export const DataUpload = () => {
 
             if (isPreviewDryRun) {
                 addLog(`[DRY RUN PREVIEW] Complete. No writes committed to database.`);
-                addLog(`Preview: ${canonicalFixes.length} fixes (${canonicalFixes.filter(f => f.type === 'GPS').length} GPS, ${canonicalFixes.filter(f => f.type === 'DOPPLER').length} Doppler).`);
-                setPreviewData(canonicalFixes);
-                setSyncStats({ transmitters: ptts.length, positions: canonicalFixes.length });
+                addLog(`Preview: ${activeFixes.length} fixes (${activeFixes.filter(f => f.type === 'GPS').length} GPS, ${activeFixes.filter(f => f.type === 'DOPPLER').length} Doppler).`);
+                setPreviewData(activeFixes);
+                setSyncStats({ transmitters: ptts.length, positions: activeFixes.length });
                 setApiStatus('success');
                 return;
             }
 
             // Write canonical fixes to Firestore
-            const mappedArgos: ArgosMessage[] = canonicalFixes.map(fix => {
+            const mappedArgos: ArgosMessage[] = activeFixes.map(fix => {
                 const locDateIso = new Date(fix.t).toISOString();
                 const validMsgDateMs = fix.firstMessageMs || fix.t;
                 const msgDateIso = new Date(validMsgDateMs).toISOString();
@@ -1052,7 +1121,7 @@ export const DataUpload = () => {
 
             const syncResult = await syncArgosToFirebase(mappedArgos, [], (msg) => addLog(maskSensitive(msg)));
             stats = syncResult;
-            addLog(`✅ Successfully synced ${canonicalFixes.length} positions to database. Duration: ${durationMs}ms.`);
+            addLog(`✅ Successfully synced ${activeFixes.length} positions to database. Duration: ${durationMs}ms.`);
         } else if (selectedOperation === 'retrieve-bulk') {
             rawData = await fetchBulkData(token);
         } else if (selectedOperation === 'retrieve-realtime') {

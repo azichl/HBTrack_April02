@@ -1,102 +1,66 @@
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { messagesToRawFixes } from './messagesToRawFixes';
+import { readFileSync } from 'node:fs';
+import { messagesToRawFixes, inspectMessageSchema, calibrateDopplerDate } from './messagesToRawFixes';
 import { buildFixes, partitionByQuality, type RawFix } from './positionsEngine';
 
-describe('messages -> fixes fallback (no message date used)', () => {
-  const fixturePath = new URL('./fixtures/cls_messages_43574.json', import.meta.url);
-  const posFixturePath = new URL('./fixtures/cls_positions_43574.json', import.meta.url);
+const msgs = JSON.parse(readFileSync(new URL('./fixtures/cls_messages_43574.json', import.meta.url), 'utf8'));
+const pos: RawFix[] = JSON.parse(readFileSync(new URL('./fixtures/cls_positions_43574.json', import.meta.url), 'utf8'));
 
-  if (existsSync(fixturePath) && existsSync(posFixturePath)) {
-    const msgs = JSON.parse(readFileSync(fixturePath, 'utf8'));
-    const pos: RawFix[] = JSON.parse(readFileSync(posFixturePath, 'utf8'));
-    const conv = messagesToRawFixes(msgs);
-    const { fixes } = buildFixes(conv.rows);
+/** The CLS API JSON shape seen in the log (values are the same real data, re-keyed). dopplerAcqDatetime is SYNTHETIC (+90 s) for the calibration test. */
+const apiMsgs = msgs.map((m: any, i: number) => ({
+  deviceMsgUid: `u${i}`, providerMsgId: `p${i}`, msgType: 'ARGOS', deviceUid: `uid-${m['Device ID']}`, deviceRef: String(m['Device ID']), modemRef: 'M1',
+  msgDatetime: m['Message date'], acqDatetime: m['Message date'], category: 'Houbara', rawData: 'abcd', sensors: [],
+  dopplerLocId: m['Doppler Date'] ? `d-${m['Doppler Date']}` : null, dopplerRevision: m['Doppler Date'] ? 1 : null,
+  dopplerDatetime: m['Doppler Date'], dopplerAcqDatetime: m['Doppler Date'] ? new Date(Date.parse(m['Doppler Date']) + 90_000).toISOString() : null,
+  dopplerLocLon: m['Doppler Longitude'], dopplerLocLat: m['Doppler Latitude'], dopplerLocErrorRadius: m['Doppler Error radius'], dopplerLocClass: m['Doppler Class'],
+  gpsLocDatetime: m['GPS Date of position'], gpsLocLon: m['GPS Longitude'], gpsLocLat: m['GPS Latitude'],
+}));
 
-    it('1,087 messages collapse to 75 unique GPS fixes and 253 unique Doppler fixes', () => {
-      expect(conv.messages).toBe(1087);
-      expect(fixes.filter((f) => f.type === 'GPS')).toHaveLength(75);
-      expect(fixes.filter((f) => f.type === 'DOPPLER')).toHaveLength(253);
-    });
-
-    it('every GPS date is a whole minute (genuine fix time, not arrival time)', () => {
-      expect(fixes.filter((f) => f.type === 'GPS').every((f) => f.t % 60_000 === 0)).toBe(true);
-    });
-
-    it('agrees with the CLS Positions export on the overlapping window', () => {
-      const cutoff = Math.max(...msgs.filter((m: any) => m['GPS Date of position']).map((m: any) => Date.parse(m['GPS Date of position'])));
-      const p = buildFixes(pos).fixes.filter((f) => f.t <= cutoff);
-      const byId = new Map(fixes.map((f) => [f.id, f]));
-      const gps = p.filter((f) => f.type === 'GPS');
-      expect(gps.length).toBeGreaterThan(5);
-      expect(gps.every((g) => byId.has(g.id))).toBe(true);
-      expect(gps.every((g) => Math.abs(byId.get(g.id)!.lat - g.lat) < 1e-4 && Math.abs(byId.get(g.id)!.lon - g.lon) < 1e-4)).toBe(true);
-      const dop = p.filter((f) => f.type === 'DOPPLER');
-      const hit = dop.filter((d) => byId.has(d.id)).length;
-      expect(hit / dop.length).toBeGreaterThan(0.95);
-    });
-
-    it('Doppler error radius > 2000 m are rejected by the engine rule (58 in this file)', () => {
-      expect(partitionByQuality(fixes).rejected).toHaveLength(58);
-    });
-  }
-
-  it('a message with a position but no position date is skipped, never stamped with the message date', () => {
-    const r = messagesToRawFixes([{ 'Device ID': 1, 'Message date': '2026-10-18T04:00:00Z', 'GPS Latitude': 1, 'GPS Longitude': 2 }]);
-    expect(r.rows).toHaveLength(0);
-    expect(r.skippedNoDate).toBe(1);
+describe('export-shaped messages (CLS Messages table)', () => {
+  const conv = messagesToRawFixes(msgs); const { fixes } = buildFixes(conv.rows);
+  it('1,087 messages -> 75 GPS + 253 Doppler; whole-minute GPS dates; 58 Doppler > 2000 m rejected', () => {
+    expect(fixes.filter((f) => f.type === 'GPS')).toHaveLength(75); expect(fixes.filter((f) => f.type === 'DOPPLER')).toHaveLength(253);
+    expect(fixes.filter((f) => f.type === 'GPS').every((f) => f.t % 60_000 === 0)).toBe(true);
+    expect(partitionByQuality(fixes).rejected).toHaveLength(58);
   });
+  it('agrees with the CLS Positions export on the overlapping window', () => {
+    const cutoff = Math.max(...msgs.filter((m: any) => m['GPS Date of position']).map((m: any) => Date.parse(m['GPS Date of position'])));
+    const p = buildFixes(pos).fixes.filter((f) => f.t <= cutoff); const byId = new Map(fixes.map((f) => [f.id, f]));
+    const gps = p.filter((f) => f.type === 'GPS');
+    expect(gps.length).toBeGreaterThan(5); expect(gps.every((g) => byId.has(g.id))).toBe(true);
+    expect(gps.every((g) => Math.abs(byId.get(g.id)!.lat - g.lat) < 1e-4 && Math.abs(byId.get(g.id)!.lon - g.lon) < 1e-4)).toBe(true);
+    const dop = p.filter((f) => f.type === 'DOPPLER'); expect(dop.filter((d) => byId.has(d.id)).length / dop.length).toBeGreaterThan(0.95);
+  });
+});
 
-  it('extracts GPS and Doppler fixes correctly with true dates from messages', () => {
-    const testMessages = [
-      {
-        'Device ID': '43574',
-        'Message date': '2026-10-18T10:00:00Z',
-        'GPS Date of position': '2026-10-18T08:00:00Z',
-        'GPS Latitude': 44.1234,
-        'GPS Longitude': 75.5678,
-        'Doppler Date': '2026-10-18T09:59:00Z',
-        'Doppler Latitude': 44.1250,
-        'Doppler Longitude': 75.5700,
-        'Doppler Class': '3',
-        'Doppler Error radius': 150
-      },
-      // Duplicate fix re-transmitted in a subsequent message
-      {
-        'Device ID': '43574',
-        'Message date': '2026-10-18T12:00:00Z',
-        'GPS Date of position': '2026-10-18T08:00:00Z',
-        'GPS Latitude': 44.1234,
-        'GPS Longitude': 75.5678
-      },
-      // Doppler fix with error radius > 2000m
-      {
-        'Device ID': '43574',
-        'Message date': '2026-10-18T14:00:00Z',
-        'Doppler Date': '2026-10-18T13:58:00Z',
-        'Doppler Latitude': 44.2000,
-        'Doppler Longitude': 75.6000,
-        'Doppler Class': 'B',
-        'Doppler Error radius': 2500
-      }
-    ];
-
-    const conv = messagesToRawFixes(testMessages);
-    expect(conv.messages).toBe(3);
-    expect(conv.rows).toHaveLength(4); // 2 GPS (duplicates) + 2 Doppler
-
-    const { fixes } = buildFixes(conv.rows);
-    // Duplicate GPS should collapse into 1 canonical fix
-    expect(fixes.filter((f) => f.type === 'GPS')).toHaveLength(1);
-    expect(fixes.filter((f) => f.type === 'DOPPLER')).toHaveLength(2);
-
-    const gpsFix = fixes.find((f) => f.type === 'GPS')!;
-    expect(new Date(gpsFix.t).toISOString()).toBe('2026-10-18T08:00:00.000Z');
-    expect(gpsFix.firstMessageMs).toBe(Date.parse('2026-10-18T10:00:00Z'));
-
-    const quality = partitionByQuality(fixes);
-    expect(quality.accepted.length).toBe(2); // 1 GPS + 1 Doppler (150m)
-    expect(quality.rejected.length).toBe(1); // 1 Doppler (2500m)
-    expect(quality.rejected[0].reason).toBe('doppler_error_gt_2000');
+describe('API-shaped messages (the log: "2637 messages retrieved, but 0 fixes extracted")', () => {
+  it('extracts the same fixes from the API keys (deviceRef, gpsLoc*, dopplerLoc*)', () => {
+    const conv = messagesToRawFixes(apiMsgs); const { fixes } = buildFixes(conv.rows);
+    expect(conv.rows.length).toBeGreaterThan(0);
+    expect(conv.mapping.ptt).toBe('deviceRef'); expect(conv.mapping.gDate).toBe('gpsLocDatetime'); expect(conv.mapping.dDate).toBe('dopplerDatetime');
+    expect(fixes.filter((f) => f.type === 'GPS')).toHaveLength(75); expect(fixes.filter((f) => f.type === 'DOPPLER')).toHaveLength(253);
+    expect(fixes[0].pttId).toBe('43574');
+  });
+  it('carries class, error radius and revision; never uses msgDatetime as a position date', () => {
+    const conv = messagesToRawFixes(apiMsgs); const d = conv.rows.find((r) => r.locationType === 'DOPPLER')!;
+    expect(d.locationClass).not.toBeNull(); expect(d.errorRadiusM).toBeGreaterThan(0); expect(d.revision).toBe(1);
+    const noDate = messagesToRawFixes([{ deviceRef: '1', msgDatetime: '2026-10-18T04:00:00Z', gpsLocLat: 1, gpsLocLon: 2 }]);
+    expect(noDate.rows).toHaveLength(0); expect(noDate.skippedNoDate).toBe(1);
+  });
+  it('inspectMessageSchema picks the PTT key that matches known PTTs, not deviceUid/modemRef', () => {
+    const r = inspectMessageSchema(apiMsgs, ['43574']);
+    expect(r.idChosen).toBe('deviceRef'); expect(r.warnings).toEqual([]);
+    expect(r.idCandidates.find((c) => c.key === 'deviceUid')!.matchesKnownPtts).toBe(0);
+    expect(inspectMessageSchema(apiMsgs, ['99999']).warnings.join()).toContain('No candidate PTT key');
+  });
+  it('calibrateDopplerDate chooses the date field that equals the CLS Location date (dopplerDatetime here)', () => {
+    const ref = buildFixes(pos).fixes;
+    const c = calibrateDopplerDate(apiMsgs, ref);
+    expect(c[0].field).toBe('dopplerDatetime'); expect(c[0].rate).toBeGreaterThan(0.9);
+    expect(c.find((x) => x.field === 'dopplerAcqDatetime')!.rate).toBeLessThan(0.2);
+  });
+  it('forced idField / dopplerDateField options are honoured', () => {
+    const conv = messagesToRawFixes(apiMsgs, { idField: 'modemRef', dopplerDateField: 'dopplerAcqDatetime' });
+    expect(conv.rows[0].pttId).toBe('M1'); expect(conv.mapping.dDate).toBe('dopplerAcqDatetime');
   });
 });
