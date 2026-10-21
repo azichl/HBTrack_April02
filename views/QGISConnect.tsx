@@ -14,7 +14,7 @@ import {
   fetchWMSCapabilities, exportTrackingDataAsGeoJSON,
   getLayerGeoJSON
 } from '../services/qgisLayerService';
-import { QGISMapProductionReport } from '../components/reports/QGISMapProductionReport';
+import { MapProductionReport } from '../components/reports/MapProductionReport';
 import { CustomMapProductionReport } from '../components/reports/CustomMapProductionReport';
 import { saveAs } from 'file-saver';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -417,9 +417,9 @@ export const QGISConnect = ({ onBack, initialTab }: { onBack?: () => void; initi
       {/* TAB CONTENT */}
       <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl p-5">
         
-        {/* TAB 0: MAP PRODUCTION & REPORTS */}
+        {/* TAB 0: MAP PRODUCTION & REPORTS (DUPLICATE OF CUSTOM MAP REPORT) */}
         {activeTab === 'map-production' && (
-          <QGISMapProductionReport />
+          <MapProductionReport />
         )}
 
         {/* TAB 0B: CUSTOM MAP PRODUCTION REPORT (IMPORTED FROM LIVE TRACKING) */}
