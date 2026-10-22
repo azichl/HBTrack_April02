@@ -32,11 +32,17 @@ import { SevenDayTempChart } from './SevenDayTempChart';
 import { CustomMapAnnotation, AnnotationShape, createCustomAnnotationDivIcon, renderCustomAnnotationSvg } from './CustomMapAnnotations';
 import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
 import { BotReportBridgeModal } from './BotReportBridgeModal';
+import { shareReportViaWhatsApp, downloadBlob } from '../../src/utils/whatsappShare';
 import {
   FlightTrackCustomizer,
   FlightTrackConfig,
   buildColoredTrackSegments
 } from './FlightTrackCustomizer';
+import { TrackPathButton } from '../../src/components/track/TrackPathButton';
+import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
+import { ReportToolbar } from '../../src/components/report/ReportToolbar';
+import { Editable } from '../../src/components/report/Editable';
+import { SectionId, MapLabel } from '../../src/types/report';
 import {
   calculateDistanceKm,
   calculateBearingDegrees,
@@ -727,6 +733,64 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setCustomAnnotations(prev => prev.map(a => a.id === id ? { ...a, lat, lon } : a));
   };
 
+  const toolbarSections = useMemo<Record<SectionId, boolean>>(() => ({
+    header: sectionVisibility.headerLogos,
+    regionInfo: sectionVisibility.subtitle,
+    birdTable: sectionVisibility.birdDataCard,
+    coordsTable: sectionVisibility.coordinatesCard,
+    kpis: sectionVisibility.kpiCards,
+    tempCurve: sectionVisibility.tempChart,
+    legend: sectionVisibility.legendBar,
+    scaleBar: sectionVisibility.scaleBar,
+    northArrow: sectionVisibility.northArrow,
+    footer: sectionVisibility.footer,
+  }), [sectionVisibility]);
+
+  const handleToolbarSectionsChange = useCallback((next: Record<SectionId, boolean>) => {
+    setSectionVisibility({
+      headerLogos: next.header,
+      subtitle: next.regionInfo,
+      birdDataCard: next.birdTable,
+      coordinatesCard: next.coordsTable,
+      kpiCards: next.kpis,
+      tempChart: next.tempCurve,
+      legendBar: next.legend,
+      scaleBar: next.scaleBar,
+      northArrow: next.northArrow,
+      footer: next.footer,
+    });
+  }, []);
+
+  const reportLabels: MapLabel[] = useMemo(() => {
+    return customAnnotations.map(ann => ({
+      id: ann.id,
+      text: ann.text,
+      shape: (ann.shape === 'callout' || ann.shape === 'text-only' ? 'pill' : ann.shape) as any,
+      bg: ann.bgColor,
+      fg: ann.textColor,
+      border: ann.borderColor,
+      fontSize: ann.fontSize,
+      x: ann.xPercent,
+      y: ann.yPercent
+    }));
+  }, [customAnnotations]);
+
+  const handleLabelsChange = useCallback((newLabels: MapLabel[]) => {
+    setCustomAnnotations(newLabels.map(l => ({
+      id: l.id,
+      text: l.text,
+      shape: l.shape,
+      bgColor: l.bg,
+      textColor: l.fg,
+      borderColor: l.border,
+      fontSize: l.fontSize,
+      lat: 46.9965,
+      lon: 67.0222,
+      xPercent: l.x,
+      yPercent: l.y
+    })));
+  }, []);
+
   // Selected Transmitter (defaults to 244289 as requested)
   const initialPtt = useMemo(() => {
     if (exportedMapView?.transmitterId) return exportedMapView.transmitterId;
@@ -801,6 +865,37 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [showReleaseMarker, setShowReleaseMarker] = useState<boolean>(true);
   const [showDistanceToRelease, setShowDistanceToRelease] = useState<boolean>(true);
   const [showFlightTrack, setShowFlightTrack] = useState<boolean>(true);
+
+  // Advanced Track Settings & Live Preview
+  const [trackSettings, setTrackSettings] = useState<TrackPathSettings>(() => {
+    try {
+      const saved = localStorage.getItem('hbtrack_track_path_settings');
+      if (saved) return { ...DEFAULT_TRACK_SETTINGS, ...JSON.parse(saved) };
+    } catch (e) {}
+    return {
+      ...DEFAULT_TRACK_SETTINGS,
+      show: true,
+      periodsEnabled: false,
+      periods: [
+        {
+          id: 'p1',
+          from: '2026-01-01',
+          to: '2026-04-30',
+          color: '#2563eb',
+          label: '01/01/2026 → 30/04/2026'
+        },
+        {
+          id: 'p2',
+          from: '2026-05-01',
+          to: '2026-10-22',
+          color: '#f97316',
+          label: '01/05/2026 → 22/10/2026'
+        }
+      ]
+    };
+  });
+  const [trackPreviewSettings, setTrackPreviewSettings] = useState<TrackPathSettings>(trackSettings);
+
   const [flightTrackConfig, setFlightTrackConfig] = useState<FlightTrackConfig>({
     enabled: true,
     locationType: 'ALL',
@@ -988,12 +1083,31 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [rawHistoryRecords, setRawHistoryRecords] = useState<any[]>([]);
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
 
+  const effectiveFlightTrackConfig: FlightTrackConfig = useMemo(() => ({
+    enabled: trackPreviewSettings.show,
+    locationType: trackPreviewSettings.type,
+    filterStartDate: trackPreviewSettings.from || '',
+    filterEndDate: trackPreviewSettings.to || '',
+    useColorPeriods: trackPreviewSettings.periodsEnabled,
+    defaultColor: trackPreviewSettings.color,
+    lineWeight: trackPreviewSettings.width,
+    lineDashed: false,
+    showTrackPoints: trackPreviewSettings.showPoints,
+    periods: trackPreviewSettings.periods.map(p => ({
+      id: p.id,
+      label: p.label || `${p.from} → ${p.to}`,
+      startDate: p.from,
+      endDate: p.to,
+      color: p.color
+    }))
+  }), [trackPreviewSettings]);
+
   const { segments: coloredTrackSegments, filteredPoints: activeTrackPoints } = useMemo(
     () => buildColoredTrackSegments(
       rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints,
-      { ...flightTrackConfig, enabled: showFlightTrack }
+      effectiveFlightTrackConfig
     ),
-    [rawHistoryRecords, allHistoryPoints, flightTrackConfig, showFlightTrack]
+    [rawHistoryRecords, allHistoryPoints, effectiveFlightTrackConfig]
   );
 
   const T = {
@@ -1944,6 +2058,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const caption = `🦅 تقرير متابعة الحبارى (Houbara Report)\nجهاز: ${selectedPttId}\nالحجل: ${customMetadata.birdRing || 'NA'}\nالتاريخ: ${telemetryData.lastGpsPos.dateStr}\nالموقع: ${metrics.lLat.toFixed(4)}, ${metrics.lLon.toFixed(4)}`;
     return { blob, fileName, caption };
   }, [selectedPttId, customMetadata.birdRing, telemetryData.lastGpsPos.dateStr, metrics.lLat, metrics.lLon]);
+
+  const handleShareWhatsApp = useCallback(async () => {
+    try {
+      const { blob, fileName, caption } = await handleGeneratePdfBlob();
+      const res = await shareReportViaWhatsApp({
+        blob,
+        fileName: `${fileName}.pdf`,
+        birdId: selectedPttId || 'BirdReport',
+        title: caption || `Houbara Tracking Report – ${selectedPttId}`
+      });
+      if (res.method === 'blocked') {
+        window.open(res.waUrl, '_blank');
+      }
+    } catch (err: any) {
+      console.error('WhatsApp share error:', err);
+      try {
+        const { blob, fileName } = await handleGeneratePdfBlob();
+        downloadBlob(blob, `${fileName}.pdf`);
+      } catch {}
+    }
+  }, [handleGeneratePdfBlob, selectedPttId]);
 
   // ─── HISTORY ROW EDITING HANDLERS ──────────────────────────────────────────
   const handleUpdateHistoryRow = (id: string, field: keyof HistoryTableRow, value: any) => {
@@ -3049,35 +3184,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 إضافة مسميات جوجل (المدن والطرق) على الخريطة
               </label>
             </div>
-            <div className="mt-2.5 flex items-center gap-2 px-1">
-              <input
-                type="checkbox"
-                id="showFlightTrack"
-                checked={showFlightTrack}
-                onChange={(e) => {
-                  setShowFlightTrack(e.target.checked);
-                  setFlightTrackConfig(prev => ({ ...prev, enabled: e.target.checked }));
-                }}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
-              />
-              <label htmlFor="showFlightTrack" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                إظهار مسار التتبع (Flight Track)
-              </label>
-            </div>
-
-            {/* Multi-Period & Location-Type Flight Track Customizer */}
-            {showFlightTrack && (
-              <FlightTrackCustomizer
-                config={{ ...flightTrackConfig, enabled: showFlightTrack }}
+            {/* Compact Track Path Button & Popover */}
+            <div className="mt-2.5">
+              <TrackPathButton
+                settings={trackSettings}
                 onChange={(next) => {
-                  setFlightTrackConfig(next);
-                  setShowFlightTrack(next.enabled);
+                  setTrackSettings(next);
+                  setTrackPreviewSettings(next);
+                  setShowFlightTrack(next.show);
+                  setFlightTrackConfig(prev => ({ ...prev, enabled: next.show }));
                 }}
-                totalRawPoints={rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length}
-                activePointCount={activeTrackPoints.length}
-                allHistoryPoints={rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints}
+                onPreview={(preview) => {
+                  setTrackPreviewSettings(preview);
+                  setShowFlightTrack(preview.show);
+                }}
+                displayedPointsCount={activeTrackPoints.length}
+                totalPointsCount={rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length}
+                language={reportLanguage}
               />
-            )}
+            </div>
             <div className="mt-2.5 flex items-center gap-2 px-1">
               <input
                 type="checkbox"
@@ -3351,449 +3476,87 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
             </div>
 
-            {/* Section B: Editable Texts, Footer, and Metadata */}
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                تخصيص نصوص وعناوين التقرير وتذييل الصفحة:
-              </h4>
-
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">عنوان التقرير:</label>
-                  <input
-                    type="text"
-                    value={customMetadata.reportTitle}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">المنطقة الجغرافية:</label>
-                  <input
-                    type="text"
-                    value={customMetadata.regionName}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, regionName: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">رقم الحجل (Ring ID):</label>
-                  <input
-                    type="text"
-                    value={customMetadata.birdRing}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, birdRing: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none font-mono font-bold"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">النوعية (Species):</label>
-                  <input
-                    type="text"
-                    value={customMetadata.species}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, species: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">تاريخ الإصدار:</label>
-                  <input
-                    type="date"
-                    value={customMetadata.issueDate}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, issueDate: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] text-gray-500 mb-1">نص تذييل الصفحة الأيمن:</label>
-                  <input
-                    type="text"
-                    value={customMetadata.footerRight}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, footerRight: e.target.value })}
-                    className="w-full px-2.5 py-1.5 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg outline-none font-bold"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Section C: Upload & Display QGIS Map (Logos & Legend managed directly on the report) */}
-            <div className="bg-sky-50/70 dark:bg-sky-950/30 p-3.5 rounded-xl border border-sky-200 dark:border-sky-800/60">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-gradient-to-br from-sky-600 to-indigo-600 text-white rounded-lg shadow-2xs">
-                    <Upload size={16} />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-gray-900 dark:text-white block">
-                      خريطة معدّلة في QGIS (PNG / JPG)
-                    </span>
-                    <span className="text-[11px] text-gray-500 dark:text-gray-400">
-                      رفع وتثبيت صورة خريطة خارجية عالية الدقة تم تصميمها ببرنامج QGIS
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Upload button */}
-                  <button
-                    type="button"
-                    onClick={() => mapImageInputRef.current?.click()}
-                    className="py-1.5 px-3 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
-                  >
-                    <Upload size={13} />
-                    <span>رفع صورة خريطة QGIS جديدة</span>
-                  </button>
-
-                  {/* Display fit options */}
-                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-gray-200 dark:border-slate-700 text-[11px]">
-                    <span className="px-1.5 text-gray-400 text-[10px] font-semibold">ملاءمة العرض:</span>
-                    <button
-                      type="button"
-                      onClick={() => setMapImageFit('contain')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'contain' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
-                      title="احتواء كامل للخريطة دون اقتصاص الحواف"
-                    >
-                      احتواء (Contain)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMapImageFit('cover')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'cover' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
-                      title="تغطية كامل نافذة الخريطة"
-                    >
-                      تغطية (Cover)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMapImageFit('fill')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${mapImageFit === 'fill' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}
-                      title="ملء الإطار بالكامل"
-                    >
-                      ملء (Fill)
-                    </button>
-                  </div>
-
-                  {mapSnapshotUrl && mapDisplayMode === 'snapshot' && (
-                    <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-1 rounded-lg text-xs">
-                      <span className="text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-1 text-[11px]">
-                        <CheckCircle2 size={12} />
-                        معروضة حالياً بالتقرير
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMapDisplayMode('interactive');
-                          setFitKey(k => k + 1);
-                        }}
-                        className="text-brand-600 hover:text-brand-700 font-bold text-[11px] underline"
-                      >
-                        العودة للتفاعلية
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Studio Section: Report Section Visibility */}
-            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2">
-              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                <Eye size={14} className="text-brand-500" />
-                <span>إظهار وإخفاء أقسام التقرير (100% Studio Section Visibility):</span>
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-300">
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.headerLogos}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, headerLogos: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>رأس الصفحة والشعارات</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.subtitle}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, subtitle: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>معلومات المنطقة والجهاز</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.birdDataCard}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, birdDataCard: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>جدول بيانات الطائر</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.coordinatesCard}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, coordinatesCard: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>جدول الإحداثيات</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.kpiCards}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, kpiCards: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>بطاقات المؤشرات (KPIs)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.tempChart}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, tempChart: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>منحنى درجات الحرارة (7 أيام)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.legendBar}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, legendBar: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>مفتاح الخريطة (Legend)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.scaleBar}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, scaleBar: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>مقياس الرسم (Scale Bar)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.northArrow}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, northArrow: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>سهم الشمال (North Arrow)</span>
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={sectionVisibility.footer}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, footer: e.target.checked }))}
-                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>تذييل الصفحة (Footer)</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Studio Section: Theme Colors */}
-            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2">
-              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
-                <Palette size={14} className="text-brand-500" />
-                <span>ألوان عناصر التقرير والخريطة (Theme Colors):</span>
-              </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 text-xs">
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.primaryMaroon}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, primaryMaroon: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">العنابي الأساسي</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.primaryMaroon}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.latestGreen}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, latestGreen: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">الأخضر الأساسي</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.latestGreen}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.latestPinColor}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, latestPinColor: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">دبوس آخر موقع</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.latestPinColor}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.releasePinColor}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, releasePinColor: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">دبوس الإطلاق</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.releasePinColor}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.campPinColor}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, campPinColor: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">دبوس المخيم</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.campPinColor}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.trackLineColor}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, trackLineColor: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">خط المسار</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.trackLineColor}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.releaseDistLineColor}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, releaseDistLineColor: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">مسافة الإطلاق</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.releaseDistLineColor}</span>
-                </div>
-                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
-                  <input
-                    type="color"
-                    value={themeColors.campDistLineColor}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, campDistLineColor: e.target.value }))}
-                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
-                  />
-                  <span className="block text-[10.5px] font-bold">مسافة المخيم</span>
-                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.campDistLineColor}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Studio Section: Draggable Custom Map Annotations */}
-            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-3">
-              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <MapPin size={14} className="text-brand-500" />
-                  <span>تسميات وعلامات الخريطة المخصصة (Custom Map Labels & Shapes):</span>
-                </span>
-                <span className="text-[10px] text-gray-500">قابلة للسحب والتحريك على الخريطة</span>
-              </h4>
-
-              {/* Add Annotation Form */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 items-end">
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">نص التسمية:</label>
-                  <input
-                    type="text"
-                    value={newAnnText}
-                    onChange={(e) => setNewAnnText(e.target.value)}
-                    placeholder="اكتب التسمية هنا..."
-                    className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">الشكل:</label>
-                  <select
-                    value={newAnnShape}
-                    onChange={(e) => setNewAnnShape(e.target.value as AnnotationShape)}
-                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white dark:bg-slate-800"
-                  >
-                    <option value="pill">كبسولة (Pill)</option>
-                    <option value="rect">مستطيل (Rect)</option>
-                    <option value="circle">دائرة (Circle)</option>
-                    <option value="callout">مربع حواري (Callout)</option>
-                    <option value="flag">علم (Flag)</option>
-                    <option value="text-only">نص فقط (Text)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">الخلفية:</label>
-                  <input
-                    type="color"
-                    value={newAnnBg}
-                    onChange={(e) => setNewAnnBg(e.target.value)}
-                    className="w-full h-8 rounded border border-gray-300 cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">لون النص:</label>
-                  <input
-                    type="color"
-                    value={newAnnTextCol}
-                    onChange={(e) => setNewAnnTextCol(e.target.value)}
-                    className="w-full h-8 rounded border border-gray-300 cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">لون الإطار:</label>
-                  <input
-                    type="color"
-                    value={newAnnBorderCol}
-                    onChange={(e) => setNewAnnBorderCol(e.target.value)}
-                    className="w-full h-8 rounded border border-gray-300 cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <button
-                    type="button"
-                    onClick={handleAddAnnotation}
-                    className="w-full py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Plus size={14} />
-                    <span>إضافة</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* List of active custom annotations */}
-              {customAnnotations.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-200 dark:border-slate-700">
-                  {customAnnotations.map(ann => (
-                    <div
-                      key={ann.id}
-                      className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs bg-white dark:bg-slate-800"
-                      style={{ borderColor: ann.borderColor }}
-                    >
-                      <span className="font-bold" style={{ color: ann.textColor }}>{ann.text}</span>
-                      <span className="text-[10px] text-gray-400">({ann.shape})</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteAnnotation(ann.id)}
-                        className="text-red-500 hover:text-red-700"
-                        title="حذف التسمية"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
           </div>
         )}
 
       </div>
+
+      {/* ─── UNIFIED REPORT STUDIO TOOLBAR (COMPACT 1-ROW WITH ANCHORED POPOVERS) ─── */}
+      <ReportToolbar
+        mapImage={{ url: mapSnapshotUrl || '', fit: mapImageFit }}
+        isSnapshotMode={mapDisplayMode === 'snapshot'}
+        onChangeMapImage={(url) => {
+          if (url) {
+            setMapSnapshotUrl(url);
+            setMapDisplayMode('snapshot');
+          } else {
+            setMapSnapshotUrl(null);
+            setMapDisplayMode('interactive');
+          }
+        }}
+        onChangeMapFit={(fit) => setMapImageFit(fit)}
+        onToggleMapMode={(mode) => {
+          setMapDisplayMode(mode);
+          if (mode === 'interactive') setFitKey(k => k + 1);
+        }}
+        sections={toolbarSections}
+        onChangeSections={handleToolbarSectionsChange}
+        colors={{
+          primary: themeColors.primaryMaroon,
+          green: themeColors.latestGreen,
+          lastLocation: themeColors.latestPinColor,
+          releaseDots: themeColors.releasePinColor,
+          stopoverDots: themeColors.campPinColor,
+          trackLine: trackSettings.color || themeColors.trackLineColor,
+          releaseDistance: themeColors.releaseDistLineColor,
+          stopoverDistance: themeColors.campDistLineColor
+        }}
+        onChangeColors={(c) => {
+          setThemeColors({
+            primaryMaroon: c.primary,
+            latestGreen: c.green,
+            latestPinColor: c.lastLocation,
+            releasePinColor: c.releaseDots,
+            campPinColor: c.stopoverDots,
+            trackLineColor: c.trackLine,
+            releaseDistLineColor: c.releaseDistance,
+            campDistLineColor: c.stopoverDistance
+          });
+          setTrackSettings(prev => ({ ...prev, color: c.trackLine }));
+          setTrackPreviewSettings(prev => ({ ...prev, color: c.trackLine }));
+        }}
+        labels={reportLabels}
+        onChangeLabels={handleLabelsChange}
+        texts={{
+          reportTitle: customMetadata.reportTitle,
+          subtitle: customMetadata.birdRing,
+          orgNameAr: customMetadata.agencyNameAr,
+          orgNameEn: customMetadata.agencyNameEn,
+          footerText: customMetadata.footerRight,
+          notes: customMetadata.footerLeft,
+          preparedBy: (customMetadata as any).preparedBy || 'فريق التتبع الميداني',
+          issueDate: customMetadata.issueDate
+        }}
+        onChangeTexts={(t) => {
+          setCustomMetadata(prev => ({
+            ...prev,
+            reportTitle: t.reportTitle,
+            birdRing: t.subtitle,
+            agencyNameAr: t.orgNameAr,
+            agencyNameEn: t.orgNameEn,
+            footerRight: t.footerText,
+            footerLeft: t.notes,
+            issueDate: t.issueDate
+          }));
+        }}
+        saveStatus="saved"
+        onExportPdf={handleExportPdf}
+        onExportPng={handleExportPng}
+        onPrint={() => window.print()}
+        onShareWhatsApp={handleShareWhatsApp}
+        isExporting={isExportingPdf || isExportingPng}
+        language={reportLanguage}
+      />
 
       {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE) ─── */}
       <div className={
@@ -4258,51 +4021,35 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* 2px Solid Maroon Rule */}
           {sectionVisibility.headerLogos && <div className="trk-hr" />}
 
-          {/* Centered Title */}
-          {isTableEditing ? (
-            <input
-              type="text"
-              value={customMetadata.reportTitle}
-              onChange={(e) => setCustomMetadata({ ...customMetadata, reportTitle: e.target.value })}
-              className="w-full text-center text-[28px] font-bold text-gray-900 border border-amber-300 rounded px-2 py-0.5 bg-amber-50/40 mb-2"
+          {/* Centered Title (In-Place Editable) */}
+          <h1 className="trk-title">
+            <Editable
+              value={customMetadata.reportTitle || T.reportTitle}
+              onCommit={(v) => setCustomMetadata(prev => ({ ...prev, reportTitle: v }))}
+              placeholder={reportLanguage === 'ar' ? 'عنوان التقرير...' : 'Report Title...'}
             />
-          ) : (
-            <h1 className="trk-title">
-              {T.reportTitle}
-            </h1>
-          )}
+          </h1>
 
-          {/* Subtitle */}
+          {/* Subtitle (In-Place Editable) */}
           {sectionVisibility.subtitle && (
             <p className="trk-sub">
-              {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {isTableEditing ? (
-                <span className="inline-flex items-center gap-1 mx-1">
-                  <input
-                    type="text"
-                    value={customMetadata.regionName}
-                    onChange={(e) => setCustomMetadata({ ...customMetadata, regionName: e.target.value })}
-                    className="text-xs font-semibold px-2 py-0.5 border border-amber-300 rounded bg-amber-50/50 text-gray-800"
-                    placeholder={reportLanguage === 'ar' ? `${autoLocation.regionAr} – ${autoLocation.countryAr}` : `${autoLocation.regionEn} – ${autoLocation.countryEn}`}
-                  />
-                </span>
-              ) : (
-                <span>
-                  {customMetadata.regionName 
-                    ? (() => {
-                        const res = resolveRegionBilingual(customMetadata.regionName, customMetadata.regionName);
-                        const reg = reportLanguage === 'ar' ? res.regionAr : res.regionEn;
-                        const cty = reportLanguage === 'ar' ? autoLocation.countryAr : autoLocation.countryEn;
-                        return reportLanguage === 'ar'
-                          ? `${T.regionLabel} ${reg} – ${cty}`
-                          : `${reg} ${T.regionLabel} – ${cty}`;
-                      })()
-                    : (reportLanguage === 'ar' 
-                        ? `${T.regionLabel} ${autoLocation.regionAr} – ${autoLocation.countryAr}`
-                        : `${autoLocation.regionEn} ${T.regionLabel} – ${autoLocation.countryEn}`
-                      )
-                  }
-                </span>
-              )} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
+              {T.transmitterLabel} <b>{displayTransmitterLabel}</b> •{' '}
+              <Editable
+                value={
+                  customMetadata.regionName ||
+                  (reportLanguage === 'ar'
+                    ? `${T.regionLabel} ${autoLocation.regionAr} – ${autoLocation.countryAr}`
+                    : `${autoLocation.regionEn} ${T.regionLabel} – ${autoLocation.countryEn}`)
+                }
+                onCommit={(v) => setCustomMetadata(prev => ({ ...prev, regionName: v }))}
+              />{' '}
+              • {T.issueDateLabel}{' '}
+              <b dir="ltr">
+                <Editable
+                  value={customMetadata.issueDate}
+                  onCommit={(v) => setCustomMetadata(prev => ({ ...prev, issueDate: v }))}
+                />
+              </b>
             </p>
           )}
 

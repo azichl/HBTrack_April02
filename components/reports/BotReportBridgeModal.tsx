@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, CheckCircle2, AlertTriangle, Loader2, X, Play, Square, Share2 } from 'lucide-react';
 import { parseBirdCoordinateCommand } from '../../utils/coordinateParser';
+import { shareReportViaWhatsApp, downloadBlob } from '../../src/utils/whatsappShare';
 
 interface BotReportBridgeModalProps {
   isOpen: boolean;
@@ -250,16 +251,35 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
             </div>
             <button
               type="button"
+              disabled={isSending}
               onClick={async () => {
-                const { blob, fileName, caption } = await onGeneratePdfBlob();
-                const file = new File([blob], `${fileName}.pdf`, { type: 'application/pdf' });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                  await navigator.share({ title: fileName, text: caption, files: [file] });
-                } else {
-                  window.open(`https://wa.me/?text=${encodeURIComponent(caption)}`, '_blank');
+                try {
+                  addLog('⏳ Preparing PDF for WhatsApp share...');
+                  const { blob, fileName, caption } = await onGeneratePdfBlob();
+                  const identifier = commandInput.split(' ')[0] || 'BirdReport';
+                  const res = await shareReportViaWhatsApp({
+                    blob,
+                    fileName: `${fileName}.pdf`,
+                    birdId: identifier,
+                    title: caption || `Houbara Tracking Report – ${identifier}`
+                  });
+                  if (res.method === 'native') {
+                    addLog('✅ Opened native share sheet (WhatsApp)!');
+                  } else if (res.method === 'web') {
+                    addLog('✅ Uploaded PDF and redirected to WhatsApp Web!');
+                  } else if (res.method === 'blocked') {
+                    addLog('⚠️ Popup blocked. Opening direct WhatsApp link...');
+                    window.open(res.waUrl, '_blank');
+                  }
+                } catch (err: any) {
+                  addLog(`⚠️ Could not share via WhatsApp directly: ${err.message}. Downloading file instead.`);
+                  try {
+                    const { blob, fileName } = await onGeneratePdfBlob();
+                    downloadBlob(blob, `${fileName}.pdf`);
+                  } catch {}
                 }
               }}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0"
             >
               <Share2 size={14} />
               <span>مشاركة عبر واتساب</span>
