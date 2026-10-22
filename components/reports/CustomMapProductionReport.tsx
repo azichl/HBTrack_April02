@@ -40,6 +40,10 @@ import {
 } from './FlightTrackCustomizer';
 import { TrackPathButton } from '../../src/components/track/TrackPathButton';
 import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
+import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
+import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
+import { BirdIdCombobox } from '../../src/components/ui/BirdIdCombobox';
+import { ReportLegendItem, ReportLegendLayout } from '../../src/types/report';
 import { ReportToolbar } from '../../src/components/report/ReportToolbar';
 import { Editable } from '../../src/components/report/Editable';
 import { SectionId, MapLabel } from '../../src/types/report';
@@ -771,7 +775,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       border: ann.borderColor,
       fontSize: ann.fontSize,
       x: ann.xPercent,
-      y: ann.yPercent
+      y: ann.yPercent,
+      lat: ann.lat,
+      lon: ann.lon,
+      anchor: 'geo'
     }));
   }, [customAnnotations]);
 
@@ -784,8 +791,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       textColor: l.fg,
       borderColor: l.border,
       fontSize: l.fontSize,
-      lat: 46.9965,
-      lon: 67.0222,
+      lat: l.lat ?? 46.9965,
+      lon: l.lon ?? 67.0222,
       xPercent: l.x,
       yPercent: l.y
     })));
@@ -1372,6 +1379,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setIsLegendCustomizedByUser(true);
     setLegendItems(prev => prev.filter(item => item.id !== id));
   }, []);
+
+  const toolbarLegendItems: ReportLegendItem[] = useMemo(() => {
+    return legendItems.map(item => ({
+      id: item.id,
+      label: item.label,
+      color: item.color,
+      shape: (item.symbol === 'tent' ? 'pin' : item.symbol === 'square' ? 'square' : item.symbol === 'line' ? 'line' : item.symbol === 'dashed-line' ? 'dashed-line' : item.symbol === 'triangle' ? 'triangle' : 'circle') as any,
+      visible: item.visible,
+      custom: !['release_pos', 'last_pos', 'camps', 'camp_dist', 'main_road'].includes(item.id)
+    }));
+  }, [legendItems]);
+
+  const handleToolbarLegendChange = useCallback((newItems: ReportLegendItem[]) => {
+    setIsLegendCustomizedByUser(true);
+    setLegendItems(newItems.map(item => ({
+      id: item.id,
+      label: item.label,
+      color: item.color,
+      symbol: item.shape === 'pin' ? 'tent' : item.shape,
+      visible: item.visible
+    })));
+  }, []);
+
+  const mapContainerDomRef = useRef<HTMLDivElement>(null);
 
   const handleMoveLegendItem = useCallback((index: number, direction: 'left' | 'right') => {
     setIsLegendCustomizedByUser(true);
@@ -2060,25 +2091,29 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [selectedPttId, customMetadata.birdRing, telemetryData.lastGpsPos.dateStr, metrics.lLat, metrics.lLon]);
 
   const handleShareWhatsApp = useCallback(async () => {
+    const fileName = `Houbara_Tracking_Report_${selectedPttId}_${formatDateYYYYMMDD(new Date())}.pdf`;
+    const caption = `🦅 تقرير متابعة الحبارى (Houbara Report)\nجهاز: ${selectedPttId}\nالحجل: ${customMetadata.birdRing || 'NA'}\nالتاريخ: ${telemetryData.lastGpsPos.dateStr}\nالموقع: ${metrics.lLat.toFixed(4)}, ${metrics.lLon.toFixed(4)}`;
+    const savedPhone = localStorage.getItem('hb_wa_phone') || '';
+
     try {
-      const { blob, fileName, caption } = await handleGeneratePdfBlob();
       const res = await shareReportViaWhatsApp({
-        blob,
-        fileName: `${fileName}.pdf`,
+        generatePdf: async () => {
+          const { blob } = await handleGeneratePdfBlob();
+          return blob;
+        },
+        fileName,
         birdId: selectedPttId || 'BirdReport',
-        title: caption || `Houbara Tracking Report – ${selectedPttId}`
+        title: `Houbara Tracking Report – ${selectedPttId}`,
+        summary: caption,
+        phone: savedPhone
       });
       if (res.method === 'blocked') {
         window.open(res.waUrl, '_blank');
       }
     } catch (err: any) {
       console.error('WhatsApp share error:', err);
-      try {
-        const { blob, fileName } = await handleGeneratePdfBlob();
-        downloadBlob(blob, `${fileName}.pdf`);
-      } catch {}
     }
-  }, [handleGeneratePdfBlob, selectedPttId]);
+  }, [handleGeneratePdfBlob, selectedPttId, customMetadata.birdRing, telemetryData.lastGpsPos.dateStr, metrics.lLat, metrics.lLon]);
 
   // ─── HISTORY ROW EDITING HANDLERS ──────────────────────────────────────────
   const handleUpdateHistoryRow = (id: string, field: keyof HistoryTableRow, value: any) => {
@@ -2700,6 +2735,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           box-sizing: border-box; 
           min-height: 32px;
         }
+        :root {
+          --z-report: 0;
+          --z-studio-bar: 40;
+          --z-popover: 1000;
+          --z-dropdown: 1100;
+          --z-modal: 1200;
+          --z-toast: 1300;
+        }
+        .report-isolated-container {
+          position: relative;
+          z-index: var(--z-report, 0);
+          isolation: isolate;
+        }
+        .report-legend {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          gap: 6px 18px !important;
+          min-width: 0 !important;
+        }
+        .report-legend > div {
+          white-space: nowrap !important;
+        }
         .trk-legend span, .trk-legend div { 
           display: inline-flex; 
           align-items: center; 
@@ -2863,137 +2920,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
           </div>
 
-          {/* Action Buttons - Shortened to fit comfortably on a single line */}
-          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto py-0.5">
-            {/* Upload from History */}
-            <button
-              onClick={() => handleUploadFromHistory()}
-              disabled={isLoadingTelemetry}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="جلب إحداثيات ومسار الجهاز من السجل التاريخي لقاعدة البيانات"
-            >
-              <History size={14} className={isLoadingTelemetry ? 'animate-spin' : ''} />
-              <span>{isLoadingTelemetry ? '...' : 'السجل'}</span>
-            </button>
-
-            {/* Toggle Table Edit Mode */}
-            <button
-              onClick={() => setIsTableEditing(!isTableEditing)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
-                isTableEditing 
-                  ? 'bg-amber-600 hover:bg-amber-700 text-white' 
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-slate-700 dark:text-white'
-              }`}
-              title="تعديل نصوص التقرير، التذييل، وجداول الإحداثيات مباشرة"
-            >
-              <Edit3 size={14} />
-              <span>{isTableEditing ? 'حفظ' : 'تعديل'}</span>
-            </button>
-
-            {/* Drag & Drop Toggle */}
-            <button
-              onClick={() => setIsDragEnabled(!isDragEnabled)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
-                isDragEnabled 
-                  ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-800 dark:bg-slate-700 dark:text-white'
-              }`}
-              title="تفعيل/تعطيل إمكانية سحب وتحريك عناصر التقرير (Drag & Drop)"
-            >
-              <Move size={14} />
-              <span>{isDragEnabled ? 'تثبيت' : 'تحريك'}</span>
-            </button>
-
-            {isDragEnabled && (
-              <button
-                onClick={() => setDragResetKey(k => k + 1)}
-                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-slate-700 dark:text-gray-300 rounded-lg whitespace-nowrap"
-                title="إعادة تعيين أماكن العناصر للوضع الافتراضي"
-              >
-                <RotateCcw size={14} />
-              </button>
-            )}
-
-            {/* Distance Measurement Ruler */}
-            <button
-              onClick={() => setIsMeasuring(!isMeasuring)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
-                isMeasuring 
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300' 
-                  : 'bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60'
-              }`}
-              title="أداة قياس المسافة برسم خطوط على الخريطة وتصديرها مع الـ PNG و PDF"
-            >
-              <Ruler size={14} className={isMeasuring ? 'animate-pulse' : ''} />
-              <span>{isMeasuring ? 'إنهاء' : 'قياس'}</span>
-              {measurePoints.length > 1 && (
-                <span className="bg-amber-700 text-white text-[10px] px-1 py-0.2 rounded font-mono">
-                  {totalMeasureDistanceKm}k
-                </span>
-              )}
-            </button>
-
-            {measurePoints.length > 0 && (
-              <button
-                onClick={() => setMeasurePoints([])}
-                className="p-1.5 bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 dark:bg-slate-700 dark:text-gray-300 rounded-lg whitespace-nowrap"
-                title="مسح خط القياس من على الخريطة"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-
-            {/* Upload QGIS Map Image */}
-            <button
-              onClick={() => mapImageInputRef.current?.click()}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="رفع خريطة بصيغة PNG أو JPG مُعدلة في برنامج QGIS وعرضها بالتقرير"
-            >
-              <Upload size={14} />
-              <span>خريطة QGIS</span>
-            </button>
-
-            {/* Export PDF */}
-            <button
-              onClick={handleExportPdf}
-              disabled={isExportingPdf}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="تصدير التقرير كملف PDF"
-            >
-              <FileDown size={14} />
-              <span>{isExportingPdf ? '...' : 'PDF'}</span>
-            </button>
-
-            {/* Export PNG */}
-            <button
-              onClick={handleExportPng}
-              disabled={isExportingPng}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="تصدير التقرير كصورة PNG"
-            >
-              <Download size={14} />
-              <span>{isExportingPng ? '...' : 'صورة'}</span>
-            </button>
-
-            {/* Fullscreen */}
-            <button
-              onClick={() => setIsReportFullscreen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="معاينة التقرير بملء الشاشة"
-            >
-              <Maximize2 size={14} />
-              <span>ملء الشاشة</span>
-            </button>
-
+          {/* Title Row Secondary Actions */}
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Language Toggle */}
             <div className="flex bg-gray-100 dark:bg-slate-800 rounded-lg p-0.5 shadow-inner">
               <button
+                type="button"
                 onClick={() => setReportLanguage('ar')}
                 className={`px-2 py-1 text-xs font-bold rounded-md transition-colors ${reportLanguage === 'ar' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'}`}
               >
                 العربية
               </button>
               <button
+                type="button"
                 onClick={() => setReportLanguage('en')}
                 className={`px-2 py-1 text-xs font-bold rounded-md transition-colors ${reportLanguage === 'en' ? 'bg-white dark:bg-slate-700 shadow-sm text-brand-600' : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'}`}
               >
@@ -3003,6 +2942,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
             {/* Telegram & WhatsApp Bot Bridge Trigger */}
             <button
+              type="button"
               onClick={() => setIsBotModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-700 hover:to-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap"
               title="ربط التقرير مع بوت تيليجرام وواتساب واستقبال الأوامر تلقائياً"
@@ -3011,30 +2951,113 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               <span>📲 بوت تيليجرام / واتساب</span>
             </button>
 
-            {/* Save Settings */}
+            {/* Fullscreen */}
             <button
-              onClick={saveSettings}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="حفظ الشعارات والتنسيقات للتقارير القادمة"
+              type="button"
+              onClick={() => setIsReportFullscreen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title="معاينة التقرير بملء الشاشة"
             >
-              <Save size={14} />
-              <span>حفظ الإعدادات</span>
-            </button>
-
-            {/* Filter & Customizer Toggle */}
-            <button
-              onClick={() => setShowCustomizer(!showCustomizer)}
-              className={`p-1.5 rounded-lg border text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1 ${
-                showCustomizer 
-                  ? 'bg-brand-50 text-brand-600 border-brand-300 ring-2 ring-brand-500/30 dark:bg-brand-900/30' 
-                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-300'
-              }`}
-              title="خيارات الفلاتر والمسافات وعناصر الخريطة المتقدمة"
-            >
-              <SlidersHorizontal size={15} />
+              <Maximize2 size={14} />
+              <span>ملء الشاشة</span>
             </button>
           </div>
         </div>
+
+        {/* ─── UNIFIED REPORT STUDIO TOOLBAR (STICKY DIRECTLY UNDER TITLE ROW) ─── */}
+        <ReportToolbar
+          mapImage={{ url: mapSnapshotUrl || '', fit: mapImageFit }}
+          isSnapshotMode={mapDisplayMode === 'snapshot'}
+          onChangeMapImage={(url) => {
+            if (url) {
+              setMapSnapshotUrl(url);
+              setMapDisplayMode('snapshot');
+            } else {
+              setMapSnapshotUrl(null);
+              setMapDisplayMode('interactive');
+            }
+          }}
+          onChangeMapFit={(fit) => setMapImageFit(fit)}
+          onToggleMapMode={(mode) => {
+            setMapDisplayMode(mode);
+            if (mode === 'interactive') setFitKey(k => k + 1);
+          }}
+          sections={toolbarSections}
+          onChangeSections={handleToolbarSectionsChange}
+          colors={{
+            primary: themeColors.primaryMaroon,
+            green: themeColors.latestGreen,
+            lastLocation: themeColors.latestPinColor,
+            releaseDots: themeColors.releasePinColor,
+            stopoverDots: themeColors.campPinColor,
+            trackLine: trackSettings.color || themeColors.trackLineColor,
+            releaseDistance: themeColors.releaseDistLineColor,
+            stopoverDistance: themeColors.campDistLineColor
+          }}
+          onChangeColors={(c) => {
+            setThemeColors({
+              primaryMaroon: c.primary,
+              latestGreen: c.green,
+              latestPinColor: c.lastLocation,
+              releasePinColor: c.releaseDots,
+              campPinColor: c.stopoverDots,
+              trackLineColor: c.trackLine,
+              releaseDistLineColor: c.releaseDistance,
+              campDistLineColor: c.stopoverDistance
+            });
+            setTrackSettings(prev => ({ ...prev, color: c.trackLine }));
+            setTrackPreviewSettings(prev => ({ ...prev, color: c.trackLine }));
+          }}
+          labels={reportLabels}
+          onChangeLabels={handleLabelsChange}
+          mapCenter={{ lat: metrics.lLat || 46.9965, lon: metrics.lLon || 67.0222 }}
+          legendItems={toolbarLegendItems}
+          onChangeLegendItems={handleToolbarLegendChange}
+          trackSettings={trackSettings}
+          onChangeTrackSettings={(next) => {
+            setTrackSettings(next);
+            setTrackPreviewSettings(next);
+            setShowFlightTrack(next.show);
+            setFlightTrackConfig(prev => ({ ...prev, enabled: next.show }));
+          }}
+          onPreviewTrackSettings={(preview) => {
+            setTrackPreviewSettings(preview);
+            setShowFlightTrack(preview.show);
+          }}
+          trackPointsCount={{
+            displayed: activeTrackPoints.length,
+            total: rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length
+          }}
+          texts={{
+            reportTitle: customMetadata.reportTitle,
+            subtitle: customMetadata.birdRing,
+            orgNameAr: customMetadata.agencyNameAr,
+            orgNameEn: customMetadata.agencyNameEn,
+            footerText: customMetadata.footerRight,
+            notes: customMetadata.footerLeft,
+            preparedBy: (customMetadata as any).preparedBy || 'فريق التتبع الميداني',
+            issueDate: customMetadata.issueDate
+          }}
+          onChangeTexts={(t) => {
+            setCustomMetadata(prev => ({
+              ...prev,
+              reportTitle: t.reportTitle,
+              birdRing: t.subtitle,
+              agencyNameAr: t.orgNameAr,
+              agencyNameEn: t.orgNameEn,
+              footerRight: t.footerText,
+              footerLeft: t.notes,
+              issueDate: t.issueDate
+            }));
+          }}
+          saveStatus="saved"
+          onExportPdf={handleExportPdf}
+          onExportPng={handleExportPng}
+          onPrint={() => window.print()}
+          onShareWhatsApp={handleShareWhatsApp}
+          isExporting={isExportingPdf || isExportingPng}
+          language={reportLanguage}
+        />
 
         {/* Notice Bar */}
         {historyUploadNotice && (
@@ -3481,83 +3504,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
       </div>
 
-      {/* ─── UNIFIED REPORT STUDIO TOOLBAR (COMPACT 1-ROW WITH ANCHORED POPOVERS) ─── */}
-      <ReportToolbar
-        mapImage={{ url: mapSnapshotUrl || '', fit: mapImageFit }}
-        isSnapshotMode={mapDisplayMode === 'snapshot'}
-        onChangeMapImage={(url) => {
-          if (url) {
-            setMapSnapshotUrl(url);
-            setMapDisplayMode('snapshot');
-          } else {
-            setMapSnapshotUrl(null);
-            setMapDisplayMode('interactive');
-          }
-        }}
-        onChangeMapFit={(fit) => setMapImageFit(fit)}
-        onToggleMapMode={(mode) => {
-          setMapDisplayMode(mode);
-          if (mode === 'interactive') setFitKey(k => k + 1);
-        }}
-        sections={toolbarSections}
-        onChangeSections={handleToolbarSectionsChange}
-        colors={{
-          primary: themeColors.primaryMaroon,
-          green: themeColors.latestGreen,
-          lastLocation: themeColors.latestPinColor,
-          releaseDots: themeColors.releasePinColor,
-          stopoverDots: themeColors.campPinColor,
-          trackLine: trackSettings.color || themeColors.trackLineColor,
-          releaseDistance: themeColors.releaseDistLineColor,
-          stopoverDistance: themeColors.campDistLineColor
-        }}
-        onChangeColors={(c) => {
-          setThemeColors({
-            primaryMaroon: c.primary,
-            latestGreen: c.green,
-            latestPinColor: c.lastLocation,
-            releasePinColor: c.releaseDots,
-            campPinColor: c.stopoverDots,
-            trackLineColor: c.trackLine,
-            releaseDistLineColor: c.releaseDistance,
-            campDistLineColor: c.stopoverDistance
-          });
-          setTrackSettings(prev => ({ ...prev, color: c.trackLine }));
-          setTrackPreviewSettings(prev => ({ ...prev, color: c.trackLine }));
-        }}
-        labels={reportLabels}
-        onChangeLabels={handleLabelsChange}
-        texts={{
-          reportTitle: customMetadata.reportTitle,
-          subtitle: customMetadata.birdRing,
-          orgNameAr: customMetadata.agencyNameAr,
-          orgNameEn: customMetadata.agencyNameEn,
-          footerText: customMetadata.footerRight,
-          notes: customMetadata.footerLeft,
-          preparedBy: (customMetadata as any).preparedBy || 'فريق التتبع الميداني',
-          issueDate: customMetadata.issueDate
-        }}
-        onChangeTexts={(t) => {
-          setCustomMetadata(prev => ({
-            ...prev,
-            reportTitle: t.reportTitle,
-            birdRing: t.subtitle,
-            agencyNameAr: t.orgNameAr,
-            agencyNameEn: t.orgNameEn,
-            footerRight: t.footerText,
-            footerLeft: t.notes,
-            issueDate: t.issueDate
-          }));
-        }}
-        saveStatus="saved"
-        onExportPdf={handleExportPdf}
-        onExportPng={handleExportPng}
-        onPrint={() => window.print()}
-        onShareWhatsApp={handleShareWhatsApp}
-        isExporting={isExportingPdf || isExportingPng}
-        language={reportLanguage}
-      />
-
       {/* ─── OFFICIAL REPORT SHEET CONTAINER (A4 LANDSCAPE) ─── */}
       <div className={
         isReportFullscreen
@@ -3605,18 +3551,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         <div 
           id="custom-map-production-print-area"
           ref={reportContainerRef}
-          className="trk-page bg-white text-gray-900 w-[1123px] min-w-[1123px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none"
+          className="trk-page report-isolated-container bg-white text-gray-900 w-[1123px] min-w-[1123px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none"
           dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}
           style={{
             direction: reportLanguage === 'ar' ? 'rtl' : 'ltr',
             fontFamily: "'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif",
-            letterSpacing: 'normal'
+            letterSpacing: 'normal',
+            position: 'relative',
+            zIndex: 'var(--z-report, 0)',
+            isolation: 'isolate'
           }}
         >
 
           {/* 1. REPORT HEADER (Pixel-faithful to reference design) */}
           {sectionVisibility.headerLogos && (
-            <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2000 }}>
+            <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2 }}>
             
             {/* Agency Info: Emblem + Rule + Names (On Right in RTL) */}
             <div className="trk-header__agency relative">
@@ -4620,7 +4569,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
                 ) : (
                   /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS (PER-BIRD INTERACTIVE MODE) */
-                  <div className="relative w-full h-full">
+                  <div ref={mapContainerDomRef} className="relative w-full h-full">
+                    {/* Draggable Map Labels Overlay (Snapping, Pointer Capture, Anchor Toggle) */}
+                    <MapLabelsOverlay
+                      labels={reportLabels}
+                      onChangeLabels={handleLabelsChange}
+                      mapInstance={mapInstance}
+                      containerRef={mapContainerDomRef}
+                      isExporting={isExportingPdf || isExportingPng}
+                      language={reportLanguage}
+                    />
+
                     {/* Quick Button to Upload QGIS Map right from the interactive map view */}
                     <div className="rpt-toolbar no-export-snapshot no-print no-export absolute top-2 left-2 z-[400] flex items-center gap-1.5">
                       <button
@@ -4693,36 +4652,34 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {/* Dynamic GIS Graphic Scale Bar (Matching Model 25km Two-Segment Bar) */}
                       {sectionVisibility.scaleBar && <CustomGraphicScaleControl />}
 
-                      {/* Real History Flight Trajectory (Multi-Period Colored Segments) */}
-                      {showFlightTrack && coloredTrackSegments.map((seg) =>
-                        seg.positions.length > 1 ? (
-                          <Polyline
-                            key={seg.id}
-                            positions={seg.positions}
-                            pathOptions={{
-                              color: seg.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
-                              weight: flightTrackConfig.lineWeight || 3,
-                              dashArray: flightTrackConfig.lineDashed ? '6, 6' : undefined,
-                              opacity: 0.9
-                            }}
-                          />
-                        ) : null
-                      )}
-
-                      {/* Telemetry Fix Dots */}
-                      {showFlightTrack && flightTrackConfig.showTrackPoints && activeTrackPoints.map((pt, idx) => (
-                        <CircleMarker
-                          key={`trk-pt-${idx}-${pt.ts}`}
-                          center={[pt.lat, pt.lon]}
-                          radius={3}
-                          pathOptions={{
-                            fillColor: '#ffffff',
-                            fillOpacity: 0.95,
-                            color: pt.color,
-                            weight: 1
-                          }}
+                      {/* Shared History Flight Trajectory Layer (Fix types, multi-period colors, vertices, and coordinate labels) */}
+                      {showFlightTrack && (
+                        <HistoryTrackLayer
+                          mode="report"
+                          historyPaths={[{
+                            id: selectedPttId,
+                            color: trackSettings.color || themeColors.trackLineColor,
+                            path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map((pt: any, idx: number) => {
+                              if (Array.isArray(pt)) {
+                                return {
+                                  lat: pt[0],
+                                  lon: pt[1],
+                                  timestamp: new Date(Date.now() - ((allHistoryPoints.length - idx) * 3600000)).toISOString()
+                                };
+                              }
+                              return {
+                                lat: pt.lat ?? pt.latitude ?? 0,
+                                lon: pt.lon ?? pt.lng ?? pt.longitude ?? 0,
+                                timestamp: pt.timestamp ?? pt.locationDate ?? new Date().toISOString(),
+                                type: pt.type ?? pt.locationType,
+                                locationClass: pt.locationClass ?? pt.lc
+                              };
+                            })
+                          }]}
+                          settings={trackSettings}
+                          isExporting={isExportingPdf || isExportingPng}
                         />
-                      ))}
+                      )}
 
                       {/* Distance line between Camps (Requested Filter) */}
                       {showCampDistance && visibleCampIds.length >= 2 && (() => {
@@ -4939,27 +4896,6 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           </React.Fragment>
                         );
                       })}
-
-                      {/* Custom Map Annotations */}
-                      {customAnnotations.map(ann => (
-                        <Marker
-                          key={ann.id}
-                          position={[ann.lat, ann.lon]}
-                          icon={createCustomAnnotationDivIcon(ann)}
-                          zIndexOffset={1800}
-                          interactive={true}
-                          draggable={isDragEnabled}
-                          eventHandlers={{
-                            dragend: (e) => {
-                              const marker = e.target;
-                              if (marker && marker.getLatLng) {
-                                const latLng = marker.getLatLng();
-                                updateAnnotationLatLon(ann.id, latLng.lat, latLng.lng);
-                              }
-                            }
-                          }}
-                        />
-                      ))}
 
                       {/* Interactive Distance Measurement Tool Drawing (EXPORTED WITH PNG & PDF) */}
                       {measurePoints.length > 0 && (
@@ -5394,161 +5330,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {sectionVisibility.legendBar && (
                 <div 
                   id="custom-map-legend-bar"
-                className="trk-legend relative group select-none transition-all"
-                style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%' }}
-              >
-                {/* Hover Quick Edit Button (when not in table edit mode) */}
-                {!isTableEditing && (
-                  <div className="no-export-snapshot no-print no-export absolute -top-3 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button
-                      type="button"
-                      onClick={() => setIsTableEditing(true)}
-                      className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold flex items-center gap-1 shadow-md"
-                      title="تعديل نصوص وألوان ورموز مفتاح الخريطة عنصراً بعنصر"
-                    >
-                      <Edit3 size={10} />
-                      <span>تعديل المفتاح</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Edit Mode Top Toolbar */}
-                {isTableEditing && (
-                  <div className="no-export-snapshot no-print no-export mb-2 pb-1.5 border-b border-gray-200 flex items-center justify-between text-xs w-full">
-                    <span className="font-bold text-gray-800 flex items-center gap-1">
-                      <Edit3 size={12} className="text-brand-500" />
-                      <span>تعديل مفتاح الخريطة (عنصراً بعنصر):</span>
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleAddLegendItem}
-                        className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold flex items-center gap-1 shadow-xs"
-                      >
-                        <Plus size={11} />
-                        <span>إضافة عنصر</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleResetLegendItems}
-                        className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[11px] font-bold flex items-center gap-1"
-                        title="إعادة تعيين مفتاح الخريطة للوضع الافتراضي"
-                      >
-                        <RotateCcw size={11} />
-                        <span>استعادة الافتراضي</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Content: Edit View vs Clean Official Report View */}
-                {isTableEditing ? (
-                  <div className="flex flex-wrap items-center gap-2 py-1 w-full">
-                    {legendItems.map((item, index) => (
-                      <div 
-                        key={item.id} 
-                        className={`flex items-center gap-1.5 p-1 rounded-md border text-xs transition-colors ${
-                          item.visible ? 'bg-amber-50/80 border-amber-300 shadow-xs' : 'bg-gray-100/60 border-gray-200 opacity-60'
-                        }`}
-                      >
-                        {/* Visibility Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateLegendItem(item.id, { visible: !item.visible })}
-                          className={`p-0.5 rounded hover:bg-white/80 ${item.visible ? 'text-emerald-700' : 'text-gray-400'}`}
-                          title={item.visible ? 'إخفاء هذا العنصر من التقرير' : 'إظهار هذا العنصر في التقرير'}
-                        >
-                          {item.visible ? <Eye size={13} /> : <EyeOff size={13} />}
-                        </button>
-
-                        {/* Color Picker */}
-                        <input
-                          type="color"
-                          value={item.color}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { color: e.target.value })}
-                          className="w-5 h-5 rounded cursor-pointer border border-gray-300 p-0"
-                          title="تغيير اللون"
-                        />
-
-                        {/* Symbol Selector */}
-                        <select
-                          value={item.symbol}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { symbol: e.target.value as any })}
-                          className="text-[10.5px] bg-white border border-gray-200 rounded px-1 py-0.5 font-sans cursor-pointer outline-none"
-                          title="نوع الرمز"
-                        >
-                          <option value="circle">دائرة</option>
-                          <option value="line">خط</option>
-                          <option value="dashed-line">متقطع</option>
-                          <option value="tent">خيمة</option>
-                          <option value="square">مربع</option>
-                          <option value="star">نجمة</option>
-                        </select>
-
-                        {/* Editable Label */}
-                        <input
-                          type="text"
-                          value={item.label}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { label: e.target.value })}
-                          className="px-1.5 py-0.5 text-[11px] font-bold text-gray-900 border border-gray-300 rounded bg-white w-28 md:w-36 outline-none focus:ring-1 focus:ring-amber-500 font-sans"
-                          placeholder="نص العنصر..."
-                        />
-
-                        {/* Reorder: Move Left / Right */}
-                        <button
-                          type="button"
-                          onClick={() => handleMoveLegendItem(index, 'left')}
-                          disabled={index === 0}
-                          className="p-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
-                          title="تحريك للأمام (اليمين)"
-                        >
-                          <ChevronRight size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveLegendItem(index, 'right')}
-                          disabled={index === legendItems.length - 1}
-                          className="p-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-30"
-                          title="تحريك للخلف (اليسار)"
-                        >
-                          <ChevronLeft size={13} />
-                        </button>
-
-                        {/* Delete Item */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLegendItem(item.id)}
-                          className="p-0.5 text-red-500 hover:text-red-700"
-                          title="حذف هذا العنصر من المفتاح"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-
-                    {/* Flight Track Period Legend info during edit mode */}
-                    {showFlightTrack && (
-                      <div className="flex items-center gap-1.5 p-1 rounded-md border text-xs bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold">
-                        <span className="text-[10px]">{reportLanguage === 'en' ? 'Track:' : 'المسار:'}</span>
-                        {flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
-                          coloredTrackSegments.map(seg => (
-                            <span key={`edit-seg-${seg.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: seg.color }} />
-                              {seg.label}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: flightTrackConfig.defaultColor || themeColors.trackLineColor }} />
-                            {reportLanguage === 'en' ? 'Flight Track' : 'مسار الطيران'}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
+                  className="trk-legend report-legend relative select-none"
+                  style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%' }}
+                >
                   <div 
-                    className="trk-legend flex flex-row items-center flex-wrap gap-x-4 gap-y-1.5 w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
+                    className="flex flex-row items-center flex-wrap gap-x-4 gap-y-1.5 w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
                     style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', minWidth: 0 }}
                   >
                     {legendItems.filter(item => item.visible).map(item => {
@@ -5602,8 +5388,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )
                     )}
                   </div>
-                )}
-              </div>
+                </div>
               )}
 
             </div>

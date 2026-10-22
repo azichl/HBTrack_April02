@@ -9,6 +9,7 @@ export interface LabelsPopoverProps {
   onClose: () => void;
   labels: MapLabel[];
   onChange: (labels: MapLabel[]) => void;
+  mapCenter?: { lat: number; lon: number };
   language?: 'ar' | 'en';
 }
 
@@ -18,6 +19,7 @@ export const LabelsPopover: React.FC<LabelsPopoverProps> = ({
   onClose,
   labels,
   onChange,
+  mapCenter,
   language = 'ar'
 }) => {
   const isAr = language === 'ar';
@@ -52,7 +54,7 @@ export const LabelsPopover: React.FC<LabelsPopoverProps> = ({
   };
 
   const handleSave = () => {
-    if (!formText.trim()) return;
+    const textToSave = formText.trim() || (isAr ? 'علامة جديدة' : 'New Label');
 
     if (editingLabelId) {
       onChange(
@@ -60,7 +62,7 @@ export const LabelsPopover: React.FC<LabelsPopoverProps> = ({
           l.id === editingLabelId
             ? {
                 ...l,
-                text: formText.trim(),
+                text: textToSave,
                 shape: formShape,
                 bg: formBg,
                 fg: formFg,
@@ -73,14 +75,17 @@ export const LabelsPopover: React.FC<LabelsPopoverProps> = ({
     } else {
       const newLabel: MapLabel = {
         id: `label-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text: formText.trim(),
+        text: textToSave,
         shape: formShape,
         bg: formBg,
         fg: formFg,
         border: formBorder,
         fontSize: formFontSize,
         x: 50,
-        y: 50
+        y: 50,
+        lat: mapCenter?.lat ?? 46.9965,
+        lon: mapCenter?.lon ?? 67.0222,
+        anchor: 'geo'
       };
       onChange([...labels, newLabel]);
     }

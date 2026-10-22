@@ -13,6 +13,7 @@ import { isVisibleOnLiveMap } from '../utils/statusCalculator';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { fetchAllLayers } from '../services/qgisLayerService';
+import { HistoryTrackLayer } from '../src/components/map/HistoryTrackLayer';
 import Draggable from 'react-draggable';
 import { mark } from '../src/diagnostics/bootProfiler';
 
@@ -2561,29 +2562,22 @@ const LiveTrackingInner = () => {
             ))}
 
             {/* Historical Tracks */}
-            {showHistory && historyPaths.map((hp) => (
-                <React.Fragment key={hp.id}>
-                    {/* Continuous history polyline through ALL filtered points */}
-                    {((hp.polyline && hp.polyline.length > 1) ? hp.polyline : (hp.path.length > 1 ? hp.path.map(p => [p.lat, p.lon] as [number, number]) : null)) && (
-                        <Polyline 
-                            key={`${hp.id}-line`}
-                            positions={(hp.polyline && hp.polyline.length > 1) ? hp.polyline : hp.path.map(p => [p.lat, p.lon] as [number, number])} 
-                            pathOptions={{ color: hp.color, weight: 3, opacity: 0.7 }} 
+            {showHistory && (
+                <HistoryTrackLayer
+                    mode="live"
+                    historyPaths={historyPaths}
+                    timeZone={timeZone}
+                    renderPointMarker={(point, pttId, color) => (
+                        <HistoricalMarker
+                            key={`${pttId}-${point.timestamp}`}
+                            point={point}
+                            pttId={pttId}
+                            color={color}
+                            timeZone={timeZone}
                         />
                     )}
-                    
-                    {/* Markers for all points */}
-                    {hp.path.map((point, idx) => (
-                         <HistoricalMarker
-                            key={`${hp.id}-${point.timestamp}-${idx}`}
-                            point={point}
-                            pttId={hp.id}
-                            color={hp.color}
-                            timeZone={timeZone}
-                         />
-                    ))}
-                </React.Fragment>
-            ))}
+                />
+            )}
             
             <ZoomControl position="bottomright" />
             <ScaleControl position="bottomleft" />

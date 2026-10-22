@@ -16,6 +16,7 @@ export interface TrackPathSettings {
   color: string;           // default #6366f1
   width: number;           // 1..8
   showPoints: boolean;
+  showCoordinateLabels?: boolean;
   periodsEnabled: boolean;
   periods: TrackPeriod[];
 }
@@ -26,6 +27,7 @@ export const DEFAULT_TRACK_SETTINGS: TrackPathSettings = {
   color: '#6366f1',
   width: 3,
   showPoints: false,
+  showCoordinateLabels: false,
   periodsEnabled: false,
   periods: [],
 };

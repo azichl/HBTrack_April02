@@ -20,7 +20,28 @@ export interface MapLabel {
   fontSize: number;
   x: number; // % of map frame (0..100)
   y: number; // % of map frame (0..100)
+  lat?: number;
+  lon?: number;
+  anchor?: 'geo' | 'frame';
   hidden?: boolean;
+}
+
+export type LegendShape = 'circle' | 'square' | 'line' | 'dashed-line' | 'triangle' | 'pin';
+
+export interface ReportLegendItem {
+  id: string;
+  label: string;
+  color: string;
+  shape: LegendShape;
+  visible: boolean;
+  custom?: boolean;
+}
+
+export interface ReportLegendLayout {
+  position: 'below' | 'overlay-bottom' | 'overlay-top';
+  columns: 'auto' | 1 | 2 | 3;
+  fontSize: 's' | 'm' | 'l';
+  background: 'none' | 'white-90' | 'dark';
 }
 
 export interface ReportDocument {
@@ -40,6 +61,8 @@ export interface ReportDocument {
   sectionOrder: SectionId[];
   mapImage?: { url: string; fit: 'fill' | 'cover' | 'contain' };
   labels: MapLabel[];
+  legend?: ReportLegendItem[];
+  legendLayout?: ReportLegendLayout;
   columnLabels: Record<string, Record<string, string>>;
   cellOverrides: Record<string, Record<string, Record<string, string>>>;
   kpiOverrides: Record<string, { label?: string; value?: string; unit?: string; color?: string }>;

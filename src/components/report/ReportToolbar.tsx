@@ -1,10 +1,13 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Image as ImageIcon,
   Eye,
   Palette,
   MapPin,
+  ListOrdered,
   Type,
+  Route,
   Undo2,
   Redo2,
   Download,
@@ -17,11 +20,13 @@ import {
 } from 'lucide-react';
 import { MapImagePopover } from './popovers/MapImagePopover';
 import { SectionsPopover } from './popovers/SectionsPopover';
-import { ColorsPopover } from './popovers/ColorsPopover';
+import { ColorsPopover, ReportColors } from './popovers/ColorsPopover';
 import { LabelsPopover } from './popovers/LabelsPopover';
+import { LegendPopover } from './popovers/LegendPopover';
 import { TextPopover, ReportTexts } from './popovers/TextPopover';
-import { SectionId, MapLabel } from '../../types/report';
-import { ReportColors } from './popovers/ColorsPopover';
+import { TrackPathPopover } from '../track/TrackPathPopover';
+import { SectionId, MapLabel, ReportLegendItem, ReportLegendLayout } from '../../types/report';
+import { TrackPathSettings } from '../../types/track';
 
 export interface ReportToolbarProps {
   // Map image
@@ -42,6 +47,20 @@ export interface ReportToolbarProps {
   // Labels
   labels: MapLabel[];
   onChangeLabels: (labels: MapLabel[]) => void;
+  mapCenter?: { lat: number; lon: number };
+
+  // Legend
+  legendItems?: ReportLegendItem[];
+  onChangeLegendItems?: (items: ReportLegendItem[]) => void;
+  legendLayout?: ReportLegendLayout;
+  onChangeLegendLayout?: (layout: ReportLegendLayout) => void;
+  defaultLegendItems?: ReportLegendItem[];
+
+  // Track Path
+  trackSettings?: TrackPathSettings;
+  onChangeTrackSettings?: (settings: TrackPathSettings) => void;
+  onPreviewTrackSettings?: (settings: TrackPathSettings) => void;
+  trackPointsCount?: { displayed: number; total: number };
 
   // Texts
   texts: ReportTexts;
@@ -66,7 +85,7 @@ export interface ReportToolbarProps {
   language?: 'ar' | 'en';
 }
 
-type ActivePopover = 'mapImage' | 'sections' | 'colors' | 'labels' | 'text' | null;
+type ActivePopover = 'mapImage' | 'sections' | 'colors' | 'labels' | 'legend' | 'text' | 'track' | null;
 
 export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   mapImage,
@@ -80,6 +99,16 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   onChangeColors,
   labels,
   onChangeLabels,
+  mapCenter,
+  legendItems = [],
+  onChangeLegendItems = () => {},
+  legendLayout,
+  onChangeLegendLayout,
+  defaultLegendItems,
+  trackSettings,
+  onChangeTrackSettings,
+  onPreviewTrackSettings,
+  trackPointsCount,
   texts,
   onChangeTexts,
   canUndo = false,
@@ -103,15 +132,40 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   const sectionsBtnRef = useRef<HTMLButtonElement>(null);
   const colorsBtnRef = useRef<HTMLButtonElement>(null);
   const labelsBtnRef = useRef<HTMLButtonElement>(null);
+  const legendBtnRef = useRef<HTMLButtonElement>(null);
   const textBtnRef = useRef<HTMLButtonElement>(null);
+  const trackBtnRef = useRef<HTMLButtonElement>(null);
   const exportBtnRef = useRef<HTMLButtonElement>(null);
 
   const togglePopover = (popover: ActivePopover) => {
     setActivePopover((prev) => (prev === popover ? null : popover));
   };
 
+  // Position portal for Export dropdown
+  const [exportPos, setExportPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isExportMenuOpen || !exportBtnRef.current) return;
+    const rect = exportBtnRef.current.getBoundingClientRect();
+    const isRtl = document.documentElement.dir === 'rtl' || document.body.dir === 'rtl';
+    const menuWidth = 190;
+    let left = isRtl ? rect.right - menuWidth : rect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+    setExportPos({
+      top: rect.bottom + 6,
+      left
+    });
+  }, [isExportMenuOpen]);
+
   return (
-    <div className="sticky top-0 z-[500] flex flex-wrap items-center justify-between gap-2 p-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-gray-200 dark:border-slate-800 rounded-xl shadow-xs text-xs mb-3">
+    <div
+      style={{
+        position: 'sticky',
+        top: 0,
+        zIndex: 40
+      }}
+      className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-200 dark:border-slate-800 shadow-xs text-xs mb-3 select-none"
+    >
       {/* 1. Popover Tool Buttons */}
       <div className="flex items-center gap-1.5 flex-wrap">
         {/* Map Image Button */}
@@ -126,7 +180,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           }`}
         >
           <ImageIcon size={13} />
-          <span>{isAr ? 'خريطة QGIS' : 'Map image'}</span>
+          <span className="hidden sm:inline">{isAr ? 'خريطة QGIS' : 'Map image'}</span>
           <ChevronDown size={11} className={`transition-transform ${activePopover === 'mapImage' ? 'rotate-180' : ''}`} />
         </button>
 
@@ -142,7 +196,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           }`}
         >
           <Eye size={13} />
-          <span>{isAr ? 'الأقسام' : 'Sections'}</span>
+          <span className="hidden sm:inline">{isAr ? 'الأقسام' : 'Sections'}</span>
           <ChevronDown size={11} className={`transition-transform ${activePopover === 'sections' ? 'rotate-180' : ''}`} />
         </button>
 
@@ -158,7 +212,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           }`}
         >
           <Palette size={13} />
-          <span>{isAr ? 'الألوان' : 'Colors'}</span>
+          <span className="hidden sm:inline">{isAr ? 'الألوان' : 'Colors'}</span>
           <ChevronDown size={11} className={`transition-transform ${activePopover === 'colors' ? 'rotate-180' : ''}`} />
         </button>
 
@@ -174,8 +228,24 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           }`}
         >
           <MapPin size={13} />
-          <span>{isAr ? 'العلامات' : 'Labels'}</span>
+          <span className="hidden sm:inline">{isAr ? 'العلامات' : 'Labels'}</span>
           <ChevronDown size={11} className={`transition-transform ${activePopover === 'labels' ? 'rotate-180' : ''}`} />
+        </button>
+
+        {/* Legend Button (Item 2) */}
+        <button
+          ref={legendBtnRef}
+          type="button"
+          onClick={() => togglePopover('legend')}
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold border transition-all ${
+            activePopover === 'legend'
+              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+              : 'bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700'
+          }`}
+        >
+          <ListOrdered size={13} />
+          <span className="hidden sm:inline">{isAr ? 'المفتاح' : 'Legend'}</span>
+          <ChevronDown size={11} className={`transition-transform ${activePopover === 'legend' ? 'rotate-180' : ''}`} />
         </button>
 
         {/* Text Button */}
@@ -190,12 +260,35 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           }`}
         >
           <Type size={13} />
-          <span>{isAr ? 'النصوص' : 'Text'}</span>
+          <span className="hidden sm:inline">{isAr ? 'النصوص' : 'Text'}</span>
           <ChevronDown size={11} className={`transition-transform ${activePopover === 'text' ? 'rotate-180' : ''}`} />
         </button>
+
+        {/* Track Customizer Button (Item 6) */}
+        {trackSettings && (
+          <button
+            ref={trackBtnRef}
+            type="button"
+            onClick={() => togglePopover('track')}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold border transition-all ${
+              activePopover === 'track'
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                : 'bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700'
+            }`}
+          >
+            <Route size={13} />
+            <span className="hidden sm:inline">{isAr ? 'المسار' : 'Track'}</span>
+            {trackPointsCount && (
+              <span className="text-[10px] px-1 py-0.2 rounded bg-black/10 dark:bg-white/10 font-mono">
+                {trackPointsCount.displayed}
+              </span>
+            )}
+            <ChevronDown size={11} className={`transition-transform ${activePopover === 'track' ? 'rotate-180' : ''}`} />
+          </button>
+        )}
       </div>
 
-      {/* 2. Middle: Autosave Status Chip */}
+      {/* 2. Middle: Autosave Status Chip & Undo / Redo */}
       <div className="flex items-center gap-2">
         <span
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold ${
@@ -240,7 +333,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
         </div>
       </div>
 
-      {/* 3. Export Menu Trigger */}
+      {/* 3. Export Menu Trigger (Rendered via Portal to avoid stacking/clipping) */}
       <div className="relative">
         <button
           ref={exportBtnRef}
@@ -254,9 +347,16 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           <ChevronDown size={11} className={`transition-transform ${isExportMenuOpen ? 'rotate-180' : ''}`} />
         </button>
 
-        {isExportMenuOpen && (
+        {isExportMenuOpen && exportPos && createPortal(
           <div
-            className="absolute z-[999] top-full mt-1.5 right-0 rtl:right-auto rtl:left-0 w-44 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden py-1 animate-in fade-in zoom-in-95"
+            style={{
+              position: 'fixed',
+              top: exportPos.top,
+              left: exportPos.left,
+              zIndex: 1100,
+              width: 190
+            }}
+            className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1 animate-in fade-in zoom-in-95"
             onMouseLeave={() => setIsExportMenuOpen(false)}
           >
             <button
@@ -279,7 +379,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
               className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors"
             >
               <ImageIcon size={14} className="text-indigo-500" />
-              <span>{isAr ? 'تصدير صورة عالية الدقة (PNG)' : 'Export PNG Image'}</span>
+              <span>{isAr ? 'تصدير صورة (PNG)' : 'Export PNG Image'}</span>
             </button>
             {onShareWhatsApp && (
               <button
@@ -288,7 +388,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
                   setIsExportMenuOpen(false);
                   onShareWhatsApp();
                 }}
-                className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-800 text-emerald-600 dark:text-emerald-400"
+                className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-800"
               >
                 <Share2 size={14} className="text-emerald-600 dark:text-emerald-400" />
                 <span>{isAr ? 'مشاركة عبر واتساب' : 'Share on WhatsApp'}</span>
@@ -305,7 +405,8 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
               <Printer size={14} className="text-gray-500" />
               <span>{isAr ? 'طباعة مباشرة' : 'Direct Print'}</span>
             </button>
-          </div>
+          </div>,
+          document.body
         )}
       </div>
 
@@ -346,6 +447,19 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
         onClose={() => setActivePopover(null)}
         labels={labels}
         onChange={onChangeLabels}
+        mapCenter={mapCenter}
+        language={language}
+      />
+
+      <LegendPopover
+        anchorRef={legendBtnRef}
+        open={activePopover === 'legend'}
+        onClose={() => setActivePopover(null)}
+        items={legendItems}
+        onChangeItems={onChangeLegendItems}
+        layout={legendLayout}
+        onChangeLayout={onChangeLegendLayout}
+        defaultItems={defaultLegendItems}
         language={language}
       />
 
@@ -357,6 +471,21 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
         onChange={onChangeTexts}
         language={language}
       />
+
+      {trackSettings && onChangeTrackSettings && (
+        <TrackPathPopover
+          anchorRef={trackBtnRef}
+          open={activePopover === 'track'}
+          onClose={() => setActivePopover(null)}
+          settings={trackSettings}
+          onApply={(next) => {
+            onChangeTrackSettings(next);
+            setActivePopover(null);
+          }}
+          onPreview={onPreviewTrackSettings}
+          language={language}
+        />
+      )}
     </div>
   );
 };

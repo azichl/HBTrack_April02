@@ -19,7 +19,10 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
   const [commandInput, setCommandInput] = useState<string>('244289 46.9965, 67.0222');
   const [botToken, setBotToken] = useState<string>(() => localStorage.getItem('hb_tg_bot_token') || '');
   const [chatId, setChatId] = useState<string>(() => localStorage.getItem('hb_tg_chat_id') || '');
+  const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem('hb_wa_phone') || '');
   const [isSending, setIsSending] = useState<boolean>(false);
+  const [isSharingWa, setIsSharingWa] = useState<boolean>(false);
+  const [manualWaUrl, setManualWaUrl] = useState<string | null>(null);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [statusLog, setStatusLog] = useState<string[]>([]);
   const lastUpdateIdRef = useRef<number>(0);
@@ -27,7 +30,8 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
   useEffect(() => {
     if (botToken) localStorage.setItem('hb_tg_bot_token', botToken);
     if (chatId) localStorage.setItem('hb_tg_chat_id', chatId);
-  }, [botToken, chatId]);
+    if (waPhone !== undefined) localStorage.setItem('hb_wa_phone', waPhone.replace(/\D/g, ''));
+  }, [botToken, chatId, waPhone]);
 
   const addLog = (msg: string) => {
     setStatusLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 29)]);
@@ -240,50 +244,82 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
             </div>
           </div>
 
-          <div className="bg-emerald-50/60 dark:bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-3">
-            <div>
-              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 block">
-                3. مشاركة سريعة عبر واتساب (WhatsApp)
-              </span>
-              <span className="text-[11px] text-gray-600 dark:text-gray-400">
-                إرسال ملخص إحداثيات الطائر وتفاصيل التقرير مباشرة عبر WhatsApp
-              </span>
+          <div className="bg-emerald-50/60 dark:bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 block">
+                  3. مشاركة سريعة عبر واتساب (WhatsApp)
+                </span>
+                <span className="text-[11px] text-gray-600 dark:text-gray-400">
+                  إرسال ملخص إحداثيات الطائر وتفاصيل التقرير مع ملف PDF تلقائياً
+                </span>
+              </div>
             </div>
-            <button
-              type="button"
-              disabled={isSending}
-              onClick={async () => {
-                try {
-                  addLog('⏳ Preparing PDF for WhatsApp share...');
-                  const { blob, fileName, caption } = await onGeneratePdfBlob();
-                  const identifier = commandInput.split(' ')[0] || 'BirdReport';
-                  const res = await shareReportViaWhatsApp({
-                    blob,
-                    fileName: `${fileName}.pdf`,
-                    birdId: identifier,
-                    title: caption || `Houbara Tracking Report – ${identifier}`
-                  });
-                  if (res.method === 'native') {
-                    addLog('✅ Opened native share sheet (WhatsApp)!');
-                  } else if (res.method === 'web') {
-                    addLog('✅ Uploaded PDF and redirected to WhatsApp Web!');
-                  } else if (res.method === 'blocked') {
-                    addLog('⚠️ Popup blocked. Opening direct WhatsApp link...');
-                    window.open(res.waUrl, '_blank');
-                  }
-                } catch (err: any) {
-                  addLog(`⚠️ Could not share via WhatsApp directly: ${err.message}. Downloading file instead.`);
-                  try {
-                    const { blob, fileName } = await onGeneratePdfBlob();
-                    downloadBlob(blob, `${fileName}.pdf`);
-                  } catch {}
-                }
-              }}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0"
-            >
-              <Share2 size={14} />
-              <span>مشاركة عبر واتساب</span>
-            </button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex-1 min-w-[200px]">
+                <label className="block text-[10.5px] text-gray-600 dark:text-gray-400 mb-0.5">
+                  رقم المستلم (اختياري، بالصيغة الدولية):
+                </label>
+                <input
+                  type="tel"
+                  dir="ltr"
+                  value={waPhone}
+                  onChange={e => setWaPhone(e.target.value)}
+                  placeholder="e.g. 971501234567 or 97455123456"
+                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="self-end flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isSharingWa}
+                  onClick={async () => {
+                    if (isSharingWa) return;
+                    setIsSharingWa(true);
+                    setManualWaUrl(null);
+                    try {
+                      const identifier = commandInput.split(' ')[0] || 'BirdReport';
+                      const res = await shareReportViaWhatsApp({
+                        generatePdf: async () => {
+                          const { blob } = await onGeneratePdfBlob();
+                          return blob;
+                        },
+                        fileName: `Houbara_Tracking_Report_${identifier}.pdf`,
+                        birdId: identifier,
+                        title: `Houbara Tracking Report – ${identifier}`,
+                        summary: `🦅 تقرير متابعة الحبارى (Houbara Report)\nمعرف: ${identifier}`,
+                        phone: waPhone,
+                        log: (_stage, msg) => addLog(msg)
+                      });
+                      if (res.method === 'blocked') {
+                        setManualWaUrl(res.waUrl);
+                      }
+                    } catch (err: any) {
+                      addLog(`❌ ${(err as Error).message}`);
+                    } finally {
+                      setIsSharingWa(false);
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-xs"
+                >
+                  {isSharingWa ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
+                  <span>{isSharingWa ? 'جارِ المعالجة...' : 'مشاركة عبر واتساب'}</span>
+                </button>
+
+                {manualWaUrl && (
+                  <a
+                    href={manualWaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1"
+                  >
+                    <span>فتح واتساب ويب يدويًا</span>
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="bg-slate-950 text-gray-200 p-3 rounded-xl font-mono text-[11px] h-32 overflow-y-auto space-y-1 text-left" dir="ltr">

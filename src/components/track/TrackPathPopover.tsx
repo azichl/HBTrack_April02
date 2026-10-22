@@ -230,6 +230,16 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
             />
           </div>
         </div>
+
+        {/* Show Coordinates on Map Switch */}
+        <div className="flex items-center justify-between px-1 pt-0.5">
+          <Switch
+            checked={Boolean(draft.showCoordinateLabels)}
+            onChange={(showCoordinateLabels) => updateDraft({ showCoordinateLabels })}
+            label={isAr ? 'عرض الإحداثيات كنصوص على الخريطة' : 'Show coordinates on map'}
+            size="sm"
+          />
+        </div>
       </div>
 
       <div className="border-t border-gray-100 dark:border-slate-800" />

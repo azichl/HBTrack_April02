@@ -1,98 +1,63 @@
-// src/utils/whatsappShare.ts
-// Share the generated PDF report through WhatsApp.
+// src/utils/whatsappShare.ts  (v2 — replaces v1; fixes the "Preparing PDF for WhatsApp share…" hang)
 //
-// Why this exists: WhatsApp Web / wa.me / whatsapp:// links accept ONLY text (+ optional phone).
-// They cannot attach a file. So on desktop we upload the PDF to Firebase Storage and open
-// WhatsApp Web with a ready message containing the download link. On phones we use the native
-// share sheet (which lists WhatsApp and attaches the real PDF).
+// Root causes this version removes:
+//  1. No timeout anywhere → any stalled step (PDF render, Storage upload) looks like an endless hang.
+//     Firebase Storage's default maxUploadRetryTime is 10 MINUTES, so a blocked upload "hangs" silently.
+//  2. Nothing told the user which stage was running → every stage now reports progress to the modal log.
+//  3. Double clicks started two parallel runs (log showed two "Preparing…" lines) → single-flight guard.
+//  4. Everything depended on the upload. Now WhatsApp ALWAYS opens: if PDF/upload fails or times out,
+//     WhatsApp Web opens with the text summary and the PDF is downloaded so it can be attached by hand.
 
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { getAuth } from 'firebase/auth';
 
+export type ShareStage = 'pdf' | 'upload' | 'open';
+export type ShareLog = (stage: ShareStage | 'info' | 'warn' | 'error', message: string) => void;
+
 export interface WhatsAppShareInput {
-  blob: Blob;            // the PDF, ideally pre-generated when the share modal opens
-  fileName: string;      // e.g. Houbara_Tracking_Report_244292_2026-10-22.pdf
+  /** Existing PDF generator. MUST resolve to a Blob. Receives an AbortSignal it should honour if possible. */
+  generatePdf: (signal: AbortSignal) => Promise<Blob>;
+  fileName: string;
   birdId: string;
-  title: string;         // e.g. "Houbara Tracking Report – 244292"
-  phone?: string;        // optional, international format, digits only or with +
+  title: string;                // "Houbara Tracking Report – 244289"
+  summary?: string;             // coordinates / KPI text lines appended to the message
+  phone?: string;               // optional recipient, international digits
+  log?: ShareLog;               // writes to the black log box in the modal
+  timeouts?: { pdfMs?: number; uploadMs?: number };
 }
 
 export type WhatsAppShareResult =
   | { method: 'native' }
   | { method: 'cancelled' }
-  | { method: 'web'; url: string; waUrl: string }
-  | { method: 'blocked'; url: string; waUrl: string }; // popup blocked → show manual button
+  | { method: 'link'; url: string; waUrl: string }          // PDF link inside the message
+  | { method: 'text-only'; waUrl: string; pdfDownloaded: boolean } // fallback
+  | { method: 'blocked'; waUrl: string; url?: string };     // popup blocked → show manual button
 
-const isTouchDevice = (): boolean =>
+/* ------------------------------ helpers ------------------------------ */
+
+const isTouchDevice = () =>
   /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-const cleanPhone = (p?: string) => (p ? p.replace(/\D/g, '') : '');
+export class StageTimeout extends Error {
+  constructor(public stage: string, ms: number) { super(`${stage} timed out after ${Math.round(ms / 1000)}s`); }
+}
 
-export const buildWhatsAppUrl = (text: string, phone?: string): string => {
-  const params = new URLSearchParams();
-  const digits = cleanPhone(phone);
-  if (digits) params.set('phone', digits);
-  params.set('text', text);
-  // Desktop → WhatsApp Web directly (it hands off to the desktop app if installed).
-  return `https://web.whatsapp.com/send?${params.toString()}`;
+function withTimeout<T>(stage: string, p: Promise<T>, ms: number, onTimeout?: () => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => { onTimeout?.(); reject(new StageTimeout(stage, ms)); }, ms);
+    p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
+export const buildWhatsAppUrl = (text: string, phone?: string) => {
+  const q = new URLSearchParams();
+  const digits = phone?.replace(/\D/g, '');
+  if (digits) q.set('phone', digits);
+  q.set('text', text);
+  return `https://web.whatsapp.com/send?${q.toString()}`;
 };
 
-async function uploadReport(blob: Blob, fileName: string, birdId: string): Promise<string> {
-  const uid = getAuth().currentUser?.uid;
-  if (!uid) throw new Error('Not signed in');
-  const path = `shared-reports/${uid}/${birdId}/${Date.now()}_${fileName}`;
-  const r = ref(getStorage(), path);
-  await uploadBytes(r, blob, { contentType: 'application/pdf', contentDisposition: `inline; filename="${fileName}"` });
-  return getDownloadURL(r); // tokenised URL, opens without login
-}
-
-/**
- * IMPORTANT: call this DIRECTLY from the click handler. Do not `await` anything before it
- * (generate the PDF blob earlier, e.g. when the modal opens). Safari/Chrome only allow
- * window.open() inside the user-gesture call stack, so the tab is opened first and
- * navigated after the upload finishes.
- */
-export async function shareReportViaWhatsApp(input: WhatsAppShareInput): Promise<WhatsAppShareResult> {
-  const { blob, fileName, birdId, title, phone } = input;
-  const file = new File([blob], fileName, { type: 'application/pdf' });
-
-  // 1) Phones / tablets: real file attachment through the native share sheet.
-  if (isTouchDevice() && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title, text: title });
-      return { method: 'native' };
-    } catch (e) {
-      if ((e as DOMException).name === 'AbortError') return { method: 'cancelled' };
-      // otherwise fall through to the link-based flow
-    }
-  }
-
-  // 2) Desktop (or share failed): upload + WhatsApp Web with link.
-  //    Do NOT use navigator.share here — on macOS it opens the system sheet (AirDrop, Messages…)
-  //    which does not include WhatsApp Web.
-  const win = window.open('', '_blank');           // must be synchronous
-  if (win) {
-    win.document.title = 'WhatsApp';
-    win.document.body.innerHTML =
-      '<p style="font:16px system-ui;padding:24px">Preparing report… / جارٍ تجهيز التقرير…</p>';
-  }
-
-  try {
-    const url = await uploadReport(blob, fileName, birdId);
-    const waUrl = buildWhatsAppUrl(`${title}\n${url}`, phone);
-    if (win && !win.closed) {
-      win.location.href = waUrl;
-      return { method: 'web', url, waUrl };
-    }
-    return { method: 'blocked', url, waUrl };
-  } catch (err) {
-    win?.close();
-    throw err;
-  }
-}
-
-/** Optional helper: also save the PDF locally so the user can drag it into WhatsApp manually. */
 export function downloadBlob(blob: Blob, fileName: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -101,4 +66,118 @@ export function downloadBlob(blob: Blob, fileName: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+}
+
+async function uploadPdf(blob: Blob, fileName: string, birdId: string, ms: number, log: ShareLog): Promise<string> {
+  const uid = getAuth().currentUser?.uid;
+  if (!uid) throw new Error('Not signed in');
+  const storage = getStorage();
+  storage.maxUploadRetryTime = ms;                            // fail fast instead of retrying for 10 min
+  const r = ref(storage, `shared-reports/${uid}/${birdId}/${Date.now()}_${fileName}`);
+  const task = uploadBytesResumable(r, blob, { contentType: 'application/pdf' });
+
+  const done = new Promise<void>((resolve, reject) => {
+    let lastPct = -1;
+    task.on('state_changed',
+      s => {
+        const pct = Math.round((s.bytesTransferred / s.totalBytes) * 100);
+        if (pct !== lastPct && pct % 25 === 0) { lastPct = pct; log('upload', `Uploading PDF… ${pct}%`); }
+      },
+      err => reject(err),                                      // surfaces storage/unauthorized, storage/retry-limit-exceeded…
+      () => resolve());
+  });
+  await withTimeout('Upload', done, ms, () => task.cancel());
+  return getDownloadURL(r);
+}
+
+/* single-flight guard: ignore double clicks */
+let running = false;
+
+/**
+ * Call DIRECTLY from the click handler (no await before it).
+ * The WhatsApp tab is opened synchronously, then navigated when ready.
+ */
+export async function shareReportViaWhatsApp(input: WhatsAppShareInput): Promise<WhatsAppShareResult> {
+  if (running) throw new Error('A share is already in progress');
+  running = true;
+
+  const log: ShareLog = input.log ?? (() => {});
+  const pdfMs = input.timeouts?.pdfMs ?? 30_000;
+  const uploadMs = input.timeouts?.uploadMs ?? 25_000;
+  const { fileName, birdId, title, summary, phone } = input;
+
+  // Open the tab NOW (user gesture) on desktop. Phones go through navigator.share instead.
+  const touch = isTouchDevice();
+  const win = touch ? null : window.open('', '_blank');
+  if (win) {
+    win.document.title = 'WhatsApp';
+    win.document.body.innerHTML = '<p style="font:16px system-ui;padding:24px">Preparing report… / جارٍ تجهيز التقرير…</p>';
+  }
+  const openWa = (waUrl: string): boolean => {
+    if (win && !win.closed) { win.location.href = waUrl; return true; }
+    return false;
+  };
+
+  const ac = new AbortController();
+  let blob: Blob | null = null;
+
+  try {
+    /* ---------- stage 1: PDF ---------- */
+    log('pdf', '⏳ Rendering PDF…');
+    const t0 = performance.now();
+    try {
+      blob = await withTimeout('PDF generation', input.generatePdf(ac.signal), pdfMs, () => ac.abort());
+      log('pdf', `✅ PDF ready (${(blob.size / 1024).toFixed(0)} KB, ${((performance.now() - t0) / 1000).toFixed(1)}s)`);
+    } catch (e) {
+      log('error', `❌ PDF failed: ${(e as Error).message}`);
+      console.error('[WhatsApp share] PDF stage', e);
+    }
+
+    /* ---------- phones: native share with the real file ---------- */
+    if (blob && touch) {
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title, text: title });
+          return { method: 'native' };
+        } catch (e) {
+          if ((e as DOMException).name === 'AbortError') return { method: 'cancelled' };
+          log('warn', `⚠️ Native share failed (${(e as Error).message}); using link flow`);
+        }
+      }
+    }
+
+    /* ---------- stage 2: upload (only if we have a PDF) ---------- */
+    let url: string | undefined;
+    if (blob) {
+      try {
+        log('upload', '⏳ Uploading PDF…');
+        url = await uploadPdf(blob, fileName, birdId, uploadMs, log);
+        log('upload', '✅ Link created');
+      } catch (e) {
+        const code = (e as { code?: string }).code ?? '';
+        log('error', `❌ Upload failed: ${code || (e as Error).message}`);
+        console.error('[WhatsApp share] upload stage', e);
+      }
+    }
+
+    /* ---------- stage 3: open WhatsApp (always) ---------- */
+    const lines = [title, summary, url].filter(Boolean) as string[];
+    const waUrl = buildWhatsAppUrl(lines.join('\n'), phone);
+    log('open', '⏳ Opening WhatsApp Web…');
+    const opened = openWa(waUrl);
+
+    if (url) {
+      log('open', opened ? '✅ WhatsApp opened with the PDF link' : '⚠️ Popup blocked — use the button below');
+      return opened ? { method: 'link', url, waUrl } : { method: 'blocked', waUrl, url };
+    }
+
+    // Fallback: text only + local download so the PDF can be attached manually
+    let pdfDownloaded = false;
+    if (blob) { downloadBlob(blob, fileName); pdfDownloaded = true; log('warn', '⬇️ PDF saved to Downloads — attach it manually in WhatsApp'); }
+    log('open', opened ? '✅ WhatsApp opened with text summary' : '⚠️ Popup blocked — use the button below');
+    return opened ? { method: 'text-only', waUrl, pdfDownloaded } : { method: 'blocked', waUrl };
+  } finally {
+    running = false;
+  }
 }
