@@ -29,7 +29,7 @@ import {
 } from '../../utils/formatting';
 import { parseBirdCoordinateCommand, resolveBirdOrTransmitter } from '../../utils/coordinateParser';
 import { SevenDayTempChart } from './SevenDayTempChart';
-import { CustomMapAnnotation, createCustomAnnotationDivIcon } from './CustomMapAnnotations';
+import { CustomMapAnnotation, AnnotationShape, createCustomAnnotationDivIcon, renderCustomAnnotationSvg } from './CustomMapAnnotations';
 import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
 import { BotReportBridgeModal } from './BotReportBridgeModal';
 import {
@@ -624,12 +624,13 @@ export const getCampLegendLabel = (campIds: string[]): string => {
 };
 
 export interface ReportSectionVisibility {
-  header: boolean;
+  headerLogos: boolean;
+  subtitle: boolean;
   birdDataCard: boolean;
   coordinatesCard: boolean;
   kpiCards: boolean;
   tempChart: boolean;
-  legend: boolean;
+  legendBar: boolean;
   scaleBar: boolean;
   northArrow: boolean;
   footer: boolean;
@@ -638,9 +639,12 @@ export interface ReportSectionVisibility {
 export interface ReportThemeColors {
   primaryMaroon: string;
   latestGreen: string;
-  trackLine: string;
-  campPin: string;
-  releasePin: string;
+  releasePinColor: string;
+  latestPinColor: string;
+  campPinColor: string;
+  trackLineColor: string;
+  releaseDistLineColor: string;
+  campDistLineColor: string;
 }
 
 export interface CustomMapProductionReportProps {
@@ -659,12 +663,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // ─── 100% EDITABLE STUDIO: SECTION VISIBILITY & THEME COLORS ─────────────
   const [sectionVisibility, setSectionVisibility] = useState<ReportSectionVisibility>({
-    header: true,
+    headerLogos: true,
+    subtitle: true,
     birdDataCard: true,
     coordinatesCard: true,
     kpiCards: true,
     tempChart: true,
-    legend: true,
+    legendBar: true,
     scaleBar: true,
     northArrow: true,
     footer: true,
@@ -672,14 +677,50 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   const [themeColors, setThemeColors] = useState<ReportThemeColors>({
     primaryMaroon: '#7a1c32',
-    latestGreen: '#059669',
-    trackLine: '#dc2626',
-    campPin: '#f59e0b',
-    releasePin: '#7a1c32',
+    latestGreen: '#128a5b',
+    releasePinColor: '#701a2b',
+    latestPinColor: '#22c55e',
+    campPinColor: '#f59e0b',
+    trackLineColor: '#6366f1',
+    releaseDistLineColor: '#dc2626',
+    campDistLineColor: '#d97706',
   });
 
   const [isBotModalOpen, setIsBotModalOpen] = useState<boolean>(false);
-  const [annotations, setAnnotations] = useState<CustomMapAnnotation[]>([]);
+  const [customAnnotations, setCustomAnnotations] = useState<CustomMapAnnotation[]>([]);
+  const [newAnnText, setNewAnnText] = useState<string>('');
+  const [newAnnShape, setNewAnnShape] = useState<AnnotationShape>('pill');
+  const [newAnnBg, setNewAnnBg] = useState<string>('#ffffff');
+  const [newAnnTextCol, setNewAnnTextCol] = useState<string>('#1f2937');
+  const [newAnnBorderCol, setNewAnnBorderCol] = useState<string>('#dc2626');
+  const [newAnnFontSize, setNewAnnFontSize] = useState<number>(12);
+
+  const handleAddAnnotation = () => {
+    if (!newAnnText.trim()) return;
+    const newAnn: CustomMapAnnotation = {
+      id: `ann-${Date.now()}`,
+      text: newAnnText.trim(),
+      shape: newAnnShape,
+      bgColor: newAnnBg,
+      textColor: newAnnTextCol,
+      borderColor: newAnnBorderCol,
+      fontSize: newAnnFontSize,
+      lat: (telemetryData.lastGpsPos.lat) || 46.9965,
+      lon: (telemetryData.lastGpsPos.lon) || 67.0222,
+      xPercent: 50,
+      yPercent: 50
+    };
+    setCustomAnnotations(prev => [...prev, newAnn]);
+    setNewAnnText('');
+  };
+
+  const handleDeleteAnnotation = (id: string) => {
+    setCustomAnnotations(prev => prev.filter(a => a.id !== id));
+  };
+
+  const updateAnnotationLatLon = (id: string, lat: number, lon: number) => {
+    setCustomAnnotations(prev => prev.map(a => a.id === id ? { ...a, lat, lon } : a));
+  };
 
   // Selected Transmitter (defaults to 244289 as requested)
   const initialPtt = useMemo(() => {
@@ -1302,14 +1343,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setCustomLastPosMarkerPos(null);
 
     try {
-      const cleanId = String(pttId).replace(/^trans-/, '');
-      const currentTransmitter = transmitters.find(
-        t => t.id === pttId || t.platform_id === pttId ||
+      const resolved = resolveBirdOrTransmitter(pttId, transmitters, birds);
+      const queryPttId = resolved.pttId && resolved.pttId !== 'NA' ? resolved.pttId : pttId;
+      const cleanId = String(queryPttId).replace(/^trans-/, '');
+      const currentTransmitter = resolved.transmitter || transmitters.find(
+        t => t.id === queryPttId || t.platform_id === queryPttId ||
              String(t.platform_id).replace(/^trans-/, '') === cleanId
       );
-      const currentBird = currentTransmitter ? findBirdForTransmitter(birds, currentTransmitter) : null;
+      const currentBird = resolved.bird || (currentTransmitter ? findBirdForTransmitter(birds, currentTransmitter) : null);
 
-      const pttIdsToQuery = [pttId];
+      const pttIdsToQuery = [queryPttId];
       if (currentTransmitter?.platform_id && !pttIdsToQuery.includes(currentTransmitter.platform_id)) {
         pttIdsToQuery.push(currentTransmitter.platform_id);
       }
@@ -1389,10 +1432,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
         setCustomMetadata(prev => ({
           ...prev,
-          birdRing: currentBird?.ring_id || prev.birdRing || 'NA',
-          species: currentBird?.species === 'Asian Houbara' ? 'وحش' : (currentBird?.species || 'وحش'),
+          birdRing: currentBird?.ring_id || (resolved.matchedBy === 'RING' ? resolved.identifierUsed : prev.birdRing) || 'NA',
+          species: currentBird?.species === 'Asian Houbara' ? 'وحش' : (currentBird?.species || prev.species || 'وحش'),
           gender: currentBird?.sex === 'M' ? 'ذكر' : currentBird?.sex === 'F' ? 'أنثى' : prev.gender,
-          birdStatus: currentTransmitter?.status === 'active' ? 'حي' : (currentTransmitter?.status || 'حي'),
+          birdStatus: currentTransmitter?.status === 'active' ? 'حي' : (currentTransmitter?.status || prev.birdStatus || 'حي'),
           issueDate: formatDateYYYYMMDD(new Date()) || prev.issueDate,
           regionName: '',
           statDirection: '',
@@ -2241,9 +2284,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         #custom-map-production-print-area {
           --maroon: ${themeColors.primaryMaroon};
           --green: ${themeColors.latestGreen};
-          --amber: ${themeColors.campPin};
+          --amber: ${themeColors.campPinColor};
           --brown: #7a4a12;
-          --red: ${themeColors.trackLine};
+          --red: ${themeColors.releaseDistLineColor};
           --ink: #1f2937;
           --muted: #6b7280;
           --line: #d9dbe1;
@@ -2831,7 +2874,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* 1. Unified Bird ID Selector & Resolver (PTT / Ring / Darvic) */}
           <div className="relative">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
-              <span>البحث عن طائر أو جهاز:</span>
+              <span>{reportLanguage === 'ar' ? 'معرّف الطائر (PTT / رقم الحجل / Darvic):' : 'Bird ID (PTT / Ring / Darvic):'}</span>
               <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold font-mono">PTT / Ring / Darvic</span>
             </label>
             <div className="relative">
@@ -3405,11 +3448,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
                   <input
                     type="checkbox"
-                    checked={sectionVisibility.header}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, header: e.target.checked }))}
+                    checked={sectionVisibility.headerLogos}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, headerLogos: e.target.checked }))}
                     className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
                   />
                   <span>رأس الصفحة والشعارات</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.subtitle}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, subtitle: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>معلومات المنطقة والجهاز</span>
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
                   <input
@@ -3450,8 +3502,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
                   <input
                     type="checkbox"
-                    checked={sectionVisibility.legend}
-                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, legend: e.target.checked }))}
+                    checked={sectionVisibility.legendBar}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, legendBar: e.target.checked }))}
                     className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
                   />
                   <span>مفتاح الخريطة (Legend)</span>
@@ -3492,68 +3544,189 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <Palette size={14} className="text-brand-500" />
                 <span>ألوان عناصر التقرير والخريطة (Theme Colors):</span>
               </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 text-xs">
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
                   <input
                     type="color"
                     value={themeColors.primaryMaroon}
                     onChange={(e) => setThemeColors(prev => ({ ...prev, primaryMaroon: e.target.value }))}
-                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
                   />
-                  <div>
-                    <span className="block text-[11px] font-bold">اللون العنابي</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.primaryMaroon}</span>
-                  </div>
+                  <span className="block text-[10.5px] font-bold">العنابي الأساسي</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.primaryMaroon}</span>
                 </div>
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
                   <input
                     type="color"
                     value={themeColors.latestGreen}
                     onChange={(e) => setThemeColors(prev => ({ ...prev, latestGreen: e.target.value }))}
-                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
                   />
-                  <div>
-                    <span className="block text-[11px] font-bold">آخر موقع</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.latestGreen}</span>
-                  </div>
+                  <span className="block text-[10.5px] font-bold">الأخضر الأساسي</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.latestGreen}</span>
                 </div>
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
                   <input
                     type="color"
-                    value={themeColors.trackLine}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, trackLine: e.target.value }))}
-                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                    value={themeColors.latestPinColor}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, latestPinColor: e.target.value }))}
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
                   />
-                  <div>
-                    <span className="block text-[11px] font-bold">خط المسار</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.trackLine}</span>
-                  </div>
+                  <span className="block text-[10.5px] font-bold">دبوس آخر موقع</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.latestPinColor}</span>
                 </div>
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
                   <input
                     type="color"
-                    value={themeColors.campPin}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, campPin: e.target.value }))}
-                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                    value={themeColors.releasePinColor}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, releasePinColor: e.target.value }))}
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
                   />
-                  <div>
-                    <span className="block text-[11px] font-bold">دبوس المخيم</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.campPin}</span>
-                  </div>
+                  <span className="block text-[10.5px] font-bold">دبوس الإطلاق</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.releasePinColor}</span>
                 </div>
-                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
                   <input
                     type="color"
-                    value={themeColors.releasePin}
-                    onChange={(e) => setThemeColors(prev => ({ ...prev, releasePin: e.target.value }))}
-                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                    value={themeColors.campPinColor}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, campPinColor: e.target.value }))}
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
                   />
-                  <div>
-                    <span className="block text-[11px] font-bold">دبوس الإطلاق</span>
-                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.releasePin}</span>
-                  </div>
+                  <span className="block text-[10.5px] font-bold">دبوس المخيم</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.campPinColor}</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
+                  <input
+                    type="color"
+                    value={themeColors.trackLineColor}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, trackLineColor: e.target.value }))}
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
+                  />
+                  <span className="block text-[10.5px] font-bold">خط المسار</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.trackLineColor}</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
+                  <input
+                    type="color"
+                    value={themeColors.releaseDistLineColor}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, releaseDistLineColor: e.target.value }))}
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
+                  />
+                  <span className="block text-[10.5px] font-bold">مسافة الإطلاق</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.releaseDistLineColor}</span>
+                </div>
+                <div className="bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700 text-center">
+                  <input
+                    type="color"
+                    value={themeColors.campDistLineColor}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, campDistLineColor: e.target.value }))}
+                    className="w-full h-7 rounded border border-gray-300 cursor-pointer mb-1"
+                  />
+                  <span className="block text-[10.5px] font-bold">مسافة المخيم</span>
+                  <span className="text-[9.5px] text-gray-400 font-mono">{themeColors.campDistLineColor}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Studio Section: Draggable Custom Map Annotations */}
+            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-3">
+              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <MapPin size={14} className="text-brand-500" />
+                  <span>تسميات وعلامات الخريطة المخصصة (Custom Map Labels & Shapes):</span>
+                </span>
+                <span className="text-[10px] text-gray-500">قابلة للسحب والتحريك على الخريطة</span>
+              </h4>
+
+              {/* Add Annotation Form */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-2 items-end">
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">نص التسمية:</label>
+                  <input
+                    type="text"
+                    value={newAnnText}
+                    onChange={(e) => setNewAnnText(e.target.value)}
+                    placeholder="اكتب التسمية هنا..."
+                    className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">الشكل:</label>
+                  <select
+                    value={newAnnShape}
+                    onChange={(e) => setNewAnnShape(e.target.value as AnnotationShape)}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white dark:bg-slate-800"
+                  >
+                    <option value="pill">كبسولة (Pill)</option>
+                    <option value="rect">مستطيل (Rect)</option>
+                    <option value="circle">دائرة (Circle)</option>
+                    <option value="callout">مربع حواري (Callout)</option>
+                    <option value="flag">علم (Flag)</option>
+                    <option value="text-only">نص فقط (Text)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">الخلفية:</label>
+                  <input
+                    type="color"
+                    value={newAnnBg}
+                    onChange={(e) => setNewAnnBg(e.target.value)}
+                    className="w-full h-8 rounded border border-gray-300 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">لون النص:</label>
+                  <input
+                    type="color"
+                    value={newAnnTextCol}
+                    onChange={(e) => setNewAnnTextCol(e.target.value)}
+                    className="w-full h-8 rounded border border-gray-300 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 dark:text-gray-400 mb-1">لون الإطار:</label>
+                  <input
+                    type="color"
+                    value={newAnnBorderCol}
+                    onChange={(e) => setNewAnnBorderCol(e.target.value)}
+                    className="w-full h-8 rounded border border-gray-300 cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleAddAnnotation}
+                    className="w-full py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Plus size={14} />
+                    <span>إضافة</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* List of active custom annotations */}
+              {customAnnotations.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1 border-t border-gray-200 dark:border-slate-700">
+                  {customAnnotations.map(ann => (
+                    <div
+                      key={ann.id}
+                      className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs bg-white dark:bg-slate-800"
+                      style={{ borderColor: ann.borderColor }}
+                    >
+                      <span className="font-bold" style={{ color: ann.textColor }}>{ann.text}</span>
+                      <span className="text-[10px] text-gray-400">({ann.shape})</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteAnnotation(ann.id)}
+                        className="text-red-500 hover:text-red-700"
+                        title="حذف التسمية"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
           </div>
@@ -3618,9 +3791,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         >
 
           {/* 1. REPORT HEADER (Pixel-faithful to reference design) */}
-          {sectionVisibility.header && (
-            <>
-              <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2000 }}>
+          {sectionVisibility.headerLogos && (
+            <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2000 }}>
             
             {/* Agency Info: Emblem + Rule + Names (On Right in RTL) */}
             <div className="trk-header__agency relative">
@@ -4020,9 +4192,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </div>
 
           </header>
+          )}
 
           {/* 2px Solid Maroon Rule */}
-          <div className="trk-hr" />
+          {sectionVisibility.headerLogos && <div className="trk-hr" />}
 
           {/* Centered Title */}
           {isTableEditing ? (
@@ -4039,37 +4212,37 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           )}
 
           {/* Subtitle */}
-          <p className="trk-sub">
-            {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {isTableEditing ? (
-              <span className="inline-flex items-center gap-1 mx-1">
-                <input
-                  type="text"
-                  value={customMetadata.regionName}
-                  onChange={(e) => setCustomMetadata({ ...customMetadata, regionName: e.target.value })}
-                  className="text-xs font-semibold px-2 py-0.5 border border-amber-300 rounded bg-amber-50/50 text-gray-800"
-                  placeholder={reportLanguage === 'ar' ? `${autoLocation.regionAr} – ${autoLocation.countryAr}` : `${autoLocation.regionEn} – ${autoLocation.countryEn}`}
-                />
-              </span>
-            ) : (
-              <span>
-                {customMetadata.regionName 
-                  ? (() => {
-                      const res = resolveRegionBilingual(customMetadata.regionName, customMetadata.regionName);
-                      const reg = reportLanguage === 'ar' ? res.regionAr : res.regionEn;
-                      const cty = reportLanguage === 'ar' ? autoLocation.countryAr : autoLocation.countryEn;
-                      return reportLanguage === 'ar'
-                        ? `${T.regionLabel} ${reg} – ${cty}`
-                        : `${reg} ${T.regionLabel} – ${cty}`;
-                    })()
-                  : (reportLanguage === 'ar' 
-                      ? `${T.regionLabel} ${autoLocation.regionAr} – ${autoLocation.countryAr}`
-                      : `${autoLocation.regionEn} ${T.regionLabel} – ${autoLocation.countryEn}`
-                    )
-                }
-              </span>
-            )} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
-          </p>
-          </>
+          {sectionVisibility.subtitle && (
+            <p className="trk-sub">
+              {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {isTableEditing ? (
+                <span className="inline-flex items-center gap-1 mx-1">
+                  <input
+                    type="text"
+                    value={customMetadata.regionName}
+                    onChange={(e) => setCustomMetadata({ ...customMetadata, regionName: e.target.value })}
+                    className="text-xs font-semibold px-2 py-0.5 border border-amber-300 rounded bg-amber-50/50 text-gray-800"
+                    placeholder={reportLanguage === 'ar' ? `${autoLocation.regionAr} – ${autoLocation.countryAr}` : `${autoLocation.regionEn} – ${autoLocation.countryEn}`}
+                  />
+                </span>
+              ) : (
+                <span>
+                  {customMetadata.regionName 
+                    ? (() => {
+                        const res = resolveRegionBilingual(customMetadata.regionName, customMetadata.regionName);
+                        const reg = reportLanguage === 'ar' ? res.regionAr : res.regionEn;
+                        const cty = reportLanguage === 'ar' ? autoLocation.countryAr : autoLocation.countryEn;
+                        return reportLanguage === 'ar'
+                          ? `${T.regionLabel} ${reg} – ${cty}`
+                          : `${reg} ${T.regionLabel} – ${cty}`;
+                      })()
+                    : (reportLanguage === 'ar' 
+                        ? `${T.regionLabel} ${autoLocation.regionAr} – ${autoLocation.countryAr}`
+                        : `${autoLocation.regionEn} ${T.regionLabel} – ${autoLocation.countryEn}`
+                      )
+                  }
+                </span>
+              )} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
+            </p>
           )}
 
           {/* 2. MAIN REPORT BODY */}
@@ -4615,6 +4788,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span>تفاعلية</span>
                       </button>
                     </div>
+
+                    {/* Draggable Annotations in Snapshot Mode */}
+                    {customAnnotations.map(ann => {
+                      const { svgHtml, width, height } = renderCustomAnnotationSvg(ann);
+                      return (
+                        <DraggableComponent
+                          key={ann.id}
+                          disabled={!isDragEnabled}
+                          defaultPosition={{ x: (ann.xPercent / 100) * 600, y: (ann.yPercent / 100) * 400 }}
+                          onStop={(_: any, data: any) => {
+                            setCustomAnnotations(prev => prev.map(a => a.id === ann.id ? { ...a, xPercent: (data.x / 600) * 100, yPercent: (data.y / 400) * 100 } : a));
+                          }}
+                        >
+                          <div
+                            className={`absolute z-[1000] ${isDragEnabled ? 'cursor-move ring-1 ring-brand-400' : 'pointer-events-auto'}`}
+                            style={{ width, height }}
+                            dangerouslySetInnerHTML={{ __html: svgHtml }}
+                          />
+                        </DraggableComponent>
+                      );
+                    })}
                   </div>
                 ) : (
                   /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS (PER-BIRD INTERACTIVE MODE) */
@@ -4643,6 +4837,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
                     </div>
                     <MapContainer
+                      key={`report-map-${selectedPttId}-${mapDisplayMode}`}
                       center={mapCenter}
                       zoom={mapZoom}
                       scrollWheelZoom={true}
@@ -4695,7 +4890,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <Polyline
                           positions={allHistoryPoints}
                           pathOptions={{
-                            color: themeColors.trackLine,
+                            color: themeColors.trackLineColor,
                             weight: 2.8,
                             opacity: 0.85
                           }}
@@ -4711,7 +4906,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           pathOptions={{
                             fillColor: '#ffffff',
                             fillOpacity: 0.95,
-                            color: '#4f46e5',
+                            color: themeColors.trackLineColor,
                             weight: 1.5
                           }}
                         />
@@ -4731,7 +4926,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 [c2.lat, c2.lon]
                               ]}
                               pathOptions={{
-                                color: '#059669',
+                                color: themeColors.campDistLineColor,
                                 weight: 2.5,
                                 dashArray: '6, 6',
                                 opacity: 0.95
@@ -4739,7 +4934,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             />
                             <Marker
                               position={mid}
-                              icon={createDistancePillIcon(`${dKm} km`, '#059669')}
+                              icon={createDistancePillIcon(`${dKm} km`, themeColors.campDistLineColor)}
                               zIndexOffset={1500}
                               interactive={false}
                             />
@@ -4766,7 +4961,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 [metrics.lLat, metrics.lLon]
                               ]}
                               pathOptions={{
-                                color: '#d97706',
+                                color: themeColors.campDistLineColor,
                                 weight: 2.5,
                                 dashArray: '6, 6',
                                 opacity: 0.95
@@ -4774,7 +4969,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             />
                             <Marker
                               position={pillPos}
-                              icon={createDistancePillIcon(`${distKm} km`, '#d97706')}
+                              icon={createDistancePillIcon(`${distKm} km`, themeColors.campDistLineColor)}
                               zIndexOffset={1600}
                               interactive={true}
                               draggable={true}
@@ -4804,7 +4999,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               [metrics.rLat, metrics.rLon]
                             ]}
                             pathOptions={{
-                              color: themeColors.trackLine,
+                              color: themeColors.releaseDistLineColor,
                               weight: 2.5,
                               dashArray: '6, 6',
                               opacity: 0.95
@@ -4814,7 +5009,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             position={customReleaseDistPos || metrics.releaseToLastMid}
                             icon={createDistancePillIcon(
                               `${metrics.distFromReleaseKm} km`, 
-                              themeColors.trackLine,
+                              themeColors.releaseDistLineColor,
                               [Math.max(70, `${metrics.distFromReleaseKm} km`.length * 7.5 + 16) + 16, 12]
                             )}
                             zIndexOffset={1500}
@@ -4838,7 +5033,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.rLat, metrics.rLon]}
-                            icon={createLiveTrackingPinIcon(themeColors.releasePin)}
+                            icon={createLiveTrackingPinIcon(themeColors.releasePinColor)}
                             zIndexOffset={1800}
                             interactive={false}
                           />
@@ -4847,7 +5042,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             icon={createLiveTrackingLabelIcon({
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
-                              borderColorHex: themeColors.releasePin,
+                              borderColorHex: themeColors.releasePinColor,
                               labelTitle: reportLanguage === 'en' ? 'Release' : T.installHead,
                               position: 'right'
                             })}
@@ -4871,7 +5066,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.lLat, metrics.lLon]}
-                            icon={createLiveTrackingPinIcon(themeColors.latestGreen)}
+                            icon={createLiveTrackingPinIcon(themeColors.latestPinColor)}
                             zIndexOffset={2000}
                             interactive={false}
                           />
@@ -4880,7 +5075,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             icon={createLiveTrackingLabelIcon({
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
-                              borderColorHex: themeColors.latestGreen,
+                              borderColorHex: themeColors.latestPinColor,
                               labelTitle: reportLanguage === 'en' ? 'Latest Location' : T.lastHead,
                               position: 'top'
                             })}
@@ -4906,7 +5101,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <React.Fragment key={camp.id}>
                             <Marker
                               position={[camp.lat, camp.lon]}
-                              icon={createLiveTrackingCampPinIcon(themeColors.campPin)}
+                              icon={createLiveTrackingCampPinIcon(themeColors.campPinColor)}
                               zIndexOffset={1000}
                               interactive={false}
                             />
@@ -5384,7 +5579,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </div>
 
               {/* Map Legend Bar */}
-              {sectionVisibility.legend && (
+              {sectionVisibility.legendBar && (
                 <div 
                   id="custom-map-legend-bar"
                 className="trk-legend relative group select-none transition-all"
