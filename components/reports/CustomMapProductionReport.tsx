@@ -6,7 +6,8 @@ import {
   Plus, Minus, Crosshair, Maximize2, Minimize2,
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
   Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload,
-  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X, Save, AlertTriangle
+  ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X, Save, AlertTriangle,
+  Bot
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -23,8 +24,14 @@ import { FIXED_FIELD_CAMPS, FieldCampPoint } from '../../constants';
 import { 
   safeParseTimestamp, 
   classifyLocationType, 
-  findBirdForTransmitter 
+  findBirdForTransmitter,
+  isBirdLinkedToTransmitter
 } from '../../utils/formatting';
+import { parseBirdCoordinateCommand, resolveBirdOrTransmitter } from '../../utils/coordinateParser';
+import { SevenDayTempChart } from './SevenDayTempChart';
+import { CustomMapAnnotation, createCustomAnnotationDivIcon } from './CustomMapAnnotations';
+import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
+import { BotReportBridgeModal } from './BotReportBridgeModal';
 import {
   calculateDistanceKm,
   calculateBearingDegrees,
@@ -167,12 +174,12 @@ const createLiveTrackingLabelIcon = ({
   });
 };
 
-const createLiveTrackingCampPinIcon = () => {
+const createLiveTrackingCampPinIcon = (pinColorHex: string = '#f59e0b') => {
   return L.divIcon({
     className: 'bg-transparent',
     html: `
       <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
-        <circle cx="15" cy="15" r="14" fill="#f59e0b" stroke="#ffffff" stroke-width="2"/>
+        <circle cx="15" cy="15" r="14" fill="${pinColorHex}" stroke="#ffffff" stroke-width="2"/>
         <g transform="translate(6, 6) scale(0.75)">
           <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
           <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
@@ -616,6 +623,26 @@ export const getCampLegendLabel = (campIds: string[]): string => {
   return 'مخيم';
 };
 
+export interface ReportSectionVisibility {
+  header: boolean;
+  birdDataCard: boolean;
+  coordinatesCard: boolean;
+  kpiCards: boolean;
+  tempChart: boolean;
+  legend: boolean;
+  scaleBar: boolean;
+  northArrow: boolean;
+  footer: boolean;
+}
+
+export interface ReportThemeColors {
+  primaryMaroon: string;
+  latestGreen: string;
+  trackLine: string;
+  campPin: string;
+  releasePin: string;
+}
+
 export interface CustomMapProductionReportProps {
   onBack?: () => void;
 }
@@ -629,6 +656,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     sharedMapCenter,
     sharedMapZoom
   } = useAppStore();
+
+  // ─── 100% EDITABLE STUDIO: SECTION VISIBILITY & THEME COLORS ─────────────
+  const [sectionVisibility, setSectionVisibility] = useState<ReportSectionVisibility>({
+    header: true,
+    birdDataCard: true,
+    coordinatesCard: true,
+    kpiCards: true,
+    tempChart: true,
+    legend: true,
+    scaleBar: true,
+    northArrow: true,
+    footer: true,
+  });
+
+  const [themeColors, setThemeColors] = useState<ReportThemeColors>({
+    primaryMaroon: '#7a1c32',
+    latestGreen: '#059669',
+    trackLine: '#dc2626',
+    campPin: '#f59e0b',
+    releasePin: '#7a1c32',
+  });
+
+  const [isBotModalOpen, setIsBotModalOpen] = useState<boolean>(false);
+  const [annotations, setAnnotations] = useState<CustomMapAnnotation[]>([]);
 
   // Selected Transmitter (defaults to 244289 as requested)
   const initialPtt = useMemo(() => {
@@ -770,6 +821,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.tableMode) setTableMode(parsed.tableMode);
         if (parsed.reportLanguage) setReportLanguage(parsed.reportLanguage);
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
+        if (parsed.sectionVisibility) setSectionVisibility(parsed.sectionVisibility);
+        if (parsed.themeColors) setThemeColors(parsed.themeColors);
       } catch (e) {
         console.error('Failed to parse saved report settings', e);
       }
@@ -793,7 +846,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       showGraticule,
       tableMode,
       reportLanguage,
-      mapImageFit
+      mapImageFit,
+      sectionVisibility,
+      themeColors
     };
     localStorage.setItem('hbtrack_report_settings', JSON.stringify(settings));
     setHistoryUploadNotice('تم بنجاح حفظ الإعدادات الافتراضية للتقرير.');
@@ -1634,6 +1689,175 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return list.filter(id => id.toLowerCase().includes(pttSearchTerm.toLowerCase()));
   }, [transmitters, pttSearchTerm]);
 
+  // ─── UNIFIED BIRD ID SELECTOR & RESOLVER (PTT, RING, DARVIC) ──────────────
+  const unifiedTargetOptions = useMemo(() => {
+    const options: Array<{
+      key: string;
+      id: string;
+      label: string;
+      sublabel: string;
+      pttId: string;
+      ringId?: string;
+      darvicId?: string;
+      type: 'transmitter' | 'bird';
+      searchValue: string;
+    }> = [];
+
+    const seenKeys = new Set<string>();
+
+    // 1. All Transmitters from App Store
+    transmitters.forEach(tx => {
+      const ptt = tx.platform_id || tx.id;
+      if (!ptt || seenKeys.has(`tx-${ptt}`)) return;
+      seenKeys.add(`tx-${ptt}`);
+
+      const linkedBird = birds.find(b => isBirdLinkedToTransmitter(b, tx));
+      const ring = linkedBird?.ring_id;
+      const darvic = linkedBird?.darvic_number;
+
+      const subParts: string[] = [];
+      if (ring && ring !== 'NA') subParts.push(`حجل: ${ring}`);
+      if (darvic) subParts.push(`دارفيك: ${darvic}`);
+      if (tx.status) subParts.push(`حالة: ${tx.status}`);
+
+      options.push({
+        key: `tx-${ptt}`,
+        id: ptt,
+        label: `جهاز PTT: ${ptt}`,
+        sublabel: subParts.join(' | ') || 'جهاز تتبع',
+        pttId: ptt,
+        ringId: ring,
+        darvicId: darvic,
+        type: 'transmitter',
+        searchValue: `${ptt} ${ring || ''} ${darvic || ''} ${tx.id || ''}`.toLowerCase()
+      });
+    });
+
+    // 2. All Birds from App Store
+    birds.forEach(b => {
+      const ring = b.ring_id && b.ring_id !== 'NA' ? b.ring_id : '';
+      const darvic = b.darvic_number || '';
+      const linkedTx = transmitters.find(t => isBirdLinkedToTransmitter(b, t));
+      const ptt = linkedTx?.platform_id || b.assigned_transmitter_id || 'NA';
+
+      if (ring && !seenKeys.has(`ring-${ring}`)) {
+        seenKeys.add(`ring-${ring}`);
+        options.push({
+          key: `ring-${ring}`,
+          id: ring,
+          label: `طائر (حجل): ${ring}`,
+          sublabel: `جهاز: ${ptt}${darvic ? ` | دارفيك: ${darvic}` : ''}${b.species ? ` | ${b.species}` : ''}`,
+          pttId: ptt,
+          ringId: ring,
+          darvicId: darvic,
+          type: 'bird',
+          searchValue: `${ring} ${ptt} ${darvic} ${b.species || ''}`.toLowerCase()
+        });
+      }
+
+      if (darvic && !seenKeys.has(`darvic-${darvic}`)) {
+        seenKeys.add(`darvic-${darvic}`);
+        options.push({
+          key: `darvic-${darvic}`,
+          id: darvic,
+          label: `طائر (دارفيك): ${darvic}`,
+          sublabel: `حجل: ${ring || 'NA'} | جهاز: ${ptt}`,
+          pttId: ptt,
+          ringId: ring,
+          darvicId: darvic,
+          type: 'bird',
+          searchValue: `${darvic} ${ring} ${ptt}`.toLowerCase()
+        });
+      }
+    });
+
+    // Fallbacks
+    ['244289', '244276'].forEach(demoPtt => {
+      if (!seenKeys.has(`tx-${demoPtt}`)) {
+        seenKeys.add(`tx-${demoPtt}`);
+        options.unshift({
+          key: `tx-${demoPtt}`,
+          id: demoPtt,
+          label: `جهاز PTT: ${demoPtt}`,
+          sublabel: 'نموذج قياسي',
+          pttId: demoPtt,
+          type: 'transmitter',
+          searchValue: demoPtt.toLowerCase()
+        });
+      }
+    });
+
+    return options;
+  }, [transmitters, birds]);
+
+  const filteredUnifiedTargets = useMemo(() => {
+    if (!pttSearchTerm.trim()) return unifiedTargetOptions;
+    const term = pttSearchTerm.trim().toLowerCase();
+    return unifiedTargetOptions.filter(opt => opt.searchValue.includes(term));
+  }, [unifiedTargetOptions, pttSearchTerm]);
+
+  const handleSelectUnifiedTarget = useCallback((targetId: string) => {
+    const resolved = resolveBirdOrTransmitter(targetId, transmitters, birds);
+    const targetPtt = resolved.pttId && resolved.pttId !== 'NA' ? resolved.pttId : targetId;
+    setSelectedPttId(targetPtt);
+    setPttSearchTerm('');
+    setIsSearchOpen(false);
+
+    if (resolved.bird) {
+      const b = resolved.bird;
+      setCustomMetadata(prev => ({
+        ...prev,
+        birdRing: b.ring_id || prev.birdRing || 'NA',
+        species: b.species === 'Asian Houbara' ? 'وحش' : (b.species || prev.species),
+        gender: b.sex === 'M' ? 'ذكر' : b.sex === 'F' ? 'أنثى' : prev.gender,
+        birdStatus: resolved.transmitter?.status === 'active' ? 'حي' : (resolved.transmitter?.status || prev.birdStatus)
+      }));
+    }
+
+    handleUploadFromHistory(targetPtt);
+  }, [transmitters, birds, handleUploadFromHistory]);
+
+  const handleApplyBotCommand = useCallback(async (identifier: string, lat?: number, lon?: number) => {
+    if (identifier) {
+      const resolved = resolveBirdOrTransmitter(identifier, transmitters, birds);
+      const targetPtt = resolved.pttId && resolved.pttId !== 'NA' ? resolved.pttId : identifier;
+      setSelectedPttId(targetPtt);
+      if (resolved.bird) {
+        const b = resolved.bird;
+        setCustomMetadata(prev => ({
+          ...prev,
+          birdRing: b.ring_id || prev.birdRing || 'NA',
+          species: b.species === 'Asian Houbara' ? 'وحش' : (b.species || prev.species),
+          gender: b.sex === 'M' ? 'ذكر' : b.sex === 'F' ? 'أنثى' : prev.gender,
+          birdStatus: resolved.transmitter?.status === 'active' ? 'حي' : (resolved.transmitter?.status || prev.birdStatus)
+        }));
+      }
+      await handleUploadFromHistory(targetPtt);
+    }
+
+    if (lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon)) {
+      setTelemetryData(prev => ({
+        ...prev,
+        lastGpsPos: {
+          lat,
+          lon,
+          dateStr: formatDateDDMMYYYY(new Date())
+        },
+        dataSource: 'telemetry'
+      }));
+      setMapCenter([lat, lon]);
+      setFitKey(k => k + 1);
+    }
+  }, [transmitters, birds, handleUploadFromHistory]);
+
+  const handleGeneratePdfBlob = useCallback(async (): Promise<{ blob: Blob; fileName: string; caption: string }> => {
+    const node = reportContainerRef.current || document.getElementById('custom-map-production-print-area')!;
+    const blob = await generateReportPdfBlob(node);
+    const fileName = `Houbara_Tracking_Report_${selectedPttId}_${formatDateYYYYMMDD(new Date())}`;
+    const caption = `🦅 تقرير متابعة الحبارى (Houbara Report)\nجهاز: ${selectedPttId}\nالحجل: ${customMetadata.birdRing || 'NA'}\nالتاريخ: ${telemetryData.lastGpsPos.dateStr}\nالموقع: ${metrics.lLat.toFixed(4)}, ${metrics.lLon.toFixed(4)}`;
+    return { blob, fileName, caption };
+  }, [selectedPttId, customMetadata.birdRing, telemetryData.lastGpsPos.dateStr, metrics.lLat, metrics.lLon]);
+
   // ─── HISTORY ROW EDITING HANDLERS ──────────────────────────────────────────
   const handleUpdateHistoryRow = (id: string, field: keyof HistoryTableRow, value: any) => {
     setHistoryRows(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
@@ -2015,11 +2239,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 
         #custom-map-production-print-area {
-          --maroon: #7a1c32;
-          --green: #128a5b;
-          --amber: #f5a623;
+          --maroon: ${themeColors.primaryMaroon};
+          --green: ${themeColors.latestGreen};
+          --amber: ${themeColors.campPin};
           --brown: #7a4a12;
-          --red: #d9263a;
+          --red: ${themeColors.trackLine};
           --ink: #1f2937;
           --muted: #6b7280;
           --line: #d9dbe1;
@@ -2037,16 +2261,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         .trk-header { display: flex; justify-content: space-between; align-items: center; width: 100%; }
         .trk-header__agency { display: flex; align-items: center; gap: 14px; }
         .trk-header__agency img { height: 64px; }
-        .trk-header__rule { width: 1px; height: 52px; background: #7a1c32; }
+        .trk-header__rule { width: 1px; height: 52px; background: var(--maroon, #7a1c32); }
         .trk-header__names { text-align: right; }
         .trk-header__names .ar { font-size: 18px; font-weight: 600; letter-spacing: 0.02em; color: #1b2433; line-height: 1.25; }
         .trk-header__names .en { font-size: 19px; font-weight: 500; color: #1b2433; line-height: 1.2; font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important; }
         .trk-header__center { height: 78px; }
-        .trk-hr { height: 2px; background: #7a1c32; margin: 12px 0 18px; width: 100%; display: block; }
+        .trk-hr { height: 2px; background: var(--maroon, #7a1c32); margin: 12px 0 18px; width: 100%; display: block; }
 
         .trk-title { text-align: center; font-size: 23px; font-weight: 700; margin: 0 0 8px; color: #1b2433; }
         .trk-sub { text-align: center; color: #6b7280; font-size: 13px; margin: 0 0 16px; }
-        .trk-sub b { color: #7a1c32; font-weight: 700; }
+        .trk-sub b { color: var(--maroon, #7a1c32); font-weight: 700; }
 
         /* Two columns: side panel (440px on right in RTL) and map (left) */
         .trk-grid { display: grid; grid-template-columns: 440px 1fr; gap: 24px; flex: 1; min-height: 520px; width: 100%; }
@@ -2066,7 +2290,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
         .trk-card { border: 1px solid #d9dbe1; border-radius: 8px; overflow: hidden; background: #fff; }
         .trk-card__head { 
-          background: #7a1c32; 
+          background: var(--maroon, #7a1c32); 
           color: #fff; 
           font-weight: 700; 
           font-size: 14.5px; 
@@ -2116,7 +2340,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           text-align: center; 
           justify-content: center; 
         }
-        .trk-row .v .maroon, .maroon { color: #7a1c32; font-weight: 700; }
+        .trk-row .v .maroon, .maroon { color: var(--maroon, #7a1c32); font-weight: 700; }
 
         /* 3. Pills: inline-flex + fixed height so they never clip */
         .pill { 
@@ -2163,14 +2387,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           box-sizing: border-box;
         }
         .trk-twohead__install { 
-          background: #7a1c32; 
+          background: var(--maroon, #7a1c32); 
           padding: 0 12px; 
           text-align: center; 
           flex: 1 1 33.333%; 
           width: 33.333%; 
         }
         .trk-twohead__last { 
-          background: #128a5b; 
+          background: var(--green, #128a5b); 
           padding: 0 12px; 
           text-align: center; 
           flex: 1 1 33.333%; 
@@ -2555,6 +2779,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </button>
             </div>
 
+            {/* Telegram & WhatsApp Bot Bridge Trigger */}
+            <button
+              onClick={() => setIsBotModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-sky-600 to-emerald-600 hover:from-sky-700 hover:to-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition-all whitespace-nowrap"
+              title="ربط التقرير مع بوت تيليجرام وواتساب واستقبال الأوامر تلقائياً"
+            >
+              <Bot size={15} />
+              <span>📲 بوت تيليجرام / واتساب</span>
+            </button>
+
             {/* Save Settings */}
             <button
               onClick={saveSettings}
@@ -2594,10 +2828,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         {/* Primary Controls Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-1">
           
-          {/* 1. Transmitter Selector */}
+          {/* 1. Unified Bird ID Selector & Resolver (PTT / Ring / Darvic) */}
           <div className="relative">
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-              جهاز التتبع (Transmitter ID):
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
+              <span>البحث عن طائر أو جهاز:</span>
+              <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold font-mono">PTT / Ring / Darvic</span>
             </label>
             <div className="relative">
               <input
@@ -2609,7 +2844,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   setIsSearchOpen(true);
                 }}
                 onFocus={() => setIsSearchOpen(true)}
-                placeholder="رقم الجهاز..."
+                placeholder="ابحث برقم PTT أو الحجل أو الدارفيك..."
                 className="w-full pl-9 pr-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white font-mono"
               />
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -2618,27 +2853,37 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             {isSearchOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setIsSearchOpen(false)} />
-                <div className="absolute top-full mt-1.5 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-30 max-h-56 overflow-y-auto">
-                  <div className="p-1.5">
-                    {filteredPtts.map(pid => (
+                <div className="absolute top-full mt-1.5 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-30 max-h-64 overflow-y-auto">
+                  <div className="p-1.5 space-y-1">
+                    {filteredUnifiedTargets.map(opt => (
                       <button
-                        key={pid}
+                        key={opt.key}
                         type="button"
-                        onClick={() => {
-                          setSelectedPttId(pid);
-                          setPttSearchTerm('');
-                          setIsSearchOpen(false);
-                        }}
-                        className={`w-full text-right px-3 py-2 text-xs rounded-lg flex items-center justify-between font-mono transition-colors ${
-                          selectedPttId === pid 
+                        onClick={() => handleSelectUnifiedTarget(opt.id)}
+                        className={`w-full text-right px-3 py-2 text-xs rounded-lg flex flex-col gap-0.5 transition-colors ${
+                          selectedPttId === opt.pttId 
                             ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300 font-bold' 
                             : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200'
                         }`}
                       >
-                        <span>{pid}</span>
-                        {pid === 'NA' && <span className="text-[10px] text-gray-400 font-sans">عرض برقم الحجل</span>}
+                        <div className="flex items-center justify-between font-mono">
+                          <span className="font-bold">{opt.label}</span>
+                          <span className="text-[10px] text-gray-400 font-sans">
+                            {opt.type === 'bird' ? 'طائر' : 'جهاز'}
+                          </span>
+                        </div>
+                        {opt.sublabel && (
+                          <div className="text-[10.5px] text-gray-500 dark:text-gray-400 font-sans truncate">
+                            {opt.sublabel}
+                          </div>
+                        )}
                       </button>
                     ))}
+                    {filteredUnifiedTargets.length === 0 && (
+                      <div className="p-3 text-center text-xs text-gray-400 font-sans">
+                        لا توجد نتائج مطابقة
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -3150,6 +3395,167 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </div>
             </div>
 
+            {/* Studio Section: Report Section Visibility */}
+            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2">
+              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                <Eye size={14} className="text-brand-500" />
+                <span>إظهار وإخفاء أقسام التقرير (100% Studio Section Visibility):</span>
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.header}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, header: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>رأس الصفحة والشعارات</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.birdDataCard}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, birdDataCard: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>جدول بيانات الطائر</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.coordinatesCard}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, coordinatesCard: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>جدول الإحداثيات</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.kpiCards}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, kpiCards: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>بطاقات المؤشرات (KPIs)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.tempChart}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, tempChart: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>منحنى درجات الحرارة (7 أيام)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.legend}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, legend: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>مفتاح الخريطة (Legend)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.scaleBar}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, scaleBar: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>مقياس الرسم (Scale Bar)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.northArrow}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, northArrow: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>سهم الشمال (North Arrow)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={sectionVisibility.footer}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, footer: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>تذييل الصفحة (Footer)</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Studio Section: Theme Colors */}
+            <div className="bg-gray-50/80 dark:bg-slate-900/60 p-3 rounded-xl border border-gray-200 dark:border-slate-700 space-y-2">
+              <h4 className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                <Palette size={14} className="text-brand-500" />
+                <span>ألوان عناصر التقرير والخريطة (Theme Colors):</span>
+              </h4>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs">
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                  <input
+                    type="color"
+                    value={themeColors.primaryMaroon}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, primaryMaroon: e.target.value }))}
+                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="block text-[11px] font-bold">اللون العنابي</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.primaryMaroon}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                  <input
+                    type="color"
+                    value={themeColors.latestGreen}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, latestGreen: e.target.value }))}
+                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="block text-[11px] font-bold">آخر موقع</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.latestGreen}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                  <input
+                    type="color"
+                    value={themeColors.trackLine}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, trackLine: e.target.value }))}
+                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="block text-[11px] font-bold">خط المسار</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.trackLine}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                  <input
+                    type="color"
+                    value={themeColors.campPin}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, campPin: e.target.value }))}
+                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="block text-[11px] font-bold">دبوس المخيم</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.campPin}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg border border-gray-200 dark:border-slate-700">
+                  <input
+                    type="color"
+                    value={themeColors.releasePin}
+                    onChange={(e) => setThemeColors(prev => ({ ...prev, releasePin: e.target.value }))}
+                    className="w-7 h-7 rounded border border-gray-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="block text-[11px] font-bold">دبوس الإطلاق</span>
+                    <span className="text-[10px] text-gray-400 font-mono">{themeColors.releasePin}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         )}
 
@@ -3212,7 +3618,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         >
 
           {/* 1. REPORT HEADER (Pixel-faithful to reference design) */}
-          <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2000 }}>
+          {sectionVisibility.header && (
+            <>
+              <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2000 }}>
             
             {/* Agency Info: Emblem + Rule + Names (On Right in RTL) */}
             <div className="trk-header__agency relative">
@@ -3661,6 +4069,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </span>
             )} • {T.issueDateLabel} <b dir="ltr">{customMetadata.issueDate}</b>
           </p>
+          </>
+          )}
 
           {/* 2. MAIN REPORT BODY */}
           <div className="trk-grid" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
@@ -3669,7 +4079,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             <aside className="trk-side" key={dragResetKey}>
               
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
-              {(tableMode === 'standard' || tableMode === 'both') && (
+              {sectionVisibility.birdDataCard && (tableMode === 'standard' || tableMode === 'both') && (
                 <section id="custom-bird-data-table" className={`trk-card ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
@@ -3782,7 +4192,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               )}
 
               {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
-              {(tableMode === 'standard' || tableMode === 'both') && (
+              {sectionVisibility.coordinatesCard && (tableMode === 'standard' || tableMode === 'both') && (
                 <section id="custom-table2-coordinates" className={`trk-card trk-card--table ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
@@ -4024,115 +4434,127 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               )}
 
               {/* 4 KPI METRIC TILES */}
-              <div className={`trk-stats ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl relative' : ''}`}>
-                {isDragEnabled && (
-                  <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export rounded-t-lg">
-                    <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
-                    <span>⋮⋮</span>
-                  </div>
-                )}
+              {sectionVisibility.kpiCards && (
+                <div className={`trk-stats ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl relative' : ''}`}>
+                  {isDragEnabled && (
+                    <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export rounded-t-lg">
+                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
+                      <span>⋮⋮</span>
+                    </div>
+                  )}
 
-                {/* Card 1: Distance from Release (Rightmost in RTL) */}
-                <div className="trk-stat">
-                  <div className="val red" dir="ltr">
-                    {isTableEditing ? (
-                      <div className="flex items-center gap-1">
+                  {/* Card 1: Distance from Release (Rightmost in RTL) */}
+                  <div className="trk-stat">
+                    <div className="val red" dir="ltr">
+                      {isTableEditing ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={customMetadata.statDistFromRelease ?? ''}
+                            onChange={(e) => setCustomMetadata({ ...customMetadata, statDistFromRelease: e.target.value })}
+                            className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                            placeholder={metrics.distFromReleaseKm.toString()}
+                          />
+                          <span>km</span>
+                        </div>
+                      ) : (
+                        <>{customMetadata.statDistFromRelease || metrics.distFromReleaseKm} km</>
+                      )}
+                    </div>
+                    <div className="lab">
+                      {T.distFromRelease}
+                    </div>
+                  </div>
+
+                  {/* Card 2: Bearing Direction & Degrees */}
+                  <div className="trk-stat">
+                    <div className="val">
+                      {isTableEditing ? (
                         <input
                           type="text"
-                          value={customMetadata.statDistFromRelease ?? ''}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDistFromRelease: e.target.value })}
-                          className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                          placeholder={metrics.distFromReleaseKm.toString()}
+                          value={customMetadata.statDirection ?? ''}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDirection: e.target.value })}
+                          className="w-full text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                          placeholder={metrics.bearingArabic.text}
                         />
-                        <span>km</span>
-                      </div>
-                    ) : (
-                      <>{customMetadata.statDistFromRelease || metrics.distFromReleaseKm} km</>
-                    )}
-                  </div>
-                  <div className="lab">
-                    {T.distFromRelease}
-                  </div>
-                </div>
-
-                {/* Card 2: Bearing Direction & Degrees */}
-                <div className="trk-stat">
-                  <div className="val">
-                    {isTableEditing ? (
-                      <input
-                        type="text"
-                        value={customMetadata.statDirection ?? ''}
-                        onChange={(e) => setCustomMetadata({ ...customMetadata, statDirection: e.target.value })}
-                        className="w-full text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                        placeholder={metrics.bearingArabic.text}
-                      />
-                    ) : (
-                      <>{customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text}</>
-                    )}
-                  </div>
-                  <div className="lab">
-                    {T.direction} (
-                    {isTableEditing ? (
-                      <input
-                        type="text"
-                        value={customMetadata.statDirectionDeg ?? ''}
-                        onChange={(e) => setCustomMetadata({ ...customMetadata, statDirectionDeg: e.target.value })}
-                        className="w-8 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800"
-                        placeholder={metrics.bearingArabic.degrees.toString()}
-                      />
-                    ) : (
-                      <>{customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}</>
-                    )}
-                    °)
-                  </div>
-                </div>
-
-                {/* Card 3: Distance from Camp */}
-                <div className="trk-stat">
-                  <div className="val brown" dir="ltr">
-                    {isTableEditing ? (
-                      <div className="flex items-center gap-1">
+                      ) : (
+                        <>{customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text}</>
+                      )}
+                    </div>
+                    <div className="lab">
+                      {T.direction} (
+                      {isTableEditing ? (
                         <input
                           type="text"
-                          value={customMetadata.statDistToCamp ?? ''}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDistToCamp: e.target.value })}
-                          className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                          placeholder={metrics.distToCampKm.toString()}
+                          value={customMetadata.statDirectionDeg ?? ''}
+                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDirectionDeg: e.target.value })}
+                          className="w-8 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800"
+                          placeholder={metrics.bearingArabic.degrees.toString()}
                         />
-                        <span>km</span>
-                      </div>
-                    ) : (
-                      <>{customMetadata.statDistToCamp || metrics.distToCampKm} km</>
-                    )}
+                      ) : (
+                        <>{customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}</>
+                      )}
+                      °)
+                    </div>
                   </div>
-                  <div className="lab">
-                    {T.distToCamp}
-                  </div>
-                </div>
 
-                {/* Card 4: Tracking Duration (Leftmost in RTL) */}
-                <div className="trk-stat">
-                  <div className="val" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
-                    {isTableEditing ? (
-                      <div className="flex items-center gap-1 justify-center">
-                        <input
-                          type="text"
-                          value={customMetadata.statDuration ?? ''}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDuration: e.target.value })}
-                          className="w-12 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                          placeholder={metrics.durationDays.toString()}
-                        />
-                        <span>{T.days}</span>
-                      </div>
-                    ) : (
-                      <span>{`${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
-                    )}
+                  {/* Card 3: Distance from Camp */}
+                  <div className="trk-stat">
+                    <div className="val brown" dir="ltr">
+                      {isTableEditing ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={customMetadata.statDistToCamp ?? ''}
+                            onChange={(e) => setCustomMetadata({ ...customMetadata, statDistToCamp: e.target.value })}
+                            className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                            placeholder={metrics.distToCampKm.toString()}
+                          />
+                          <span>km</span>
+                        </div>
+                      ) : (
+                        <>{customMetadata.statDistToCamp || metrics.distToCampKm} km</>
+                      )}
+                    </div>
+                    <div className="lab">
+                      {T.distToCamp}
+                    </div>
                   </div>
-                  <div className="lab">
-                    {T.followUp}
+
+                  {/* Card 4: Tracking Duration (Leftmost in RTL) */}
+                  <div className="trk-stat">
+                    <div className="val" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
+                      {isTableEditing ? (
+                        <div className="flex items-center gap-1 justify-center">
+                          <input
+                            type="text"
+                            value={customMetadata.statDuration ?? ''}
+                            onChange={(e) => setCustomMetadata({ ...customMetadata, statDuration: e.target.value })}
+                            className="w-12 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                            placeholder={metrics.durationDays.toString()}
+                          />
+                          <span>{T.days}</span>
+                        </div>
+                      ) : (
+                        <span>{`${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
+                      )}
+                    </div>
+                    <div className="lab">
+                      {T.followUp}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* 7-Day Min/Max Temperature Chart */}
+              {sectionVisibility.tempChart && (
+                <SevenDayTempChart
+                  lat={metrics.lLat}
+                  lon={metrics.lLon}
+                  language={reportLanguage}
+                  isEditing={isTableEditing}
+                />
+              )}
 
             </aside>
 
@@ -4266,14 +4688,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       />
 
                       {/* Dynamic GIS Graphic Scale Bar (Matching Model 25km Two-Segment Bar) */}
-                      <CustomGraphicScaleControl />
+                      {sectionVisibility.scaleBar && <CustomGraphicScaleControl />}
 
                       {/* Real History Flight Trajectory */}
                       {showFlightTrack && allHistoryPoints.length > 1 && (
                         <Polyline
                           positions={allHistoryPoints}
                           pathOptions={{
-                            color: '#6366f1',
+                            color: themeColors.trackLine,
                             weight: 2.8,
                             opacity: 0.85
                           }}
@@ -4382,7 +4804,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               [metrics.rLat, metrics.rLon]
                             ]}
                             pathOptions={{
-                              color: '#dc2626',
+                              color: themeColors.trackLine,
                               weight: 2.5,
                               dashArray: '6, 6',
                               opacity: 0.95
@@ -4392,7 +4814,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             position={customReleaseDistPos || metrics.releaseToLastMid}
                             icon={createDistancePillIcon(
                               `${metrics.distFromReleaseKm} km`, 
-                              '#dc2626',
+                              themeColors.trackLine,
                               [Math.max(70, `${metrics.distFromReleaseKm} km`.length * 7.5 + 16) + 16, 12]
                             )}
                             zIndexOffset={1500}
@@ -4416,7 +4838,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.rLat, metrics.rLon]}
-                            icon={createLiveTrackingPinIcon('#701a2b')}
+                            icon={createLiveTrackingPinIcon(themeColors.releasePin)}
                             zIndexOffset={1800}
                             interactive={false}
                           />
@@ -4425,7 +4847,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             icon={createLiveTrackingLabelIcon({
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
-                              borderColorHex: '#701a2b',
+                              borderColorHex: themeColors.releasePin,
                               labelTitle: reportLanguage === 'en' ? 'Release' : T.installHead,
                               position: 'right'
                             })}
@@ -4449,7 +4871,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.lLat, metrics.lLon]}
-                            icon={createLiveTrackingPinIcon('#22c55e')}
+                            icon={createLiveTrackingPinIcon(themeColors.latestGreen)}
                             zIndexOffset={2000}
                             interactive={false}
                           />
@@ -4458,7 +4880,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             icon={createLiveTrackingLabelIcon({
                               number: displayTransmitterLabel,
                               ringId: customMetadata.birdRing,
-                              borderColorHex: '#22c55e',
+                              borderColorHex: themeColors.latestGreen,
                               labelTitle: reportLanguage === 'en' ? 'Latest Location' : T.lastHead,
                               position: 'top'
                             })}
@@ -4484,7 +4906,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <React.Fragment key={camp.id}>
                             <Marker
                               position={[camp.lat, camp.lon]}
-                              icon={createLiveTrackingCampPinIcon()}
+                              icon={createLiveTrackingCampPinIcon(themeColors.campPin)}
                               zIndexOffset={1000}
                               interactive={false}
                             />
@@ -4510,6 +4932,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           </React.Fragment>
                         );
                       })}
+
+                      {/* Custom Map Annotations */}
+                      {annotations.map(ann => (
+                        <Marker
+                          key={ann.id}
+                          position={[ann.lat, ann.lon]}
+                          icon={createCustomAnnotationDivIcon(ann)}
+                          zIndexOffset={1800}
+                          interactive={true}
+                          draggable={isDragEnabled}
+                          eventHandlers={{
+                            dragend: (e) => {
+                              const marker = e.target;
+                              if (marker && marker.getLatLng) {
+                                const latLng = marker.getLatLng();
+                                setAnnotations(prev => prev.map(a => a.id === ann.id ? { ...a, lat: latLng.lat, lon: latLng.lng } : a));
+                              }
+                            }
+                          }}
+                        />
+                      ))}
 
                       {/* Interactive Distance Measurement Tool Drawing (EXPORTED WITH PNG & PDF) */}
                       {measurePoints.length > 0 && (
@@ -4821,13 +5264,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 </div>
 
                 {/* Top-Right: GIS North Arrow Symbol */}
-                <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
-                  <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
-                    <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
-                    <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
-                  </svg>
-                  <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
-                </div>
+                {sectionVisibility.northArrow && (
+                  <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
+                    <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
+                      <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
+                      <polygon points="10,0 20,26 10,20" fill="#111827" stroke="#000000" strokeWidth="1" />
+                    </svg>
+                    <span className="text-[11px] font-black text-white font-mono leading-none mt-0.5">N</span>
+                  </div>
+                )}
 
                 {/* Dynamic GIS Graticule Grid Lines & Perimeter Coordinate Labels (Move smoothly with map pan/zoom) */}
                 {showGraticule && mapDisplayMode !== 'snapshot' && (
@@ -4939,8 +5384,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </div>
 
               {/* Map Legend Bar */}
-              <div 
-                id="custom-map-legend-bar"
+              {sectionVisibility.legend && (
+                <div 
+                  id="custom-map-legend-bar"
                 className="trk-legend relative group select-none transition-all"
                 style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%' }}
               >
@@ -5105,51 +5551,62 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
                 )}
               </div>
+              )}
 
             </div>
 
           </div>
 
           {/* 3. REPORT FOOTER (MODIFIABLE AND PERSONALIZED) */}
-          <footer className="trk-footer">
-            <div className="flex items-center justify-between w-full" style={{ direction: 'rtl' }}>
-              {/* Right Footer Text */}
-              {isTableEditing ? (
-                <input
-                  type="text"
-                  value={customMetadata.footerRight}
-                  onChange={(e) => setCustomMetadata({ ...customMetadata, footerRight: e.target.value })}
-                  className="text-right border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-700 text-[11.5px] w-[55%]"
-                  title="تعديل نص التذييل الأيمن"
-                />
-              ) : (
-                <span className="font-semibold text-[12px] text-gray-600">
-                  {customMetadata.footerRight || 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان'}
-                </span>
-              )}
+          {sectionVisibility.footer && showFooter && (
+            <footer className="trk-footer">
+              <div className="flex items-center justify-between w-full" style={{ direction: 'rtl' }}>
+                {/* Right Footer Text */}
+                {isTableEditing ? (
+                  <input
+                    type="text"
+                    value={customMetadata.footerRight}
+                    onChange={(e) => setCustomMetadata({ ...customMetadata, footerRight: e.target.value })}
+                    className="text-right border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-700 text-[11.5px] w-[55%]"
+                    title="تعديل نص التذييل الأيمن"
+                  />
+                ) : (
+                  <span className="font-semibold text-[12px] text-gray-600">
+                    {customMetadata.footerRight || 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان'}
+                  </span>
+                )}
 
-              {/* Left Footer Text */}
-              {isTableEditing ? (
-                <input
-                  type="text"
-                  value={customMetadata.footerLeft}
-                  onChange={(e) => setCustomMetadata({ ...customMetadata, footerLeft: e.target.value })}
-                  className="text-left font-mono border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-500 text-[10px] w-[40%]"
-                  dir="ltr"
-                  title="تعديل نص التذييل الأيسر"
-                  placeholder="تذييل اختياري..."
-                />
-              ) : customMetadata.footerLeft ? (
-                <span className="text-[11px] text-gray-400 font-mono" dir="ltr">
-                  {customMetadata.footerLeft}
-                </span>
-              ) : null}
-            </div>
-          </footer>
+                {/* Left Footer Text */}
+                {isTableEditing ? (
+                  <input
+                    type="text"
+                    value={customMetadata.footerLeft}
+                    onChange={(e) => setCustomMetadata({ ...customMetadata, footerLeft: e.target.value })}
+                    className="text-left font-mono border border-amber-300 rounded px-2 py-0.5 bg-amber-50/50 font-bold text-gray-500 text-[10px] w-[40%]"
+                    dir="ltr"
+                    title="تعديل نص التذييل الأيسر"
+                    placeholder="تذييل اختياري..."
+                  />
+                ) : customMetadata.footerLeft ? (
+                  <span className="text-[11px] text-gray-400 font-mono" dir="ltr">
+                    {customMetadata.footerLeft}
+                  </span>
+                ) : null}
+              </div>
+            </footer>
+          )}
 
         </div>
 
       </div>
+
+      {/* Telegram & WhatsApp Bot Bridge Modal */}
+      <BotReportBridgeModal
+        isOpen={isBotModalOpen}
+        onClose={() => setIsBotModalOpen(false)}
+        onApplyCommand={handleApplyBotCommand}
+        onGeneratePdfBlob={handleGeneratePdfBlob}
+      />
 
     </div>
   );
