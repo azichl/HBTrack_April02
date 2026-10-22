@@ -33,6 +33,11 @@ import { CustomMapAnnotation, AnnotationShape, createCustomAnnotationDivIcon, re
 import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
 import { BotReportBridgeModal } from './BotReportBridgeModal';
 import {
+  FlightTrackCustomizer,
+  FlightTrackConfig,
+  buildColoredTrackSegments
+} from './FlightTrackCustomizer';
+import {
   calculateDistanceKm,
   calculateBearingDegrees,
   formatArabicBearing,
@@ -796,6 +801,33 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [showReleaseMarker, setShowReleaseMarker] = useState<boolean>(true);
   const [showDistanceToRelease, setShowDistanceToRelease] = useState<boolean>(true);
   const [showFlightTrack, setShowFlightTrack] = useState<boolean>(true);
+  const [flightTrackConfig, setFlightTrackConfig] = useState<FlightTrackConfig>({
+    enabled: true,
+    locationType: 'ALL',
+    filterStartDate: '',
+    filterEndDate: '',
+    useColorPeriods: false,
+    defaultColor: '#6366f1',
+    lineWeight: 3,
+    lineDashed: false,
+    showTrackPoints: false,
+    periods: [
+      {
+        id: 'period-1',
+        label: '01/01/2026 → 30/04/2026',
+        startDate: '2026-01-01',
+        endDate: '2026-04-30',
+        color: '#2563eb'
+      },
+      {
+        id: 'period-2',
+        label: '01/05/2026 → 22/10/2026',
+        startDate: '2026-05-01',
+        endDate: '2026-10-22',
+        color: '#f97316'
+      }
+    ]
+  });
   const [showGraticule, setShowGraticule] = useState<boolean>(true);
   const [graticuleData, setGraticuleData] = useState<GraticuleData>({
     latLines: [],
@@ -864,6 +896,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
         if (parsed.sectionVisibility) setSectionVisibility(parsed.sectionVisibility);
         if (parsed.themeColors) setThemeColors(parsed.themeColors);
+        if (parsed.flightTrackConfig) setFlightTrackConfig(parsed.flightTrackConfig);
       } catch (e) {
         console.error('Failed to parse saved report settings', e);
       }
@@ -889,7 +922,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       reportLanguage,
       mapImageFit,
       sectionVisibility,
-      themeColors
+      themeColors,
+      flightTrackConfig
     };
     localStorage.setItem('hbtrack_report_settings', JSON.stringify(settings));
     setHistoryUploadNotice('تم بنجاح حفظ الإعدادات الافتراضية للتقرير.');
@@ -951,7 +985,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // History Trajectory Records Table (changeable & uploaded from transmitter history)
   const [historyRows, setHistoryRows] = useState<HistoryTableRow[]>([]);
   const [allHistoryPoints, setAllHistoryPoints] = useState<Array<[number, number]>>([]);
+  const [rawHistoryRecords, setRawHistoryRecords] = useState<any[]>([]);
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
+
+  const { segments: coloredTrackSegments, filteredPoints: activeTrackPoints } = useMemo(
+    () => buildColoredTrackSegments(
+      rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints,
+      { ...flightTrackConfig, enabled: showFlightTrack }
+    ),
+    [rawHistoryRecords, allHistoryPoints, flightTrackConfig, showFlightTrack]
+  );
 
   const T = {
     reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle.includes('تقرير') ? 'Houbara Bustard Tracking Report' : customMetadata.reportTitle,
@@ -1391,6 +1434,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         }
       });
       setAllHistoryPoints(validPoints);
+      setRawHistoryRecords(allPositions);
 
       const gpsPositions = allPositions.filter(p => {
         const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
@@ -3010,13 +3054,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 type="checkbox"
                 id="showFlightTrack"
                 checked={showFlightTrack}
-                onChange={(e) => setShowFlightTrack(e.target.checked)}
+                onChange={(e) => {
+                  setShowFlightTrack(e.target.checked);
+                  setFlightTrackConfig(prev => ({ ...prev, enabled: e.target.checked }));
+                }}
                 className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
               />
               <label htmlFor="showFlightTrack" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
                 إظهار مسار التتبع (Flight Track)
               </label>
             </div>
+
+            {/* Multi-Period & Location-Type Flight Track Customizer */}
+            {showFlightTrack && (
+              <FlightTrackCustomizer
+                config={{ ...flightTrackConfig, enabled: showFlightTrack }}
+                onChange={(next) => {
+                  setFlightTrackConfig(next);
+                  setShowFlightTrack(next.enabled);
+                }}
+                totalRawPoints={rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length}
+                activePointCount={activeTrackPoints.length}
+                allHistoryPoints={rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints}
+              />
+            )}
             <div className="mt-2.5 flex items-center gap-2 px-1">
               <input
                 type="checkbox"
@@ -4885,29 +4946,33 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {/* Dynamic GIS Graphic Scale Bar (Matching Model 25km Two-Segment Bar) */}
                       {sectionVisibility.scaleBar && <CustomGraphicScaleControl />}
 
-                      {/* Real History Flight Trajectory */}
-                      {showFlightTrack && allHistoryPoints.length > 1 && (
-                        <Polyline
-                          positions={allHistoryPoints}
-                          pathOptions={{
-                            color: themeColors.trackLineColor,
-                            weight: 2.8,
-                            opacity: 0.85
-                          }}
-                        />
+                      {/* Real History Flight Trajectory (Multi-Period Colored Segments) */}
+                      {showFlightTrack && coloredTrackSegments.map((seg) =>
+                        seg.positions.length > 1 ? (
+                          <Polyline
+                            key={seg.id}
+                            positions={seg.positions}
+                            pathOptions={{
+                              color: seg.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
+                              weight: flightTrackConfig.lineWeight || 3,
+                              dashArray: flightTrackConfig.lineDashed ? '6, 6' : undefined,
+                              opacity: 0.9
+                            }}
+                          />
+                        ) : null
                       )}
 
                       {/* Telemetry Fix Dots */}
-                      {showFlightTrack && allHistoryPoints.map((pt, i) => (
+                      {showFlightTrack && flightTrackConfig.showTrackPoints && activeTrackPoints.map((pt, idx) => (
                         <CircleMarker
-                          key={`pt-${i}`}
-                          center={pt}
+                          key={`trk-pt-${idx}-${pt.ts}`}
+                          center={[pt.lat, pt.lon]}
                           radius={3}
                           pathOptions={{
                             fillColor: '#ffffff',
                             fillOpacity: 0.95,
-                            color: themeColors.trackLineColor,
-                            weight: 1.5
+                            color: pt.color,
+                            weight: 1
                           }}
                         />
                       ))}
@@ -5713,6 +5778,26 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </button>
                       </div>
                     ))}
+
+                    {/* Flight Track Period Legend info during edit mode */}
+                    {showFlightTrack && (
+                      <div className="flex items-center gap-1.5 p-1 rounded-md border text-xs bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold">
+                        <span className="text-[10px]">{reportLanguage === 'en' ? 'Track:' : 'المسار:'}</span>
+                        {flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
+                          coloredTrackSegments.map(seg => (
+                            <span key={`edit-seg-${seg.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
+                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: seg.color }} />
+                              {seg.label}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: flightTrackConfig.defaultColor || themeColors.trackLineColor }} />
+                            {reportLanguage === 'en' ? 'Flight Track' : 'مسار الطيران'}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div 
@@ -5743,6 +5828,32 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </div>
                       );
                     })}
+
+                    {/* Flight Track Multi-Period or Single Track Legend */}
+                    {showFlightTrack && (
+                      flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
+                        coloredTrackSegments.map(seg => (
+                          <div key={`legend-seg-${seg.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                            <span 
+                              className="w-5 h-1 rounded-sm inline-block shrink-0" 
+                              style={{ backgroundColor: seg.color }}
+                            />
+                            <span>{seg.label}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                          <span 
+                            className="w-5 h-1 rounded-sm inline-block shrink-0" 
+                            style={{ backgroundColor: flightTrackConfig.defaultColor || themeColors.trackLineColor }}
+                          />
+                          <span>
+                            {reportLanguage === 'en' ? 'Flight Track' : 'مسار الطيران'}
+                            {flightTrackConfig.locationType !== 'ALL' ? ` (${flightTrackConfig.locationType})` : ''}
+                          </span>
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
               </div>
