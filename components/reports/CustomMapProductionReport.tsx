@@ -5129,7 +5129,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       })}
 
                       {/* Custom Map Annotations */}
-                      {annotations.map(ann => (
+                      {customAnnotations.map(ann => (
                         <Marker
                           key={ann.id}
                           position={[ann.lat, ann.lon]}
@@ -5142,7 +5142,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               const marker = e.target;
                               if (marker && marker.getLatLng) {
                                 const latLng = marker.getLatLng();
-                                setAnnotations(prev => prev.map(a => a.id === ann.id ? { ...a, lat: latLng.lat, lon: latLng.lng } : a));
+                                updateAnnotationLatLon(ann.id, latLng.lat, latLng.lng);
                               }
                             }
                           }}
