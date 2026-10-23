@@ -3,10 +3,16 @@ import {
   ReportDocument,
   DEFAULT_REPORT_COLORS,
   DEFAULT_SECTIONS,
-  DEFAULT_SECTION_ORDER
+  DEFAULT_SECTION_ORDER,
+  DEFAULT_LAYOUT,
+  DEFAULT_MAP_ELEMENTS
 } from '../types/report';
 
 export const INITIAL_REPORT_DOCUMENT: ReportDocument = {
+  lang: 'ar',
+  layout: structuredClone(DEFAULT_LAYOUT),
+  mapElements: structuredClone(DEFAULT_MAP_ELEMENTS),
+  reportScale: 1.0,
   texts: {
     reportTitle: 'تقرير متابعة طائر حبارى مزود بجهاز تتبع',
     subtitle: 'بيانات وإحداثيات مسار التتبع الميداني',

@@ -1,28 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, CheckCircle2, AlertTriangle, Loader2, X, Play, Square, Share2 } from 'lucide-react';
+import { Send, Bot, CheckCircle2, AlertTriangle, Loader2, X, Play, Square, Share2, ExternalLink } from 'lucide-react';
 import { parseBirdCoordinateCommand } from '../../utils/coordinateParser';
-import { shareReportViaWhatsApp, downloadBlob } from '../../src/utils/whatsappShare';
+import { prepareShare, sendToWhatsApp, WaTarget, Prepared, hashKey, isDesktopMac } from '../../src/utils/whatsappShare';
 
 interface BotReportBridgeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onApplyCommand: (identifier: string, lat?: number, lon?: number) => Promise<void>;
   onGeneratePdfBlob: () => Promise<{ blob: Blob; fileName: string; caption: string }>;
+  onGeneratePngBlob?: () => Promise<Blob>;
 }
 
 export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
   isOpen,
   onClose,
   onApplyCommand,
-  onGeneratePdfBlob
+  onGeneratePdfBlob,
+  onGeneratePngBlob
 }) => {
   const [commandInput, setCommandInput] = useState<string>('244289 46.9965, 67.0222');
   const [botToken, setBotToken] = useState<string>(() => localStorage.getItem('hb_tg_bot_token') || '');
   const [chatId, setChatId] = useState<string>(() => localStorage.getItem('hb_tg_chat_id') || '');
   const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem('hb_wa_phone') || '');
-  const [isSending, setIsSending] = useState<boolean>(false);
-  const [isSharingWa, setIsSharingWa] = useState<boolean>(false);
+  const [waTarget, setWaTarget] = useState<WaTarget>(() => {
+    const saved = localStorage.getItem('hb_wa_target') as WaTarget;
+    if (saved) return saved;
+    return isDesktopMac() ? 'app' : 'web';
+  });
+  const [preparedReport, setPreparedReport] = useState<Prepared | null>(null);
+  const [isPreparing, setIsPreparing] = useState<boolean>(false);
+  const [waHint, setWaHint] = useState<string | null>(null);
   const [manualWaUrl, setManualWaUrl] = useState<string | null>(null);
+
+  const [isSending, setIsSending] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [statusLog, setStatusLog] = useState<string[]>([]);
   const lastUpdateIdRef = useRef<number>(0);
@@ -31,11 +41,53 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
     if (botToken) localStorage.setItem('hb_tg_bot_token', botToken);
     if (chatId) localStorage.setItem('hb_tg_chat_id', chatId);
     if (waPhone !== undefined) localStorage.setItem('hb_wa_phone', waPhone.replace(/\D/g, ''));
-  }, [botToken, chatId, waPhone]);
+    if (waTarget) localStorage.setItem('hb_wa_target', waTarget);
+  }, [botToken, chatId, waPhone, waTarget]);
 
   const addLog = (msg: string) => {
     setStatusLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 29)]);
   };
+
+  // Background pre-warming when modal is opened (Spec v3 §8)
+  useEffect(() => {
+    if (!isOpen) return;
+    let alive = true;
+    const identifier = commandInput.split(' ')[0] || 'BirdReport';
+    const key = hashKey(identifier, Date.now().toString());
+
+    setIsPreparing(true);
+    prepareShare({
+      key,
+      birdId: identifier,
+      fileName: `Houbara_Tracking_Report_${identifier}.pdf`,
+      generatePdf: async () => {
+        const { blob } = await onGeneratePdfBlob();
+        return blob;
+      },
+      generatePng: onGeneratePngBlob ? async () => {
+        return await onGeneratePngBlob();
+      } : undefined,
+      log: (_kind, msg) => {
+        if (alive) addLog(msg);
+      }
+    })
+      .then(p => {
+        if (alive) {
+          setPreparedReport(p);
+          setIsPreparing(false);
+        }
+      })
+      .catch(err => {
+        if (alive) {
+          setIsPreparing(false);
+          addLog(`⚠️ Pre-warm error: ${(err as Error).message}`);
+        }
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [isOpen]);
 
   const handleParseAndApply = async () => {
     const parsed = parseBirdCoordinateCommand(commandInput);
@@ -248,11 +300,33 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 block">
-                  3. مشاركة سريعة عبر واتساب (WhatsApp)
+                  3. مشاركة سريعة عبر واتساب (WhatsApp Fast Share v3)
                 </span>
                 <span className="text-[11px] text-gray-600 dark:text-gray-400">
-                  إرسال ملخص إحداثيات الطائر وتفاصيل التقرير مع ملف PDF تلقائياً
+                  نقرة واحدة تفتح تطبيق واتساب مع الرابط ونسخ صورة التقرير للحافظة (ألصقها بـ ⌘V)
                 </span>
+              </div>
+
+              {/* Target choice: App vs Web */}
+              <div className="flex items-center p-0.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 text-[10.5px]">
+                <button
+                  type="button"
+                  onClick={() => setWaTarget('app')}
+                  className={`px-2 py-0.5 rounded font-bold transition-all ${
+                    waTarget === 'app' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  تطبيق واتساب
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWaTarget('web')}
+                  className={`px-2 py-0.5 rounded font-bold transition-all ${
+                    waTarget === 'web' ? 'bg-emerald-600 text-white shadow-2xs' : 'text-gray-600 dark:text-gray-400'
+                  }`}
+                >
+                  واتساب ويب
+                </button>
               </div>
             </div>
 
@@ -274,38 +348,36 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
               <div className="self-end flex items-center gap-2">
                 <button
                   type="button"
-                  disabled={isSharingWa}
-                  onClick={async () => {
-                    if (isSharingWa) return;
-                    setIsSharingWa(true);
-                    setManualWaUrl(null);
-                    try {
-                      const identifier = commandInput.split(' ')[0] || 'BirdReport';
-                      const res = await shareReportViaWhatsApp({
-                        generatePdf: async () => {
-                          const { blob } = await onGeneratePdfBlob();
-                          return blob;
-                        },
-                        fileName: `Houbara_Tracking_Report_${identifier}.pdf`,
-                        birdId: identifier,
-                        title: `Houbara Tracking Report – ${identifier}`,
-                        summary: `🦅 تقرير متابعة الحبارى (Houbara Report)\nمعرف: ${identifier}`,
-                        phone: waPhone,
-                        log: (_stage, msg) => addLog(msg)
-                      });
-                      if (res.method === 'blocked') {
-                        setManualWaUrl(res.waUrl);
-                      }
-                    } catch (err: any) {
-                      addLog(`❌ ${(err as Error).message}`);
-                    } finally {
-                      setIsSharingWa(false);
+                  disabled={!preparedReport && isPreparing}
+                  onClick={() => {
+                    if (!preparedReport) return;
+                    const identifier = commandInput.split(' ')[0] || 'BirdReport';
+                    const res = sendToWhatsApp({
+                      prepared: preparedReport,
+                      title: `🦅 تقرير متابعة الحبارى – ${identifier}`,
+                      summary: `معرف: ${identifier}\nتاريخ الإصدار: ${new Date().toISOString().slice(0, 10)}`,
+                      phone: waPhone,
+                      target: waTarget,
+                      log: (_kind, msg) => addLog(msg)
+                    });
+                    if (res.target === 'app') {
+                      setWaHint('إذا لم يفتح التطبيق تلقائياً، يمكنك النقر على "فتح واتساب ويب يدويًا" أدناه.');
+                      setManualWaUrl(res.waUrl.replace('whatsapp://send', 'https://web.whatsapp.com/send'));
                     }
                   }}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-xs"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-xs transition-all"
                 >
-                  {isSharingWa ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
-                  <span>{isSharingWa ? 'جارِ المعالجة...' : 'مشاركة عبر واتساب'}</span>
+                  {isPreparing && !preparedReport ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>جارٍ التجهيز في الخلفية...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 size={14} />
+                      <span>مشاركة عبر واتساب</span>
+                    </>
+                  )}
                 </button>
 
                 {manualWaUrl && (
@@ -315,11 +387,18 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
                     rel="noopener noreferrer"
                     className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1"
                   >
+                    <ExternalLink size={12} />
                     <span>فتح واتساب ويب يدويًا</span>
                   </a>
                 )}
               </div>
             </div>
+
+            {waHint && (
+              <p className="text-[10.5px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-900/60">
+                {waHint}
+              </p>
+            )}
           </div>
 
           <div className="bg-slate-950 text-gray-200 p-3 rounded-xl font-mono text-[11px] h-32 overflow-y-auto space-y-1 text-left" dir="ltr">
@@ -336,3 +415,4 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
     </div>
   );
 };
+

@@ -43,10 +43,27 @@ import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track
 import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
 import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
 import { BirdIdCombobox } from '../../src/components/ui/BirdIdCombobox';
-import { ReportLegendItem, ReportLegendLayout } from '../../src/types/report';
+import { 
+  ReportLegendItem, 
+  ReportLegendLayout,
+  SectionId, 
+  MapLabel,
+  BlockId,
+  ZoneId,
+  ReportLayout,
+  DEFAULT_LAYOUT,
+  MapElements,
+  DEFAULT_MAP_ELEMENTS,
+  BirdStatus,
+  normalizeBirdStatus,
+  ReportLanguage
+} from '../../src/types/report';
 import { ReportToolbar } from '../../src/components/report/ReportToolbar';
 import { Editable } from '../../src/components/report/Editable';
-import { SectionId, MapLabel } from '../../src/types/report';
+import { ReportBlock } from '../../src/components/report/ReportBlock';
+import { EditToolsPalette } from '../../src/components/report/EditToolsPalette';
+import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
+import { getReportString } from '../../src/utils/reportDictionary';
 import {
   calculateDistanceKm,
   calculateBearingDegrees,
@@ -837,7 +854,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [showLayerMenu, setShowLayerMenu] = useState<boolean>(false);
   const [showFooter, setShowFooter] = useState<boolean>(true);
   const [showGoogleLabels, setShowGoogleLabels] = useState<boolean>(true);
-  const [reportLanguage, setReportLanguage] = useState<'ar' | 'en'>('ar');
+  const [reportLanguage, setReportLanguage] = useState<ReportLanguage>('ar');
   const [fitKey, setFitKey] = useState<number>(0);
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
@@ -968,6 +985,182 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [isExportingPng, setIsExportingPng] = useState<boolean>(false);
   const [isReportFullscreen, setIsReportFullscreen] = useState<boolean>(false);
   const [showCustomizer, setShowCustomizer] = useState<boolean>(false);
+
+  // ─── REPORT STUDIO V3 SUITE (EDIT MODE, PALETTE, LAYOUT, SCALING) ─────────
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [activeEditTool, setActiveEditTool] = useState<'select' | 'move' | 'measure'>('select');
+  const [distUnit, setDistUnit] = useState<'km' | 'mi'>('km');
+  const [coordFormat, setCoordFormat] = useState<'DD' | 'DMM' | 'DMS'>('DMM');
+  const [reportScale, setReportScale] = useState<number>(1.0);
+  const [statusOverride, setStatusOverride] = useState<BirdStatus | undefined>(undefined);
+  const [selectedBirdLookupId, setSelectedBirdLookupId] = useState<string>('');
+  const [draggedBlock, setDraggedBlock] = useState<{ id: BlockId; zone: ZoneId } | null>(null);
+  const [isResizingSplit, setIsResizingSplit] = useState<boolean>(false);
+
+  const [mapElements, setMapElements] = useState<MapElements>(() => {
+    try {
+      const saved = localStorage.getItem('hbtrack_map_elements');
+      if (saved) return { ...DEFAULT_MAP_ELEMENTS, ...JSON.parse(saved) };
+    } catch (e) {}
+    return DEFAULT_MAP_ELEMENTS;
+  });
+
+  const [reportLayout, setReportLayout] = useState<ReportLayout>(() => {
+    try {
+      const saved = localStorage.getItem('hbtrack_report_layout');
+      if (saved) return { ...DEFAULT_LAYOUT, ...JSON.parse(saved) };
+    } catch (e) {}
+    return DEFAULT_LAYOUT;
+  });
+
+  // Sync isMeasuring and isDragEnabled with activeEditTool and isEditMode
+  useEffect(() => {
+    setIsMeasuring(isEditMode && activeEditTool === 'measure');
+    setIsDragEnabled(isEditMode && activeEditTool === 'move');
+  }, [isEditMode, activeEditTool]);
+
+  // Keyboard shortcut: E to toggle edit mode, Esc to clear measure or exit edit mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      if (isInput) return;
+
+      if (e.key === 'e' || e.key === 'E') {
+        setIsEditMode(prev => !prev);
+      } else if (e.key === 'Escape') {
+        if (measurePoints.length > 0) {
+          setMeasurePoints([]);
+        } else if (isEditMode) {
+          setIsEditMode(false);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditMode, measurePoints.length]);
+
+  // Resizable split divider drag listener
+  useEffect(() => {
+    if (!isResizingSplit) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!reportContainerRef.current) return;
+      const rect = reportContainerRef.current.getBoundingClientRect();
+      const containerWidth = rect.width;
+      const isAr = reportLanguage === 'ar';
+      let relX = e.clientX - rect.left;
+      if (isAr) {
+        relX = rect.right - e.clientX;
+      }
+      let newSplit = Math.round((relX / containerWidth) * 100);
+      newSplit = Math.max(25, Math.min(65, newSplit));
+      setReportLayout(prev => {
+        const next = { ...prev, split: newSplit };
+        try { localStorage.setItem('hbtrack_report_layout', JSON.stringify(next)); } catch (err) {}
+        return next;
+      });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingSplit(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingSplit, reportLanguage]);
+
+  // Block layout handlers
+  const handleMoveBlock = useCallback((blockId: BlockId, fromZone: ZoneId, direction: 'up' | 'down') => {
+    setReportLayout(prev => {
+      const list = [...prev.zones[fromZone]];
+      const idx = list.indexOf(blockId);
+      if (idx === -1) return prev;
+      const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= list.length) return prev;
+      const temp = list[idx];
+      list[idx] = list[targetIdx];
+      list[targetIdx] = temp;
+      const next = {
+        ...prev,
+        zones: {
+          ...prev.zones,
+          [fromZone]: list
+        }
+      };
+      try { localStorage.setItem('hbtrack_report_layout', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  }, []);
+
+  const handleMoveToZone = useCallback((blockId: BlockId, fromZone: ZoneId, toZone: ZoneId) => {
+    if (fromZone === toZone) return;
+    setReportLayout(prev => {
+      const fromList = prev.zones[fromZone].filter(id => id !== blockId);
+      const toList = [...prev.zones[toZone], blockId];
+      const next = {
+        ...prev,
+        zones: {
+          ...prev.zones,
+          [fromZone]: fromList,
+          [toZone]: toList
+        }
+      };
+      try { localStorage.setItem('hbtrack_report_layout', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  }, []);
+
+  const handleBlockScaleChange = useCallback((blockId: BlockId, scale: number) => {
+    setReportLayout(prev => {
+      const next = {
+        ...prev,
+        blockScale: {
+          ...prev.blockScale,
+          [blockId]: scale
+        }
+      };
+      try { localStorage.setItem('hbtrack_report_layout', JSON.stringify(next)); } catch (e) {}
+      return next;
+    });
+  }, []);
+
+  const handleBlockDragStart = useCallback((e: React.DragEvent, id: BlockId, zone: ZoneId) => {
+    setDraggedBlock({ id, zone });
+    e.dataTransfer.setData('text/plain', JSON.stringify({ id, zone }));
+  }, []);
+
+  const handleBlockDrop = useCallback((e: React.DragEvent, targetId: BlockId, targetZone: ZoneId) => {
+    e.preventDefault();
+    if (!draggedBlock) return;
+    const { id: sourceId, zone: sourceZone } = draggedBlock;
+    if (sourceId === targetId && sourceZone === targetZone) return;
+
+    setReportLayout(prev => {
+      const sourceList = prev.zones[sourceZone].filter(x => x !== sourceId);
+      const targetList = [...(sourceZone === targetZone ? sourceList : prev.zones[targetZone])];
+      const targetIdx = targetList.indexOf(targetId);
+      if (targetIdx === -1) {
+        targetList.push(sourceId);
+      } else {
+        targetList.splice(targetIdx, 0, sourceId);
+      }
+      const next = {
+        ...prev,
+        zones: {
+          ...prev.zones,
+          [sourceZone]: sourceZone === targetZone ? targetList : sourceList,
+          ...(sourceZone !== targetZone ? { [targetZone]: targetList } : {})
+        }
+      };
+      try { localStorage.setItem('hbtrack_report_layout', JSON.stringify(next)); } catch (err) {}
+      return next;
+    });
+    setDraggedBlock(null);
+  }, [draggedBlock]);
 
   // ─── CHANGEABLE TABLE STATE ────────────────────────────────────────────────
   const [tableMode, setTableMode] = useState<'standard' | 'history_list' | 'both'>('standard');
@@ -1267,6 +1460,23 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return String(selectedPttId).replace(/^trans-/, '');
   }, [isPttNA, selectedPttId, customMetadata.birdRing]);
 
+  const displayBirdId = useMemo(() => {
+    if (selectedBirdLookupId) return selectedBirdLookupId;
+    if (!isPttNA) return String(selectedPttId).replace(/^trans-/, '');
+    return customMetadata.birdRing || 'NA';
+  }, [selectedBirdLookupId, isPttNA, selectedPttId, customMetadata.birdRing]);
+
+  const effectiveReportTitle = useMemo(() => {
+    if (customMetadata.reportTitle && !customMetadata.reportTitle.includes('تقرير متابعة طائر حبارى مزود بجهاز تتبع')) {
+      return customMetadata.reportTitle;
+    }
+    return getReportString('report.title', reportLanguage);
+  }, [customMetadata.reportTitle, reportLanguage]);
+
+  const selectedBirdRecord = useMemo(() => {
+    return resolveBirdOrTransmitter(selectedBirdLookupId || selectedPttId, transmitters, birds).bird;
+  }, [selectedBirdLookupId, selectedPttId, transmitters, birds]);
+
   // Distance between camps (Zhezkazgan & Almaty)
   const campDistanceKm = useMemo(() => {
     if (FIXED_FIELD_CAMPS.length >= 2) {
@@ -1286,6 +1496,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     }
     return [45.2, 72.1];
   }, []);
+
+  const formatDist = useCallback((kmVal: number | string) => {
+    const n = typeof kmVal === 'number' ? kmVal : parseFloat(kmVal);
+    if (isNaN(n)) return `${kmVal} ${distUnit}`;
+    if (distUnit === 'mi') return `${(n * 0.621371).toFixed(1)} mi`;
+    return `${n.toFixed(1)} km`;
+  }, [distUnit]);
 
   // Distance Measurement Tool Calculations (Live Tracking Ruler Feature)
   const totalMeasureDistanceKm = useMemo(() => {
@@ -2029,6 +2246,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [unifiedTargetOptions, pttSearchTerm]);
 
   const handleSelectUnifiedTarget = useCallback((targetId: string) => {
+    setSelectedBirdLookupId(targetId);
     const resolved = resolveBirdOrTransmitter(targetId, transmitters, birds);
     const targetPtt = resolved.pttId && resolved.pttId !== 'NA' ? resolved.pttId : targetId;
     setSelectedPttId(targetPtt);
@@ -2051,6 +2269,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   const handleApplyBotCommand = useCallback(async (identifier: string, lat?: number, lon?: number) => {
     if (identifier) {
+      setSelectedBirdLookupId(identifier);
       const resolved = resolveBirdOrTransmitter(identifier, transmitters, birds);
       const targetPtt = resolved.pttId && resolved.pttId !== 'NA' ? resolved.pttId : identifier;
       setSelectedPttId(targetPtt);
@@ -2966,6 +3185,38 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
         {/* ─── UNIFIED REPORT STUDIO TOOLBAR (STICKY DIRECTLY UNDER TITLE ROW) ─── */}
         <ReportToolbar
+          isEditMode={isEditMode}
+          onToggleEditMode={() => setIsEditMode(prev => !prev)}
+          mapElements={mapElements}
+          onChangeMapElements={(elements) => {
+            setMapElements(elements);
+            setShowReleaseMarker(elements.release.visible);
+            setShowDistanceToRelease(elements.distRelease.visible);
+            setShowCampDistance(elements.distCamp.visible);
+            setShowFlightTrack(elements.track.visible);
+            setShowGoogleLabels(elements.placeLabels.visible);
+            setShowGraticule(elements.graticule.visible);
+            setSectionVisibility(prev => ({
+              ...prev,
+              northArrow: elements.northArrow.visible,
+              scaleBar: elements.scaleBar.visible
+            }));
+            try { localStorage.setItem('hbtrack_map_elements', JSON.stringify(elements)); } catch (err) {}
+          }}
+          visibleCampIds={visibleCampIds}
+          onChangeVisibleCampIds={setVisibleCampIds}
+          campDistToLastEnabled={campDistToLastEnabled}
+          onChangeCampDistToLastEnabled={setCampDistToLastEnabled}
+          activeBaseLayer={activeBaseLayer}
+          onChangeBaseLayer={(layer) => setActiveBaseLayer(layer as any)}
+          showGoogleLabels={showGoogleLabels}
+          onChangeShowGoogleLabels={setShowGoogleLabels}
+          showGraticule={showGraticule}
+          onChangeShowGraticule={setShowGraticule}
+          coordFormat={coordFormat}
+          onChangeCoordFormat={setCoordFormat}
+          distUnit={distUnit}
+          onChangeDistUnit={setDistUnit}
           mapImage={{ url: mapSnapshotUrl || '', fit: mapImageFit }}
           isSnapshotMode={mapDisplayMode === 'snapshot'}
           onChangeMapImage={(url) => {
@@ -3029,8 +3280,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             total: rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length
           }}
           texts={{
-            reportTitle: customMetadata.reportTitle,
-            subtitle: customMetadata.birdRing,
+            reportTitle: effectiveReportTitle,
+            subtitle: displayBirdId,
             orgNameAr: customMetadata.agencyNameAr,
             orgNameEn: customMetadata.agencyNameEn,
             footerText: customMetadata.footerRight,
@@ -3050,13 +3301,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               issueDate: t.issueDate
             }));
           }}
+          reportLanguage={reportLanguage}
+          onChangeReportLanguage={(lang) => setReportLanguage(lang)}
           saveStatus="saved"
           onExportPdf={handleExportPdf}
           onExportPng={handleExportPng}
           onPrint={() => window.print()}
           onShareWhatsApp={handleShareWhatsApp}
           isExporting={isExportingPdf || isExportingPng}
-          language={reportLanguage}
+          language={reportLanguage === 'ar' ? 'ar' : 'en'}
         />
 
         {/* Notice Bar */}
@@ -3563,6 +3816,56 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           }}
         >
 
+          {/* Floating Edit Mode Palette (Hidden in export and print) */}
+          {isEditMode && (
+            <div className="no-print no-export absolute top-2 left-1/2 -translate-x-1/2 z-50">
+              <EditToolsPalette
+                activeTool={activeEditTool}
+                onChangeTool={setActiveEditTool}
+                measureDistance={measurePoints.length >= 2 ? `${totalMeasureDistanceKm} ${distUnit}` : undefined}
+                onPinMeasurement={() => {
+                  if (measurePoints.length >= 2) {
+                    const lastPt = measurePoints[measurePoints.length - 1];
+                    const newLabel: MapLabel = {
+                      id: `measure-${Date.now()}`,
+                      text: `${totalMeasureDistanceKm} ${distUnit}`,
+                      shape: 'pill',
+                      bg: '#f59e0b',
+                      fg: '#ffffff',
+                      border: '#d97706',
+                      fontSize: 11,
+                      x: 50,
+                      y: 50,
+                      lat: lastPt[0],
+                      lon: lastPt[1],
+                      anchor: 'geo'
+                    };
+                    handleLabelsChange([...reportLabels, newLabel]);
+                    setMeasurePoints([]);
+                  }
+                }}
+                onClearMeasurement={() => setMeasurePoints([])}
+                onAddLabel={() => {
+                  const newLabel: MapLabel = {
+                    id: `lbl-${Date.now()}`,
+                    text: reportLanguage === 'ar' ? 'تسمية جديدة' : 'New Label',
+                    shape: 'pill',
+                    bg: '#ffffff',
+                    fg: '#1f2937',
+                    border: '#3b82f6',
+                    fontSize: 12,
+                    x: 50,
+                    y: 50,
+                    lat: metrics.lLat || 46.9965,
+                    lon: metrics.lLon || 67.0222,
+                    anchor: 'geo'
+                  };
+                  handleLabelsChange([...reportLabels, newLabel]);
+                }}
+              />
+            </div>
+          )}
+
           {/* 1. REPORT HEADER (Pixel-faithful to reference design) */}
           {sectionVisibility.headerLogos && (
             <header className="trk-header relative" style={{ direction: 'rtl', zIndex: 2 }}>
@@ -3973,16 +4276,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* Centered Title (In-Place Editable) */}
           <h1 className="trk-title">
             <Editable
-              value={customMetadata.reportTitle || T.reportTitle}
+              value={effectiveReportTitle}
               onCommit={(v) => setCustomMetadata(prev => ({ ...prev, reportTitle: v }))}
-              placeholder={reportLanguage === 'ar' ? 'عنوان التقرير...' : 'Report Title...'}
+              placeholder={getReportString('report.title', reportLanguage)}
             />
           </h1>
 
           {/* Subtitle (In-Place Editable) */}
           {sectionVisibility.subtitle && (
             <p className="trk-sub">
-              {T.transmitterLabel} <b>{displayTransmitterLabel}</b> •{' '}
+              {getReportString('report.birdId', reportLanguage)} <b>{displayBirdId}</b> •{' '}
               <Editable
                 value={
                   customMetadata.regionName ||
@@ -3992,7 +4295,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 }
                 onCommit={(v) => setCustomMetadata(prev => ({ ...prev, regionName: v }))}
               />{' '}
-              • {T.issueDateLabel}{' '}
+              • {getReportString('report.issueDate', reportLanguage)}{' '}
               <b dir="ltr">
                 <Editable
                   value={customMetadata.issueDate}
@@ -4005,12 +4308,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* 2. MAIN REPORT BODY */}
           <div className="trk-grid" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
 
-            {/* ─── COLUMN 1 (RIGHT in RTL): SIDE PANEL (440px) ───── */}
-            <aside className="trk-side" key={dragResetKey}>
+            {/* ─── COLUMN 1 (RIGHT in RTL): SIDE PANEL (RESIZABLE) ───── */}
+            <aside 
+              className="trk-side" 
+              key={dragResetKey}
+              style={{ width: `${reportLayout.split}%`, minWidth: '280px', maxWidth: '65%' }}
+            >
               
               {/* TABLE 1: BIRD DATA (بيانات الطائر) */}
               {sectionVisibility.birdDataCard && (tableMode === 'standard' || tableMode === 'both') && (
-                <section id="custom-bird-data-table" className={`trk-card ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
+                <ReportBlock
+                  id="birdData"
+                  title={reportLanguage === 'ar' ? 'بيانات الطائر' : 'Bird Data'}
+                  zoneId="left"
+                  isEditMode={isEditMode}
+                  scale={reportLayout.blockScale.birdData ?? 1.0}
+                  onScaleChange={(scale) => handleBlockScaleChange('birdData', scale)}
+                  onMoveUp={() => handleMoveBlock('birdData', 'left', 'up')}
+                  onMoveDown={() => handleMoveBlock('birdData', 'left', 'down')}
+                  onMoveToZone={(targetZone) => handleMoveToZone('birdData', 'left', targetZone)}
+                  onHide={() => setSectionVisibility(prev => ({ ...prev, birdDataCard: false }))}
+                >
+                  <section id="custom-bird-data-table" className={`trk-card ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول بيانات الطائر</span>
@@ -4100,30 +4419,42 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   <div className="trk-row">
                     <span className="k">{T.status}</span>
                     <span className="v">
-                      {isTableEditing ? (
-                        <input
-                          type="text"
-                          value={customMetadata.birdStatus}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, birdStatus: e.target.value })}
-                          className="w-full text-center font-bold text-emerald-700 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        <span className={`pill ${
-                          customMetadata.birdStatus === 'نافق' || customMetadata.birdStatus === 'dead' ? 'pill--bad' :
-                          customMetadata.birdStatus === 'غير نشط' || customMetadata.birdStatus === 'inactive' ? 'pill--warn' :
-                          'pill--ok'
-                        }`}>
-                          {translateValue(customMetadata.birdStatus || 'حي')}
-                        </span>
-                      )}
+                      <BirdStatusChip
+                        tableStatus={selectedBirdRecord?.status || customMetadata.birdStatus}
+                        overrideStatus={statusOverride}
+                        onOverrideStatus={(newStatus) => {
+                          setStatusOverride(newStatus);
+                          if (newStatus) {
+                            setCustomMetadata(prev => ({
+                              ...prev,
+                              birdStatus: newStatus === 'alive' ? 'حي' : newStatus === 'dead' ? 'نافق' : 'نفوق محتمل'
+                            }));
+                          }
+                        }}
+                        isEditMode={isEditMode}
+                        language={reportLanguage}
+                      />
                     </span>
                   </div>
                 </section>
+                </ReportBlock>
               )}
 
               {/* TABLE 2: MOVEMENT & COORDINATES COMPARISON TABLE */}
               {sectionVisibility.coordinatesCard && (tableMode === 'standard' || tableMode === 'both') && (
-                <section id="custom-table2-coordinates" className={`trk-card trk-card--table ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
+                <ReportBlock
+                  id="trackTable"
+                  title={reportLanguage === 'ar' ? 'مقارنة الإحداثيات' : 'Coordinates Comparison'}
+                  zoneId="left"
+                  isEditMode={isEditMode}
+                  scale={reportLayout.blockScale.trackTable ?? 1.0}
+                  onScaleChange={(scale) => handleBlockScaleChange('trackTable', scale)}
+                  onMoveUp={() => handleMoveBlock('trackTable', 'left', 'up')}
+                  onMoveDown={() => handleMoveBlock('trackTable', 'left', 'down')}
+                  onMoveToZone={(targetZone) => handleMoveToZone('trackTable', 'left', targetZone)}
+                  onHide={() => setSectionVisibility(prev => ({ ...prev, coordinatesCard: false }))}
+                >
+                  <section id="custom-table2-coordinates" className={`trk-card trk-card--table ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول مقارنة الإحداثيات</span>
@@ -4219,6 +4550,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </span>
                   </div>
                 </section>
+                </ReportBlock>
               )}
 
               {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE */}
@@ -4365,7 +4697,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
               {/* 4 KPI METRIC TILES */}
               {sectionVisibility.kpiCards && (
-                <div className={`trk-stats ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl relative' : ''}`}>
+                <ReportBlock
+                  id="kpis"
+                  title={reportLanguage === 'ar' ? 'المؤشرات الرئيسية' : 'KPI Cards'}
+                  zoneId="left"
+                  isEditMode={isEditMode}
+                  scale={reportLayout.blockScale.kpis ?? 1.0}
+                  onScaleChange={(scale) => handleBlockScaleChange('kpis', scale)}
+                  onMoveUp={() => handleMoveBlock('kpis', 'left', 'up')}
+                  onMoveDown={() => handleMoveBlock('kpis', 'left', 'down')}
+                  onMoveToZone={(targetZone) => handleMoveToZone('kpis', 'left', targetZone)}
+                  onHide={() => setSectionVisibility(prev => ({ ...prev, kpiCards: false }))}
+                >
+                  <div className={`trk-stats ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 p-1 rounded-xl relative' : ''}`}>
                   {isDragEnabled && (
                     <div className="col-span-4 drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export rounded-t-lg">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل بطاقات المؤشرات</span>
@@ -4388,7 +4732,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <span>km</span>
                         </div>
                       ) : (
-                        <>{customMetadata.statDistFromRelease || metrics.distFromReleaseKm} km</>
+                        <>{formatDist(customMetadata.statDistFromRelease || metrics.distFromReleaseKm)}</>
                       )}
                     </div>
                     <div className="lab">
@@ -4443,7 +4787,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <span>km</span>
                         </div>
                       ) : (
-                        <>{customMetadata.statDistToCamp || metrics.distToCampKm} km</>
+                        <>{formatDist(customMetadata.statDistToCamp || metrics.distToCampKm)}</>
                       )}
                     </div>
                     <div className="lab">
@@ -4474,29 +4818,75 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </div>
                   </div>
                 </div>
+                </ReportBlock>
               )}
 
               {/* 7-Day Min/Max Temperature Chart */}
               {sectionVisibility.tempChart && (
-                <SevenDayTempChart
-                  lat={metrics.lLat}
-                  lon={metrics.lLon}
-                  language={reportLanguage}
-                  isEditing={isTableEditing}
-                />
+                <ReportBlock
+                  id="temperature"
+                  title={reportLanguage === 'ar' ? 'منحنى درجات الحرارة' : 'Temperature Chart'}
+                  zoneId="left"
+                  isEditMode={isEditMode}
+                  scale={reportLayout.blockScale.temperature ?? 1.0}
+                  onScaleChange={(scale) => handleBlockScaleChange('temperature', scale)}
+                  onMoveUp={() => handleMoveBlock('temperature', 'left', 'up')}
+                  onMoveDown={() => handleMoveBlock('temperature', 'left', 'down')}
+                  onMoveToZone={(targetZone) => handleMoveToZone('temperature', 'left', targetZone)}
+                  onHide={() => setSectionVisibility(prev => ({ ...prev, tempChart: false }))}
+                >
+                  <SevenDayTempChart
+                    lat={metrics.lLat}
+                    lon={metrics.lLon}
+                    language={reportLanguage}
+                    isEditing={isTableEditing}
+                  />
+                </ReportBlock>
               )}
 
             </aside>
 
+            {/* Resizable Divider (Draggable in Edit Mode) */}
+            {isEditMode && (
+              <div
+                className="no-print no-export w-2 hover:w-3.5 bg-gray-200 hover:bg-brand-500 cursor-col-resize transition-all rounded-full select-none flex items-center justify-center shrink-0 self-stretch my-1 z-30"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setIsResizingSplit(true);
+                }}
+                title={`سحب لتعديل عرض العمودين (${reportLayout.split}% / ${100 - reportLayout.split}%)`}
+              >
+                <div className="w-0.5 h-10 bg-gray-400 rounded-full" />
+              </div>
+            )}
+
             {/* ─── COLUMN 2 (LEFT in RTL): MAP WINDOW & LEGEND (1fr) ───── */}
-            <div className="flex flex-col space-y-2.5" style={{ direction: 'ltr', minWidth: 0 }}>
+            <div 
+              className="flex flex-col space-y-2.5" 
+              style={{ 
+                direction: 'ltr', 
+                minWidth: 0,
+                width: isEditMode ? `calc(${100 - reportLayout.split}% - 12px)` : `${100 - reportLayout.split}%`
+              }}
+            >
               
               {/* Map Viewport Frame */}
-              <div 
-                ref={mapViewportRef}
-                className="trk-map relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-[#ece8de] h-[465px] shadow-xs flex items-center justify-center"
-                style={{ direction: 'ltr', textAlign: 'left' }}
+              <ReportBlock
+                id="map"
+                title={reportLanguage === 'ar' ? 'نافذة الخريطة' : 'Map Viewport'}
+                zoneId="right"
+                isEditMode={isEditMode}
+                scale={reportLayout.blockScale.map ?? 1.0}
+                onScaleChange={(scale) => handleBlockScaleChange('map', scale)}
+                onMoveUp={() => handleMoveBlock('map', 'right', 'up')}
+                onMoveDown={() => handleMoveBlock('map', 'right', 'down')}
+                onMoveToZone={(targetZone) => handleMoveToZone('map', 'right', targetZone)}
               >
+                <div 
+                  ref={mapViewportRef}
+                  className="trk-map relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-[#ece8de] h-[465px] shadow-xs flex items-center justify-center"
+                  style={{ direction: 'ltr', textAlign: 'left' }}
+                >
                 
                 {/* 1. SCREENED PHOTO FROM LIVE TRACK OR UPLOADED QGIS MAP */}
                 {mapDisplayMode === 'snapshot' && mapSnapshotUrl ? (
@@ -5325,11 +5715,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 )}
 
               </div>
+              </ReportBlock>
 
               {/* Map Legend Bar */}
               {sectionVisibility.legendBar && (
-                <div 
-                  id="custom-map-legend-bar"
+                <ReportBlock
+                  id="legend"
+                  title={reportLanguage === 'ar' ? 'دليل الخريطة' : 'Map Legend'}
+                  zoneId="right"
+                  isEditMode={isEditMode}
+                  scale={reportLayout.blockScale.legend ?? 1.0}
+                  onScaleChange={(scale) => handleBlockScaleChange('legend', scale)}
+                  onMoveUp={() => handleMoveBlock('legend', 'right', 'up')}
+                  onMoveDown={() => handleMoveBlock('legend', 'right', 'down')}
+                  onMoveToZone={(targetZone) => handleMoveToZone('legend', 'right', targetZone)}
+                  onHide={() => setSectionVisibility(prev => ({ ...prev, legendBar: false }))}
+                >
+                  <div 
+                    id="custom-map-legend-bar"
                   className="trk-legend report-legend relative select-none"
                   style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%' }}
                 >
@@ -5389,6 +5792,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     )}
                   </div>
                 </div>
+                </ReportBlock>
               )}
 
             </div>
