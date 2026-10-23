@@ -63,20 +63,20 @@ export interface MapElementState {
 export type MapElements = Record<MapElementId, MapElementState>;
 
 export const DEFAULT_MAP_ELEMENTS: MapElements = {
-  release: { visible: true, showLabel: true, size: 8 },
-  latest: { visible: true, showLabel: true, size: 10 },
-  camps: { visible: true, showLabel: true, size: 8 },
-  stopovers: { visible: false, showLabel: false, size: 6 },
+  release: { visible: true, showLabel: true, size: 8, color: '#701a2b' },
+  latest: { visible: true, showLabel: true, size: 10, color: '#22c55e' },
+  camps: { visible: true, showLabel: true, size: 8, color: '#f59e0b' },
+  stopovers: { visible: false, showLabel: false, size: 6, color: '#3b82f6' },
   trackPoints: { visible: true, size: 4 },
-  track: { visible: true, size: 3 },
-  distRelease: { visible: true, showLabel: true },
-  distCamp: { visible: true, showLabel: true },
+  track: { visible: true, size: 3, color: '#6366f1' },
+  distRelease: { visible: true, showLabel: true, color: '#dc2626' },
+  distCamp: { visible: true, showLabel: true, color: '#d97706' },
   distStopovers: { visible: false, showLabel: false },
   placeLabels: { visible: false },
-  graticule: { visible: false },
+  graticule: { visible: true },
   northArrow: { visible: true },
   scaleBar: { visible: true },
-  miniMap: { visible: false }
+  miniMap: { visible: true }
 };
 
 /* ------------------- Section 3: Layout Engine ------------------- */

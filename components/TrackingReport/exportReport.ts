@@ -47,9 +47,9 @@ export async function exportReport(node: HTMLElement, opts: ExportOptions): Prom
   if (waitForMap) await waitForMap();
   await sleep(150); // let the final paint settle
 
-  // 2. Freeze the capture size to the on-screen page size.
-  const width = Math.round(node.scrollWidth);
-  const height = Math.round(node.scrollHeight);
+  // 2. Freeze the capture size to the design-lock frame: 1122 × 885 CSS px (2244 × 1770 at 2x).
+  const width = 1122;
+  const height = 885;
 
   node.classList.add('trk-exporting');
   try {
@@ -94,15 +94,14 @@ export async function exportReport(node: HTMLElement, opts: ExportOptions): Prom
       return;
     }
 
-    // PDF: page = exactly the captured size (landscape A4 ratio), no re-scaling blur.
+    // PDF: page = exactly the locked size 841.5 × 663.75 pt (1122 × 885 CSS px), no re-scaling blur.
     const pdf = new jsPDF({
-      orientation: width >= height ? 'landscape' : 'portrait',
-      unit: 'px',
-      format: [width, height],
-      hotfixes: ['px_scaling'],
+      orientation: 'landscape',
+      unit: 'pt',
+      format: [841.5, 663.75],
       compress: true,
     });
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, width, height, undefined, 'FAST');
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, 841.5, 663.75, undefined, 'FAST');
     pdf.save(`${fileName}.pdf`);
   } finally {
     node.classList.remove('trk-exporting');

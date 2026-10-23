@@ -2,8 +2,9 @@ import React, { useRef } from 'react';
 import { RotateCcw } from 'lucide-react';
 
 export interface ColorChipProps {
-  label: string;
-  value: string; // #rrggbb
+  label?: string;
+  value?: string;
+  color?: string; // fallback alias for value
   onChange: (hex: string) => void;
   defaultValue?: string;
   onReset?: () => void;
@@ -14,43 +15,38 @@ export interface ColorChipProps {
 export const ColorChip: React.FC<ColorChipProps> = ({
   label,
   value,
+  color,
   onChange,
   defaultValue,
   onReset,
   className = '',
   size = 'md'
 }) => {
+  const effectiveValue = (value || color || '#000000').toLowerCase();
   const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
-      onChange(raw.toLowerCase());
-    }
-  };
 
   return (
     <div
-      className={`flex items-center justify-between gap-2 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-2xs ${className}`}
+      className={`inline-flex items-center gap-2 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 shadow-2xs ${className}`}
     >
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="flex items-center gap-1.5 min-w-0">
         {/* Color Swatch Trigger */}
         <button
           type="button"
-          aria-label={`${label}: ${value}`}
+          aria-label={label ? `${label}: ${effectiveValue}` : effectiveValue}
           onClick={() => inputRef.current?.click()}
-          className="relative shrink-0 rounded-md border border-black/15 dark:border-white/20 shadow-xs cursor-pointer hover:scale-105 active:scale-95 transition-transform overflow-hidden"
+          className="relative shrink-0 rounded-md border border-black/20 dark:border-white/20 shadow-xs cursor-pointer hover:scale-105 active:scale-95 transition-transform overflow-hidden"
           style={{
-            width: size === 'sm' ? 24 : 28,
-            height: size === 'sm' ? 24 : 28,
-            backgroundColor: value
+            width: size === 'sm' ? 22 : 26,
+            height: size === 'sm' ? 22 : 26,
+            backgroundColor: effectiveValue
           }}
           title="انقر لتغيير اللون"
         >
           <input
             ref={inputRef}
             type="color"
-            value={value}
+            value={effectiveValue}
             onChange={(e) => onChange(e.target.value)}
             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
             tabIndex={-1}
@@ -58,18 +54,24 @@ export const ColorChip: React.FC<ColorChipProps> = ({
         </button>
 
         {/* Label & Hex readout */}
-        <div className="min-w-0 flex-1 leading-tight">
-          <span className="block text-[11px] font-bold text-gray-800 dark:text-gray-200 truncate" title={label}>
-            {label}
+        {label ? (
+          <div className="min-w-0 leading-tight">
+            <span className="block text-[11px] font-bold text-gray-800 dark:text-gray-200 truncate" title={label}>
+              {label}
+            </span>
+            <span className="text-[10px] font-mono text-gray-400 dark:text-gray-400 uppercase">
+              {effectiveValue}
+            </span>
+          </div>
+        ) : (
+          <span className="text-[10px] font-mono font-bold text-gray-500 uppercase">
+            {effectiveValue}
           </span>
-          <span className="text-[10px] font-mono text-gray-400 dark:text-gray-400 uppercase">
-            {value}
-          </span>
-        </div>
+        )}
       </div>
 
       {/* Optional Reset */}
-      {onReset && defaultValue && value.toLowerCase() !== defaultValue.toLowerCase() && (
+      {onReset && defaultValue && effectiveValue !== defaultValue.toLowerCase() && (
         <button
           type="button"
           onClick={onReset}
@@ -81,4 +83,4 @@ export const ColorChip: React.FC<ColorChipProps> = ({
       )}
     </div>
   );
-}
+};

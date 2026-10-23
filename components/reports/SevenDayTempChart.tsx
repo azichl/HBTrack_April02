@@ -36,6 +36,8 @@ export const SevenDayTempChart: React.FC<SevenDayTempChartProps> = ({
     const numLat = Number(lat);
     const numLon = Number(lon);
     if (!numLat || !numLon || isNaN(numLat) || isNaN(numLon) || (numLat === 0 && numLon === 0)) {
+      setData([]);
+      setLoading(false);
       return;
     }
 
@@ -159,6 +161,10 @@ export const SevenDayTempChart: React.FC<SevenDayTempChartProps> = ({
           <div className="h-[88px] flex items-center justify-center gap-2 text-xs text-gray-400">
             <Loader2 size={14} className="animate-spin" />
             <span>Loading 7-day temperature...</span>
+          </div>
+        ) : data.length === 0 ? (
+          <div className="h-[88px] flex items-center justify-center text-xs text-gray-400 font-sans italic">
+            <span>{language === 'ar' ? 'لا تتوفر بيانات درجات الحرارة' : 'No temperature data available'}</span>
           </div>
         ) : (
           <svg

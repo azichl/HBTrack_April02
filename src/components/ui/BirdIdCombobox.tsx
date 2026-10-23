@@ -8,13 +8,15 @@ export interface BirdOption {
   label: string;
   sublabel?: string;
   pttId: string;
+  birdId?: string;
+  kind?: 'ptt' | 'ring' | 'darvic';
   type: 'bird' | 'transmitter';
   searchValue: string;
 }
 
 export interface BirdIdComboboxProps {
   value: string;
-  onSelect: (id: string) => void;
+  onSelect: (option: BirdOption | string) => void;
   options: BirdOption[];
   language?: 'ar' | 'en';
   placeholder?: string;
@@ -139,7 +141,7 @@ export const BirdIdCombobox: React.FC<BirdIdComboboxProps> = ({
   }, [isOpen, activeIndex, filtered, recentOptions]);
 
   const handleChoose = (opt: BirdOption) => {
-    onSelect(opt.id);
+    onSelect(opt);
     saveRecent(opt.id);
     setSearchTerm('');
     setIsOpen(false);

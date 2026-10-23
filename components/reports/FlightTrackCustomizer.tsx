@@ -15,8 +15,8 @@ export interface TrackColorPeriod {
 export interface FlightTrackConfig {
   enabled: boolean;
   locationType: TrackLocationTypeFilter;
-  filterStartDate: string; // YYYY-MM-DD (empty = no lower bound)
-  filterEndDate: string;   // YYYY-MM-DD (empty = no upper bound)
+  filterStartDate?: string; // YYYY-MM-DD (empty = no lower bound)
+  filterEndDate?: string;   // YYYY-MM-DD (empty = no upper bound)
   useColorPeriods: boolean;
   defaultColor: string;
   lineWeight: number;
@@ -87,8 +87,10 @@ export function buildColoredTrackSegments(
     } else {
       lat = Number(pt.lat ?? pt.latitude);
       lon = Number(pt.lon ?? pt.longitude);
-      locType = classifyLocationType(pt.lc || pt.locationClass, pt.locationType, pt.satellite);
-      const dateStr = pt.locationDate || pt.fixTime || pt.timestamp || pt.date;
+      locType = (pt.type === 'GPS' || pt.type === 'DOPPLER')
+        ? pt.type
+        : classifyLocationType(pt.lc || pt.locationClass, pt.locationType, pt.satellite);
+      const dateStr = pt.locationDate || pt.fixTime || pt.timestamp || pt.date || pt.ts;
       ts = safeParseTimestamp(dateStr);
     }
 

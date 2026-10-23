@@ -19,6 +19,8 @@ import Draggable from 'react-draggable';
 const DraggableComponent = Draggable as any;
 
 import { useAppStore } from '../../store/appStore';
+import { db } from '../../firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { getHistoricalPositions } from '../../services/firestoreService';
 import { FIXED_FIELD_CAMPS, FieldCampPoint } from '../../constants';
 import { 
@@ -35,7 +37,7 @@ import { BotReportBridgeModal } from './BotReportBridgeModal';
 import { ReportToolbar } from '../../src/components/report/ReportToolbar';
 import { EditToolsPalette } from '../../src/components/report/EditToolsPalette';
 import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
-import { BirdIdCombobox } from '../../src/components/ui/BirdIdCombobox';
+import { BirdIdCombobox, BirdOption } from '../../src/components/ui/BirdIdCombobox';
 import { TrackPathButton } from '../../src/components/track/TrackPathButton';
 import { Editable } from '../../src/components/report/Editable';
 import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
@@ -43,6 +45,8 @@ import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
 import { MapLabel, ReportLegendItem, SectionId, DEFAULT_MAP_ELEMENTS, MapElements } from '../../src/types/report';
 import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
 import { getReportString } from '../../src/utils/reportDictionary';
+import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
+import { BirdStatus } from '../../src/constants/statusColors';
 import {
   FlightTrackCustomizer,
   FlightTrackConfig,
@@ -67,13 +71,29 @@ import {
   AutoResolvedLocation
 } from './QGISMapProductionReport';
 
-/** Formats coordinate to degree and minute format without dir suffix for coordinates comparison table (e.g. 46° 56.6490′ and 066° 49.4520′) */
-export const formatTableDMM = (val: number, isLat: boolean): string => {
+/** Formats coordinate to DD, DMM, or DMS for the coordinates comparison table. Returns '—' for empty/0/NaN */
+export const formatCoordinateForTable = (
+  val: number,
+  isLat: boolean,
+  format: 'DD' | 'DMM' | 'DMS' = 'DMM'
+): string => {
   const num = Number(val);
-  if (isNaN(num) || num === 0) {
-    return isLat ? `00° 00.0000′` : `000° 00.0000′`;
-  }
+  if (isNaN(num) || num === 0) return '—';
+
   const abs = Math.abs(num);
+  if (format === 'DD') {
+    return `${abs.toFixed(4)}°`;
+  }
+
+  if (format === 'DMS') {
+    const deg = Math.floor(abs);
+    const min = Math.floor((abs - deg) * 60);
+    const sec = Math.round(((abs - deg) * 60 - min) * 60);
+    const degStr = isLat ? String(deg) : String(deg).padStart(3, '0');
+    return `${degStr}° ${String(min).padStart(2, '0')}′ ${String(sec).padStart(2, '0')}″`;
+  }
+
+  // Default DMM (degree & minute, 4 decimal places)
   let deg = Math.floor(abs);
   let min = (abs - deg) * 60;
   if (min >= 59.99995) {
@@ -84,6 +104,11 @@ export const formatTableDMM = (val: number, isLat: boolean): string => {
   const minStr = `${minWhole.padStart(2, '0')}.${minFraction}`;
   const degStr = isLat ? String(deg) : String(deg).padStart(3, '0');
   return `${degStr}° ${minStr}′`;
+};
+
+/** Backwards compatible alias */
+export const formatTableDMM = (val: number, isLat: boolean): string => {
+  return formatCoordinateForTable(val, isLat, 'DMM');
 };
 
 // ─── LEAFLET ICONS ────────────────────────────────────────────────────────────
@@ -797,9 +822,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── FIELD CAMPS FILTER & DISTANCES (AS REQUESTED) ──────────────────────────
   // Choose camps one by one (check case for every camp)
   const [visibleCampIds, setVisibleCampIds] = useState<string[]>(FIXED_FIELD_CAMPS.map(c => c.id));
-  // Distance between each chosen camp and last position (automatically enabled for nearest camp)
-  const [campDistToLastEnabled, setCampDistToLastEnabled] = useState<{ [campId: string]: boolean }>({
-    [initialNearestCamp.id]: true
+  // Distance between each chosen camp and last position (all enabled by default per Spec v4 §4)
+  const [campDistToLastEnabled, setCampDistToLastEnabled] = useState<{ [campId: string]: boolean }>(() => {
+    const initial: Record<string, boolean> = {};
+    FIXED_FIELD_CAMPS.forEach(c => { initial[c.id] = true; });
+    return initial;
   });
   // Distance between camps
   const [showCampDistance, setShowCampDistance] = useState<boolean>(false);
@@ -858,7 +885,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // ─── MAP CONTAINER REF & LABELS & TRACK SETTINGS ───────────────────────────
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const [coordFormat, setCoordFormat] = useState<'DD' | 'DMM' | 'DMS'>('DD');
+  const [coordFormat, setCoordFormat] = useState<'DD' | 'DMM' | 'DMS'>('DMM');
+  const [distUnit, setDistUnit] = useState<'km' | 'mi'>('km');
+
+  // Single unified ReportSubject feeding all blocks (§1)
+  const [reportSubject, setReportSubject] = useState<ReportSubject>(() =>
+    resolveReportSubject('244289', birds, transmitters, reportLanguage)
+  );
 
   const [mapLabels, setMapLabels] = useState<MapLabel[]>(() => {
     try {
@@ -1766,13 +1799,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const cLat = parseFloat(String(activeCamp.lat)) || 0;
     const cLon = parseFloat(String(activeCamp.lon)) || 0;
 
-    const distFromRelease = calculateDistanceKm(rLat, rLon, lLat, lLon);
-    const bearing = calculateBearingDegrees(rLat, rLon, lLat, lLon);
-    const bearingArabic = formatArabicBearing(bearing);
-    const bearingEnglish = formatEnglishBearing(bearing);
+    const hasLast = !isNaN(lLat) && !isNaN(lLon) && lLat !== 0 && lLon !== 0;
+    const hasRelease = !isNaN(rLat) && !isNaN(rLon) && rLat !== 0 && rLon !== 0;
+
+    const distFromRelease = (hasRelease && hasLast) ? calculateDistanceKm(rLat, rLon, lLat, lLon) : NaN;
+    const bearing = (hasRelease && hasLast) ? calculateBearingDegrees(rLat, rLon, lLat, lLon) : NaN;
+    const bearingArabic = !isNaN(bearing) ? formatArabicBearing(bearing) : { direction: '—', degrees: 0 };
+    const bearingEnglish = !isNaN(bearing) ? formatEnglishBearing(bearing) : '—';
     const activeBearing = reportLanguage === 'ar' ? bearingArabic : bearingEnglish;
-    const distToCamp = calculateDistanceKm(lLat, lLon, cLat, cLon);
-    const durationDays = calculateDurationFromReleaseToToday(telemetryData.releasePos.dateStr);
+    const distToCamp = hasLast ? calculateDistanceKm(lLat, lLon, cLat, cLon) : NaN;
+    const durationDays = (hasLast && telemetryData.releasePos.dateStr && telemetryData.releasePos.dateStr !== '—')
+      ? calculateDurationFromReleaseToToday(telemetryData.releasePos.dateStr)
+      : 0;
 
     return {
       rLat,
@@ -1781,26 +1819,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       lLon,
       cLat,
       cLon,
-      bearingDegrees: bearing,
-      distFromReleaseKm: distFromRelease.toFixed(2),
+      hasLast,
+      hasRelease,
+      bearingDegrees: !isNaN(bearing) ? bearing : 0,
+      distFromReleaseKm: !isNaN(distFromRelease) ? distFromRelease.toFixed(2) : '—',
       bearingArabic: activeBearing,
       bearingEnglish,
-      distToCampKm: distToCamp.toFixed(2),
+      distToCampKm: !isNaN(distToCamp) ? distToCamp.toFixed(2) : '—',
       durationDays: durationDays > 0 ? durationDays : 0,
-      releaseLatDMM: formatDMM(rLat, true),
-      releaseLonDMM: formatDMM(rLon, false),
-      lastGpsLatDMM: formatDMM(lLat, true),
-      lastGpsLonDMM: formatDMM(lLon, false),
-      releaseLatTableDMM: formatTableDMM(rLat, true),
-      releaseLonTableDMM: formatTableDMM(rLon, false),
-      lastGpsLatTableDMM: formatTableDMM(lLat, true),
-      lastGpsLonTableDMM: formatTableDMM(lLon, false),
+      releaseLatDMM: formatCoordinateForTable(rLat, true, coordFormat),
+      releaseLonDMM: formatCoordinateForTable(rLon, false, coordFormat),
+      lastGpsLatDMM: hasLast ? formatCoordinateForTable(lLat, true, coordFormat) : '—',
+      lastGpsLonDMM: hasLast ? formatCoordinateForTable(lLon, false, coordFormat) : '—',
+      releaseLatTableDMM: formatCoordinateForTable(rLat, true, coordFormat),
+      releaseLonTableDMM: formatCoordinateForTable(rLon, false, coordFormat),
+      lastGpsLatTableDMM: hasLast ? formatCoordinateForTable(lLat, true, coordFormat) : '—',
+      lastGpsLonTableDMM: hasLast ? formatCoordinateForTable(lLon, false, coordFormat) : '—',
       releaseToLastMid: [
-        (rLat + lLat) / 2,
-        (rLon + lLon) / 2
+        (rLat + (hasLast ? lLat : rLat)) / 2,
+        (rLon + (hasLast ? lLon : rLon)) / 2
       ] as [number, number]
     };
-  }, [telemetryData, activeCamp, reportLanguage]);
+  }, [telemetryData, activeCamp, reportLanguage, coordFormat]);
 
   // Recenter Map Helper (Fits bounds around Release Point, Last GPS Fix, and Active Camp)
   const handleRecenterMap = useCallback(() => {
@@ -1951,19 +1991,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [transmitters, pttSearchTerm]);
 
   // ─── UNIFIED BIRD ID SELECTOR & RESOLVER (PTT, RING, DARVIC) ──────────────
-  const unifiedTargetOptions = useMemo(() => {
-    const options: Array<{
-      key: string;
-      id: string;
-      label: string;
-      sublabel: string;
-      pttId: string;
-      ringId?: string;
-      darvicId?: string;
-      type: 'transmitter' | 'bird';
-      searchValue: string;
-    }> = [];
-
+  const unifiedTargetOptions = useMemo<BirdOption[]>(() => {
+    const options: BirdOption[] = [];
     const seenKeys = new Set<string>();
 
     // 1. All Transmitters from App Store
@@ -1984,11 +2013,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       options.push({
         key: `tx-${ptt}`,
         id: ptt,
+        birdId: linkedBird?.id,
+        kind: 'ptt',
         label: `جهاز PTT: ${ptt}`,
         sublabel: subParts.join(' | ') || 'جهاز تتبع',
         pttId: ptt,
-        ringId: ring,
-        darvicId: darvic,
         type: 'transmitter',
         searchValue: `${ptt} ${ring || ''} ${darvic || ''} ${tx.id || ''}`.toLowerCase()
       });
@@ -1999,33 +2028,33 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const ring = b.ring_id && b.ring_id !== 'NA' ? b.ring_id : '';
       const darvic = b.darvic_number || '';
       const linkedTx = transmitters.find(t => isBirdLinkedToTransmitter(b, t));
-      const ptt = linkedTx?.platform_id || b.assigned_transmitter_id || 'NA';
+      const ptt = linkedTx?.platform_id || (b.assigned_transmitter_id ? String(b.assigned_transmitter_id).replace(/^trans-/, '') : '');
 
-      if (ring && !seenKeys.has(`ring-${ring}`)) {
-        seenKeys.add(`ring-${ring}`);
+      if (ring && !seenKeys.has(`ring-${b.id}`)) {
+        seenKeys.add(`ring-${b.id}`);
         options.push({
-          key: `ring-${ring}`,
-          id: ring,
-          label: `طائر (حجل): ${ring}`,
-          sublabel: `جهاز: ${ptt}${darvic ? ` | دارفيك: ${darvic}` : ''}${b.species ? ` | ${b.species}` : ''}`,
+          key: `ring-${b.id}`,
+          id: ring || b.id,
+          birdId: b.id,
+          kind: 'ring',
+          label: `طائر (حجل): ${ring || b.id}`,
+          sublabel: `جهاز: ${ptt && ptt !== 'NA' ? ptt : (reportLanguage === 'ar' ? 'بدون جهاز' : 'No Transmitter')}${darvic ? ` | دارفيك: ${darvic}` : ''}${b.species ? ` | ${b.species}` : ''}`,
           pttId: ptt,
-          ringId: ring,
-          darvicId: darvic,
           type: 'bird',
-          searchValue: `${ring} ${ptt} ${darvic} ${b.species || ''}`.toLowerCase()
+          searchValue: `${ring} ${ptt} ${darvic} ${b.species || ''} ${b.id}`.toLowerCase()
         });
       }
 
-      if (darvic && !seenKeys.has(`darvic-${darvic}`)) {
-        seenKeys.add(`darvic-${darvic}`);
+      if (darvic && !seenKeys.has(`darvic-${b.id}-${darvic}`)) {
+        seenKeys.add(`darvic-${b.id}-${darvic}`);
         options.push({
-          key: `darvic-${darvic}`,
+          key: `darvic-${b.id}-${darvic}`,
           id: darvic,
+          birdId: b.id,
+          kind: 'darvic',
           label: `طائر (دارفيك): ${darvic}`,
-          sublabel: `حجل: ${ring || 'NA'} | جهاز: ${ptt}`,
+          sublabel: `حجل: ${ring || 'NA'} | جهاز: ${ptt && ptt !== 'NA' ? ptt : (reportLanguage === 'ar' ? 'بدون جهاز' : 'No Transmitter')}`,
           pttId: ptt,
-          ringId: ring,
-          darvicId: darvic,
           type: 'bird',
           searchValue: `${darvic} ${ring} ${ptt}`.toLowerCase()
         });
@@ -2039,6 +2068,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         options.unshift({
           key: `tx-${demoPtt}`,
           id: demoPtt,
+          kind: 'ptt',
           label: `جهاز PTT: ${demoPtt}`,
           sublabel: 'نموذج قياسي',
           pttId: demoPtt,
@@ -2049,7 +2079,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     });
 
     return options;
-  }, [transmitters, birds]);
+  }, [transmitters, birds, reportLanguage]);
 
   const filteredUnifiedTargets = useMemo(() => {
     if (!pttSearchTerm.trim()) return unifiedTargetOptions;
@@ -2057,26 +2087,85 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return unifiedTargetOptions.filter(opt => opt.searchValue.includes(term));
   }, [unifiedTargetOptions, pttSearchTerm]);
 
-  const handleSelectUnifiedTarget = useCallback((targetId: string) => {
-    const resolved = resolveBirdOrTransmitter(targetId, transmitters, birds);
-    const targetPtt = resolved.pttId && resolved.pttId !== 'NA' ? resolved.pttId : targetId;
+  const handleSelectUnifiedTarget = useCallback((target: string | BirdOption) => {
+    const targetId = typeof target === 'string' ? target : target.id;
+    const birdId = typeof target === 'object' ? target.birdId : undefined;
+    const kind = typeof target === 'object' ? target.kind : undefined;
+    const pttId = typeof target === 'object' ? target.pttId : undefined;
+
+    const subject = resolveReportSubject(
+      { birdId, id: targetId, kind, value: targetId, pttId },
+      birds,
+      transmitters,
+      reportLanguage
+    );
+
+    setReportSubject(subject);
+    const targetPtt = subject.active?.platform_id || (subject.bird?.ring_id && subject.bird.ring_id !== 'NA' ? subject.bird.ring_id : targetId);
     setSelectedPttId(targetPtt);
     setPttSearchTerm('');
     setIsSearchOpen(false);
 
-    if (resolved.bird) {
-      const b = resolved.bird;
+    // Cancel in-flight loads and CLEAR previous telemetry/track/KPI data immediately (§1)
+    setTelemetryData({
+      lastGpsPos: { lat: NaN, lon: NaN, dateStr: '—' },
+      releasePos: subject.release
+        ? { lat: subject.release.lat!, lon: subject.release.lon!, dateStr: subject.release.date || '—' }
+        : { lat: NaN, lon: NaN, dateStr: '—' },
+      dataSource: 'telemetry'
+    });
+    setRawHistoryRecords([]);
+    setAllHistoryPoints([]);
+    setHistoryRows([]);
+    setCustomReleaseMarkerPos(null);
+    setCustomLastPosMarkerPos(null);
+    setCustomReleaseDistPos(null);
+    setCustomCampDistPositions({});
+
+    if (subject.bird) {
+      const b = subject.bird;
       setCustomMetadata(prev => ({
         ...prev,
-        birdRing: b.ring_id || prev.birdRing || 'NA',
+        birdRing: b.ring_id && b.ring_id !== 'NA' ? b.ring_id : 'NA',
         species: b.species === 'Asian Houbara' ? 'وحش' : (b.species || prev.species),
         gender: b.sex === 'M' ? 'ذكر' : b.sex === 'F' ? 'أنثى' : prev.gender,
-        birdStatus: resolved.transmitter?.status === 'active' ? 'حي' : (resolved.transmitter?.status || prev.birdStatus)
+        birdStatus: subject.status.value === 'alive' ? (reportLanguage === 'ar' ? 'حي' : 'Alive') : subject.status.value
+      }));
+    } else {
+      setCustomMetadata(prev => ({
+        ...prev,
+        birdRing: 'NA',
+        birdStatus: subject.status.value === 'alive' ? (reportLanguage === 'ar' ? 'حي' : 'Alive') : subject.status.value
       }));
     }
 
-    handleUploadFromHistory(targetPtt);
-  }, [transmitters, birds, handleUploadFromHistory]);
+    // Only upload history if bird has an active transmitter
+    if (subject.active) {
+      handleUploadFromHistory(subject.active.platform_id);
+    } else if (subject.release) {
+      setMapCenter([subject.release.lat!, subject.release.lon!]);
+      setFitKey(k => k + 1);
+    }
+  }, [transmitters, birds, reportLanguage, handleUploadFromHistory]);
+
+  const handleUpdateBirdStatusInDb = useCallback(async (newStatus: BirdStatus) => {
+    if (reportSubject.bird && reportSubject.status.editable) {
+      try {
+        const birdRef = doc(db, 'birds', reportSubject.bird.id);
+        await updateDoc(birdRef, { status: newStatus });
+        setReportSubject(prev => ({
+          ...prev,
+          status: { ...prev.status, value: newStatus }
+        }));
+        setCustomMetadata(prev => ({
+          ...prev,
+          birdStatus: reportLanguage === 'ar' ? (newStatus === 'alive' ? 'حي' : newStatus === 'dead' ? 'نافق' : newStatus === 'potential_mortality' ? 'نفوق محتمل' : 'غير نشط') : newStatus
+        }));
+      } catch (err) {
+        console.error('Failed to update bird status in Firestore', err);
+      }
+    }
+  }, [reportSubject, reportLanguage]);
 
   const handleApplyBotCommand = useCallback(async (identifier: string, lat?: number, lon?: number) => {
     if (identifier) {
@@ -2512,6 +2601,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           position: relative;
           z-index: var(--z-report, 0);
           isolation: isolate;
+          width: 1122px;
+          min-width: 1122px;
+          max-width: 1122px;
+          height: 885px;
+          min-height: 885px;
+          max-height: 885px;
+          box-sizing: border-box;
+          overflow: hidden;
           --maroon: ${themeColors.primaryMaroon};
           --green: ${themeColors.latestGreen};
           --amber: ${themeColors.campPinColor};
@@ -4080,7 +4177,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         <div 
           id="custom-map-production-print-area"
           ref={reportContainerRef}
-          className="trk-page bg-white text-gray-900 w-[1123px] min-w-[1123px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none"
+          className="trk-page bg-white text-gray-900 w-[1122px] min-w-[1122px] max-w-[1122px] h-[885px] min-h-[885px] max-h-[885px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none box-border overflow-hidden"
           dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}
           style={{
             direction: reportLanguage === 'ar' ? 'rtl' : 'ltr',
@@ -4513,7 +4610,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* Subtitle */}
           {sectionVisibility.subtitle && (
             <p className="trk-sub">
-              {T.transmitterLabel} <b>{displayTransmitterLabel}</b> • {isTableEditing ? (
+              {T.transmitterLabel} <b>{reportSubject.display.birdId}</b> • {isTableEditing ? (
                 <span className="inline-flex items-center gap-1 mx-1">
                   <input
                     type="text"
@@ -4575,14 +4672,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {isTableEditing ? (
                         <input
                           type="text"
-                          value={selectedPttId}
-                          onChange={(e) => setSelectedPttId(e.target.value)}
+                          value={reportSubject.display.transmitterId}
+                          onChange={(e) => {
+                            setReportSubject(prev => ({
+                              ...prev,
+                              display: { ...prev.display, transmitterId: e.target.value }
+                            }));
+                          }}
                           className="w-full text-center font-bold text-[#7a1c32] text-[15px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
                         <b className="maroon">
-                          {displayTransmitterLabel}
-                          {isPttNA && <span className="text-[10px] text-gray-400 font-sans mr-1">(حجل)</span>}
+                          {reportSubject.display.transmitterId}
                         </b>
                       )}
                     </span>
@@ -4594,12 +4695,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {isTableEditing ? (
                         <input
                           type="text"
-                          value={customMetadata.birdRing}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, birdRing: e.target.value })}
+                          value={reportSubject.display.ringNumber}
+                          onChange={(e) => {
+                            setReportSubject(prev => ({
+                              ...prev,
+                              display: { ...prev.display, ringNumber: e.target.value }
+                            }));
+                            setCustomMetadata(prev => ({ ...prev, birdRing: e.target.value }));
+                          }}
                           className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
-                        <span className="pill pill--grey">{translateValue(customMetadata.birdRing || 'NA')}</span>
+                        <span className="pill pill--grey">{translateValue(reportSubject.display.ringNumber || 'NA')}</span>
                       )}
                     </span>
                   </div>
@@ -4643,19 +4750,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     <span className="k">{T.status}</span>
                     <span className="v flex items-center justify-center">
                       <BirdStatusChip
-                        tableStatus={customMetadata.birdStatus || 'alive'}
-                        overrideStatus={statusOverride}
-                        onOverrideStatus={(newStatus) => {
-                          setStatusOverride(newStatus);
-                          if (newStatus) {
-                            setCustomMetadata(prev => ({
-                              ...prev,
-                              birdStatus: reportLanguage === 'ar' 
-                                ? (newStatus === 'alive' ? 'حي' : newStatus === 'dead' ? 'نافق' : 'نفوق محتمل') 
-                                : (newStatus === 'alive' ? 'Alive' : newStatus === 'dead' ? 'Dead' : 'Potential mortality')
-                            }));
-                          }
-                        }}
+                        status={reportSubject.status.value}
+                        isEditable={reportSubject.status.editable}
+                        onUpdateStatus={(newStatus) => handleUpdateBirdStatusInDb(newStatus)}
                         isEditMode={isTableEditing}
                         language={reportLanguage}
                       />
@@ -4928,10 +5025,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
                             placeholder={metrics.distFromReleaseKm.toString()}
                           />
-                          <span>km</span>
+                          <span>{distUnit}</span>
                         </div>
                       ) : (
-                        <>{customMetadata.statDistFromRelease || metrics.distFromReleaseKm} km</>
+                        <>{!metrics.hasLast ? '—' : (customMetadata.statDistFromRelease ? `${customMetadata.statDistFromRelease} ${distUnit}` : (distUnit === 'mi' ? `${(parseFloat(metrics.distFromReleaseKm) * 0.621371).toFixed(2)} mi` : `${metrics.distFromReleaseKm} km`))}</>
                       )}
                     </div>
                     <div className="lab">
@@ -4951,23 +5048,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           placeholder={metrics.bearingArabic.text}
                         />
                       ) : (
-                        <>{customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text}</>
+                        <>{!metrics.hasLast ? '—' : (customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text)}</>
                       )}
                     </div>
                     <div className="lab">
-                      {T.direction} (
-                      {isTableEditing ? (
-                        <input
-                          type="text"
-                          value={customMetadata.statDirectionDeg ?? ''}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, statDirectionDeg: e.target.value })}
-                          className="w-8 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800"
-                          placeholder={metrics.bearingArabic.degrees.toString()}
-                        />
-                      ) : (
-                        <>{customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}</>
-                      )}
-                      °)
+                      {T.direction} {!metrics.hasLast ? '' : `(${customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}°)`}
                     </div>
                   </div>
 
@@ -4983,10 +5068,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
                             placeholder={metrics.distToCampKm.toString()}
                           />
-                          <span>km</span>
+                          <span>{distUnit}</span>
                         </div>
                       ) : (
-                        <>{customMetadata.statDistToCamp || metrics.distToCampKm} km</>
+                        <>{!metrics.hasLast ? '—' : (customMetadata.statDistToCamp ? `${customMetadata.statDistToCamp} ${distUnit}` : (distUnit === 'mi' ? `${(parseFloat(metrics.distToCampKm) * 0.621371).toFixed(2)} mi` : `${metrics.distToCampKm} km`))}</>
                       )}
                     </div>
                     <div className="lab">
@@ -5009,7 +5094,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <span>{T.days}</span>
                         </div>
                       ) : (
-                        <span>{`${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
+                        <span>{!metrics.hasLast || metrics.durationDays <= 0 ? '—' : `${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
                       )}
                     </div>
                     <div className="lab">
@@ -5022,8 +5107,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {/* 7-Day Min/Max Temperature Chart */}
               {sectionVisibility.tempChart && (
                 <SevenDayTempChart
-                  lat={metrics.lLat}
-                  lon={metrics.lLon}
+                  lat={metrics.hasLast ? metrics.lLat : (metrics.hasRelease ? metrics.rLat : NaN)}
+                  lon={metrics.hasLast ? metrics.lLon : (metrics.hasRelease ? metrics.rLon : NaN)}
                   language={reportLanguage}
                   isEditing={isTableEditing}
                 />
@@ -5186,23 +5271,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {sectionVisibility.scaleBar && <CustomGraphicScaleControl />}
 
                       {/* Real History Flight Trajectory (Shared Layer with Live Tracking) */}
-                      <HistoryTrackLayer
-                        mode="report"
-                        historyPaths={[{
-                          id: selectedPttId,
-                          color: flightTrackConfig.defaultColor || themeColors.trackLineColor,
-                          path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map(pt => ({
-                            lat: pt.lat,
-                            lon: pt.lon,
-                            timestamp: pt.ts ? new Date(pt.ts).toISOString() : new Date().toISOString(),
-                            type: pt.type
-                          })),
-                          polyline: activeTrackPositions
-                        }]}
-                        settings={trackPathSettings}
-                        coordFormat={coordFormat}
-                        isExporting={isExportingPdf || isExportingPng}
-                      />
+                      {mapElements.track?.visible !== false && showFlightTrack && activeTrackPositions.length > 0 && (
+                        <HistoryTrackLayer
+                          mode="report"
+                          historyPaths={[{
+                            id: selectedPttId,
+                            color: mapElements.track?.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
+                            path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map(pt => ({
+                              lat: pt.lat,
+                              lon: pt.lon,
+                              timestamp: pt.ts ? new Date(pt.ts).toISOString() : new Date().toISOString(),
+                              type: pt.type
+                            })),
+                            polyline: activeTrackPositions
+                          }]}
+                          settings={trackPathSettings}
+                          coordFormat={coordFormat}
+                          isExporting={isExportingPdf || isExportingPng}
+                        />
+                      )}
 
                       {/* Distance line between Camps (Requested Filter) */}
                       {showCampDistance && visibleCampIds.length >= 2 && (() => {
@@ -5235,12 +5322,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       })()}
 
                       {/* Distance line between Chosen Camp(s) and Last Position (Requested Feature) */}
-                      {visibleCampIds.map(campId => {
+                      {mapElements.distCamp?.visible !== false && metrics.hasLast && visibleCampIds.map(campId => {
                         if (!campDistToLastEnabled[campId]) return null;
                         const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
-                        if (!camp || metrics.lLat === 0 || metrics.lLon === 0) return null;
+                        if (!camp || metrics.lLat === 0 || isNaN(metrics.lLat)) return null;
 
-                        const distKm = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon).toFixed(1);
+                        const rawDist = calculateDistanceKm(camp.lat, camp.lon, metrics.lLat, metrics.lLon);
+                        const distFormatted = distUnit === 'mi' ? `${(rawDist * 0.621371).toFixed(1)} mi` : `${rawDist.toFixed(1)} km`;
                         const midLat = (camp.lat + metrics.lLat) / 2;
                         const midLon = (camp.lon + metrics.lLon) / 2;
                         const pillPos: [number, number] = customCampDistPositions[campId] || [midLat, midLon];
@@ -5253,7 +5341,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 [metrics.lLat, metrics.lLon]
                               ]}
                               pathOptions={{
-                                color: themeColors.campDistLineColor,
+                                color: mapElements.distCamp?.color || themeColors.campDistLineColor,
                                 weight: 2.5,
                                 dashArray: '6, 6',
                                 opacity: 0.95
@@ -5261,7 +5349,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             />
                             <Marker
                               position={pillPos}
-                              icon={createDistancePillIcon(`${distKm} km`, themeColors.campDistLineColor)}
+                              icon={createDistancePillIcon(distFormatted, mapElements.distCamp?.color || themeColors.campDistLineColor)}
                               zIndexOffset={1600}
                               interactive={true}
                               draggable={true}
@@ -5283,7 +5371,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       })}
 
                       {/* Distance line: Last Position to Release Location (Requested Filter) */}
-                      {showDistanceToRelease && metrics.lLat !== 0 && metrics.rLat !== 0 && (
+                      {mapElements.distRelease?.visible !== false && showDistanceToRelease && metrics.hasLast && metrics.hasRelease && (
                         <>
                           <Polyline
                             positions={[
@@ -5291,7 +5379,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               [metrics.rLat, metrics.rLon]
                             ]}
                             pathOptions={{
-                              color: themeColors.releaseDistLineColor,
+                              color: mapElements.distRelease?.color || themeColors.releaseDistLineColor,
                               weight: 2.5,
                               dashArray: '6, 6',
                               opacity: 0.95
@@ -5300,8 +5388,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <Marker
                             position={customReleaseDistPos || metrics.releaseToLastMid}
                             icon={createDistancePillIcon(
-                              `${metrics.distFromReleaseKm} km`, 
-                              themeColors.releaseDistLineColor,
+                              distUnit === 'mi' ? `${(parseFloat(metrics.distFromReleaseKm) * 0.621371).toFixed(2)} mi` : `${metrics.distFromReleaseKm} km`, 
+                              mapElements.distRelease?.color || themeColors.releaseDistLineColor,
                               [Math.max(70, `${metrics.distFromReleaseKm} km`.length * 7.5 + 16) + 16, 12]
                             )}
                             zIndexOffset={1500}
@@ -5321,20 +5409,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
 
                       {/* Release Location Marker (Requested Filter) */}
-                      {showReleaseMarker && metrics.rLat !== 0 && metrics.rLon !== 0 && (
+                      {mapElements.release?.visible !== false && showReleaseMarker && metrics.rLat !== 0 && !isNaN(metrics.rLat) && (
                         <>
                           <Marker
                             position={[metrics.rLat, metrics.rLon]}
-                            icon={createLiveTrackingPinIcon(themeColors.releasePinColor)}
+                            icon={createLiveTrackingPinIcon(mapElements.release?.color || themeColors.releasePinColor)}
                             zIndexOffset={1800}
                             interactive={false}
                           />
                           <Marker
                             position={customReleaseMarkerPos || [metrics.rLat, metrics.rLon]}
                             icon={createLiveTrackingLabelIcon({
-                              number: displayTransmitterLabel,
-                              ringId: customMetadata.birdRing,
-                              borderColorHex: themeColors.releasePinColor,
+                              number: reportSubject.display.mapChipLabel,
+                              ringId: reportSubject.display.ringNumber,
+                              borderColorHex: mapElements.release?.color || themeColors.releasePinColor,
                               labelTitle: reportLanguage === 'en' ? 'Release' : T.installHead,
                               position: 'right'
                             })}
@@ -5354,20 +5442,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
 
                       {/* Current/Latest Active Transmitter Marker (With Ring fallback if NA) */}
-                      {metrics.lLat !== 0 && metrics.lLon !== 0 && (
+                      {mapElements.latest?.visible !== false && metrics.hasLast && metrics.lLat !== 0 && !isNaN(metrics.lLat) && (
                         <>
                           <Marker
                             position={[metrics.lLat, metrics.lLon]}
-                            icon={createLiveTrackingPinIcon(themeColors.latestPinColor)}
+                            icon={createLiveTrackingPinIcon(mapElements.latest?.color || themeColors.latestPinColor)}
                             zIndexOffset={2000}
                             interactive={false}
                           />
                           <Marker
                             position={customLastPosMarkerPos || [metrics.lLat, metrics.lLon]}
                             icon={createLiveTrackingLabelIcon({
-                              number: displayTransmitterLabel,
-                              ringId: customMetadata.birdRing,
-                              borderColorHex: themeColors.latestPinColor,
+                              number: reportSubject.display.mapChipLabel,
+                              ringId: reportSubject.display.ringNumber,
+                              borderColorHex: mapElements.latest?.color || themeColors.latestPinColor,
                               labelTitle: reportLanguage === 'en' ? 'Latest Location' : T.lastHead,
                               position: 'top'
                             })}
@@ -5667,91 +5755,93 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 {/* ─── MAP OVERLAYS (MATCHING REFERENCE DESIGN) ──────────────────── */}
 
                 {/* Top-Left Inset: Kazakhstan Country Silhouette Locator Map & Exact Bird Position */}
-                <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-400 rounded-md p-1 shadow-md w-[138px] pointer-events-none select-none">
-                  <div className="relative w-full h-[76px] flex items-center justify-center bg-stone-50 border border-gray-200 rounded overflow-hidden">
-                    {insetMapData.svgPath ? (
-                      <svg viewBox={insetMapData.viewBox} className="w-full h-full">
-                        {/* Kazakhstan Country Silhouette Border */}
-                        <path
-                          d={insetMapData.svgPath}
-                          fill="#fdfbf7"
-                          stroke="#881337"
-                          strokeWidth="1.1"
-                          strokeLinejoin="round"
-                        />
-                        {/* Red Location Point & Transmitter ID Callout Badge */}
-                        {(() => {
-                          const pttLabel = displayTransmitterLabel || String(selectedPttId).replace(/^trans-/, '');
-                          const labelW = Math.max(28, pttLabel.length * 5.2 + 6);
-                          const labelH = 10;
-                          const badgeX = Math.max(labelW / 2 + 2, Math.min(140 - labelW / 2 - 2, insetMapData.birdPoint.x));
-                          const isNearTop = insetMapData.birdPoint.y < 16;
-                          const badgeY = isNearTop ? insetMapData.birdPoint.y + 4.5 : insetMapData.birdPoint.y - 12.5;
+                {mapElements.miniMap?.visible !== false && (
+                  <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-400 rounded-md p-1 shadow-md w-[138px] pointer-events-none select-none">
+                    <div className="relative w-full h-[76px] flex items-center justify-center bg-stone-50 border border-gray-200 rounded overflow-hidden">
+                      {insetMapData.svgPath ? (
+                        <svg viewBox={insetMapData.viewBox} className="w-full h-full">
+                          {/* Kazakhstan Country Silhouette Border */}
+                          <path
+                            d={insetMapData.svgPath}
+                            fill="#fdfbf7"
+                            stroke="#881337"
+                            strokeWidth="1.1"
+                            strokeLinejoin="round"
+                          />
+                          {/* Red Location Point & Transmitter ID Callout Badge */}
+                          {(() => {
+                            const pttLabel = reportSubject.active ? reportSubject.active.platform_id : reportSubject.display.mapChipLabel;
+                            const labelW = Math.max(28, pttLabel.length * 5.2 + 6);
+                            const labelH = 10;
+                            const badgeX = Math.max(labelW / 2 + 2, Math.min(140 - labelW / 2 - 2, insetMapData.birdPoint.x));
+                            const isNearTop = insetMapData.birdPoint.y < 16;
+                            const badgeY = isNearTop ? insetMapData.birdPoint.y + 4.5 : insetMapData.birdPoint.y - 12.5;
 
-                          return (
-                            <g>
-                              {/* Pointer triangle connecting badge to exact point */}
-                              <polygon 
-                                points={
-                                  isNearTop
-                                    ? `${insetMapData.birdPoint.x - 2},${badgeY} ${insetMapData.birdPoint.x + 2},${badgeY} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y + 1}`
-                                    : `${insetMapData.birdPoint.x - 2},${badgeY + labelH} ${insetMapData.birdPoint.x + 2},${badgeY + labelH} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y - 1}`
-                                } 
-                                fill="#881337" 
-                              />
+                            return (
+                              <g>
+                                {/* Pointer triangle connecting badge to exact point */}
+                                <polygon 
+                                  points={
+                                    isNearTop
+                                      ? `${insetMapData.birdPoint.x - 2},${badgeY} ${insetMapData.birdPoint.x + 2},${badgeY} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y + 1}`
+                                      : `${insetMapData.birdPoint.x - 2},${badgeY + labelH} ${insetMapData.birdPoint.x + 2},${badgeY + labelH} ${insetMapData.birdPoint.x},${insetMapData.birdPoint.y - 1}`
+                                  } 
+                                  fill="#881337" 
+                                />
 
-                              {/* Transmitter ID Badge */}
-                              <rect 
-                                x={badgeX - labelW / 2} 
-                                y={badgeY} 
-                                width={labelW} 
-                                height={labelH} 
-                                rx="2" 
-                                fill="#ffffff" 
-                                stroke="#881337" 
-                                strokeWidth="0.8" 
-                              />
-                              <text 
-                                x={badgeX} 
-                                y={badgeY + labelH / 2 + 0.6} 
-                                textAnchor="middle" 
-                                dominantBaseline="middle" 
-                                fontSize="6.8" 
-                                fontWeight="bold" 
-                                fontFamily="'Segoe UI', Roboto, monospace, sans-serif" 
-                                fill="#881337"
-                              >
-                                {pttLabel}
-                              </text>
+                                {/* Transmitter ID Badge */}
+                                <rect 
+                                  x={badgeX - labelW / 2} 
+                                  y={badgeY} 
+                                  width={labelW} 
+                                  height={labelH} 
+                                  rx="2" 
+                                  fill="#ffffff" 
+                                  stroke="#881337" 
+                                  strokeWidth="0.8" 
+                                />
+                                <text 
+                                  x={badgeX} 
+                                  y={badgeY + labelH / 2 + 0.6} 
+                                  textAnchor="middle" 
+                                  dominantBaseline="middle" 
+                                  fontSize="6.8" 
+                                  fontWeight="bold" 
+                                  fontFamily="'Segoe UI', Roboto, monospace, sans-serif" 
+                                  fill="#881337"
+                                >
+                                  {pttLabel}
+                                </text>
 
-                              {/* Red GPS Point with halo */}
-                              <circle 
-                                cx={insetMapData.birdPoint.x} 
-                                cy={insetMapData.birdPoint.y} 
-                                r="4.2" 
-                                fill="#dc2626" 
-                                opacity="0.35" 
-                              />
-                              <circle 
-                                cx={insetMapData.birdPoint.x} 
-                                cy={insetMapData.birdPoint.y} 
-                                r="2.5" 
-                                fill="#dc2626" 
-                                stroke="#ffffff" 
-                                strokeWidth="0.8" 
-                              />
-                            </g>
-                          );
-                        })()}
-                      </svg>
-                    ) : (
-                      <div className="text-[10px] text-gray-500 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
-                    )}
+                                {/* Red GPS Point with halo */}
+                                <circle 
+                                  cx={insetMapData.birdPoint.x} 
+                                  cy={insetMapData.birdPoint.y} 
+                                  r="4.2" 
+                                  fill="#dc2626" 
+                                  opacity="0.35" 
+                                />
+                                <circle 
+                                  cx={insetMapData.birdPoint.x} 
+                                  cy={insetMapData.birdPoint.y} 
+                                  r="2.5" 
+                                  fill="#dc2626" 
+                                  stroke="#ffffff" 
+                                  strokeWidth="0.8" 
+                                />
+                              </g>
+                            );
+                          })()}
+                        </svg>
+                      ) : (
+                        <div className="text-[10px] text-gray-500 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Top-Right: GIS North Arrow Symbol */}
-                {sectionVisibility.northArrow && (
+                {sectionVisibility.northArrow && mapElements.northArrow?.visible !== false && (
                   <div className="absolute top-2.5 right-3 z-[1000] flex flex-col items-center pointer-events-none drop-shadow">
                     <svg width="18" height="26" viewBox="0 0 20 30" fill="none">
                       <polygon points="10,0 0,26 10,20" fill="#ffffff" stroke="#000000" strokeWidth="1" />
@@ -6017,7 +6107,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     ))}
 
                     {/* Flight Track Period Legend info during edit mode */}
-                    {showFlightTrack && (
+                    {showFlightTrack && mapElements.track?.visible !== false && activeTrackPoints.length > 0 && (
                       <div className="flex items-center gap-1.5 p-1 rounded-md border text-xs bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold">
                         <span className="text-[10px]">{reportLanguage === 'en' ? 'Track:' : 'المسار:'}</span>
                         {flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
@@ -6041,7 +6131,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     className="trk-legend flex flex-row items-center flex-wrap gap-x-4 gap-y-1.5 w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
                     style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', minWidth: 0 }}
                   >
-                    {legendItems.filter(item => item.visible).map(item => {
+                    {legendItems.filter(item => {
+                      if (!item.visible) return false;
+                      if (item.id === 'release_pos' && (mapElements.release?.visible === false || !metrics.hasRelease)) return false;
+                      if (item.id === 'last_pos' && (mapElements.latest?.visible === false || !metrics.hasLast)) return false;
+                      if (item.id === 'camp_dist' && (mapElements.distCamp?.visible === false || !metrics.hasLast)) return false;
+                      if (item.id === 'dist_release' && (mapElements.distRelease?.visible === false || !metrics.hasLast)) return false;
+                      if (item.id === 'flight_track' && (mapElements.track?.visible === false || activeTrackPoints.length === 0)) return false;
+                      return true;
+                    }).map(item => {
                       let lbl = item.label;
                       if (reportLanguage === 'en') {
                         if (lbl === 'طريق رئيسي' || item.id === 'main_road') lbl = 'Main Road';
@@ -6067,7 +6165,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     })}
 
                     {/* Flight Track Multi-Period or Single Track Legend */}
-                    {showFlightTrack && (
+                    {showFlightTrack && mapElements.track?.visible !== false && activeTrackPoints.length > 0 && (
                       flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
                         coloredTrackSegments.map(seg => (
                           <div key={`legend-seg-${seg.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">

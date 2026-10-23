@@ -30,8 +30,9 @@ export async function generateReportPdfBlob(
   if (waitForMap) await waitForMap();
   await sleep(200);
 
-  const width = Math.round(node.scrollWidth);
-  const height = Math.round(node.scrollHeight);
+  // Design-lock frame: 1122 × 885 CSS px (2244 × 1770 at 2x)
+  const width = 1122;
+  const height = 885;
 
   node.classList.add('trk-exporting');
   try {
@@ -66,13 +67,12 @@ export async function generateReportPdfBlob(
     const canvas = await toCanvas(node, options);
 
     const pdf = new jsPDF({
-      orientation: width >= height ? 'landscape' : 'portrait',
-      unit: 'px',
-      format: [width, height],
-      hotfixes: ['px_scaling'],
+      orientation: 'landscape',
+      unit: 'pt',
+      format: [841.5, 663.75],
       compress: true
     });
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, width, height, undefined, 'FAST');
+    pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 841.5, 663.75, undefined, 'FAST');
     return pdf.output('blob');
   } finally {
     node.classList.remove('trk-exporting');
