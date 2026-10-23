@@ -36,6 +36,8 @@ import { ReportToolbar } from '../../src/components/report/ReportToolbar';
 import { EditToolsPalette } from '../../src/components/report/EditToolsPalette';
 import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
 import { BirdIdCombobox } from '../../src/components/ui/BirdIdCombobox';
+import { TrackPathButton } from '../../src/components/track/TrackPathButton';
+import { Editable } from '../../src/components/report/Editable';
 import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
 import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
 import { MapLabel, ReportLegendItem, SectionId, DEFAULT_MAP_ELEMENTS, MapElements } from '../../src/types/report';
@@ -2877,6 +2879,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         <ReportToolbar
           isEditMode={isTableEditing}
           onToggleEditMode={() => setIsTableEditing(p => !p)}
+          mapImage={mapSnapshotUrl ? { url: mapSnapshotUrl, fit: mapImageFit } : undefined}
+          onChangeMapImage={(url) => setMapSnapshotUrl(url || '')}
+          onChangeMapImageFit={setMapImageFit}
+          isSnapshotMode={mapDisplayMode === 'snapshot'}
+          onToggleMapDisplayMode={(m) => setMapDisplayMode(m)}
           mapElements={mapElements}
           onChangeMapElements={setMapElements}
           visibleCampIds={visibleCampIds}
@@ -3295,35 +3302,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 إضافة مسميات جوجل (المدن والطرق) على الخريطة
               </label>
             </div>
-            <div className="mt-2.5 flex items-center gap-2 px-1">
-              <input
-                type="checkbox"
-                id="showFlightTrack"
-                checked={showFlightTrack}
-                onChange={(e) => {
-                  setShowFlightTrack(e.target.checked);
-                  setFlightTrackConfig(prev => ({ ...prev, enabled: e.target.checked }));
+            {/* Collapsed One-Row Track Path Customizer (§2.1) */}
+            <div className="mt-2.5">
+              <TrackPathButton
+                settings={trackPathSettings}
+                onChange={handleTrackSettingsChange}
+                onPreview={(preview) => {
+                  setTrackPathSettings(preview);
+                  setShowFlightTrack(preview.show);
                 }}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
+                displayedPointsCount={activeTrackPoints.length}
+                totalPointsCount={rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length}
+                language={reportLanguage}
               />
-              <label htmlFor="showFlightTrack" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                إظهار مسار التتبع (Flight Track)
-              </label>
             </div>
-
-            {/* Multi-Period & Location-Type Flight Track Customizer */}
-            {showFlightTrack && (
-              <FlightTrackCustomizer
-                config={{ ...flightTrackConfig, enabled: showFlightTrack }}
-                onChange={(next) => {
-                  setFlightTrackConfig(next);
-                  setShowFlightTrack(next.enabled);
-                }}
-                totalRawPoints={rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length}
-                activePointCount={activeTrackPoints.length}
-                allHistoryPoints={rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints}
-              />
-            )}
             <div className="mt-2.5 flex items-center gap-2 px-1">
               <input
                 type="checkbox"

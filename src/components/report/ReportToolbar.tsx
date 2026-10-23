@@ -18,8 +18,10 @@ import {
   FileDown,
   CheckCircle2,
   RefreshCw,
-  Share2
+  Share2,
+  Image as ImageIcon
 } from 'lucide-react';
+import { MapImagePopover } from './popovers/MapImagePopover';
 import { MapElementsPopover } from './popovers/MapElementsPopover';
 import { SectionsPopover } from './popovers/SectionsPopover';
 import { ColorsPopover, ReportColors } from './popovers/ColorsPopover';
@@ -103,14 +105,26 @@ export interface ReportToolbarProps {
   onShareWhatsApp?: () => void;
   isExporting?: boolean;
 
+  // Map Image
+  mapImage?: { url: string; fit: 'fill' | 'cover' | 'contain' };
+  onChangeMapImage?: (url: string | null) => void;
+  onChangeMapImageFit?: (fit: 'fill' | 'cover' | 'contain') => void;
+  isSnapshotMode?: boolean;
+  onToggleMapDisplayMode?: (mode: 'interactive' | 'snapshot') => void;
+
   language?: 'ar' | 'en';
 }
 
-type ActivePopover = 'mapElements' | 'sections' | 'colors' | 'labels' | 'legend' | 'text' | 'track' | null;
+type ActivePopover = 'mapImage' | 'mapElements' | 'sections' | 'colors' | 'labels' | 'legend' | 'text' | 'track' | null;
 
 export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   isEditMode,
   onToggleEditMode,
+  mapImage,
+  onChangeMapImage,
+  onChangeMapImageFit,
+  isSnapshotMode,
+  onToggleMapDisplayMode,
   mapElements,
   onChangeMapElements,
   visibleCampIds,
@@ -164,6 +178,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
 
   // Button anchor refs
+  const mapImageBtnRef = useRef<HTMLButtonElement>(null);
   const mapElementsBtnRef = useRef<HTMLButtonElement>(null);
   const sectionsBtnRef = useRef<HTMLButtonElement>(null);
   const colorsBtnRef = useRef<HTMLButtonElement>(null);
@@ -226,6 +241,24 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           </button>
 
           <div className="h-4 w-px bg-gray-300 dark:bg-slate-700 mx-0.5" />
+
+          {/* Map Image Button (QGIS / Live Snapshot) */}
+          {onChangeMapImage && (
+            <button
+              ref={mapImageBtnRef}
+              type="button"
+              onClick={() => togglePopover('mapImage')}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold border transition-all ${
+                activePopover === 'mapImage'
+                  ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                  : 'bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-slate-700'
+              }`}
+            >
+              <ImageIcon size={13} className="text-sky-500" />
+              <span className="hidden sm:inline">{isAr ? 'صورة الخريطة' : 'Map image'}</span>
+              <ChevronDown size={11} className={`transition-transform ${activePopover === 'mapImage' ? 'rotate-180' : ''}`} />
+            </button>
+          )}
 
           {/* Map Elements Button (Spec v3 §1) */}
           <button
@@ -516,6 +549,20 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
       )}
 
       {/* Popovers */}
+      {onChangeMapImage && (
+        <MapImagePopover
+          anchorRef={mapImageBtnRef}
+          open={activePopover === 'mapImage'}
+          onClose={() => setActivePopover(null)}
+          mapImage={mapImage}
+          isSnapshotMode={Boolean(isSnapshotMode)}
+          onChangeImage={onChangeMapImage}
+          onChangeFit={onChangeMapImageFit || (() => {})}
+          onToggleMode={onToggleMapDisplayMode || (() => {})}
+          language={language}
+        />
+      )}
+
       <MapElementsPopover
         anchorRef={mapElementsBtnRef}
         open={activePopover === 'mapElements'}
