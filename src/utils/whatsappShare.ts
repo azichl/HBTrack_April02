@@ -18,7 +18,7 @@ import { getAuth } from 'firebase/auth';
 
 /* ------------------------------- types ------------------------------- */
 
-export type LogKind = 'info' | 'ok' | 'warn' | 'error';
+export type LogKind = 'pdf' | 'upload' | 'open' | 'info' | 'ok' | 'warn' | 'error';
 export type ShareLog = (kind: LogKind, message: string) => void;
 export type PrepareStatus = 'idle' | 'working' | 'ready' | 'error';
 export type WaTarget = 'app' | 'web';
@@ -84,15 +84,23 @@ export function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
 }
 
-async function uploadPdf(blob: Blob, fileName: string, birdId: string, ms: number): Promise<string> {
+async function uploadPdf(blob: Blob, fileName: string, birdId: string, ms: number, log?: ShareLog): Promise<string> {
   const uid = getAuth().currentUser?.uid;
   if (!uid) throw new Error('Not signed in');
   const storage = getStorage();
-  storage.maxUploadRetryTime = ms;                       // never "hang" for the 10-min default
+  (storage as any).maxUploadRetryTime = ms;                       // never "hang" for the 10-min default
   const r = ref(storage, `shared-reports/${uid}/${birdId}/${Date.now()}_${fileName}`);
   const task = uploadBytesResumable(r, blob, { contentType: 'application/pdf' });
-  const done = new Promise<void>((resolve, reject) =>
-    task.on('state_changed', undefined, reject, () => resolve()));
+  const done = new Promise<void>((resolve, reject) => {
+    let lastPct = -1;
+    task.on('state_changed',
+      s => {
+        const pct = Math.round((s.bytesTransferred / s.totalBytes) * 100);
+        if (pct !== lastPct && pct % 25 === 0 && log) { lastPct = pct; log('upload', `⏳ Uploading PDF… ${pct}%`); }
+      },
+      reject,
+      () => resolve());
+  });
   await withTimeout('Upload', done, ms, () => task.cancel());
   return getDownloadURL(r);
 }
@@ -131,7 +139,7 @@ export function prepareShare(input: PrepareInput): Promise<Prepared> {
     // Upload (non-fatal)
     let url: string | undefined;
     try {
-      url = await uploadPdf(pdf, input.fileName, input.birdId, upMs);
+      url = await uploadPdf(pdf, input.fileName, input.birdId, upMs, log);
       log('ok', '✅ PDF link ready');
     } catch (e) {
       log('warn', `⚠️ Upload failed (${(e as { code?: string }).code ?? (e as Error).message}) — link will be omitted`);
@@ -253,28 +261,39 @@ export function useWhatsAppShare(input: PrepareInput | null, enabled: boolean) {
   return { status, ready, prepared: ready ? prepared : null, error, retry: run };
 }
 
-/** Legacy wrapper for backwards compatibility */
+export type WhatsAppShareResult =
+  | { method: 'app' | 'web'; waUrl: string }
+  | { method: 'native' }
+  | { method: 'blocked'; waUrl: string };
+
+/** Backwards-compatible one-call wrapper */
 export async function shareReportViaWhatsApp(options: {
-  generatePdf: () => Promise<Blob>;
+  generatePdf: (signal?: AbortSignal) => Promise<Blob>;
   fileName: string;
   birdId: string;
   title: string;
   summary?: string;
   phone?: string;
   target?: WaTarget;
-}) {
+  log?: ShareLog;
+  timeouts?: { pdfMs?: number; uploadMs?: number };
+}): Promise<WhatsAppShareResult> {
+  const log = options.log ?? (() => {});
   const prepared = await prepareShare({
-    key: options.fileName,
+    key: `${options.birdId}_${Date.now()}`,
     birdId: options.birdId,
     fileName: options.fileName,
-    generatePdf: () => options.generatePdf(),
+    generatePdf: (signal) => options.generatePdf(signal),
+    log,
+    timeouts: options.timeouts
   });
   const res = sendToWhatsApp({
     prepared,
     title: options.title,
     summary: options.summary,
     phone: options.phone,
-    target: options.target
+    target: options.target,
+    log
   });
-  return { method: res.target === 'app' ? 'app' : 'web', waUrl: res.waUrl };
+  return { method: res.target, waUrl: res.waUrl };
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, CheckCircle2, AlertTriangle, Loader2, X, Play, Square, Share2 } from 'lucide-react';
+import { Send, Bot, CheckCircle2, AlertTriangle, Loader2, X, Play, Square, Share2, ExternalLink } from 'lucide-react';
 import { parseBirdCoordinateCommand } from '../../utils/coordinateParser';
+import { shareReportViaWhatsApp } from '../../src/utils/whatsappShare';
 
 interface BotReportBridgeModalProps {
   isOpen: boolean;
@@ -21,6 +22,10 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
   const [isSending, setIsSending] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [statusLog, setStatusLog] = useState<string[]>([]);
+  const [recipientPhone, setRecipientPhone] = useState<string>(() => localStorage.getItem('hb_wa_recipient_phone') || '');
+  const [waTarget, setWaTarget] = useState<'app' | 'web'>(() => (localStorage.getItem('hb_wa_target') as 'app' | 'web') || 'app');
+  const [isSharingWhatsApp, setIsSharingWhatsApp] = useState<boolean>(false);
+  const [manualWaUrl, setManualWaUrl] = useState<string | null>(null);
   const lastUpdateIdRef = useRef<number>(0);
 
   useEffect(() => {
@@ -28,8 +33,46 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
     if (chatId) localStorage.setItem('hb_tg_chat_id', chatId);
   }, [botToken, chatId]);
 
+  useEffect(() => {
+    localStorage.setItem('hb_wa_recipient_phone', recipientPhone);
+  }, [recipientPhone]);
+
+  useEffect(() => {
+    localStorage.setItem('hb_wa_target', waTarget);
+  }, [waTarget]);
+
   const addLog = (msg: string) => {
     setStatusLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 29)]);
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (isSharingWhatsApp) return;
+    setIsSharingWhatsApp(true);
+    setManualWaUrl(null);
+    try {
+      const res = await shareReportViaWhatsApp({
+        generatePdf: async () => {
+          const { blob } = await onGeneratePdfBlob();
+          return blob;
+        },
+        fileName: `Houbara_Tracking_Report_${Date.now()}.pdf`,
+        birdId: commandInput.split(' ')[0] || 'Bird',
+        title: `Houbara Tracking Report – ${commandInput.split(' ')[0] || 'Bird'}`,
+        summary: commandInput ? `Coordinates: ${commandInput}` : undefined,
+        phone: recipientPhone.trim() ? recipientPhone.replace(/\D/g, '') : undefined,
+        target: waTarget,
+        log: (_stage, msg) => addLog(msg),
+        timeouts: { pdfMs: 30_000, uploadMs: 25_000 }
+      });
+
+      if (res.method === 'blocked') {
+        setManualWaUrl(res.waUrl);
+      }
+    } catch (err: any) {
+      addLog(`❌ WhatsApp share error: ${err.message}`);
+    } finally {
+      setIsSharingWhatsApp(false);
+    }
   };
 
   const handleParseAndApply = async () => {
@@ -239,31 +282,73 @@ export const BotReportBridgeModal: React.FC<BotReportBridgeModalProps> = ({
             </div>
           </div>
 
-          <div className="bg-emerald-50/60 dark:bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between gap-3">
-            <div>
-              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 block">
-                3. مشاركة سريعة عبر واتساب (WhatsApp)
+          <div className="bg-emerald-50/60 dark:bg-emerald-950/20 p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                <Share2 size={14} />
+                <span>3. مشاركة سريعة عبر واتساب (WhatsApp Web / Mac App)</span>
               </span>
-              <span className="text-[11px] text-gray-600 dark:text-gray-400">
-                إرسال ملخص إحداثيات الطائر وتفاصيل التقرير مباشرة عبر WhatsApp
-              </span>
+              <div className="flex bg-emerald-100 dark:bg-emerald-900/60 rounded-md p-0.5 text-[10.5px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setWaTarget('app')}
+                  className={`px-2 py-0.5 rounded transition-all ${waTarget === 'app' ? 'bg-white dark:bg-emerald-700 text-emerald-900 dark:text-white shadow-2xs' : 'text-emerald-700 dark:text-emerald-300'}`}
+                >
+                  Mac App (whatsapp://)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWaTarget('web')}
+                  className={`px-2 py-0.5 rounded transition-all ${waTarget === 'web' ? 'bg-white dark:bg-emerald-700 text-emerald-900 dark:text-white shadow-2xs' : 'text-emerald-700 dark:text-emerald-300'}`}
+                >
+                  WhatsApp Web
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={async () => {
-                const { blob, fileName, caption } = await onGeneratePdfBlob();
-                const file = new File([blob], `${fileName}.pdf`, { type: 'application/pdf' });
-                if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                  await navigator.share({ title: fileName, text: caption, files: [file] });
-                } else {
-                  window.open(`https://wa.me/?text=${encodeURIComponent(caption)}`, '_blank');
-                }
-              }}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0"
-            >
-              <Share2 size={14} />
-              <span>مشاركة عبر واتساب</span>
-            </button>
+
+            <div className="flex flex-col sm:flex-row gap-2 items-center">
+              <div className="w-full sm:w-1/2">
+                <label className="block text-[11px] text-gray-600 dark:text-gray-400 mb-1">
+                  رقم المستلم (اختياري مع رمز الدولة e.g. 974...):
+                </label>
+                <input
+                  type="tel"
+                  dir="ltr"
+                  value={recipientPhone}
+                  onChange={e => setRecipientPhone(e.target.value.replace(/[^\d+]/g, ''))}
+                  placeholder="+974 5500 0000"
+                  className="w-full px-2.5 py-1.5 text-xs font-mono bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg outline-none"
+                />
+              </div>
+
+              <div className="w-full sm:w-1/2 flex flex-col gap-1.5 pt-4 sm:pt-0">
+                <button
+                  type="button"
+                  disabled={isSharingWhatsApp}
+                  onClick={handleShareWhatsApp}
+                  className="w-full py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                >
+                  {isSharingWhatsApp ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
+                  <span>{isSharingWhatsApp ? 'جارِ التحضير والإرسال...' : (waTarget === 'app' ? 'فتح تطبيق WhatsApp Mac' : 'فتح واتساب ويب')}</span>
+                </button>
+
+                {manualWaUrl && (
+                  <a
+                    href={manualWaUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 shadow-xs transition-colors"
+                  >
+                    <ExternalLink size={12} />
+                    <span>لم يفتح؟ فتح واتساب ويب يدوياً</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed border-t border-emerald-100 dark:border-emerald-900/40 pt-1.5">
+              💡 <b>ملاحظة:</b> روابط واتساب تدعم النصوص والروابط تلقائياً. يتم تجهيز رابط الـ PDF وإرساله بالرسالة مباشرة، ونسخ صورة التقرير (PNG) في الحافظة ليتم لصقها بضغط <b>⌘V</b> داخل المحادثة.
+            </p>
           </div>
 
           <div className="bg-slate-950 text-gray-200 p-3 rounded-xl font-mono text-[11px] h-32 overflow-y-auto space-y-1 text-left" dir="ltr">

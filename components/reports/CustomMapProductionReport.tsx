@@ -32,6 +32,15 @@ import { SevenDayTempChart } from './SevenDayTempChart';
 import { CustomMapAnnotation, AnnotationShape, createCustomAnnotationDivIcon, renderCustomAnnotationSvg } from './CustomMapAnnotations';
 import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
 import { BotReportBridgeModal } from './BotReportBridgeModal';
+import { ReportToolbar } from '../../src/components/report/ReportToolbar';
+import { EditToolsPalette } from '../../src/components/report/EditToolsPalette';
+import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
+import { BirdIdCombobox } from '../../src/components/ui/BirdIdCombobox';
+import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
+import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
+import { MapLabel, ReportLegendItem, SectionId, DEFAULT_MAP_ELEMENTS, MapElements } from '../../src/types/report';
+import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
+import { getReportString } from '../../src/utils/reportDictionary';
 import {
   FlightTrackCustomizer,
   FlightTrackConfig,
@@ -845,6 +854,66 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [customReleaseMarkerPos, setCustomReleaseMarkerPos] = useState<[number, number] | null>(null);
   const [customLastPosMarkerPos, setCustomLastPosMarkerPos] = useState<[number, number] | null>(null);
 
+  // ─── MAP CONTAINER REF & LABELS & TRACK SETTINGS ───────────────────────────
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const [coordFormat, setCoordFormat] = useState<'DD' | 'DMM' | 'DMS'>('DD');
+
+  const [mapLabels, setMapLabels] = useState<MapLabel[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('hbtrack_map_labels') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('hbtrack_map_labels', JSON.stringify(mapLabels));
+  }, [mapLabels]);
+
+  const [trackPathSettings, setTrackPathSettings] = useState<TrackPathSettings>(() => ({
+    show: flightTrackConfig.enabled,
+    type: flightTrackConfig.locationType,
+    from: flightTrackConfig.filterStartDate,
+    to: flightTrackConfig.filterEndDate,
+    color: flightTrackConfig.defaultColor || '#6366f1',
+    width: flightTrackConfig.lineWeight || 3,
+    showPoints: flightTrackConfig.showTrackPoints,
+    showCoordinateLabels: false,
+    periodsEnabled: flightTrackConfig.useColorPeriods,
+    periods: flightTrackConfig.periods.map(p => ({
+      id: p.id,
+      from: p.startDate,
+      to: p.endDate,
+      color: p.color,
+      label: p.label
+    }))
+  }));
+
+  const handleTrackSettingsChange = useCallback((next: TrackPathSettings) => {
+    setTrackPathSettings(next);
+    setShowFlightTrack(next.show);
+    setFlightTrackConfig(prev => ({
+      ...prev,
+      enabled: next.show,
+      locationType: next.type,
+      filterStartDate: next.from || '',
+      filterEndDate: next.to || '',
+      defaultColor: next.color,
+      lineWeight: next.width,
+      showTrackPoints: next.showPoints,
+      useColorPeriods: next.periodsEnabled,
+      periods: next.periods.map(p => ({
+        id: p.id,
+        startDate: p.from,
+        endDate: p.to,
+        color: p.color,
+        label: p.label || `${p.from} → ${p.to}`
+      }))
+    }));
+  }, []);
+
+  const [mapElements, setMapElements] = useState<MapElements>(DEFAULT_MAP_ELEMENTS);
+
   // Sync with exportedMapView
   useEffect(() => {
     if (exportedMapView) {
@@ -996,10 +1065,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     [rawHistoryRecords, allHistoryPoints, flightTrackConfig, showFlightTrack]
   );
 
+  const activeTrackPositions: [number, number][] = useMemo(
+    () => activeTrackPoints.map(p => [p.lat, p.lon] as [number, number]),
+    [activeTrackPoints]
+  );
+
   const T = {
-    reportTitle: reportLanguage === 'ar' ? customMetadata.reportTitle || 'تقرير متابعة طائر حبارى مزود بجهاز تتبع' : customMetadata.reportTitle.includes('تقرير') ? 'Houbara Bustard Tracking Report' : customMetadata.reportTitle,
-    issueDateLabel: reportLanguage === 'ar' ? 'تاريخ الإصدار' : 'Issue Date',
-    transmitterLabel: reportLanguage === 'ar' ? 'جهاز التتبع' : 'Transmitter',
+    reportTitle: reportLanguage === 'ar'
+      ? (customMetadata.reportTitle && !customMetadata.reportTitle.includes('Tracking Report') ? customMetadata.reportTitle : getReportString('report.title', 'ar'))
+      : (customMetadata.reportTitle && !customMetadata.reportTitle.includes('تقرير') ? customMetadata.reportTitle : getReportString('report.title', reportLanguage)),
+    issueDateLabel: getReportString('report.issueDate', reportLanguage),
+    transmitterLabel: getReportString('report.birdId', reportLanguage),
     regionLabel: reportLanguage === 'ar' ? 'منطقة' : 'Region',
     campLabel: reportLanguage === 'ar' ? 'مخيم' : 'Camp',
     birdData: reportLanguage === 'ar' ? 'بيانات الطائر' : 'Bird Data',
@@ -1371,6 +1447,102 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       }));
     }
   }, [showReleaseMarker, isLegendCustomizedByUser]);
+
+  // ─── STUDIO TOOLBAR DATA ADAPTERS (SPEC V3) ─────────────────────────────────
+  const [statusOverride, setStatusOverride] = useState<any>(undefined);
+
+  const toolbarColors = useMemo(() => ({
+    primary: themeColors.primaryMaroon,
+    green: themeColors.latestGreen,
+    lastLocation: themeColors.latestPinColor,
+    releaseDots: themeColors.releasePinColor,
+    stopoverDots: themeColors.campPinColor,
+    trackLine: themeColors.trackLineColor,
+    releaseDistance: themeColors.releaseDistLineColor,
+    stopoverDistance: themeColors.campDistLineColor,
+  }), [themeColors]);
+
+  const handleToolbarColorsChange = useCallback((c: any) => {
+    setThemeColors({
+      primaryMaroon: c.primary,
+      latestGreen: c.green,
+      latestPinColor: c.lastLocation,
+      releasePinColor: c.releaseDots,
+      campPinColor: c.stopoverDots,
+      trackLineColor: c.trackLine,
+      releaseDistLineColor: c.releaseDistance,
+      campDistLineColor: c.stopoverDistance,
+    });
+  }, []);
+
+  const toolbarSections = useMemo(() => ({
+    header: sectionVisibility.agencyHeader,
+    regionInfo: true,
+    birdTable: sectionVisibility.birdTable,
+    coordsTable: sectionVisibility.coordsTable,
+    kpis: sectionVisibility.kpiCards,
+    tempCurve: sectionVisibility.tempChart,
+    legend: sectionVisibility.legendBar,
+    scaleBar: sectionVisibility.scaleBar,
+    northArrow: sectionVisibility.northArrow,
+    footer: sectionVisibility.footer,
+  }), [sectionVisibility]);
+
+  const handleToolbarSectionsChange = useCallback((s: any) => {
+    setSectionVisibility(prev => ({
+      ...prev,
+      agencyHeader: s.header,
+      birdTable: s.birdTable,
+      coordsTable: s.coordsTable,
+      kpiCards: s.kpis,
+      tempChart: s.tempCurve,
+      legendBar: s.legend,
+      scaleBar: s.scaleBar,
+      northArrow: s.northArrow,
+      footer: s.footer,
+    }));
+  }, []);
+
+  const toolbarTexts = useMemo(() => ({
+    title: customMetadata.reportTitle,
+    subtitle: customMetadata.regionName,
+    orgAr: customMetadata.agencyNameAr,
+    orgEn: customMetadata.agencyNameEn,
+    notes: customMetadata.footerLeft
+  }), [customMetadata]);
+
+  const handleToolbarTextsChange = useCallback((t: any) => {
+    setCustomMetadata(prev => ({
+      ...prev,
+      reportTitle: t.title !== undefined ? t.title : prev.reportTitle,
+      regionName: t.subtitle !== undefined ? t.subtitle : prev.regionName,
+      agencyNameAr: t.orgAr !== undefined ? t.orgAr : prev.agencyNameAr,
+      agencyNameEn: t.orgEn !== undefined ? t.orgEn : prev.agencyNameEn,
+      footerLeft: t.notes !== undefined ? t.notes : prev.footerLeft
+    }));
+  }, []);
+
+  const toolbarLegendItems: ReportLegendItem[] = useMemo(() => {
+    return legendItems.map(item => ({
+      id: item.id,
+      label: item.label,
+      color: item.color,
+      shape: (item.symbol === 'tent' ? 'triangle' : (item.symbol as any)) || 'circle',
+      visible: item.visible,
+      custom: item.id.startsWith('custom_')
+    }));
+  }, [legendItems]);
+
+  const handleToolbarLegendItemsChange = useCallback((items: ReportLegendItem[]) => {
+    setIsLegendCustomizedByUser(true);
+    setLegendItems(items.map(item => ({
+      id: item.id,
+      label: item.label,
+      color: item.color,
+      symbol: item.shape === 'triangle' ? 'tent' : (item.shape as any),
+      visible: item.visible
+    })));
+  }, []);
 
   // ─── UPLOAD FROM HISTORY FUNCTION ──────────────────────────────────────────
   const handleUploadFromHistory = useCallback(async (targetPttId?: string) => {
@@ -2325,7 +2497,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
 
+        :root {
+          --z-report: 0;
+          --z-studio-bar: 40;
+          --z-popover: 1000;
+          --z-dropdown: 1100;
+          --z-modal: 1200;
+          --z-toast: 1300;
+        }
+
         #custom-map-production-print-area {
+          position: relative;
+          z-index: var(--z-report, 0);
+          isolation: isolate;
           --maroon: ${themeColors.primaryMaroon};
           --green: ${themeColors.latestGreen};
           --amber: ${themeColors.campPinColor};
@@ -2547,12 +2731,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           text-align: center; 
         }
 
-        /* 4. Legend: icon and label share one flex row, centred on the same axis */
-        .trk-legend {
-          display: flex; 
-          flex-wrap: nowrap; 
-          gap: 8px; 
-          justify-content: space-between; 
+        /* 4. Legend: icon and label share flex row, wraps cleanly without clipping */
+        .trk-legend, .report-legend {
+          display: flex !important; 
+          flex-wrap: wrap !important; 
+          gap: 6px 18px !important; 
+          min-width: 0 !important;
+          justify-content: flex-start !important; 
           align-items: center;
           border: 1px solid #d9dbe1; 
           border-radius: 8px; 
@@ -2686,6 +2871,114 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         className="hidden"
         onChange={(e) => handleLogoUpload(e, 'right')}
       />
+
+      {/* ─── STICKY STUDIO TOOLBAR (TOP DIRECTLY UNDER PAGE TITLE) ─────────────────── */}
+      <div className="no-print sticky top-0 z-[40] w-full">
+        <ReportToolbar
+          isEditMode={isTableEditing}
+          onToggleEditMode={() => setIsTableEditing(p => !p)}
+          mapElements={mapElements}
+          onChangeMapElements={setMapElements}
+          visibleCampIds={visibleCampIds}
+          onChangeVisibleCampIds={setVisibleCampIds}
+          campDistToLastEnabled={campDistToLastEnabled}
+          onChangeCampDistToLastEnabled={setCampDistToLastEnabled}
+          activeBaseLayer={activeBaseLayer}
+          onChangeBaseLayer={(layer) => setActiveBaseLayer(layer as any)}
+          showGoogleLabels={showGoogleLabels}
+          onChangeShowGoogleLabels={setShowGoogleLabels}
+          showGraticule={showGraticule}
+          onChangeShowGraticule={setShowGraticule}
+          coordFormat={coordFormat}
+          onChangeCoordFormat={setCoordFormat}
+          distUnit="km"
+          sections={toolbarSections}
+          onChangeSections={handleToolbarSectionsChange}
+          colors={toolbarColors}
+          onChangeColors={handleToolbarColorsChange}
+          labels={mapLabels}
+          onChangeLabels={setMapLabels}
+          mapCenter={{ lat: metrics.lLat || 46.9965, lon: metrics.lLon || 67.0222 }}
+          legendItems={toolbarLegendItems}
+          onChangeLegendItems={handleToolbarLegendItemsChange}
+          trackSettings={trackPathSettings}
+          onChangeTrackSettings={handleTrackSettingsChange}
+          trackPointsCount={{
+            displayed: activeTrackPoints.length,
+            total: (rawHistoryRecords.length || allHistoryPoints.length)
+          }}
+          texts={toolbarTexts}
+          onChangeTexts={handleToolbarTextsChange}
+          reportLanguage={reportLanguage}
+          onChangeReportLanguage={setReportLanguage}
+          onExportPdf={handleExportPdf}
+          onExportPng={handleExportPng}
+          onPrint={() => window.print()}
+          onShareWhatsApp={() => setIsBotModalOpen(true)}
+          isExporting={isExportingPdf || isExportingPng}
+          language={reportLanguage}
+        />
+      </div>
+
+      {/* ─── FLOATING EDIT TOOLS PALETTE (SHOWN ONLY WHEN EDIT MODE IS ACTIVE) ───── */}
+      {isTableEditing && (
+        <EditToolsPalette
+          activeTool={isMeasuring ? 'measure' : (isDragEnabled ? 'move' : 'select')}
+          onSelectTool={(tool) => {
+            if (tool === 'measure') {
+              setIsMeasuring(true);
+              setIsDragEnabled(false);
+            } else if (tool === 'move') {
+              setIsMeasuring(false);
+              setIsDragEnabled(true);
+            } else {
+              setIsMeasuring(false);
+              setIsDragEnabled(false);
+            }
+          }}
+          onAddLabel={() => {
+            const newLabel: MapLabel = {
+              id: `label-${Date.now()}`,
+              text: reportLanguage === 'ar' ? 'علامة جديدة' : 'New Label',
+              shape: 'pill',
+              bg: '#ffffff',
+              fg: '#1f2937',
+              border: '#dc2626',
+              fontSize: 12,
+              x: 50,
+              y: 50,
+              lat: metrics.lLat || 46.9965,
+              lon: metrics.lLon || 67.0222,
+              anchor: 'geo'
+            };
+            setMapLabels(prev => [...prev, newLabel]);
+          }}
+          measurePointsCount={measurePoints.length}
+          totalMeasureKm={totalMeasureDistanceKm}
+          onPinMeasure={() => {
+            if (measurePoints.length >= 2) {
+              const lastPt = measurePoints[measurePoints.length - 1];
+              const pinnedLabel: MapLabel = {
+                id: `measure-pin-${Date.now()}`,
+                text: `${totalMeasureDistanceKm} km`,
+                shape: 'pill',
+                bg: '#ffffff',
+                fg: '#92400e',
+                border: '#f59e0b',
+                fontSize: 11,
+                x: 50,
+                y: 50,
+                lat: lastPt[0],
+                lon: lastPt[1],
+                anchor: 'geo'
+              };
+              setMapLabels(prev => [...prev, pinnedLabel]);
+            }
+          }}
+          onClearMeasure={() => setMeasurePoints([])}
+          language={reportLanguage}
+        />
+      )}
 
       {/* ─── CONTROL TOOLBAR (RTL) ────────────────────────────────────────── */}
       <div className="no-print bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-5 shadow-sm space-y-4" dir="rtl">
@@ -2921,60 +3214,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               <span>{reportLanguage === 'ar' ? 'معرّف الطائر (PTT / رقم الحجل / Darvic):' : 'Bird ID (PTT / Ring / Darvic):'}</span>
               <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold font-mono">PTT / Ring / Darvic</span>
             </label>
-            <div className="relative">
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={pttSearchTerm || selectedPttId}
-                onChange={(e) => {
-                  setPttSearchTerm(e.target.value);
-                  setIsSearchOpen(true);
-                }}
-                onFocus={() => setIsSearchOpen(true)}
-                placeholder="ابحث برقم PTT أو الحجل أو الدارفيك..."
-                className="w-full pl-9 pr-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white font-mono"
-              />
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-
-            {isSearchOpen && (
-              <>
-                <div className="fixed inset-0 z-20" onClick={() => setIsSearchOpen(false)} />
-                <div className="absolute top-full mt-1.5 w-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl z-30 max-h-64 overflow-y-auto">
-                  <div className="p-1.5 space-y-1">
-                    {filteredUnifiedTargets.map(opt => (
-                      <button
-                        key={opt.key}
-                        type="button"
-                        onClick={() => handleSelectUnifiedTarget(opt.id)}
-                        className={`w-full text-right px-3 py-2 text-xs rounded-lg flex flex-col gap-0.5 transition-colors ${
-                          selectedPttId === opt.pttId 
-                            ? 'bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300 font-bold' 
-                            : 'hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-800 dark:text-gray-200'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between font-mono">
-                          <span className="font-bold">{opt.label}</span>
-                          <span className="text-[10px] text-gray-400 font-sans">
-                            {opt.type === 'bird' ? 'طائر' : 'جهاز'}
-                          </span>
-                        </div>
-                        {opt.sublabel && (
-                          <div className="text-[10.5px] text-gray-500 dark:text-gray-400 font-sans truncate">
-                            {opt.sublabel}
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                    {filteredUnifiedTargets.length === 0 && (
-                      <div className="p-3 text-center text-xs text-gray-400 font-sans">
-                        لا توجد نتائج مطابقة
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
+            <BirdIdCombobox
+              value={selectedPttId}
+              onSelect={(id) => handleSelectUnifiedTarget(id)}
+              options={unifiedTargetOptions}
+              language={reportLanguage}
+              placeholder={reportLanguage === 'ar' ? 'ابحث برقم PTT أو الحجل أو الدارفيك...' : 'Search PTT, Ring or Darvic...'}
+            />
           </div>
 
           {/* 2. Map View Mode (Snapshot vs Interactive) */}
@@ -4403,23 +4649,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                   <div className="trk-row">
                     <span className="k">{T.status}</span>
-                    <span className="v">
-                      {isTableEditing ? (
-                        <input
-                          type="text"
-                          value={customMetadata.birdStatus}
-                          onChange={(e) => setCustomMetadata({ ...customMetadata, birdStatus: e.target.value })}
-                          className="w-full text-center font-bold text-emerald-700 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        <span className={`pill ${
-                          customMetadata.birdStatus === 'نافق' || customMetadata.birdStatus === 'dead' ? 'pill--bad' :
-                          customMetadata.birdStatus === 'غير نشط' || customMetadata.birdStatus === 'inactive' ? 'pill--warn' :
-                          'pill--ok'
-                        }`}>
-                          {translateValue(customMetadata.birdStatus || 'حي')}
-                        </span>
-                      )}
+                    <span className="v flex items-center justify-center">
+                      <BirdStatusChip
+                        tableStatus={customMetadata.birdStatus || 'alive'}
+                        overrideStatus={statusOverride}
+                        onOverrideStatus={(newStatus) => {
+                          setStatusOverride(newStatus);
+                          if (newStatus) {
+                            setCustomMetadata(prev => ({
+                              ...prev,
+                              birdStatus: reportLanguage === 'ar' 
+                                ? (newStatus === 'alive' ? 'حي' : newStatus === 'dead' ? 'نافق' : 'نفوق محتمل') 
+                                : (newStatus === 'alive' ? 'Alive' : newStatus === 'dead' ? 'Dead' : 'Potential mortality')
+                            }));
+                          }
+                        }}
+                        isEditMode={isTableEditing}
+                        language={reportLanguage}
+                      />
                     </span>
                   </div>
                 </section>
@@ -4873,7 +5120,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
                 ) : (
                   /* 2. CLEAN DYNAMIC MAP WITH APPLIED FILTERS (PER-BIRD INTERACTIVE MODE) */
-                  <div className="relative w-full h-full">
+                  <div ref={mapContainerRef} className="relative w-full h-full">
                     {/* Quick Button to Upload QGIS Map right from the interactive map view */}
                     <div className="rpt-toolbar no-export-snapshot no-print no-export absolute top-2 left-2 z-[400] flex items-center gap-1.5">
                       <button
@@ -4946,36 +5193,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {/* Dynamic GIS Graphic Scale Bar (Matching Model 25km Two-Segment Bar) */}
                       {sectionVisibility.scaleBar && <CustomGraphicScaleControl />}
 
-                      {/* Real History Flight Trajectory (Multi-Period Colored Segments) */}
-                      {showFlightTrack && coloredTrackSegments.map((seg) =>
-                        seg.positions.length > 1 ? (
-                          <Polyline
-                            key={seg.id}
-                            positions={seg.positions}
-                            pathOptions={{
-                              color: seg.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
-                              weight: flightTrackConfig.lineWeight || 3,
-                              dashArray: flightTrackConfig.lineDashed ? '6, 6' : undefined,
-                              opacity: 0.9
-                            }}
-                          />
-                        ) : null
-                      )}
-
-                      {/* Telemetry Fix Dots */}
-                      {showFlightTrack && flightTrackConfig.showTrackPoints && activeTrackPoints.map((pt, idx) => (
-                        <CircleMarker
-                          key={`trk-pt-${idx}-${pt.ts}`}
-                          center={[pt.lat, pt.lon]}
-                          radius={3}
-                          pathOptions={{
-                            fillColor: '#ffffff',
-                            fillOpacity: 0.95,
-                            color: pt.color,
-                            weight: 1
-                          }}
-                        />
-                      ))}
+                      {/* Real History Flight Trajectory (Shared Layer with Live Tracking) */}
+                      <HistoryTrackLayer
+                        mode="report"
+                        historyPaths={[{
+                          id: selectedPttId,
+                          color: flightTrackConfig.defaultColor || themeColors.trackLineColor,
+                          path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map(pt => ({
+                            lat: pt.lat,
+                            lon: pt.lon,
+                            timestamp: pt.ts ? new Date(pt.ts).toISOString() : new Date().toISOString(),
+                            type: pt.type
+                          })),
+                          polyline: activeTrackPositions
+                        }]}
+                        settings={trackPathSettings}
+                        coordFormat={coordFormat}
+                        isExporting={isExportingPdf || isExportingPng}
+                      />
 
                       {/* Distance line between Camps (Requested Filter) */}
                       {showCampDistance && visibleCampIds.length >= 2 && (() => {
@@ -5638,6 +5873,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </div>
                       </>
                     )}
+
+                    {/* Draggable Map Labels Overlay (Pointer-Events, Drag & Drop, Alt Snap, Geo Anchor) */}
+                    <MapLabelsOverlay
+                      labels={mapLabels}
+                      onChangeLabels={setMapLabels}
+                      mapInstance={mapInstance}
+                      containerRef={mapContainerRef}
+                      isExporting={isExportingPdf || isExportingPng}
+                      language={reportLanguage}
+                    />
                   </>
                 )}
 
