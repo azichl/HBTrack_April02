@@ -2801,8 +2801,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       'birdData',
       reportLanguage === 'ar' ? 'بيانات الطائر' : 'Bird Data',
       zone,
-      tableMode === 'standard' || tableMode === 'both') && (
-                <section id="custom-bird-data-table" className="trk-card">
+      <section id="custom-bird-data-table" className="trk-card">
                   
 
                   <div className="trk-card__head flex items-center justify-between">
@@ -2942,8 +2941,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       zone,
       <div className="flex flex-col gap-2">
         {showCoords && (
-          tableMode === 'standard' || tableMode === 'both') && (
-                <section id="custom-table2-coordinates" className="trk-card trk-card--table">
+          <section id="custom-table2-coordinates" className="trk-card trk-card--table">
                   
 
                   <div className="trk-twohead">

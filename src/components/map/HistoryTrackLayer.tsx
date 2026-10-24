@@ -37,6 +37,7 @@ export interface HistoryTrackLayerProps {
   historyPaths: HistoryPathItem[];
   settings?: TrackSettings;
   model?: TrackRenderModel;
+  trackRenderModel?: TrackRenderModel;
   timeZone?: string;
   coordFormat?: 'DD' | 'DMM' | 'DMS';
   isExporting?: boolean;
@@ -58,12 +59,14 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
   historyPaths,
   settings,
   model: explicitModel,
+  trackRenderModel,
   timeZone = 'UTC',
   coordFormat = 'DMM',
   isExporting = false,
   renderPointMarker
 }) => {
   const map = useMap();
+  const activeExplicitModel = explicitModel || trackRenderModel;
 
   const effectiveSettings = useMemo<TrackSettings>(() => ({
     ...DEFAULT_TRACK_SETTINGS,
@@ -80,9 +83,9 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
 
   // Build the render model if not explicitly passed
   const model = useMemo<TrackRenderModel>(() => {
-    if (explicitModel) return explicitModel;
+    if (activeExplicitModel) return activeExplicitModel;
     return buildTrackRenderModel(allFixes, effectiveSettings);
-  }, [explicitModel, allFixes, effectiveSettings]);
+  }, [activeExplicitModel, allFixes, effectiveSettings]);
 
   // Debug ?debug=track check
   const [isDebugTrack, setIsDebugTrack] = useState(false);
