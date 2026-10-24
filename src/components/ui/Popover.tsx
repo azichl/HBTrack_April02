@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState, ReactNode, useId } from 'react';
 import { createPortal } from 'react-dom';
+import { GripHorizontal } from 'lucide-react';
 
 export interface PopoverProps {
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -24,7 +25,58 @@ export function Popover({
 }: PopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; insetInlineStart: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef<{ pointerX: number; pointerY: number; startOffsetX: number; startOffsetY: number }>({
+    pointerX: 0,
+    pointerY: 0,
+    startOffsetX: 0,
+    startOffsetY: 0,
+  });
   const titleId = useId();
+
+  // Reset drag position when popup is opened anew
+  useEffect(() => {
+    if (open) {
+      setDragOffset({ x: 0, y: 0 });
+    }
+  }, [open]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, select, textarea, [role="button"], a')) return;
+
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      pointerX: e.clientX,
+      pointerY: e.clientY,
+      startOffsetX: dragOffset.x,
+      startOffsetY: dragOffset.y,
+    };
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    if (!isDraggingRef.current) return;
+    const dx = e.clientX - dragStartRef.current.pointerX;
+    const dy = e.clientY - dragStartRef.current.pointerY;
+    setDragOffset({
+      x: dragStartRef.current.startOffsetX + dx,
+      y: dragStartRef.current.startOffsetY + dy,
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLElement>) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
 
   const requestClose = () => {
     if (dirty && !window.confirm('Discard changes? / هل تريد تجاهل التغييرات غير المحفوظة؟')) return;
@@ -118,20 +170,31 @@ export function Popover({
       style={{
         top: pos?.top ?? 100,
         left: pos?.insetInlineStart ?? 16,
+        transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)`,
         width,
         maxWidth: 'calc(100vw - 16px)',
         maxHeight: 'min(82vh, 640px)',
       }}
     >
-      <header className="hb-popover__head flex items-center justify-between px-3.5 py-2.5 border-b border-black/6 dark:border-white/10 bg-gray-50/80 dark:bg-slate-800/80">
-        <h3 id={titleId} className="text-xs font-bold tracking-tight text-gray-800 dark:text-white">
-          {title}
-        </h3>
+      <header
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        className="hb-popover__head flex items-center justify-between px-3.5 py-2.5 border-b border-black/6 dark:border-white/10 bg-gray-50/80 dark:bg-slate-800/80 cursor-grab active:cursor-grabbing select-none"
+        title="اسحب لنقل النافذة / Drag to move"
+      >
+        <div className="flex items-center gap-1.5 min-w-0">
+          <GripHorizontal size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
+          <h3 id={titleId} className="text-xs font-bold tracking-tight text-gray-800 dark:text-white truncate">
+            {title}
+          </h3>
+        </div>
         <button
           type="button"
           aria-label="Close"
           onClick={requestClose}
-          className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-xs font-bold"
+          className="w-6 h-6 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-xs font-bold shrink-0"
         >
           ✕
         </button>

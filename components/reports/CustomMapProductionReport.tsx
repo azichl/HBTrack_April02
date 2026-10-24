@@ -3309,13 +3309,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           </div>
         )}
 
-        {/* Primary Controls Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3.5 pt-1">
+        {/* Primary Controls Row: Bird ID, Map Display, Table Style, Snapshot (Single Clean Row) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1 items-stretch">
           
           {/* 1. Unified Bird ID Selector & Resolver (PTT / Ring / Darvic) */}
-          <div className="relative">
+          <div className="relative flex flex-col justify-between">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
-              <span>{reportLanguage === 'ar' ? 'معرّف الطائر (PTT / رقم الحجل / Darvic):' : 'Bird ID (PTT / Ring / Darvic):'}</span>
+              <span>{reportLanguage === 'ar' ? 'معرّف الطائر (Bird ID):' : 'Bird ID (PTT / Ring / Darvic):'}</span>
               <span className="text-[10px] text-brand-600 dark:text-brand-400 font-bold font-mono">PTT / Ring / Darvic</span>
             </label>
             <BirdIdCombobox
@@ -3328,26 +3328,26 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           </div>
 
           {/* 2. Map View Mode (Snapshot vs Interactive) */}
-          <div>
+          <div className="flex flex-col justify-between">
             <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
-              <span>عرض الخريطة (Map Display):</span>
+              <span>{reportLanguage === 'ar' ? 'عرض الخريطة (Map Display):' : 'Map Display:'}</span>
               <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                {mapDisplayMode === 'snapshot' ? 'صورة ملتقطة' : 'تفاعلية'}
+                {mapDisplayMode === 'snapshot' ? (reportLanguage === 'ar' ? 'صورة ملتقطة' : 'Snapshot') : (reportLanguage === 'ar' ? 'تفاعلية' : 'Interactive')}
               </span>
             </label>
-            <div className="flex bg-gray-100 dark:bg-slate-900 p-1 rounded-xl border border-gray-200 dark:border-slate-700 gap-1">
+            <div className="flex bg-gray-100 dark:bg-slate-900 p-1 rounded-xl border border-gray-200 dark:border-slate-700 gap-1 h-[42px] items-center">
               <button
                 type="button"
                 onClick={() => setMapDisplayMode('snapshot')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                className={`flex-1 h-full text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                   mapDisplayMode === 'snapshot' 
-                    ? 'bg-white dark:bg-slate-800 text-emerald-600 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
-                title="عرض الصورة الملتقطة طبق الأصل من شاشة التتبع المباشر"
+                title={reportLanguage === 'ar' ? 'عرض الصورة الملتقطة طبق الأصل من شاشة التتبع المباشر' : 'Show captured map snapshot'}
               >
-                <Camera size={13} />
-                <span>صورة ملتقطة</span>
+                <Camera size={14} />
+                <span>{reportLanguage === 'ar' ? 'صورة ملتقطة' : 'Snapshot'}</span>
               </button>
               <button
                 type="button"
@@ -3355,148 +3355,69 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   setMapDisplayMode('interactive');
                   setFitKey(k => k + 1);
                 }}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
+                className={`flex-1 h-full text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                   mapDisplayMode === 'interactive' 
-                    ? 'bg-white dark:bg-slate-800 text-brand-600 shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
-                title="عرض خريطة تفاعلية نظيفة"
+                title={reportLanguage === 'ar' ? 'عرض خريطة تفاعلية نظيفة' : 'Show interactive dynamic map'}
               >
-                <Layers size={13} />
-                <span>خريطة تفاعلية</span>
+                <Layers size={14} />
+                <span>{reportLanguage === 'ar' ? 'خريطة تفاعلية' : 'Interactive'}</span>
               </button>
             </div>
           </div>
 
-          {/* 3. Base Map Layer */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-              نوع الخريطة (Base Map):
-            </label>
-            <div className="relative">
-              <select
-                value={activeBaseLayer}
-                onChange={(e) => setActiveBaseLayer(e.target.value as any)}
-                className="w-full px-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer font-medium"
-              >
-                <option value="google_roadmap">خرائط جوجل عادية – شوارع وتضاريس (Google Roadmap)</option>
-                <option value="google_hybrid">خرائط جوجل هجين – أقمار وشوارع (Google Hybrid)</option>
-                <option value="google_satellite">خرائط جوجل – أقمار صناعية (Google Satellite)</option>
-                <option value="scienceterrain">أقمار صناعية Esri (Esri Satellite)</option>
-                <option value="roadmap">خريطة الشوارع (OpenStreetMap)</option>
-              </select>
-              <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-            <div className="mt-2.5 flex items-center gap-2 px-1">
-              <input
-                type="checkbox"
-                id="showGoogleLabels"
-                checked={showGoogleLabels}
-                onChange={(e) => setShowGoogleLabels(e.target.checked)}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
-              />
-              <label htmlFor="showGoogleLabels" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                إضافة مسميات جوجل (المدن والطرق) على الخريطة
-              </label>
-            </div>
-            {/* Collapsed One-Row Track Path Customizer (§2.1) */}
-            <div className="mt-2.5">
-              <TrackPathButton
-                settings={trackPathSettings}
-                onChange={handleTrackSettingsChange}
-                onPreview={(preview) => {
-                  setTrackPathSettings(preview);
-                  setShowFlightTrack(preview.show);
-                }}
-                displayedPointsCount={activeTrackPoints.length}
-                totalPointsCount={rawHistoryRecords.length > 0 ? rawHistoryRecords.length : allHistoryPoints.length}
-                language={reportLanguage}
-              />
-            </div>
-            <div className="mt-2.5 flex items-center gap-2 px-1">
-              <input
-                type="checkbox"
-                id="showGraticule"
-                checked={showGraticule}
-                onChange={(e) => setShowGraticule(e.target.checked)}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
-              />
-              <label htmlFor="showGraticule" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                إظهار شبكة ودرجات الإحداثيات المتحركة (Graticule Grid)
-              </label>
-            </div>
-          </div>
-
-          {/* 4. Table Display Mode & Footer */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-              تذييل التقرير (Footer):
-            </label>
-            <div className="flex items-center gap-2 px-1 mb-4">
-              <input
-                type="checkbox"
-                id="showFooter"
-                checked={showFooter}
-                onChange={(e) => setShowFooter(e.target.checked)}
-                className="rounded border-gray-300 text-brand-600 focus:ring-brand-500 w-3.5 h-3.5 cursor-pointer"
-              />
-              <label htmlFor="showFooter" className="text-[11.5px] font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
-                إظهار تذييل التقرير (نصوص أسفل الصفحة)
-              </label>
-            </div>
-            
-            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
-              نوع الجدول (Table Style):
+          {/* 3. Table Display Mode */}
+          <div className="flex flex-col justify-between">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
+              <span>{reportLanguage === 'ar' ? 'نوع الجدول (Table Style):' : 'Table Style:'}</span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+                {tableMode === 'standard' ? (reportLanguage === 'ar' ? 'القياسي' : 'Standard') : tableMode === 'history_list' ? (reportLanguage === 'ar' ? 'المسار' : 'Fixes') : (reportLanguage === 'ar' ? 'كلاهما' : 'Both')}
+              </span>
             </label>
             <div className="relative">
               <select
                 value={tableMode}
                 onChange={(e) => setTableMode(e.target.value as any)}
-                className="w-full px-3.5 py-2 text-sm bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer font-medium"
+                className="w-full h-[42px] px-3.5 py-2 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-gray-900 dark:text-white appearance-none cursor-pointer font-bold transition-all shadow-2xs"
               >
-                <option value="standard">الجدول القياسي (بيانات الطائر + الإحداثيات)</option>
-                <option value="history_list">جدول سجل المسار التاريخي (History Fixes)</option>
-                <option value="both">عرض كلا الجدولين في التقرير</option>
+                <option value="standard">{reportLanguage === 'ar' ? 'الجدول القياسي (بيانات الطائر + الإحداثيات)' : 'Standard (Bird Data + Coords)'}</option>
+                <option value="history_list">{reportLanguage === 'ar' ? 'جدول سجل المسار التاريخي (History Fixes)' : 'History Fixes Table'}</option>
+                <option value="both">{reportLanguage === 'ar' ? 'عرض كلا الجدولين في التقرير' : 'Show Both Tables'}</option>
               </select>
-              <ChevronDown size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <ChevronDown size={15} className={`absolute ${reportLanguage === 'ar' ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none`} />
             </div>
           </div>
 
-          {/* 5. Telemetry Status & Snap Button in Toolbar */}
-          <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-900/60 rounded-xl border border-gray-100 dark:border-slate-700/60">
-            <div className="space-y-0.5">
-              <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 block">
-                حالة الإحداثيات:
-              </span>
-              <span className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+          {/* 4. Snapshot Button & Telemetry Status */}
+          <div className="flex flex-col justify-between">
+            <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5 flex items-center justify-between">
+              <span>{reportLanguage === 'ar' ? 'التقاط صورة الخريطة:' : 'Map Snapshot:'}</span>
+              <span className="text-[10px] font-bold text-gray-600 dark:text-gray-300 flex items-center gap-1">
                 {isLoadingTelemetry ? (
                   <>
-                    <RefreshCw size={13} className="animate-spin text-brand-500" />
-                    <span>جارِ جلب السجل...</span>
+                    <RefreshCw size={11} className="animate-spin text-brand-500" />
+                    <span>{reportLanguage === 'ar' ? 'جلب...' : 'Loading...'}</span>
                   </>
                 ) : telemetryData.rawGpsCount > 0 ? (
                   <>
-                    <CheckCircle2 size={14} className="text-emerald-500" />
-                    <span>{telemetryData.rawGpsCount} نقطة مسجلة</span>
+                    <CheckCircle2 size={11} className="text-emerald-500" />
+                    <span>{telemetryData.rawGpsCount} {reportLanguage === 'ar' ? 'نقطة' : 'pts'}</span>
                   </>
                 ) : (
-                  <>
-                    <Info size={14} className="text-brand-500" />
-                    <span>النموذج الافتراضي</span>
-                  </>
+                  <span className="text-gray-400">{reportLanguage === 'ar' ? 'نموذج' : 'Demo'}</span>
                 )}
               </span>
-            </div>
-
-            {/* Quick Snap button placed safely in toolbar so it NEVER overlays on the map */}
+            </label>
             <button
               type="button"
               onClick={handleCaptureInteractiveMap}
-              className="text-[11px] px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors flex items-center gap-1 shadow-sm"
-              title="التقاط المنظور الحالي للخريطة التفاعلية وتثبيته كصورة في التقرير"
+              className="w-full h-[42px] px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow active:scale-[0.99] border border-emerald-500/20"
+              title={reportLanguage === 'ar' ? 'التقاط المنظور الحالي للخريطة التفاعلية وتثبيته كصورة في التقرير' : 'Capture current interactive map view as a high-res image for the report'}
             >
-              <Camera size={13} />
-              <span>التقاط كصورة</span>
+              <Camera size={15} className="shrink-0" />
+              <span>{reportLanguage === 'ar' ? 'التقاط كصورة' : 'Take Snapshot'}</span>
             </button>
           </div>
 
@@ -6199,7 +6120,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           </div>
 
           {/* 3. REPORT FOOTER (MODIFIABLE AND PERSONALIZED) */}
-          {sectionVisibility.footer && showFooter && (
+          {sectionVisibility.footer && (
             <footer className="trk-footer">
               <div className="flex items-center justify-between w-full" style={{ direction: 'rtl' }}>
                 {/* Right Footer Text */}

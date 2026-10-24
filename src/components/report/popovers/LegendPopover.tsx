@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Eye, EyeOff, Plus, Trash2, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, RotateCcw, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { Popover } from '../../ui/Popover';
 import { ColorChip } from '../../ui/ColorChip';
 import { ReportLegendItem, ReportLegendLayout, LegendShape } from '../../../types/report';
@@ -38,7 +38,27 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
 }) => {
   const isAr = language === 'ar';
   const [showLayout, setShowLayout] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const newItemInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === targetIndex) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setDragIndex(targetIndex);
+    onChangeItems(reordered);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+  };
 
   const visibleCount = items.filter(i => i.visible).length;
 
@@ -164,18 +184,29 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
             return (
               <div
                 key={item.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, idx)}
+                onDragOver={(e) => handleDragOver(e, idx)}
+                onDragEnd={handleDragEnd}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '28px 28px 104px minmax(0, 1fr) 28px',
+                  gridTemplateColumns: '16px 28px 28px 96px minmax(0, 1fr) 28px',
                   gap: '6px',
                   alignItems: 'center'
                 }}
                 className={`p-1 rounded-lg border transition-all ${
+                  dragIndex === idx ? 'opacity-50 ring-2 ring-brand-400 bg-brand-50/50' : ''
+                } ${
                   item.visible
                     ? 'bg-white dark:bg-slate-800/80 border-gray-200 dark:border-slate-700'
                     : 'bg-gray-100/60 dark:bg-slate-800/30 border-gray-200/50 dark:border-slate-800 opacity-60'
                 }`}
               >
+                {/* 0. Drag Handle */}
+                <div className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center" title={isAr ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}>
+                  <GripVertical size={13} />
+                </div>
+
                 {/* 1. Eye Toggle */}
                 <button
                   type="button"

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Popover } from '../../ui/Popover';
 import { MapLabel } from '../../../types/report';
-import { Plus, Trash2, ArrowLeft, Edit2, Tag } from 'lucide-react';
+import { Plus, Trash2, ArrowLeft, Edit2, Tag, GripVertical } from 'lucide-react';
 
 export interface LabelsPopoverProps {
   anchorRef: React.RefObject<HTMLElement | null>;
@@ -23,6 +23,26 @@ export const LabelsPopover: React.FC<LabelsPopoverProps> = ({
   language = 'ar'
 }) => {
   const isAr = language === 'ar';
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === targetIndex) return;
+    const reordered = [...labels];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setDragIndex(targetIndex);
+    onChange(reordered);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+  };
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
 
   // Form State
@@ -261,22 +281,33 @@ export const LabelsPopover: React.FC<LabelsPopoverProps> = ({
                 {isAr ? 'لا توجد تسميات مضافة على الخريطة' : 'No labels added yet'}
               </p>
             ) : (
-              labels.map((label) => (
+              labels.map((label, idx) => (
                 <div
                   key={label.id}
-                  className="flex items-center justify-between p-2 rounded-lg border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors shadow-2xs"
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center justify-between p-2 rounded-lg border border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-800/80 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors shadow-2xs ${
+                    dragIndex === idx ? 'opacity-50 ring-2 ring-brand-400 bg-brand-50/50' : ''
+                  }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => startEdit(label)}>
-                    <span
-                      className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0"
-                      style={{ backgroundColor: label.bg }}
-                    />
-                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">
-                      {label.text}
-                    </span>
-                    <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-slate-700 px-1 rounded">
-                      {label.shape}
-                    </span>
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center shrink-0" title={isAr ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}>
+                      <GripVertical size={13} />
+                    </div>
+                    <div className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer" onClick={() => startEdit(label)}>
+                      <span
+                        className="w-3.5 h-3.5 rounded-full border border-black/15 shrink-0"
+                        style={{ backgroundColor: label.bg }}
+                      />
+                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200 truncate">
+                        {label.text}
+                      </span>
+                      <span className="text-[10px] text-gray-400 bg-gray-100 dark:bg-slate-700 px-1 rounded">
+                        {label.shape}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1">
