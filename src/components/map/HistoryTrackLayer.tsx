@@ -1,8 +1,17 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { Polyline, CircleMarker, Marker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { TrackPathSettings, ColoredTrackSegment } from '../../types/track';
-import { buildColoredTrackSegments, FlightTrackConfig } from '../../../components/reports/FlightTrackCustomizer';
+import {
+  TrackSettings,
+  DEFAULT_TRACK_SETTINGS,
+  TrackRenderModel,
+  buildTrackRenderModel,
+  formatCoord,
+  formatLatLon,
+  thinLabels,
+  DashStyle
+} from '../../features/track/trackRenderModel';
+import { toFix } from '../../features/track/toFix';
 
 export interface HistoryPoint {
   lat: number;
@@ -13,225 +22,260 @@ export interface HistoryPoint {
   locationClass?: string | null;
   errorRadiusM?: number;
   delay?: number | string;
+  id?: string;
 }
 
 export interface HistoryPathItem {
   id: string;
   color?: string;
-  path: HistoryPoint[];
+  path: HistoryPoint[] | any[];
   polyline?: [number, number][];
 }
 
 export interface HistoryTrackLayerProps {
   mode?: 'live' | 'report';
   historyPaths: HistoryPathItem[];
-  settings?: TrackPathSettings;
+  settings?: TrackSettings;
+  model?: TrackRenderModel;
   timeZone?: string;
   coordFormat?: 'DD' | 'DMM' | 'DMS';
   isExporting?: boolean;
   renderPointMarker?: (point: HistoryPoint, pttId: string, color: string) => React.ReactNode;
 }
 
-const formatDM = (val: number, isLat: boolean) => {
-  const abs = Math.abs(val || 0);
-  const deg = Math.floor(abs);
-  const min = (abs - deg) * 60;
-  const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
-  return `${deg}° ${min.toFixed(2)}' ${dir}`;
-};
-
-const formatDMS = (val: number, isLat: boolean) => {
-  const abs = Math.abs(val || 0);
-  const deg = Math.floor(abs);
-  const min = Math.floor((abs - deg) * 60);
-  const sec = ((abs - deg) * 60 - min) * 60;
-  const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
-  return `${deg}° ${min}' ${sec.toFixed(0)}" ${dir}`;
-};
-
-const formatCoord = (lat: number, lon: number, fmt: string = 'DD') => {
-  if (fmt === 'DMM') return `${formatDM(lat, true)}, ${formatDM(lon, false)}`;
-  if (fmt === 'DMS') return `${formatDMS(lat, true)}, ${formatDMS(lon, false)}`;
-  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+const getDashArray = (dash?: DashStyle): string | undefined => {
+  if (dash === 'dashed') return '8, 8';
+  if (dash === 'dotted') return '2, 6';
+  return undefined;
 };
 
 /**
  * Shared History Track Layer for BOTH Live Tracking Map and Custom Report Map.
- * Provides consistent polyline coloring, period segmentation, vertices, and coordinate labels.
+ * Directly draws the pure TrackRenderModel: segments, markers, and coordinate labels.
  */
 export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
   mode = 'report',
   historyPaths,
   settings,
+  model: explicitModel,
   timeZone = 'UTC',
-  coordFormat = 'DD',
+  coordFormat = 'DMM',
   isExporting = false,
   renderPointMarker
 }) => {
   const map = useMap();
 
-  // Consolidate track settings
-  const isEnabled = settings ? settings.show : true;
-  const trackColor = settings?.color || '#6366f1';
-  const trackWidth = settings?.width || 3;
-  const showPoints = Boolean(settings?.showPoints);
-  const showLabels = Boolean(settings?.showCoordinateLabels);
+  const effectiveSettings = useMemo<TrackSettings>(() => ({
+    ...DEFAULT_TRACK_SETTINGS,
+    ...(settings || {}),
+    coordFormat: (settings?.coordFormat || coordFormat || 'DMM') as any
+  }), [settings, coordFormat]);
+
+  const isEnabled = effectiveSettings.show !== false;
+
+  // Flatten fixes across all paths
+  const allFixes = useMemo(() => {
+    return historyPaths.flatMap(hp => (hp.path || []).map((pt, idx) => toFix(pt, idx)));
+  }, [historyPaths]);
+
+  // Build the render model if not explicitly passed
+  const model = useMemo<TrackRenderModel>(() => {
+    if (explicitModel) return explicitModel;
+    return buildTrackRenderModel(allFixes, effectiveSettings);
+  }, [explicitModel, allFixes, effectiveSettings]);
+
+  // Debug ?debug=track check
+  const [isDebugTrack, setIsDebugTrack] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isDbg = params.get('debug') === 'track';
+      setIsDebugTrack(isDbg);
+      if (isDbg) {
+        console.log('[TrackRenderModel Debug]', {
+          total: model.total,
+          shown: model.shown,
+          segments: model.segments.length,
+          markers: model.markers.length,
+          settings: effectiveSettings,
+          model
+        });
+      }
+    }
+  }, [model, effectiveSettings]);
+
+  // Compute thinned labels using thinLabels from pure model
+  const labeledMarkers = useMemo(() => {
+    if (!effectiveSettings.showCoordinateLabels || !map || model.markers.length === 0) {
+      return [];
+    }
+
+    try {
+      const size = map.getSize();
+      const bounds = { w: size.x || 800, h: size.y || 465 };
+      const project = (lat: number, lon: number) => {
+        const pt = map.latLngToContainerPoint([lat, lon]);
+        return { x: pt.x, y: pt.y };
+      };
+
+      const kept = thinLabels(
+        model.markers,
+        project,
+        effectiveSettings.labelMinSpacingPx || 70,
+        bounds,
+        [],
+        80
+      );
+
+      const keptIdSet = new Set(kept.map(k => k.id));
+      return model.markers.filter(m => keptIdSet.has(m.id));
+    } catch (e) {
+      return [];
+    }
+  }, [effectiveSettings.showCoordinateLabels, effectiveSettings.labelMinSpacingPx, map, model.markers]);
+
+  if (!isEnabled) {
+    return null;
+  }
+
+  const dashArray = getDashArray(effectiveSettings.dash);
+  const strokeColor = effectiveSettings.color || '#6366f1';
+  const strokeWidth = effectiveSettings.width || 3;
+  const strokeOpacity = effectiveSettings.opacity ?? 1;
 
   return (
     <>
-      {isEnabled && historyPaths.map((hp) => {
-        // Build segments if multi-period is enabled
-        const config: FlightTrackConfig = {
-          enabled: true,
-          locationType: settings?.type || 'ALL',
-          filterStartDate: settings?.from || '',
-          filterEndDate: settings?.to || '',
-          defaultColor: trackColor,
-          lineWeight: trackWidth,
-          lineDashed: false,
-          showTrackPoints: showPoints,
-          useColorPeriods: Boolean(settings?.periodsEnabled && settings?.periods?.length),
-          periods: (settings?.periods || []).map(p => ({
-            id: p.id,
-            label: p.label || `${p.from} → ${p.to}`,
-            startDate: p.from,
-            endDate: p.to,
-            color: p.color
-          }))
-        };
+      {/* 1. Debug Switch Chip (when ?debug=track in URL) */}
+      {isDebugTrack && (
+        <div
+          className="leaflet-top leaflet-right"
+          style={{ pointerEvents: 'none', margin: '8px', zIndex: 1200 }}
+        >
+          <div
+            id="track-debug-chip"
+            className="leaflet-control bg-slate-900/95 text-emerald-400 font-mono text-[10.5px] px-2.5 py-1 rounded-md shadow-lg border border-emerald-500/30 flex items-center gap-1.5"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>track: {model.total} total · {model.shown} shown · {model.segments.length} segs · {model.markers.length} pts · {labeledMarkers.length} lbls</span>
+          </div>
+        </div>
+      )}
 
-        const { segments, filteredPoints } = buildColoredTrackSegments(hp.path, config);
+      {/* 2. Track Segments (Bottom Layer) */}
+      {model.segments.length > 0 ? (
+        model.segments.map((seg, idx) => (
+          <Polyline
+            key={`seg-${seg.periodId || 'default'}-${idx}`}
+            positions={seg.coords}
+            pathOptions={{
+              color: seg.color || strokeColor,
+              weight: strokeWidth,
+              opacity: strokeOpacity,
+              dashArray: dashArray,
+              lineJoin: 'round',
+              lineCap: 'round'
+            }}
+          />
+        ))
+      ) : (
+        historyPaths.map(hp => (
+          hp.polyline && hp.polyline.length > 1 ? (
+            <Polyline
+              key={`fallback-poly-${hp.id}`}
+              positions={hp.polyline}
+              pathOptions={{
+                color: strokeColor,
+                weight: strokeWidth,
+                opacity: strokeOpacity,
+                dashArray: dashArray,
+                lineJoin: 'round',
+                lineCap: 'round'
+              }}
+            />
+          ) : null
+        ))
+      )}
 
-        // Thinning algorithm for static coordinate labels: minimum 70px spacing
-        const labeledPoints: Array<{ lat: number; lon: number; text: string }> = [];
-        if (showLabels && filteredPoints.length > 0 && map) {
-          let lastPointPixels: L.Point | null = null;
-          for (const pt of filteredPoints) {
-            try {
-              const currentPixels = map.latLngToContainerPoint([pt.lat, pt.lon]);
-              if (!lastPointPixels || currentPixels.distanceTo(lastPointPixels) >= 70) {
-                labeledPoints.push({
-                  lat: pt.lat,
-                  lon: pt.lon,
-                  text: formatCoord(pt.lat, pt.lon, coordFormat)
-                });
-                lastPointPixels = currentPixels;
-              }
-            } catch {
-              // Map might be unprojecting before tiles load
-            }
-          }
+      {/* 3. Point Markers (Middle Layer) */}
+      {(effectiveSettings.showPoints || mode === 'live') && model.markers.map((m, idx) => {
+        if (renderPointMarker) {
+          return (
+            <React.Fragment key={`custom-pt-${m.id}-${idx}`}>
+              {renderPointMarker({
+                lat: m.lat,
+                lon: m.lon,
+                timestamp: new Date(m.t).toISOString(),
+                type: m.kind,
+                id: m.id
+              }, m.id, m.fill)}
+            </React.Fragment>
+          );
         }
 
+        const radius = (m.diameter || 6) / 2;
         return (
-          <React.Fragment key={`history-track-${hp.id}`}>
-            {/* Polylines: Multi-period segmented or single */}
-            {segments.length > 0 ? (
-              segments.map((seg) => (
-                <Polyline
-                  key={`seg-${seg.id}`}
-                  positions={seg.positions}
-                  pathOptions={{
-                    color: seg.color,
-                    weight: trackWidth,
-                    opacity: 0.85,
-                    lineJoin: 'round',
-                    lineCap: 'round'
-                  }}
-                />
-              ))
-            ) : (
-              hp.polyline && hp.polyline.length > 1 && (
-                <Polyline
-                  positions={hp.polyline}
-                  pathOptions={{
-                    color: trackColor,
-                    weight: trackWidth,
-                    opacity: 0.85
-                  }}
-                />
-              )
+          <CircleMarker
+            key={`marker-${m.id}-${idx}`}
+            center={[m.lat, m.lon]}
+            radius={radius}
+            pathOptions={{
+              color: m.stroke || '#ffffff',
+              fillColor: m.fill,
+              fillOpacity: m.opacity ?? 1,
+              weight: 1,
+              opacity: m.opacity ?? 1
+            }}
+          >
+            {!isExporting && (
+              <Tooltip direction="top" offset={[0, -radius - 2]} opacity={0.95}>
+                <div className="text-[11px] font-sans text-center leading-tight">
+                  <div className="font-bold text-gray-900">
+                    {formatLatLon(m.lat, m.lon, effectiveSettings.coordFormat)}
+                  </div>
+                  <div className="text-gray-500 font-mono text-[9.5px]">
+                    {m.kind} · {new Date(m.t).toISOString().replace('T', ' ').slice(0, 16)}
+                  </div>
+                </div>
+              </Tooltip>
             )}
+          </CircleMarker>
+        );
+      })}
 
-            {/* Vertices / Point Markers */}
-            {(showPoints || mode === 'live') && filteredPoints.map((pt, idx) => {
-              if (renderPointMarker) {
-                return (
-                  <React.Fragment key={`custom-pt-${hp.id}-${idx}`}>
-                    {renderPointMarker({
-                      lat: pt.lat,
-                      lon: pt.lon,
-                      timestamp: new Date(pt.ts).toISOString(),
-                      type: pt.type
-                    }, hp.id, pt.color || trackColor)}
-                  </React.Fragment>
-                );
-              }
-              const isDoppler = pt.type === 'DOPPLER';
-              const dotColor = pt.color || trackColor;
+      {/* 4. Coordinate Labels (Top Layer, Collision avoided & thinned) */}
+      {effectiveSettings.showCoordinateLabels && labeledMarkers.map((m, i) => {
+        const text = formatLatLon(m.lat, m.lon, effectiveSettings.coordFormat);
+        const fontSize = effectiveSettings.labelFontSize || 10;
 
-              return (
-                <CircleMarker
-                  key={`pt-${hp.id}-${idx}`}
-                  center={[pt.lat, pt.lon]}
-                  radius={isDoppler ? 3 : 4}
-                  pathOptions={isDoppler ? {
-                    color: dotColor,
-                    fillColor: '#ffffff',
-                    fillOpacity: 0.4,
-                    weight: 1.5
-                  } : {
-                    color: dotColor,
-                    fillColor: dotColor,
-                    fillOpacity: 0.9,
-                    weight: 1.5
-                  }}
-                >
-                  {!isExporting && (
-                    <Tooltip direction="top" offset={[0, -6]} opacity={0.95}>
-                      <div className="text-[11px] font-sans text-center leading-tight">
-                        <div className="font-bold text-gray-900">{formatCoord(pt.lat, pt.lon, coordFormat)}</div>
-                        <div className="text-gray-500 font-mono text-[9.5px]">
-                          {pt.type} · {new Date(pt.ts).toISOString().replace('T', ' ').slice(0, 16)}
-                        </div>
-                      </div>
-                    </Tooltip>
-                  )}
-                </CircleMarker>
-              );
+        return (
+          <Marker
+            key={`coord-lbl-${m.id}-${i}`}
+            position={[m.lat, m.lon]}
+            interactive={false}
+            icon={L.divIcon({
+              className: 'bg-transparent',
+              html: `
+                <div style="
+                  transform: translate(8px, -14px);
+                  background: rgba(15, 23, 42, 0.88);
+                  color: #f8fafc;
+                  font-family: 'IBM Plex Sans Arabic', -apple-system, sans-serif;
+                  font-size: ${fontSize}px;
+                  font-weight: 700;
+                  padding: 2px 6px;
+                  border-radius: 4px;
+                  white-space: nowrap;
+                  box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+                  border: 0.5px solid rgba(255,255,255,0.25);
+                  pointer-events: none;
+                ">
+                  ${text}
+                </div>
+              `,
+              iconSize: [0, 0]
             })}
-
-            {/* Static Printed Coordinate Labels on Report Map (Thinned with 70px collision avoidance) */}
-            {mode === 'report' && showLabels && labeledPoints.map((lbl, i) => (
-              <Marker
-                key={`coord-lbl-${i}`}
-                position={[lbl.lat, lbl.lon]}
-                interactive={false}
-                icon={L.divIcon({
-                  className: 'bg-transparent',
-                  html: `
-                    <div style="
-                      transform: translate(8px, -14px);
-                      background: rgba(15, 23, 42, 0.85);
-                      color: #f8fafc;
-                      font-family: 'IBM Plex Sans Arabic', -apple-system, sans-serif;
-                      font-size: 9px;
-                      font-weight: 700;
-                      padding: 1.5px 5px;
-                      border-radius: 4px;
-                      white-space: nowrap;
-                      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                      border: 0.5px solid rgba(255,255,255,0.2);
-                      pointer-events: none;
-                    ">
-                      ${lbl.text}
-                    </div>
-                  `,
-                  iconSize: [0, 0]
-                })}
-              />
-            ))}
-          </React.Fragment>
+          />
         );
       })}
     </>

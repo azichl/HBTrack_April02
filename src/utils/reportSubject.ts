@@ -35,6 +35,30 @@ export function cleanSubjectId(str?: string | null): string {
 }
 
 /**
+ * Predicate to decide if a transmitter object represents a genuine hardware device
+ * rather than a placeholder, "No Transmitter", or empty stub.
+ */
+export function isRealTransmitter(t?: Transmitter | null): boolean {
+  if (!t) return false;
+  const ptt = t.platform_id !== undefined ? String(t.platform_id).trim() : String(t.id || '').trim();
+  const clean = ptt.replace(/^trans-/, '').toLowerCase();
+  if (
+    !clean ||
+    clean === 'na' ||
+    clean === 'n/a' ||
+    clean === 'none' ||
+    clean === 'null' ||
+    clean === 'undefined' ||
+    clean === 'not tagged' ||
+    clean.includes('no transmitter') ||
+    clean.includes('بدون جهاز')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Resolves a unified ReportSubject from user input (PTT, Ring, or Darvic).
  * Single source of truth for all report blocks.
  */
@@ -99,14 +123,17 @@ export function resolveReportSubject(
     linkedTransmitters = [resolvedTx];
   }
 
-  // Active transmitter: prefer active/non-inactive, else latest
-  let activeTx = resolvedTx;
-  if (!activeTx && linkedTransmitters.length > 0) {
-    activeTx = linkedTransmitters.find(t => {
+  // Active transmitter: prefer active/non-inactive from genuine devices, else first real transmitter
+  const realTransmitters = linkedTransmitters.filter(isRealTransmitter);
+  let activeTx = resolvedTx && isRealTransmitter(resolvedTx) ? resolvedTx : undefined;
+  if (!activeTx && realTransmitters.length > 0) {
+    activeTx = realTransmitters.find(t => {
       const st = (t.derived_status || t.status || '').toLowerCase();
       return st !== 'inactive';
-    }) || linkedTransmitters[0];
+    }) || realTransmitters[0];
   }
+
+  const hasTransmitter = Boolean(activeTx);
 
   // Display values
   const searchedVal = queryStr || (activeTx ? activeTx.platform_id : (resolvedBird?.ring_id || ''));
@@ -143,7 +170,7 @@ export function resolveReportSubject(
   let statusSource: 'transmitter' | 'bird' = 'transmitter';
   let statusEditable = false;
 
-  if (activeTx) {
+  if (hasTransmitter && activeTx) {
     statusVal = normalizeStatus(activeTx.derived_status || activeTx.status) || 'alive';
     statusSource = 'transmitter';
     statusEditable = false;

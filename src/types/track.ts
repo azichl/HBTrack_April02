@@ -1,36 +1,8 @@
-export type PointType = 'ALL' | 'GPS' | 'DOPPLER';
+export * from '../features/track/trackRenderModel';
+import { TrackSettings, DEFAULT_TRACK_SETTINGS } from '../features/track/trackRenderModel';
 
-export interface TrackPeriod {
-  id: string;
-  from: string;   // ISO yyyy-mm-dd
-  to: string;     // ISO yyyy-mm-dd
-  color: string;  // #rrggbb
-  label?: string; // Optional user label
-}
-
-export interface TrackPathSettings {
-  show: boolean;
-  type: PointType;
-  from?: string;
-  to?: string;
-  color: string;           // default #6366f1
-  width: number;           // 1..8
-  showPoints: boolean;
-  showCoordinateLabels?: boolean;
-  periodsEnabled: boolean;
-  periods: TrackPeriod[];
-}
-
-export const DEFAULT_TRACK_SETTINGS: TrackPathSettings = {
-  show: true,
-  type: 'ALL',
-  color: '#6366f1',
-  width: 3,
-  showPoints: false,
-  showCoordinateLabels: false,
-  periodsEnabled: false,
-  periods: [],
-};
+export type TrackPathSettings = TrackSettings;
+export { DEFAULT_TRACK_SETTINGS as DEFAULT_TRACK_PATH_SETTINGS };
 
 export interface ColoredTrackSegment {
   id: string;

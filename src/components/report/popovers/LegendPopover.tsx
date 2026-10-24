@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Eye, EyeOff, Plus, Trash2, RotateCcw, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, RotateCcw, ChevronDown, ChevronUp, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import { Popover } from '../../ui/Popover';
 import { ColorChip } from '../../ui/ColorChip';
 import { ReportLegendItem, ReportLegendLayout, LegendShape } from '../../../types/report';
@@ -21,7 +21,7 @@ const SHAPE_OPTIONS: { value: LegendShape; labelAr: string; labelEn: string }[] 
   { value: 'square', labelAr: 'مربع', labelEn: 'Square' },
   { value: 'line', labelAr: 'خط متصل', labelEn: 'Line' },
   { value: 'dashed-line', labelAr: 'خط متقطع', labelEn: 'Dashed line' },
-  { value: 'triangle', labelAr: 'مثلث', labelEn: 'Triangle' },
+  { value: 'triangle', labelAr: 'مثلث (خيمة)', labelEn: 'Triangle' },
   { value: 'pin', labelAr: 'دبوس', labelEn: 'Pin' },
 ];
 
@@ -58,6 +58,22 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
 
   const handleDragEnd = () => {
     setDragIndex(null);
+  };
+
+  const handleMoveUp = (index: number) => {
+    if (index <= 0) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(index - 1, 0, moved);
+    onChangeItems(reordered);
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index >= items.length - 1) return;
+    const reordered = [...items];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(index + 1, 0, moved);
+    onChangeItems(reordered);
   };
 
   const visibleCount = items.filter(i => i.visible).length;
@@ -133,7 +149,7 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
         </div>
       }
     >
-      <div className="space-y-3" style={{ maxHeight: 'min(70vh, 520px)' }}>
+      <div className="space-y-3" style={{ maxHeight: 'min(70vh, 560px)' }}>
         {/* Subhead with Counters and Actions */}
         <div className="flex items-center justify-between text-xs pb-1 border-b border-gray-100 dark:border-slate-800">
           <span className="font-semibold text-gray-600 dark:text-gray-300">
@@ -170,8 +186,8 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
           <span>{isAr ? '+ إضافة عنصر جديد للمفتاح' : '+ Add item'}</span>
         </button>
 
-        {/* Items List (CSS Grid row: 28px 28px 104px minmax(0,1fr) 28px) */}
-        <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+        {/* Items List (CSS Grid: [drag] [eye] [color] [shape] [text] [↑ ↓] [trash/reset]) */}
+        <div className="space-y-1.5 overflow-y-auto pr-1" style={{ maxHeight: 'min(50vh, 360px)' }}>
           {items.map((item, idx) => {
             const original = defaultItems.find(d => d.id === item.id);
             const isOverridden = original && (
@@ -190,7 +206,7 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
                 onDragEnd={handleDragEnd}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '16px 28px 28px 96px minmax(0, 1fr) 28px',
+                  gridTemplateColumns: '16px 26px 26px 88px minmax(0, 1fr) 48px 26px',
                   gap: '6px',
                   alignItems: 'center'
                 }}
@@ -203,7 +219,11 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
                 }`}
               >
                 {/* 0. Drag Handle */}
-                <div className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center" title={isAr ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}>
+                <div
+                  className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center"
+                  style={{ touchAction: 'none' }}
+                  title={isAr ? 'اسحب لإعادة الترتيب' : 'Drag to reorder'}
+                >
                   <GripVertical size={13} />
                 </div>
 
@@ -211,14 +231,14 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
                 <button
                   type="button"
                   onClick={() => handleToggle(item.id)}
-                  className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
+                  className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
                     item.visible
                       ? 'text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/40'
                       : 'text-gray-400 hover:text-gray-600'
                   }`}
                   title={item.visible ? (isAr ? 'إخفاء' : 'Hide') : (isAr ? 'إظهار' : 'Show')}
                 >
-                  {item.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                  {item.visible ? <Eye size={13} /> : <EyeOff size={13} />}
                 </button>
 
                 {/* 2. Color Swatch */}
@@ -234,7 +254,7 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
                 <select
                   value={item.shape}
                   onChange={(e) => handleUpdate(item.id, { shape: e.target.value as LegendShape })}
-                  className="w-full text-[11px] px-1 py-1 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 outline-none cursor-pointer"
+                  className="w-full text-[10.5px] px-1 py-1 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-800 dark:text-gray-200 outline-none cursor-pointer"
                 >
                   {SHAPE_OPTIONS.map(s => (
                     <option key={s.value} value={s.value}>
@@ -250,31 +270,53 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
                   value={item.label}
                   onChange={(e) => handleUpdate(item.id, { label: e.target.value })}
                   placeholder={isAr ? 'اسم العنصر...' : 'Item label...'}
-                  className="w-full min-w-0 text-xs px-2 py-1 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium"
+                  className="w-full min-w-0 text-xs px-2 py-0.5 rounded border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-white outline-none focus:border-brand-500 font-medium"
                 />
 
-                {/* 5. Delete (Custom) or Reset (Built-in) */}
+                {/* 5. ↑ / ↓ Reorder Buttons */}
+                <div className="flex items-center justify-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleMoveUp(idx)}
+                    disabled={idx === 0}
+                    className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-20 disabled:pointer-events-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                    title={isAr ? 'تحريك لأعلى' : 'Move up'}
+                  >
+                    <ArrowUp size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleMoveDown(idx)}
+                    disabled={idx === items.length - 1}
+                    className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-20 disabled:pointer-events-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                    title={isAr ? 'تحريك لأسفل' : 'Move down'}
+                  >
+                    <ArrowDown size={12} />
+                  </button>
+                </div>
+
+                {/* 6. Delete (Custom) or Reset (Built-in) */}
                 <div className="flex items-center justify-center">
                   {item.custom ? (
                     <button
                       type="button"
                       onClick={() => handleDelete(item.id)}
-                      className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 rounded transition-colors"
+                      className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-red-500 rounded transition-colors"
                       title={isAr ? 'حذف' : 'Delete'}
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={12} />
                     </button>
                   ) : isOverridden ? (
                     <button
                       type="button"
                       onClick={() => handleResetRow(item)}
-                      className="w-6 h-6 flex items-center justify-center text-amber-500 hover:text-amber-700 rounded transition-colors"
+                      className="w-5 h-5 flex items-center justify-center text-amber-500 hover:text-amber-700 rounded transition-colors"
                       title={isAr ? 'استعادة الإعداد الأصلي' : 'Reset to default'}
                     >
-                      <RotateCcw size={12} />
+                      <RotateCcw size={11} />
                     </button>
                   ) : (
-                    <span className="w-6" />
+                    <span className="w-5" />
                   )}
                 </div>
               </div>

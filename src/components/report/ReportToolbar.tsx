@@ -81,6 +81,7 @@ export interface ReportToolbarProps {
   onPreviewTrackSettings?: (settings: TrackPathSettings) => void;
   trackPointsCount?: { displayed: number; total: number };
   trackDateRange?: { from: string; to: string };
+  rawFixes?: any[];
 
   // Texts
   texts: ReportTexts;
@@ -159,6 +160,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   onPreviewTrackSettings,
   trackPointsCount,
   trackDateRange,
+  rawFixes,
   texts,
   onChangeTexts,
   reportLanguage = 'ar',
@@ -293,8 +295,8 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
               <Route size={13} className="text-indigo-500" />
               <span className="hidden sm:inline">{isAr ? 'المسار' : 'Track'}</span>
               {trackPointsCount && (
-                <span className="text-[10px] px-1 py-0.2 rounded bg-black/10 dark:bg-white/10 font-mono">
-                  {trackPointsCount.displayed}
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/10 dark:bg-white/10 font-mono">
+                  {trackPointsCount.displayed} / {trackPointsCount.total}
                 </span>
               )}
               <ChevronDown size={11} className={`transition-transform ${activePopover === 'track' ? 'rotate-180' : ''}`} />
@@ -649,6 +651,8 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           onPreview={onPreviewTrackSettings}
           language={language}
           dataDateRange={trackDateRange}
+          rawFixes={rawFixes}
+          totalCounts={trackPointsCount ? { gps: 0, doppler: 0, total: trackPointsCount.total } : undefined}
         />
       )}
     </div>
