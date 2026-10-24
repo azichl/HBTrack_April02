@@ -46,6 +46,28 @@ const PRESET_PALETTE = [
   '#ec4899', // Pink
 ];
 
+export function parseBoundaryDate(dateStr?: string, isEnd = false): number {
+  if (!dateStr || !dateStr.trim()) return isEnd ? Infinity : -Infinity;
+  const str = dateStr.trim();
+  const ymd = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    const [_, y, m, d] = ymd;
+    return isEnd
+      ? Date.UTC(Number(y), Number(m) - 1, Number(d), 23, 59, 59, 999)
+      : Date.UTC(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0);
+  }
+  const dmy = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (dmy) {
+    const [_, d, m, y] = dmy;
+    return isEnd
+      ? Date.UTC(Number(y), Number(m) - 1, Number(d), 23, 59, 59, 999)
+      : Date.UTC(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0);
+  }
+  const parsed = safeParseTimestamp(str);
+  if (!isNaN(parsed) && parsed > 0) return parsed;
+  return isEnd ? Infinity : -Infinity;
+}
+
 /**
  * Filters raw history points by Location Type (GPS / DOPPLER / ALL) and overall Date Range,
  * orders them chronologically by true locationDate/timestamp, and splits them into colored
@@ -62,12 +84,8 @@ export function buildColoredTrackSegments(
     return { segments: [], filteredPoints: [] };
   }
 
-  const minMs = config.filterStartDate
-    ? new Date(`${config.filterStartDate}T00:00:00.000Z`).getTime()
-    : -Infinity;
-  const maxMs = config.filterEndDate
-    ? new Date(`${config.filterEndDate}T23:59:59.999Z`).getTime()
-    : Infinity;
+  const minMs = parseBoundaryDate(config.filterStartDate, false);
+  const maxMs = parseBoundaryDate(config.filterEndDate, true);
 
   // 1. Normalize, classify GPS vs DOPPLER, and filter
   const normalized: Array<{ lat: number; lon: number; ts: number; type: 'GPS' | 'DOPPLER' }> = [];
@@ -136,48 +154,65 @@ export function buildColoredTrackSegments(
     };
   }
 
-  // 4. Multi-period coloring: build segments for each defined period
-  const segments: ColoredTrackSegment[] = [];
-  const coloredPoints: Array<{ lat: number; lon: number; ts: number; type: 'GPS' | 'DOPPLER'; color: string }> = [];
-
-  // Sort periods chronologically
+  // 4. Multi-period coloring: build segments for each defined period + stitch contiguous path
   const sortedPeriods = [...config.periods].sort((a, b) =>
     (a.startDate || '').localeCompare(b.startDate || '')
   );
 
-  let previousLastCoord: [number, number] | null = null;
+  const findPeriodForPoint = (ts: number): TrackColorPeriod | null => {
+    for (const period of sortedPeriods) {
+      const pStart = parseBoundaryDate(period.startDate, false);
+      const pEnd = parseBoundaryDate(period.endDate, true);
+      if (ts >= pStart && ts <= pEnd) {
+        return period;
+      }
+    }
+    return null;
+  };
 
+  // Color every point
+  const coloredPoints: Array<{ lat: number; lon: number; ts: number; type: 'GPS' | 'DOPPLER'; color: string }> = [];
+  const pointPeriodMap: Array<{ point: typeof normalized[0]; period: TrackColorPeriod | null }> = [];
+
+  for (const pt of normalized) {
+    const period = findPeriodForPoint(pt.ts);
+    const color = period ? period.color : config.defaultColor;
+    coloredPoints.push({ ...pt, color });
+    pointPeriodMap.push({ point: pt, period });
+  }
+
+  // Build segments grouped by period
+  const segments: ColoredTrackSegment[] = [];
+
+  // Dedicated segment per user period
   for (const period of sortedPeriods) {
-    const pStartMs = period.startDate
-      ? new Date(`${period.startDate}T00:00:00.000Z`).getTime()
-      : -Infinity;
-    const pEndMs = period.endDate
-      ? new Date(`${period.endDate}T23:59:59.999Z`).getTime()
-      : Infinity;
-
+    const pStartMs = parseBoundaryDate(period.startDate, false);
+    const pEndMs = parseBoundaryDate(period.endDate, true);
     const ptsInPeriod = normalized.filter(p => p.ts >= pStartMs && p.ts <= pEndMs);
     if (ptsInPeriod.length === 0) continue;
-
-    for (const p of ptsInPeriod) {
-      coloredPoints.push({ ...p, color: period.color });
-    }
-
-    const coords: [number, number][] = ptsInPeriod.map(p => [p.lat, p.lon]);
-
-    // Stitch with previous period's last coordinate so the path line is continuous
-    if (previousLastCoord && coords.length > 0) {
-      coords.unshift(previousLastCoord);
-    }
-    previousLastCoord = coords[coords.length - 1];
 
     segments.push({
       id: period.id,
       label: period.label || `${period.startDate} → ${period.endDate}`,
       color: period.color,
-      positions: coords,
+      positions: ptsInPeriod.map(p => [p.lat, p.lon] as [number, number]),
       pointCount: ptsInPeriod.length,
       startDate: period.startDate,
       endDate: period.endDate
+    });
+  }
+
+  // Also include unassigned points as connecting segment if any exist
+  const unassigned = pointPeriodMap.filter(item => !item.period).map(item => item.point);
+  if (unassigned.length > 0 && segments.length === 0) {
+    segments.push({
+      id: 'default-track',
+      label: 'Flight Path',
+      color: config.defaultColor,
+      positions: unassigned.map(p => [p.lat, p.lon] as [number, number]),
+      pointCount: unassigned.length,
+      startDate: '',
+      endDate: ''
     });
   }
 

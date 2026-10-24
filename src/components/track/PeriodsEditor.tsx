@@ -17,12 +17,14 @@ export interface PeriodsEditorProps {
   periods: TrackPeriod[];
   onChange: (periods: TrackPeriod[]) => void;
   language?: 'ar' | 'en';
+  dataDateRange?: { from: string; to: string };
 }
 
 export const PeriodsEditor: React.FC<PeriodsEditorProps> = ({
   periods,
   onChange,
-  language = 'ar'
+  language = 'ar',
+  dataDateRange
 }) => {
   const isAr = language === 'ar';
 
@@ -31,14 +33,14 @@ export const PeriodsEditor: React.FC<PeriodsEditorProps> = ({
     const last = periods[periods.length - 1];
     const currentYear = new Date().getFullYear();
 
-    let defaultFrom = `${currentYear}-01-01`;
-    let defaultTo = `${currentYear}-04-30`;
+    let defaultFrom = dataDateRange?.from || `${currentYear}-01-01`;
+    let defaultTo = dataDateRange?.to || `${currentYear}-04-30`;
 
     if (last && last.to) {
       const d = new Date(`${last.to}T00:00:00Z`);
       d.setUTCDate(d.getUTCDate() + 1);
       defaultFrom = d.toISOString().slice(0, 10);
-      defaultTo = new Date().toISOString().slice(0, 10);
+      defaultTo = dataDateRange?.to || new Date().toISOString().slice(0, 10);
     }
 
     const newPeriod: TrackPeriod = {
@@ -53,18 +55,32 @@ export const PeriodsEditor: React.FC<PeriodsEditorProps> = ({
   };
 
   const handleExample = () => {
-    const year = new Date().getFullYear();
+    let fromDate = `${new Date().getFullYear()}-01-01`;
+    let midDate = `${new Date().getFullYear()}-04-30`;
+    let toDate = `${new Date().getFullYear()}-10-22`;
+
+    if (dataDateRange && dataDateRange.from && dataDateRange.to) {
+      fromDate = dataDateRange.from;
+      toDate = dataDateRange.to;
+      const startMs = new Date(`${fromDate}T00:00:00Z`).getTime();
+      const endMs = new Date(`${toDate}T00:00:00Z`).getTime();
+      if (endMs > startMs) {
+        const midMs = startMs + (endMs - startMs) / 2;
+        midDate = new Date(midMs).toISOString().slice(0, 10);
+      }
+    }
+
     const p1: TrackPeriod = {
       id: `p1-${Date.now()}`,
-      from: `${year}-01-01`,
-      to: `${year}-04-30`,
+      from: fromDate,
+      to: midDate,
       color: '#2563eb',
       label: isAr ? 'الربيع / التشتية' : 'Spring / Winter'
     };
     const p2: TrackPeriod = {
       id: `p2-${Date.now() + 1}`,
-      from: `${year}-05-01`,
-      to: `${year}-10-22`,
+      from: midDate,
+      to: toDate,
       color: '#f97316',
       label: isAr ? 'التكاثر / الصيف' : 'Breeding / Summer'
     };

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { MapLabel } from '../../types/report';
-import { MapPin, Trash2, Copy, Edit2, Anchor, Check } from 'lucide-react';
+import { MapPin, Trash2, Copy, Edit2, Anchor, Check, X } from 'lucide-react';
 import L from 'leaflet';
 
 export interface MapLabelsOverlayProps {
@@ -22,22 +22,56 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
 }) => {
   const isAr = language === 'ar';
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState('');
+
+  // Edit style & text modal state
+  const [editModalId, setEditModalId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editShape, setEditShape] = useState<'pill' | 'rect' | 'circle'>('pill');
+  const [editFontSize, setEditFontSize] = useState<number>(12);
+  const [editBg, setEditBg] = useState('#ffffff');
+  const [editFg, setEditFg] = useState('#1f2937');
+  const [editBorder, setEditBorder] = useState('#dc2626');
+
+  // Geo customize coordinates modal state
+  const [geoCustomizeId, setGeoCustomizeId] = useState<string | null>(null);
+  const [geoLatInput, setGeoLatInput] = useState('');
+  const [geoLonInput, setGeoLonInput] = useState('');
+
+  // Inline quick double-click edit
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null);
+  const [inlineEditingText, setInlineEditingText] = useState('');
+
+  // Drag state
   const [dragState, setDragState] = useState<{
     id: string;
     startX: number;
     startY: number;
-    initialX: number; // in pixels
-    initialY: number; // in pixels
+    initialX: number;
+    initialY: number;
+    hasMoved: boolean;
   } | null>(null);
+
+  // Re-render when map moves so geo-anchored labels stay glued
+  const [, setMapTick] = useState(0);
+  useEffect(() => {
+    if (!mapInstance) return;
+    const update = () => setMapTick(t => t + 1);
+    mapInstance.on('move', update);
+    mapInstance.on('zoom', update);
+    mapInstance.on('resize', update);
+    return () => {
+      mapInstance.off('move', update);
+      mapInstance.off('zoom', update);
+      mapInstance.off('resize', update);
+    };
+  }, [mapInstance]);
 
   // Keyboard navigation & deletion
   useEffect(() => {
     if (isExporting || !selectedId) return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (editingId) return; // Typing in input
+      if (inlineEditingId || editModalId || geoCustomizeId) return;
 
       const step = e.shiftKey ? 10 : 1;
       let dx = 0;
@@ -54,7 +88,9 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
         return;
       } else if (e.key === 'Escape') {
         setSelectedId(null);
-        setEditingId(null);
+        setEditModalId(null);
+        setGeoCustomizeId(null);
+        setInlineEditingId(null);
         return;
       }
 
@@ -96,7 +132,7 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedId, editingId, labels, onChangeLabels, containerRef, mapInstance, isExporting]);
+  }, [selectedId, inlineEditingId, editModalId, geoCustomizeId, labels, onChangeLabels, containerRef, mapInstance, isExporting]);
 
   // Compute pixel positions: if geo-anchored and map available, convert lat/lon to container point
   const getLabelPixelPos = useCallback((label: MapLabel) => {
@@ -119,31 +155,42 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
   // Pointer drag handlers
   const handlePointerDown = (e: React.PointerEvent, label: MapLabel) => {
     if (isExporting) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, input, select, textarea')) return;
+
     e.stopPropagation();
-    e.preventDefault();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
 
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     setSelectedId(label.id);
-
     const pos = getLabelPixelPos(label);
     setDragState({
       id: label.id,
       startX: e.clientX,
       startY: e.clientY,
       initialX: pos.x,
-      initialY: pos.y
+      initialY: pos.y,
+      hasMoved: false
     });
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!dragState || !containerRef.current) return;
     e.stopPropagation();
-    e.preventDefault();
 
-    const rect = containerRef.current.getBoundingClientRect();
     const rawDx = e.clientX - dragState.startX;
     const rawDy = e.clientY - dragState.startY;
 
+    if (!dragState.hasMoved && Math.hypot(rawDx, rawDy) < 4) {
+      return;
+    }
+
+    if (!dragState.hasMoved) {
+      setDragState(prev => prev ? { ...prev, hasMoved: true } : null);
+    }
+
+    const rect = containerRef.current.getBoundingClientRect();
     let targetX = dragState.initialX + rawDx;
     let targetY = dragState.initialY + rawDy;
 
@@ -185,53 +232,132 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!dragState) return;
     try {
-      (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch {}
     setDragState(null);
   };
 
+  // Duplicate
   const handleDuplicate = (label: MapLabel) => {
     const dup: MapLabel = {
       ...label,
       id: `label-${Date.now()}`,
-      text: `${label.text} (نسخة)`,
+      text: `${label.text} (2)`,
       x: Math.min(95, label.x + 3),
       y: Math.min(95, label.y + 3)
     };
+    if (mapInstance && label.lat !== undefined && label.lon !== undefined) {
+      dup.lat = label.lat + 0.01;
+      dup.lon = label.lon + 0.01;
+    }
     onChangeLabels([...labels, dup]);
     setSelectedId(dup.id);
   };
 
-  const handleToggleAnchor = (label: MapLabel) => {
-    const nextAnchor = label.anchor === 'frame' ? 'geo' : 'frame';
-    onChangeLabels(labels.map(l => l.id === label.id ? { ...l, anchor: nextAnchor } : l));
+  // Delete
+  const handleDelete = (id: string) => {
+    onChangeLabels(labels.filter(l => l.id !== id));
+    setSelectedId(null);
+    setEditModalId(null);
+    setGeoCustomizeId(null);
+    setInlineEditingId(null);
   };
 
+  // Open Edit Dialog
+  const handleOpenEdit = (label: MapLabel) => {
+    setEditModalId(label.id);
+    setGeoCustomizeId(null);
+    setInlineEditingId(null);
+    setEditText(label.text);
+    setEditShape((label.shape as any) || 'pill');
+    setEditFontSize(label.fontSize || 12);
+    setEditBg(label.bg || '#ffffff');
+    setEditFg(label.fg || '#1f2937');
+    setEditBorder(label.border || '#dc2626');
+  };
+
+  // Save Edit Dialog
+  const handleSaveEdit = (id: string) => {
+    if (editText.trim()) {
+      onChangeLabels(labels.map(l => l.id === id ? {
+        ...l,
+        text: editText.trim(),
+        shape: editShape,
+        fontSize: editFontSize,
+        bg: editBg,
+        fg: editFg,
+        border: editBorder
+      } : l));
+    }
+    setEditModalId(null);
+  };
+
+  // Open Geo Customize Dialog
+  const handleOpenGeo = (label: MapLabel) => {
+    setGeoCustomizeId(label.id);
+    setEditModalId(null);
+    setInlineEditingId(null);
+    setGeoLatInput(label.lat !== undefined ? String(Number(label.lat).toFixed(5)) : '');
+    setGeoLonInput(label.lon !== undefined ? String(Number(label.lon).toFixed(5)) : '');
+  };
+
+  // Save Geo Coordinates
+  const handleSaveGeo = (id: string) => {
+    const lat = parseFloat(geoLatInput);
+    const lon = parseFloat(geoLonInput);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      let percentX = 50;
+      let percentY = 50;
+      if (mapInstance && containerRef.current) {
+        try {
+          const pt = mapInstance.latLngToContainerPoint([lat, lon]);
+          const rect = containerRef.current.getBoundingClientRect();
+          percentX = (pt.x / rect.width) * 100;
+          percentY = (pt.y / rect.height) * 100;
+        } catch {}
+      }
+      onChangeLabels(labels.map(l => l.id === id ? {
+        ...l,
+        lat,
+        lon,
+        x: percentX,
+        y: percentY,
+        anchor: 'geo'
+      } : l));
+    }
+    setGeoCustomizeId(null);
+  };
+
+  // Inline Quick Text Edit
   const handleStartInlineEdit = (label: MapLabel) => {
-    setEditingId(label.id);
-    setEditingText(label.text);
+    setInlineEditingId(label.id);
+    setInlineEditingText(label.text);
+    setEditModalId(null);
+    setGeoCustomizeId(null);
   };
 
   const handleCommitInlineEdit = (id: string) => {
-    if (editingText.trim()) {
-      onChangeLabels(labels.map(l => l.id === id ? { ...l, text: editingText.trim() } : l));
+    if (inlineEditingText.trim()) {
+      onChangeLabels(labels.map(l => l.id === id ? { ...l, text: inlineEditingText.trim() } : l));
     }
-    setEditingId(null);
+    setInlineEditingId(null);
   };
 
   return (
     <div
       className="absolute inset-0 z-[1500] pointer-events-none overflow-hidden select-none"
-      onClick={() => {
-        if (!dragState) {
+      onClick={(e) => {
+        if ((e.target as HTMLElement) === e.currentTarget && !dragState) {
           setSelectedId(null);
-          setEditingId(null);
+          setEditModalId(null);
+          setGeoCustomizeId(null);
+          setInlineEditingId(null);
         }
       }}
     >
       {labels.filter(l => !l.hidden).map(label => {
         const isSelected = selectedId === label.id && !isExporting;
-        const isEditing = editingId === label.id;
+        const isInlineEditing = inlineEditingId === label.id;
         const pos = getLabelPixelPos(label);
 
         return (
@@ -240,6 +366,10 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
             onPointerDown={(e) => handlePointerDown(e, label)}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedId(label.id);
+            }}
             onDoubleClick={(e) => {
               e.stopPropagation();
               handleStartInlineEdit(label);
@@ -252,102 +382,286 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
             }}
             className={`absolute pointer-events-auto transition-transform ${
               isSelected
-                ? 'cursor-grabbing ring-2 ring-indigo-500 shadow-xl z-20 scale-105'
+                ? 'cursor-grab ring-2 ring-blue-500 rounded-sm shadow-xl z-30'
                 : 'cursor-grab hover:scale-102 hover:shadow-md z-10'
             }`}
           >
-            {/* Label Body Render */}
-            {isEditing ? (
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded shadow-lg border border-indigo-400">
+            {/* 1. Label Body Render */}
+            {isInlineEditing ? (
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg shadow-lg border border-blue-500">
                 <input
                   type="text"
                   autoFocus
-                  value={editingText}
-                  onChange={(e) => setEditingText(e.target.value)}
+                  value={inlineEditingText}
+                  onChange={(e) => setInlineEditingText(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleCommitInlineEdit(label.id);
-                    if (e.key === 'Escape') setEditingId(null);
+                    if (e.key === 'Escape') setInlineEditingId(null);
                   }}
-                  className="px-1.5 py-0.5 text-xs text-black border-none outline-none font-bold min-w-[80px]"
+                  className="px-2 py-0.5 text-xs text-black border-none outline-none font-bold min-w-[90px]"
                 />
                 <button
                   type="button"
                   onClick={() => handleCommitInlineEdit(label.id)}
                   className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
                 >
-                  <Check size={12} />
+                  <Check size={13} />
                 </button>
               </div>
             ) : (
               <div
                 style={{
-                  backgroundColor: label.bg,
-                  color: label.fg,
-                  borderColor: label.border,
-                  fontSize: `${label.fontSize}px`,
+                  backgroundColor: label.bg || '#ffffff',
+                  color: label.fg || '#1f2937',
+                  borderColor: label.border || '#dc2626',
+                  fontSize: `${label.fontSize || 12}px`,
                   borderRadius: label.shape === 'pill' ? '9999px' : label.shape === 'circle' ? '50%' : '6px',
                   borderWidth: '1.5px',
                   borderStyle: 'solid',
-                  padding: label.shape === 'circle' ? '8px' : '3px 10px',
+                  padding: label.shape === 'circle' ? '8px' : '4px 12px',
                   fontFamily: "'IBM Plex Sans Arabic', -apple-system, sans-serif",
                   fontWeight: 700,
                   boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
                   whiteSpace: 'nowrap'
                 }}
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 select-none"
               >
                 <span>{label.text}</span>
               </div>
             )}
 
-            {/* Selected Mini-Toolbar */}
-            {isSelected && !isEditing && (
+            {/* 2. Floating Toolbar (Exact Match to Screenshot 1) */}
+            {isSelected && !isInlineEditing && (
               <div
-                className="absolute -top-9 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900/95 text-white px-2 py-1 rounded-lg shadow-xl text-[10px] whitespace-nowrap z-30"
+                className="absolute -top-11 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-[#1e293b] text-white px-3 py-1.5 rounded-xl shadow-2xl text-xs whitespace-nowrap z-40 border border-slate-700/60 select-none animate-in fade-in zoom-in-95 duration-100"
                 onClick={(e) => e.stopPropagation()}
               >
+                {/* Edit Button */}
                 <button
                   type="button"
-                  onClick={() => handleStartInlineEdit(label)}
-                  className="p-1 hover:bg-slate-800 rounded transition-colors text-amber-300"
-                  title={isAr ? 'تعديل النص' : 'Edit text'}
+                  onClick={() => handleOpenEdit(label)}
+                  className="p-1 hover:bg-slate-700/70 rounded-lg transition-colors text-amber-400 flex items-center justify-center font-bold"
+                  title={isAr ? 'تعديل النص والمظهر' : 'Edit text & style'}
                 >
-                  <Edit2 size={11} />
+                  <Edit2 size={13} />
                 </button>
+
+                {/* Geo Button (Customize Coordinates) */}
                 <button
                   type="button"
-                  onClick={() => handleToggleAnchor(label)}
-                  className={`p-1 hover:bg-slate-800 rounded transition-colors flex items-center gap-0.5 ${
-                    label.anchor === 'frame' ? 'text-sky-300' : 'text-emerald-300'
-                  }`}
-                  title={
-                    label.anchor === 'frame'
-                      ? isAr ? 'مثبت بنسبة الإطار (Frame)' : 'Frame anchor'
-                      : isAr ? 'مثبت جغرافياً بالإحداثيات (Geo)' : 'Geo anchor'
-                  }
+                  onClick={() => handleOpenGeo(label)}
+                  className="px-1.5 py-0.5 hover:bg-slate-700/70 rounded-lg transition-colors flex items-center gap-1 text-emerald-400 font-bold"
+                  title={isAr ? 'تخصيص الإحداثيات الجغرافية (Geo coordinates)' : 'Customize Geo coordinates'}
                 >
-                  {label.anchor === 'frame' ? <Anchor size={11} /> : <MapPin size={11} />}
-                  <span className="text-[9px]">{label.anchor === 'frame' ? 'Frame' : 'Geo'}</span>
+                  <MapPin size={13} />
+                  <span className="text-[11px]">Geo</span>
                 </button>
+
+                {/* Duplicate Button */}
                 <button
                   type="button"
                   onClick={() => handleDuplicate(label)}
-                  className="p-1 hover:bg-slate-800 rounded transition-colors text-gray-300"
+                  className="p-1 hover:bg-slate-700/70 rounded-lg transition-colors text-slate-300 flex items-center justify-center"
                   title={isAr ? 'نسخ' : 'Duplicate'}
                 >
-                  <Copy size={11} />
+                  <Copy size={13} />
                 </button>
+
+                {/* Delete Button */}
                 <button
                   type="button"
-                  onClick={() => {
-                    onChangeLabels(labels.filter(l => l.id !== label.id));
-                    setSelectedId(null);
-                  }}
-                  className="p-1 hover:bg-red-900/60 rounded transition-colors text-red-400"
+                  onClick={() => handleDelete(label.id)}
+                  className="p-1 hover:bg-red-900/60 rounded-lg transition-colors text-red-400 flex items-center justify-center"
                   title={isAr ? 'حذف' : 'Delete'}
                 >
-                  <Trash2 size={11} />
+                  <Trash2 size={13} />
                 </button>
+              </div>
+            )}
+
+            {/* 3. Geo Customize Coordinates Popover Modal */}
+            {geoCustomizeId === label.id && (
+              <div
+                className="absolute -top-52 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white p-3 rounded-xl shadow-2xl text-xs z-50 border border-slate-700 min-w-[250px] space-y-2 select-none"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+                    <MapPin size={13} />
+                    <span>{isAr ? 'تخصيص الإحداثيات (Geo)' : 'Customize Coordinates'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGeoCustomizeId(null)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 text-[11px]">
+                  <div>
+                    <label className="block text-gray-400 text-[10px] mb-0.5">{isAr ? 'خط العرض (Latitude):' : 'Latitude (N):'}</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={geoLatInput}
+                      onChange={(e) => setGeoLatInput(e.target.value)}
+                      placeholder="e.g. 46.9965"
+                      className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded font-mono text-white text-xs outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-[10px] mb-0.5">{isAr ? 'خط الطول (Longitude):' : 'Longitude (E):'}</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={geoLonInput}
+                      onChange={(e) => setGeoLonInput(e.target.value)}
+                      placeholder="e.g. 67.0222"
+                      className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded font-mono text-white text-xs outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextAnchor = label.anchor === 'frame' ? 'geo' : 'frame';
+                      onChangeLabels(labels.map(l => l.id === label.id ? { ...l, anchor: nextAnchor } : l));
+                    }}
+                    className="text-[10px] text-sky-400 hover:underline flex items-center gap-1"
+                    title={isAr ? 'التبديل بين التثبيت الجغرافي والإطار' : 'Toggle Geo / Frame Anchor'}
+                  >
+                    <Anchor size={10} />
+                    <span>{label.anchor === 'frame' ? (isAr ? 'تثبيت بالإطار' : 'Frame Anchor') : (isAr ? 'تثبيت جغرافي' : 'Geo Anchor')}</span>
+                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setGeoCustomizeId(null)}
+                      className="px-2 py-0.5 rounded text-gray-400 hover:text-white"
+                    >
+                      {isAr ? 'إلغاء' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSaveGeo(label.id)}
+                      className="px-2.5 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded shadow-xs"
+                    >
+                      {isAr ? 'تطبيق' : 'Apply'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. Edit Style & Text Popover Modal */}
+            {editModalId === label.id && (
+              <div
+                className="absolute -top-56 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white p-3 rounded-xl shadow-2xl text-xs z-50 border border-slate-700 min-w-[260px] space-y-2 select-none"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-400">
+                    <Edit2 size={13} />
+                    <span>{isAr ? 'تعديل مظهر العلامة' : 'Edit Label Style'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditModalId(null)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 text-[10px] mb-0.5">{isAr ? 'نص العلامة:' : 'Text:'}</label>
+                  <input
+                    type="text"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="w-full px-2 py-1 bg-slate-800 border border-slate-700 rounded text-white text-xs font-bold outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[10px]">
+                  <div>
+                    <label className="block text-gray-400 mb-0.5">{isAr ? 'الشكل:' : 'Shape:'}</label>
+                    <select
+                      value={editShape}
+                      onChange={(e) => setEditShape(e.target.value as any)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-white outline-none cursor-pointer"
+                    >
+                      <option value="pill">{isAr ? 'كبسولة (Pill)' : 'Pill'}</option>
+                      <option value="rect">{isAr ? 'مستطيل (Rect)' : 'Rectangle'}</option>
+                      <option value="circle">{isAr ? 'دائرة (Circle)' : 'Circle'}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 mb-0.5">{isAr ? 'الحجم:' : 'Font Size:'}</label>
+                    <select
+                      value={editFontSize}
+                      onChange={(e) => setEditFontSize(Number(e.target.value))}
+                      className="w-full bg-slate-800 border border-slate-700 rounded px-1.5 py-1 text-white outline-none cursor-pointer"
+                    >
+                      <option value={10}>10px</option>
+                      <option value={12}>12px</option>
+                      <option value={14}>14px</option>
+                      <option value={16}>16px</option>
+                      <option value={18}>18px</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] pt-1">
+                  <div className="flex items-center gap-1" title={isAr ? 'لون الخلفية' : 'Background'}>
+                    <span className="text-gray-400">BG:</span>
+                    <input
+                      type="color"
+                      value={editBg}
+                      onChange={(e) => setEditBg(e.target.value)}
+                      className="w-5 h-5 rounded cursor-pointer border border-slate-700 p-0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1" title={isAr ? 'لون النص' : 'Text color'}>
+                    <span className="text-gray-400">Text:</span>
+                    <input
+                      type="color"
+                      value={editFg}
+                      onChange={(e) => setEditFg(e.target.value)}
+                      className="w-5 h-5 rounded cursor-pointer border border-slate-700 p-0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1" title={isAr ? 'لون الإطار' : 'Border color'}>
+                    <span className="text-gray-400">Border:</span>
+                    <input
+                      type="color"
+                      value={editBorder}
+                      onChange={(e) => setEditBorder(e.target.value)}
+                      className="w-5 h-5 rounded cursor-pointer border border-slate-700 p-0"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setEditModalId(null)}
+                    className="px-2 py-0.5 rounded text-gray-400 hover:text-white"
+                  >
+                    {isAr ? 'إلغاء' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEdit(label.id)}
+                    className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded shadow-xs"
+                  >
+                    {isAr ? 'حفظ' : 'Save'}
+                  </button>
+                </div>
               </div>
             )}
           </div>

@@ -80,6 +80,7 @@ export interface ReportToolbarProps {
   onChangeTrackSettings?: (settings: TrackPathSettings) => void;
   onPreviewTrackSettings?: (settings: TrackPathSettings) => void;
   trackPointsCount?: { displayed: number; total: number };
+  trackDateRange?: { from: string; to: string };
 
   // Texts
   texts: ReportTexts;
@@ -157,6 +158,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   onChangeTrackSettings,
   onPreviewTrackSettings,
   trackPointsCount,
+  trackDateRange,
   texts,
   onChangeTexts,
   reportLanguage = 'ar',
@@ -646,6 +648,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
           }}
           onPreview={onPreviewTrackSettings}
           language={language}
+          dataDateRange={trackDateRange}
         />
       )}
     </div>

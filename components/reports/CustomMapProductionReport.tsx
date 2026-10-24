@@ -927,6 +927,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const handleTrackSettingsChange = useCallback((next: TrackPathSettings) => {
     setTrackPathSettings(next);
     setShowFlightTrack(next.show);
+    setMapElements(prev => ({
+      ...prev,
+      track: {
+        ...prev.track,
+        visible: next.show,
+        color: next.color
+      }
+    }));
     setFlightTrackConfig(prev => ({
       ...prev,
       enabled: next.show,
@@ -1104,6 +1112,22 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     () => activeTrackPoints.map(p => [p.lat, p.lon] as [number, number]),
     [activeTrackPoints]
   );
+
+  const trackDateRange = useMemo(() => {
+    if (!rawHistoryRecords.length && !allHistoryPoints.length) return undefined;
+    let minDate = '';
+    let maxDate = '';
+    for (const r of rawHistoryRecords) {
+      const dStr = r.timestamp || r.locationDate || r.fixTime || r.date || r.ts;
+      const ts = safeParseTimestamp(dStr);
+      if (!isNaN(ts) && ts > 0) {
+        const iso = new Date(ts).toISOString().slice(0, 10);
+        if (!minDate || iso < minDate) minDate = iso;
+        if (!maxDate || iso > maxDate) maxDate = iso;
+      }
+    }
+    return minDate && maxDate ? { from: minDate, to: maxDate } : undefined;
+  }, [rawHistoryRecords, allHistoryPoints]);
 
   const T = {
     reportTitle: reportLanguage === 'ar'
@@ -3007,6 +3031,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           onChangeLegendItems={handleToolbarLegendItemsChange}
           trackSettings={trackPathSettings}
           onChangeTrackSettings={handleTrackSettingsChange}
+          onPreviewTrackSettings={handleTrackSettingsChange}
+          trackDateRange={trackDateRange}
           trackPointsCount={{
             displayed: activeTrackPoints.length,
             total: (rawHistoryRecords.length || allHistoryPoints.length)
@@ -5197,13 +5223,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           mode="report"
                           historyPaths={[{
                             id: selectedPttId,
-                            color: mapElements.track?.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
-                            path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map(pt => ({
-                              lat: pt.lat,
-                              lon: pt.lon,
-                              timestamp: pt.ts ? new Date(pt.ts).toISOString() : new Date().toISOString(),
-                              type: pt.type
-                            })),
+                            color: trackPathSettings.color || mapElements.track?.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
+                            path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map(pt => {
+                              if (Array.isArray(pt)) {
+                                return {
+                                  lat: Number(pt[0]),
+                                  lon: Number(pt[1]),
+                                  timestamp: new Date().toISOString(),
+                                  type: 'GPS' as const
+                                };
+                              }
+                              const rawDate = pt.timestamp || pt.locationDate || pt.fixTime || pt.date || pt.ts;
+                              const tsMs = safeParseTimestamp(rawDate);
+                              return {
+                                ...pt,
+                                lat: Number(pt.lat ?? pt.latitude),
+                                lon: Number(pt.lon ?? pt.longitude),
+                                timestamp: !isNaN(tsMs) && tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString(),
+                                type: (pt.type === 'GPS' || pt.type === 'DOPPLER')
+                                  ? pt.type
+                                  : classifyLocationType(pt.lc || pt.locationClass, pt.locationType, pt.satellite)
+                              };
+                            }),
                             polyline: activeTrackPositions
                           }]}
                           settings={trackPathSettings}

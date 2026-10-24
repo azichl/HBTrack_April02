@@ -18,6 +18,7 @@ export interface TrackPathPopoverProps {
   onApply: (settings: TrackPathSettings) => void;
   onPreview?: (settings: TrackPathSettings) => void;
   language?: 'ar' | 'en';
+  dataDateRange?: { from: string; to: string };
 }
 
 export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
@@ -27,7 +28,8 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
   settings,
   onApply,
   onPreview,
-  language = 'ar'
+  language = 'ar',
+  dataDateRange
 }) => {
   const isAr = language === 'ar';
   const [draft, setDraft] = useState<TrackPathSettings>(() => structuredClone(settings));
@@ -248,7 +250,28 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
       <div className="space-y-2">
         <Switch
           checked={draft.periodsEnabled}
-          onChange={(periodsEnabled) => updateDraft({ periodsEnabled })}
+          onChange={(periodsEnabled) => {
+            if (periodsEnabled && (!draft.periods || draft.periods.length === 0)) {
+              const currentYear = new Date().getFullYear();
+              let fromDate = dataDateRange?.from || `${currentYear}-01-01`;
+              let toDate = dataDateRange?.to || `${currentYear}-10-22`;
+              let midDate = `${currentYear}-04-30`;
+              if (dataDateRange?.from && dataDateRange?.to) {
+                const s = new Date(`${fromDate}T00:00:00Z`).getTime();
+                const e = new Date(`${toDate}T00:00:00Z`).getTime();
+                if (e > s) {
+                  midDate = new Date(s + (e - s) / 2).toISOString().slice(0, 10);
+                }
+              }
+              const defaultPeriods = [
+                { id: `p1-${Date.now()}`, from: fromDate, to: midDate, color: '#2563eb', label: `${fromDate} → ${midDate}` },
+                { id: `p2-${Date.now() + 1}`, from: midDate, to: toDate, color: '#f97316', label: `${midDate} → ${toDate}` }
+              ];
+              updateDraft({ periodsEnabled, periods: defaultPeriods });
+            } else {
+              updateDraft({ periodsEnabled });
+            }
+          }}
           label={isAr ? 'تلوين المسار حسب الفترات' : 'Color Path by Periods'}
           description={isAr ? 'تقسيم المسار إلى فترات زمنية ملونة' : 'Split track into seasonal segments'}
           size="sm"
@@ -259,6 +282,7 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
             periods={draft.periods}
             onChange={(periods) => updateDraft({ periods })}
             language={language}
+            dataDateRange={dataDateRange}
           />
         )}
       </div>
