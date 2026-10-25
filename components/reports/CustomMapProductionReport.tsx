@@ -324,7 +324,7 @@ const CustomReportMapViewController = ({
   const map = useMap();
 
   useEffect(() => {
-    if (!map) return;
+    if (!map || !(map as any)._mapPane) return;
     map.invalidateSize();
     if (center && !isNaN(center[0]) && !isNaN(center[1])) {
       map.setView(center, zoom, { animate: false });
@@ -334,10 +334,15 @@ const CustomReportMapViewController = ({
   return null;
 };
 
-const MapInstanceBinder = ({ onMapInstance }: { onMapInstance: (map: L.Map) => void }) => {
+const MapInstanceBinder = ({ onMapInstance }: { onMapInstance: (map: L.Map | null) => void }) => {
   const map = useMap();
   useEffect(() => {
-    if (map) onMapInstance(map);
+    if (map) {
+      onMapInstance(map);
+      return () => {
+        onMapInstance(null);
+      };
+    }
   }, [map, onMapInstance]);
   return null;
 };
@@ -349,7 +354,7 @@ const CustomGraphicScaleControl = () => {
   const map = useMap();
 
   useEffect(() => {
-    if (!map) return;
+    if (!map || !(map as any)._mapPane) return;
 
     const GraphicControl = L.Control.extend({
       options: { position: 'bottomright' },
@@ -485,7 +490,7 @@ const MapGraticuleListener = ({
   const map = useMap();
 
   const calculate = useCallback(() => {
-    if (!map) return;
+    if (!map || !(map as any)._mapPane) return;
     try {
       const bounds = map.getBounds();
       const size = map.getSize();
@@ -1096,7 +1101,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // Leaflet Map adapter for SVG overlay
   const trackMapAdapter = useMemo(() => {
-    return mapInstance ? leafletAdapter(mapInstance) : null;
+    return (mapInstance && (mapInstance as any)._mapPane) ? leafletAdapter(mapInstance) : null;
   }, [mapInstance]);
 
   const coloredTrackSegments = useMemo(() => {
@@ -1872,26 +1877,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // Recenter Map Helper (Fits bounds around Release Point, Last GPS Fix, and Active Camp)
   const handleRecenterMap = useCallback(() => {
-    if (!mapInstance) return;
-    mapInstance.invalidateSize();
-    const pts: Array<[number, number]> = [];
-    if (metrics.lLat && metrics.lLon && metrics.lLat !== 0 && metrics.lLon !== 0) {
-      pts.push([metrics.lLat, metrics.lLon]);
-    }
-    if (metrics.rLat && metrics.rLon && metrics.rLat !== 0 && metrics.rLon !== 0) {
-      pts.push([metrics.rLat, metrics.rLon]);
-    }
-    if (activeCamp?.lat && activeCamp?.lon) {
-      pts.push([activeCamp.lat, activeCamp.lon]);
-    }
+    if (!mapInstance || !(mapInstance as any)._mapPane) return;
+    try {
+      mapInstance.invalidateSize();
+      const pts: Array<[number, number]> = [];
+      if (metrics.lLat && metrics.lLon && metrics.lLat !== 0 && metrics.lLon !== 0) {
+        pts.push([metrics.lLat, metrics.lLon]);
+      }
+      if (metrics.rLat && metrics.rLon && metrics.rLat !== 0 && metrics.rLon !== 0) {
+        pts.push([metrics.rLat, metrics.rLon]);
+      }
+      if (activeCamp?.lat && activeCamp?.lon) {
+        pts.push([activeCamp.lat, activeCamp.lon]);
+      }
 
-    if (pts.length >= 2) {
-      const bounds = L.latLngBounds(pts.map(p => L.latLng(p[0], p[1])));
-      mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
-    } else if (metrics.lLat && metrics.lLon) {
-      mapInstance.setView([metrics.lLat, metrics.lLon], 10);
-    } else {
-      mapInstance.setView(mapCenter, mapZoom);
+      if (pts.length >= 2) {
+        const bounds = L.latLngBounds(pts.map(p => L.latLng(p[0], p[1])));
+        mapInstance.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+      } else if (metrics.lLat && metrics.lLon) {
+        mapInstance.setView([metrics.lLat, metrics.lLon], 10);
+      } else {
+        mapInstance.setView(mapCenter, mapZoom);
+      }
+    } catch {
+      // safe fallback if map is in transition
     }
   }, [mapInstance, metrics.lLat, metrics.lLon, metrics.rLat, metrics.rLon, activeCamp, mapCenter, mapZoom]);
 
@@ -5178,7 +5187,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
                     </div>
                     <MapContainer
-                      key={`report-map-${selectedPttId}-${mapDisplayMode}`}
+                      key={`report-map-${mapDisplayMode}`}
                       center={mapCenter}
                       zoom={mapZoom}
                       zoomAnimation={false}

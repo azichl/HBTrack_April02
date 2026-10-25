@@ -23,25 +23,69 @@ export interface MapAdapter {
 /* ----------------------------- Leaflet adapter ------------------------------ */
 // Custom pane (zIndex 450: above vector overlays 400, below markers 600), projects with layer points,
 // draws 25 % extra on every side so panning never reveals blank edges before `moveend`.
-export function leafletAdapter(map: import('leaflet').Map): MapAdapter {
+export function leafletAdapter(map: import('leaflet').Map | null | undefined): MapAdapter | null {
+  if (!map || !(map as any)._mapPane) return null;
   const PAD = 0.25;
-  const pane = map.getPane('hbTrack') ?? map.createPane('hbTrack');
-  pane.style.zIndex = '450';
-  pane.style.pointerEvents = 'none';
-  const pad = () => { const s = map.getSize(); return { x: s.x * PAD, y: s.y * PAD }; };
-  const origin = () => { const p = pad(); const o = map.containerPointToLayerPoint([-p.x, -p.y]); return { x: o.x, y: o.y }; };
+  let pane: HTMLElement;
+  try {
+    pane = map.getPane('hbTrack') ?? map.createPane('hbTrack');
+    pane.style.zIndex = '450';
+    pane.style.pointerEvents = 'none';
+  } catch {
+    return null;
+  }
+  const isAlive = () => Boolean(map && (map as any)._mapPane);
+  const pad = () => {
+    if (!isAlive()) return { x: 0, y: 0 };
+    try {
+      const s = map.getSize();
+      return { x: s.x * PAD, y: s.y * PAD };
+    } catch {
+      return { x: 0, y: 0 };
+    }
+  };
+  const origin = () => {
+    if (!isAlive()) return { x: 0, y: 0 };
+    try {
+      const p = pad();
+      const o = map.containerPointToLayerPoint([-p.x, -p.y]);
+      return { x: o.x, y: o.y };
+    } catch {
+      return { x: 0, y: 0 };
+    }
+  };
   return {
     mount: pane,
     origin,
     project: (lat, lon) => {
-      const o = origin();
-      const p = map.latLngToLayerPoint([lat, lon]);
-      return { x: p.x - o.x, y: p.y - o.y };
+      if (!isAlive()) return { x: 0, y: 0 };
+      try {
+        const o = origin();
+        const p = map.latLngToLayerPoint([lat, lon]);
+        return { x: p.x - o.x, y: p.y - o.y };
+      } catch {
+        return { x: 0, y: 0 };
+      }
     },
-    size: () => { const s = map.getSize(); return { w: s.x * (1 + 2 * PAD), h: s.y * (1 + 2 * PAD) }; },
+    size: () => {
+      if (!isAlive()) return { w: 0, h: 0 };
+      try {
+        const s = map.getSize();
+        return { w: s.x * (1 + 2 * PAD), h: s.y * (1 + 2 * PAD) };
+      } catch {
+        return { w: 0, h: 0 };
+      }
+    },
     subscribe: cb => {
-      map.on('moveend zoomend resize viewreset', cb);
-      return () => { map.off('moveend zoomend resize viewreset', cb); };
+      if (!isAlive()) return () => {};
+      try {
+        map.on('moveend zoomend resize viewreset', cb);
+        return () => {
+          try { map.off('moveend zoomend resize viewreset', cb); } catch {}
+        };
+      } catch {
+        return () => {};
+      }
     },
   };
 }
@@ -101,7 +145,7 @@ export function TrackOverlay({ model, settings, adapter, avoid = [], debug }: Pr
     [adapter, model, settings, tick, size.w, size.h, avoid],
   );
 
-  if (!adapter || !svg) return null;
+  if (!adapter || !adapter.mount || (typeof document !== 'undefined' && !document.contains(adapter.mount)) || !svg) return null;
 
   const node = (
     <svg
