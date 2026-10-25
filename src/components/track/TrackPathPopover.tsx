@@ -42,15 +42,17 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
 }) => {
   const isAr = language === 'ar';
   const [draft, setDraft] = useState<TrackPathSettings>(() => structuredClone(settings));
+  const prevOpenRef = React.useRef(open);
 
-  // Reset draft whenever popover opens
+  // Reset draft whenever popover opens (only on opening transition)
   useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
       const cloned = structuredClone(settings);
       setDraft(cloned);
       onPreview?.(cloned);
     }
-  }, [open, settings]);
+    prevOpenRef.current = open;
+  }, [open, settings, onPreview]);
 
   const updateDraft = (patch: Partial<TrackPathSettings>) => {
     setDraft((prev) => {

@@ -3033,10 +3033,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           mapCenter={{ lat: metrics.lLat || 46.9965, lon: metrics.lLon || 67.0222 }}
           legendItems={toolbarLegendItems}
           onChangeLegendItems={handleToolbarLegendItemsChange}
-          trackSettings={draftTrackSettings}
+          trackSettings={committedTrackSettings}
           onChangeTrackSettings={(settings) => {
-            handleTrackPreviewSettings(settings);
-            handleApplyTrackSettings();
+            handleApplyTrackSettings(settings);
           }}
           onPreviewTrackSettings={handleTrackPreviewSettings}
           onResetTrackSettings={handleResetTrackSettings}

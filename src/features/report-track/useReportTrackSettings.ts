@@ -63,11 +63,13 @@ export function useReportTrackSettings(subjectKey: string = 'default') {
     setIsPreviewActive(true);
   }, []);
 
-  const apply = useCallback(() => {
-    setCommitted(draft);
+  const apply = useCallback((nextSettings?: TrackSettings) => {
+    const target = nextSettings ?? draft;
+    setDraft(target);
+    setCommitted(target);
     setIsPreviewActive(false);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(draft));
+      localStorage.setItem(storageKey, JSON.stringify(target));
     } catch (e) {
       // ignore
     }

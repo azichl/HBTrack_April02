@@ -64,7 +64,7 @@ export function buildSvgOverlay(
     if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) { skipped++; continue; }
     if (p.x < -50 || p.y < -50 || p.x > bounds.w + 50 || p.y > bounds.h + 50) continue;   // viewport cull for dots only
     const arr = byColor.get(m.fill) ?? [];
-    arr.push(`M${r1(p.x)} ${r1(p.y)}h0`);
+    arr.push(`M${r1(p.x)} ${r1(p.y)}h0.01`);
     byColor.set(m.fill, arr);
     dotCount++;
   }

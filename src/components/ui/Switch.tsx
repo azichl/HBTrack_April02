@@ -36,25 +36,32 @@ export function Switch({
           {description && <span className="block text-[10px] text-gray-400">{description}</span>}
         </div>
       )}
-      <button
-        id={switchId}
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex shrink-0 transition-colors duration-200 ease-in-out border-2 border-transparent rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/40 ${
-          size === 'sm' ? 'h-4 w-7' : 'h-5 w-9'
-        } ${checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-slate-700'}`}
-      >
-        <span
-          className={`inline-block rounded-full bg-white shadow-xs transform transition duration-200 ease-in-out ${
-            size === 'sm'
-              ? `h-3 w-3 ${checked ? 'translate-x-3 rtl:-translate-x-3' : 'translate-x-0'}`
-              : `h-4 w-4 ${checked ? 'translate-x-4 rtl:-translate-x-4' : 'translate-x-0'}`
-          }`}
+      <span className="relative inline-flex shrink-0 items-center">
+        <input
+          id={switchId}
+          type="checkbox"
+          role="switch"
+          aria-checked={checked}
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+          className="sr-only"
         />
-      </button>
+        <span
+          aria-hidden="true"
+          className={`relative inline-flex shrink-0 transition-colors duration-200 ease-in-out border-2 border-transparent rounded-full cursor-pointer focus-within:ring-2 focus-within:ring-indigo-500/40 ${
+            size === 'sm' ? 'h-4 w-7' : 'h-5 w-9'
+          } ${checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-slate-700'}`}
+        >
+          <span
+            className={`inline-block rounded-full bg-white shadow-xs transform transition duration-200 ease-in-out ${
+              size === 'sm'
+                ? `h-3 w-3 ${checked ? 'translate-x-3 rtl:-translate-x-3' : 'translate-x-0'}`
+                : `h-4 w-4 ${checked ? 'translate-x-4 rtl:-translate-x-4' : 'translate-x-0'}`
+            }`}
+          />
+        </span>
+      </span>
     </label>
   );
 }

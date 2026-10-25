@@ -6,7 +6,7 @@ export interface PopoverProps {
   anchorRef: React.RefObject<HTMLElement | null>;
   open: boolean;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
   width?: number; // default 360
   children: ReactNode;
   footer?: ReactNode;
@@ -184,11 +184,11 @@ export function Popover({
         className="hb-popover__head flex items-center justify-between px-3.5 py-2.5 border-b border-black/6 dark:border-white/10 bg-gray-50/80 dark:bg-slate-800/80 cursor-grab active:cursor-grabbing select-none"
         title="اسحب لنقل النافذة / Drag to move"
       >
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-2">
           <GripHorizontal size={14} className="text-gray-400 dark:text-gray-500 shrink-0" />
-          <h3 id={titleId} className="text-xs font-bold tracking-tight text-gray-800 dark:text-white truncate">
+          <div id={titleId} className="text-xs font-bold tracking-tight text-gray-800 dark:text-white flex-1 min-w-0">
             {title}
-          </h3>
+          </div>
         </div>
         <button
           type="button"
