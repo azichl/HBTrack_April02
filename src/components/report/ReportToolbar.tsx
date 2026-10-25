@@ -79,6 +79,9 @@ export interface ReportToolbarProps {
   trackSettings?: TrackPathSettings;
   onChangeTrackSettings?: (settings: TrackPathSettings) => void;
   onPreviewTrackSettings?: (settings: TrackPathSettings) => void;
+  onResetTrackSettings?: () => void;
+  onImportTrackFromLive?: () => void;
+  trackCounts?: { gps: number; doppler: number; total: number; shown: number };
   trackPointsCount?: { displayed: number; total: number };
   trackDateRange?: { from: string; to: string };
 
@@ -157,6 +160,9 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   trackSettings,
   onChangeTrackSettings,
   onPreviewTrackSettings,
+  onResetTrackSettings,
+  onImportTrackFromLive,
+  trackCounts,
   trackPointsCount,
   trackDateRange,
   texts,
@@ -647,6 +653,9 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
             setActivePopover(null);
           }}
           onPreview={onPreviewTrackSettings}
+          onReset={onResetTrackSettings}
+          onImportFromLive={onImportTrackFromLive}
+          counts={trackCounts}
           language={language}
           dataDateRange={trackDateRange}
         />
