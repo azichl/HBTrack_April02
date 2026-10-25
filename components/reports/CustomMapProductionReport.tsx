@@ -44,6 +44,7 @@ import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
 import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
 import { MapLabel, ReportLegendItem, SectionId, DEFAULT_MAP_ELEMENTS, MapElements } from '../../src/types/report';
 import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
+import { useReportFixes } from '../../src/features/report-track/useReportFixes';
 import { getReportString } from '../../src/utils/reportDictionary';
 import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
 import { BirdStatus } from '../../src/constants/statusColors';
@@ -1099,6 +1100,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [allHistoryPoints, setAllHistoryPoints] = useState<Array<[number, number]>>([]);
   const [rawHistoryRecords, setRawHistoryRecords] = useState<any[]>([]);
   const [historyUploadNotice, setHistoryUploadNotice] = useState<string | null>(null);
+
+  // Self-contained data hook for report track fixes (same source as live map history)
+  const { fixes: reportFixes, isLoading: isReportFixesLoading } = useReportFixes(selectedPttId);
+  const isDebugTrack = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('debug') === 'track';
+  }, []);
 
   const { segments: coloredTrackSegments, filteredPoints: activeTrackPoints } = useMemo(
     () => buildColoredTrackSegments(
@@ -3034,8 +3042,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           onPreviewTrackSettings={handleTrackSettingsChange}
           trackDateRange={trackDateRange}
           trackPointsCount={{
-            displayed: activeTrackPoints.length,
-            total: (rawHistoryRecords.length || allHistoryPoints.length)
+            displayed: reportFixes.length || activeTrackPoints.length,
+            total: reportFixes.length || (rawHistoryRecords.length || allHistoryPoints.length)
           }}
           texts={toolbarTexts}
           onChangeTexts={handleToolbarTextsChange}
@@ -6210,6 +6218,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         onApplyCommand={handleApplyBotCommand}
         onGeneratePdfBlob={handleGeneratePdfBlob}
       />
+
+      {/* On-map Debug chip for ?debug=track */}
+      {isDebugTrack && (
+        <div
+          style={{
+            position: 'fixed',
+            left: 12,
+            bottom: 12,
+            zIndex: 9999,
+            font: '11px/1.4 monospace',
+            color: '#fff',
+            background: 'rgba(0,0,0,0.85)',
+            padding: '6px 10px',
+            borderRadius: 6,
+            pointerEvents: 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+          }}
+        >
+          {`TRACK total ${reportFixes.length} · shown ${reportFixes.length} · ptt ${selectedPttId}`}
+        </div>
+      )}
 
     </div>
   );
