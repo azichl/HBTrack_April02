@@ -23,6 +23,7 @@ import * as countryCoder from '@rapideditor/country-coder';
 import * as countries from 'i18n-iso-countries';
 import englishCountries from 'i18n-iso-countries/langs/en.json';
 import arabicCountries from 'i18n-iso-countries/langs/ar.json';
+import { QATAR_POLYGON_COORDS } from '../../src/constants/countryGeometries';
 
 try {
   countries.registerLocale(englishCountries);
@@ -611,6 +612,9 @@ export const normalizeCountryAr = (countryStr: string, iso2?: string): string =>
   ) {
     return 'كازاخستان';
   }
+  if (iso2?.toUpperCase() === 'QA' || c === 'قطر' || c.toLowerCase().includes('qatar')) {
+    return 'قطر';
+  }
   return c;
 };
 
@@ -686,6 +690,17 @@ export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolve
       countryEn: 'Kazakhstan',
       regionAr: 'جيزقازغان',
       regionEn: 'Zhezqazgan'
+    };
+  }
+
+  // Explicit check for Qatar peninsula coordinates
+  if (lon >= 50.7 && lon <= 51.75 && lat >= 24.5 && lat <= 26.35) {
+    return {
+      iso2: 'QA',
+      countryAr: 'قطر',
+      countryEn: 'Qatar',
+      regionAr: 'الدوحة',
+      regionEn: 'Doha'
     };
   }
 
@@ -765,11 +780,42 @@ export function buildCountrySvgData(
   padding: number = 5
 ): CountrySvgResult {
   let feat: any = null;
-  try {
-    feat = (countryCoder as any).feature([lon, lat]);
-  } catch (e) {
-    console.warn('countryCoder.feature([lon, lat]) failed:', e);
+  const isQatarCoords = (lon >= 50.7 && lon <= 51.75 && lat >= 24.5 && lat <= 26.35);
+
+  if (isQatarCoords) {
+    feat = {
+      type: 'Feature',
+      properties: {
+        nameEn: 'Qatar',
+        iso1A2: 'QA'
+      },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [QATAR_POLYGON_COORDS]
+      }
+    };
+  } else {
+    try {
+      feat = (countryCoder as any).feature([lon, lat]);
+    } catch (e) {
+      console.warn('countryCoder.feature([lon, lat]) failed:', e);
+    }
+    if (feat?.properties?.iso1A2 === 'QA') {
+      feat = {
+        ...feat,
+        properties: {
+          ...feat.properties,
+          nameEn: 'Qatar',
+          iso1A2: 'QA'
+        },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [QATAR_POLYGON_COORDS]
+        }
+      };
+    }
   }
+
   if (!feat || !feat.geometry) {
     try {
       feat = (countryCoder as any).feature('KZ');
