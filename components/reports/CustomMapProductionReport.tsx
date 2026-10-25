@@ -40,11 +40,13 @@ import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
 import { BirdIdCombobox, BirdOption } from '../../src/components/ui/BirdIdCombobox';
 import { TrackPathButton } from '../../src/components/track/TrackPathButton';
 import { Editable } from '../../src/components/report/Editable';
-import { HistoryTrackLayer } from '../../src/components/map/HistoryTrackLayer';
 import { MapLabelsOverlay } from '../../src/components/report/MapLabelsOverlay';
 import { MapLabel, ReportLegendItem, SectionId, DEFAULT_MAP_ELEMENTS, MapElements } from '../../src/types/report';
 import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
 import { useReportFixes } from '../../src/features/report-track/useReportFixes';
+import { TrackOverlay, leafletAdapter } from '../../src/features/report-track/TrackOverlay';
+import { buildTrackRenderModel } from '../../src/features/report-track/trackRenderModel';
+import { useReportTrackSettings } from '../../src/features/report-track/useReportTrackSettings';
 import { getReportString } from '../../src/utils/reportDictionary';
 import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
 import { BirdStatus } from '../../src/constants/statusColors';
@@ -906,55 +908,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     localStorage.setItem('hbtrack_map_labels', JSON.stringify(mapLabels));
   }, [mapLabels]);
 
-  const [trackPathSettings, setTrackPathSettings] = useState<TrackPathSettings>(() => ({
-    show: flightTrackConfig.enabled,
-    type: flightTrackConfig.locationType,
-    from: flightTrackConfig.filterStartDate,
-    to: flightTrackConfig.filterEndDate,
-    color: flightTrackConfig.defaultColor || '#6366f1',
-    width: flightTrackConfig.lineWeight || 3,
-    showPoints: flightTrackConfig.showTrackPoints,
-    showCoordinateLabels: false,
-    periodsEnabled: flightTrackConfig.useColorPeriods,
-    periods: flightTrackConfig.periods.map(p => ({
-      id: p.id,
-      from: p.startDate,
-      to: p.endDate,
-      color: p.color,
-      label: p.label
-    }))
-  }));
-
-  const handleTrackSettingsChange = useCallback((next: TrackPathSettings) => {
-    setTrackPathSettings(next);
-    setShowFlightTrack(next.show);
-    setMapElements(prev => ({
-      ...prev,
-      track: {
-        ...prev.track,
-        visible: next.show,
-        color: next.color
-      }
-    }));
-    setFlightTrackConfig(prev => ({
-      ...prev,
-      enabled: next.show,
-      locationType: next.type,
-      filterStartDate: next.from || '',
-      filterEndDate: next.to || '',
-      defaultColor: next.color,
-      lineWeight: next.width,
-      showTrackPoints: next.showPoints,
-      useColorPeriods: next.periodsEnabled,
-      periods: next.periods.map(p => ({
-        id: p.id,
-        startDate: p.from,
-        endDate: p.to,
-        color: p.color,
-        label: p.label || `${p.from} → ${p.to}`
-      }))
-    }));
-  }, []);
+  // Dedicated single source of truth for report track settings
+  const {
+    committed: committedTrackSettings,
+    draft: draftTrackSettings,
+    preview: effectiveTrackSettings,
+    updateDraft: handleTrackPreviewSettings,
+    apply: handleApplyTrackSettings,
+    cancel: handleCancelTrackSettings,
+    reset: handleResetTrackSettings,
+    importFromLive: handleImportTrackFromLive,
+    isPreviewActive: isTrackPreviewActive
+  } = useReportTrackSettings(selectedPttId);
 
   const [mapElements, setMapElements] = useState<MapElements>(DEFAULT_MAP_ELEMENTS);
 
@@ -1108,34 +1073,65 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return new URLSearchParams(window.location.search).get('debug') === 'track';
   }, []);
 
-  const { segments: coloredTrackSegments, filteredPoints: activeTrackPoints } = useMemo(
-    () => buildColoredTrackSegments(
-      rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints,
-      { ...flightTrackConfig, enabled: showFlightTrack }
-    ),
-    [rawHistoryRecords, allHistoryPoints, flightTrackConfig, showFlightTrack]
-  );
+  // Pure track render model: filters (type, dates), periods, markers, and thinned labels
+  const trackRenderModel = useMemo(() => {
+    return buildTrackRenderModel(reportFixes, effectiveTrackSettings);
+  }, [reportFixes, effectiveTrackSettings]);
+
+  // Live GPS vs Doppler counts for popover
+  const trackCounts = useMemo(() => {
+    let gps = 0;
+    let doppler = 0;
+    for (const f of reportFixes) {
+      if (f.kind === 'GPS') gps++;
+      else if (f.kind === 'DOPPLER') doppler++;
+    }
+    return {
+      gps,
+      doppler,
+      total: reportFixes.length,
+      shown: trackRenderModel.shown
+    };
+  }, [reportFixes, trackRenderModel.shown]);
+
+  // Leaflet Map adapter for SVG overlay
+  const trackMapAdapter = useMemo(() => {
+    return mapInstance ? leafletAdapter(mapInstance) : null;
+  }, [mapInstance]);
+
+  const coloredTrackSegments = useMemo(() => {
+    return trackRenderModel.segments.map((seg, idx) => ({
+      id: seg.periodId || `seg-${idx}`,
+      label: effectiveTrackSettings.periods.find(p => p.id === seg.periodId)?.label || `${seg.coords[0]?.[0]} → ${seg.coords.at(-1)?.[0]}`,
+      color: seg.color,
+      positions: seg.coords,
+      pointCount: seg.coords.length,
+      startDate: '',
+      endDate: ''
+    }));
+  }, [trackRenderModel.segments, effectiveTrackSettings.periods]);
+
+  const activeTrackPoints = useMemo(() => {
+    return trackRenderModel.filtered.map(f => ({
+      lat: f.lat,
+      lon: f.lon,
+      ts: f.t,
+      type: f.kind,
+      color: effectiveTrackSettings.color
+    }));
+  }, [trackRenderModel.filtered, effectiveTrackSettings.color]);
 
   const activeTrackPositions: [number, number][] = useMemo(
-    () => activeTrackPoints.map(p => [p.lat, p.lon] as [number, number]),
-    [activeTrackPoints]
+    () => trackRenderModel.filtered.map(p => [p.lat, p.lon] as [number, number]),
+    [trackRenderModel.filtered]
   );
 
   const trackDateRange = useMemo(() => {
-    if (!rawHistoryRecords.length && !allHistoryPoints.length) return undefined;
-    let minDate = '';
-    let maxDate = '';
-    for (const r of rawHistoryRecords) {
-      const dStr = r.timestamp || r.locationDate || r.fixTime || r.date || r.ts;
-      const ts = safeParseTimestamp(dStr);
-      if (!isNaN(ts) && ts > 0) {
-        const iso = new Date(ts).toISOString().slice(0, 10);
-        if (!minDate || iso < minDate) minDate = iso;
-        if (!maxDate || iso > maxDate) maxDate = iso;
-      }
-    }
-    return minDate && maxDate ? { from: minDate, to: maxDate } : undefined;
-  }, [rawHistoryRecords, allHistoryPoints]);
+    if (!reportFixes.length) return undefined;
+    const firstIso = new Date(reportFixes[0].t).toISOString().slice(0, 10);
+    const lastIso = new Date(reportFixes[reportFixes.length - 1].t).toISOString().slice(0, 10);
+    return { from: firstIso, to: lastIso };
+  }, [reportFixes]);
 
   const T = {
     reportTitle: reportLanguage === 'ar'
@@ -3037,13 +3033,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           mapCenter={{ lat: metrics.lLat || 46.9965, lon: metrics.lLon || 67.0222 }}
           legendItems={toolbarLegendItems}
           onChangeLegendItems={handleToolbarLegendItemsChange}
-          trackSettings={trackPathSettings}
-          onChangeTrackSettings={handleTrackSettingsChange}
-          onPreviewTrackSettings={handleTrackSettingsChange}
+          trackSettings={draftTrackSettings}
+          onChangeTrackSettings={(settings) => {
+            handleTrackPreviewSettings(settings);
+            handleApplyTrackSettings();
+          }}
+          onPreviewTrackSettings={handleTrackPreviewSettings}
+          onResetTrackSettings={handleResetTrackSettings}
+          onImportTrackFromLive={handleImportTrackFromLive}
+          trackCounts={trackCounts}
           trackDateRange={trackDateRange}
           trackPointsCount={{
-            displayed: reportFixes.length || activeTrackPoints.length,
-            total: reportFixes.length || (rawHistoryRecords.length || allHistoryPoints.length)
+            displayed: trackRenderModel.shown,
+            total: trackRenderModel.total
           }}
           texts={toolbarTexts}
           onChangeTexts={handleToolbarTextsChange}
@@ -5180,6 +5182,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       key={`report-map-${selectedPttId}-${mapDisplayMode}`}
                       center={mapCenter}
                       zoom={mapZoom}
+                      zoomAnimation={false}
                       scrollWheelZoom={true}
                       dragging={true}
                       doubleClickZoom={true}
@@ -5225,39 +5228,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {/* Dynamic GIS Graphic Scale Bar (Matching Model 25km Two-Segment Bar) */}
                       {sectionVisibility.scaleBar && <CustomGraphicScaleControl />}
 
-                      {/* Real History Flight Trajectory (Shared Layer with Live Tracking) */}
-                      {mapElements.track?.visible !== false && showFlightTrack && activeTrackPositions.length > 0 && (
-                        <HistoryTrackLayer
-                          mode="report"
-                          historyPaths={[{
-                            id: selectedPttId,
-                            color: trackPathSettings.color || mapElements.track?.color || flightTrackConfig.defaultColor || themeColors.trackLineColor,
-                            path: (rawHistoryRecords.length > 0 ? rawHistoryRecords : allHistoryPoints).map(pt => {
-                              if (Array.isArray(pt)) {
-                                return {
-                                  lat: Number(pt[0]),
-                                  lon: Number(pt[1]),
-                                  timestamp: new Date().toISOString(),
-                                  type: 'GPS' as const
-                                };
-                              }
-                              const rawDate = pt.timestamp || pt.locationDate || pt.fixTime || pt.date || pt.ts;
-                              const tsMs = safeParseTimestamp(rawDate);
-                              return {
-                                ...pt,
-                                lat: Number(pt.lat ?? pt.latitude),
-                                lon: Number(pt.lon ?? pt.longitude),
-                                timestamp: !isNaN(tsMs) && tsMs > 0 ? new Date(tsMs).toISOString() : new Date().toISOString(),
-                                type: (pt.type === 'GPS' || pt.type === 'DOPPLER')
-                                  ? pt.type
-                                  : classifyLocationType(pt.lc || pt.locationClass, pt.locationType, pt.satellite)
-                              };
-                            }),
-                            polyline: activeTrackPositions
-                          }]}
-                          settings={trackPathSettings}
-                          coordFormat={coordFormat}
-                          isExporting={isExportingPdf || isExportingPng}
+                      {/* Self-contained SVG Track Overlay mounted in Leaflet hbTrack pane (z-index 450) */}
+                      {effectiveTrackSettings.show && mapElements.track?.visible !== false && (
+                        <TrackOverlay
+                          model={trackRenderModel}
+                          settings={effectiveTrackSettings}
+                          adapter={trackMapAdapter}
+                          debug={isDebugTrack}
                         />
                       )}
 
@@ -6077,22 +6054,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     ))}
 
                     {/* Flight Track Period Legend info during edit mode */}
-                    {showFlightTrack && mapElements.track?.visible !== false && activeTrackPoints.length > 0 && (
+                    {effectiveTrackSettings.show && mapElements.track?.visible !== false && trackRenderModel.shown > 0 && (
                       <div className="flex items-center gap-1.5 p-1 rounded-md border text-xs bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold">
                         <span className="text-[10px]">{reportLanguage === 'en' ? 'Track:' : 'المسار:'}</span>
-                        {flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
-                          coloredTrackSegments.map(seg => (
-                            <span key={`edit-seg-${seg.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
-                              <span className="w-3 h-3 rounded-full" style={{ backgroundColor: seg.color }} />
-                              {seg.label}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: flightTrackConfig.defaultColor || themeColors.trackLineColor }} />
-                            {reportLanguage === 'en' ? 'Flight Track' : 'مسار الطيران'}
+                        {trackRenderModel.legend.map(seg => (
+                          <span key={`edit-seg-${seg.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: seg.color }} />
+                            {seg.label}
                           </span>
-                        )}
+                        ))}
                       </div>
                     )}
                   </div>
@@ -6134,30 +6104,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       );
                     })}
 
-                    {/* Flight Track Multi-Period or Single Track Legend */}
-                    {showFlightTrack && mapElements.track?.visible !== false && activeTrackPoints.length > 0 && (
-                      flightTrackConfig.useColorPeriods && coloredTrackSegments.length > 0 ? (
-                        coloredTrackSegments.map(seg => (
-                          <div key={`legend-seg-${seg.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                            <span 
-                              className="w-5 h-1 rounded-sm inline-block shrink-0" 
-                              style={{ backgroundColor: seg.color }}
-                            />
-                            <span>{seg.label}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                    {/* Official Report Legend: Flight Track Single or Multi-Period entries from model */}
+                    {effectiveTrackSettings.show && mapElements.track?.visible !== false && trackRenderModel.shown > 0 && (
+                      trackRenderModel.legend.map(seg => (
+                        <div key={`legend-track-${seg.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
                           <span 
                             className="w-5 h-1 rounded-sm inline-block shrink-0" 
-                            style={{ backgroundColor: flightTrackConfig.defaultColor || themeColors.trackLineColor }}
+                            style={{ backgroundColor: seg.color }}
                           />
-                          <span>
-                            {reportLanguage === 'en' ? 'Flight Track' : 'مسار الطيران'}
-                            {flightTrackConfig.locationType !== 'ALL' ? ` (${flightTrackConfig.locationType})` : ''}
-                          </span>
+                          <span>{seg.label}</span>
                         </div>
-                      )
+                      ))
                     )}
                   </div>
                 )}
