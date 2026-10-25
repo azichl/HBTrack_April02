@@ -1921,21 +1921,33 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return () => document.removeEventListener('click', handleClickOutside);
   }, [showLayerMenu]);
 
-  // Dynamic Kazakhstan country silhouette & bird location for the top-left locator map
+  // Dynamic Country silhouette & bird location for the top-left locator map
   const insetMapData = useMemo(() => {
-    const lat = metrics.lLat || 46.9965;
-    const lon = metrics.lLon || 67.0222;
+    const lastFix = reportFixes.length ? reportFixes[reportFixes.length - 1] : null;
+    const lat = (!isNaN(metrics.lLat) && metrics.lLat !== 0) ? metrics.lLat : (lastFix?.lat || 46.9965);
+    const lon = (!isNaN(metrics.lLon) && metrics.lLon !== 0) ? metrics.lLon : (lastFix?.lon || 67.0222);
     return buildCountrySvgData(lon, lat, 140, 78, 5);
-  }, [metrics.lLat, metrics.lLon]);
+  }, [metrics.lLat, metrics.lLon, reportFixes]);
 
   // Automatic Country & Region Detection based on Transmitter's Last GPS Location
   const [autoLocation, setAutoLocation] = useState<AutoResolvedLocation>(() => {
-    return resolveLocationFromCoords(metrics.lLat || 46.9965, metrics.lLon || 67.0222);
+    const lastFix = reportFixes.length ? reportFixes[reportFixes.length - 1] : null;
+    const lat = (!isNaN(metrics.lLat) && metrics.lLat !== 0) ? metrics.lLat : (lastFix?.lat || 46.9965);
+    const lon = (!isNaN(metrics.lLon) && metrics.lLon !== 0) ? metrics.lLon : (lastFix?.lon || 67.0222);
+    return resolveLocationFromCoords(lat, lon);
   });
 
+  const detectedCountryName = useMemo(() => {
+    if (reportLanguage === 'en') {
+      return insetMapData.countryNameEn || autoLocation.countryEn || 'Kazakhstan';
+    }
+    return insetMapData.countryNameAr || autoLocation.countryAr || 'كازاخستان';
+  }, [reportLanguage, insetMapData.countryNameEn, insetMapData.countryNameAr, autoLocation.countryEn, autoLocation.countryAr]);
+
   useEffect(() => {
-    const lLat = Number(metrics.lLat);
-    const lLon = Number(metrics.lLon);
+    const lastFix = reportFixes.length ? reportFixes[reportFixes.length - 1] : null;
+    const lLat = (!isNaN(metrics.lLat) && metrics.lLat !== 0) ? Number(metrics.lLat) : (lastFix ? lastFix.lat : 0);
+    const lLon = (!isNaN(metrics.lLon) && metrics.lLon !== 0) ? Number(metrics.lLon) : (lastFix ? lastFix.lon : 0);
     if (!lLat || !lLon || isNaN(lLat) || isNaN(lLon) || (lLat === 0 && lLon === 0)) return;
 
     // 1. Instant offline resolution (Uzbekistan, Kazakhstan, Algeria, etc.)
@@ -5709,13 +5721,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                 {/* ─── MAP OVERLAYS (MATCHING REFERENCE DESIGN) ──────────────────── */}
 
-                {/* Top-Left Inset: Kazakhstan Country Silhouette Locator Map & Exact Bird Position */}
+                {/* Top-Left Inset: Country Silhouette Locator Map & Exact Bird Position */}
                 {mapElements.miniMap?.visible !== false && (
                   <div className="absolute top-2 left-2 z-[1000] bg-white/95 backdrop-blur-sm border border-gray-400 rounded-md p-1 shadow-md w-[138px] pointer-events-none select-none">
                     <div className="relative w-full h-[76px] flex items-center justify-center bg-stone-50 border border-gray-200 rounded overflow-hidden">
+                      {/* Automatically detected Country Name on top-left of this mini map */}
+                      <div 
+                        className="absolute top-1 left-1.5 z-10 px-1.5 py-0.5 rounded text-[8.5px] font-bold text-[#881337] bg-white/90 border border-[#881337]/25 shadow-2xs leading-none select-none pointer-events-none"
+                        style={{ fontFamily: "'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" }}
+                      >
+                        {detectedCountryName}
+                      </div>
+
                       {insetMapData.svgPath ? (
                         <svg viewBox={insetMapData.viewBox} className="w-full h-full">
-                          {/* Kazakhstan Country Silhouette Border */}
+                          {/* Country Silhouette Border */}
                           <path
                             d={insetMapData.svgPath}
                             fill="#fdfbf7"
@@ -5789,7 +5809,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           })()}
                         </svg>
                       ) : (
-                        <div className="text-[10px] text-gray-500 font-bold">{insetMapData.countryNameAr || 'كازاخستان'}</div>
+                        <div className="text-[10px] text-gray-500 font-bold">{detectedCountryName}</div>
                       )}
                     </div>
                   </div>
