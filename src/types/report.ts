@@ -4,6 +4,7 @@ export type SectionId =
   | 'birdTable'
   | 'coordsTable'
   | 'kpis'
+  | 'distTraveledKpi'
   | 'tempCurve'
   | 'legend'
   | 'scaleBar'
@@ -26,7 +27,7 @@ export interface MapLabel {
   hidden?: boolean;
 }
 
-export type LegendShape = 'circle' | 'square' | 'line' | 'dashed-line' | 'triangle' | 'pin';
+export type LegendShape = 'circle' | 'square' | 'line' | 'dashed-line' | 'triangle' | 'pin' | 'star';
 
 export interface ReportLegendItem {
   id: string;
@@ -194,6 +195,7 @@ export const DEFAULT_SECTIONS: Record<SectionId, boolean> = {
   birdTable: true,
   coordsTable: true,
   kpis: true,
+  distTraveledKpi: true,
   tempCurve: true,
   legend: true,
   scaleBar: true,
@@ -207,6 +209,7 @@ export const DEFAULT_SECTION_ORDER: SectionId[] = [
   'birdTable',
   'coordsTable',
   'kpis',
+  'distTraveledKpi',
   'tempCurve',
   'legend',
   'scaleBar',

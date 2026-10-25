@@ -18,6 +18,7 @@ const SECTION_DEFS: { id: SectionId; ar: string; en: string }[] = [
   { id: 'birdTable', ar: 'جدول بيانات الطائر', en: 'Bird Data Table' },
   { id: 'coordsTable', ar: 'جدول الإحداثيات', en: 'Coordinates Table' },
   { id: 'kpis', ar: 'بطاقات المؤشرات (KPIs)', en: 'KPI Cards' },
+  { id: 'distTraveledKpi', ar: 'المسافة المقطوعة (Distance Traveled)', en: 'Distance Traveled KPI' },
   { id: 'tempCurve', ar: 'منحنى درجات الحرارة', en: 'Temperature Curve' },
   { id: 'legend', ar: 'مفتاح الخريطة (Legend)', en: 'Map Legend' },
   { id: 'scaleBar', ar: 'مقياس الرسم (Scale Bar)', en: 'Scale Bar' },
@@ -70,7 +71,7 @@ export const SectionsPopover: React.FC<SectionsPopoverProps> = ({
       {/* Visibility counter & mass toggles */}
       <div className="flex items-center justify-between pb-1 border-b border-gray-100 dark:border-slate-800 text-[11px]">
         <span className="font-bold text-indigo-700 dark:text-indigo-400">
-          {visibleCount} / 10 {isAr ? 'ظاهرة' : 'Visible'}
+          {visibleCount} / {SECTION_DEFS.length} {isAr ? 'ظاهرة' : 'Visible'}
         </span>
         <div className="flex items-center gap-2">
           <button

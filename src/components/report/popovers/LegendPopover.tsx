@@ -21,8 +21,9 @@ const SHAPE_OPTIONS: { value: LegendShape; labelAr: string; labelEn: string }[] 
   { value: 'square', labelAr: 'مربع', labelEn: 'Square' },
   { value: 'line', labelAr: 'خط متصل', labelEn: 'Line' },
   { value: 'dashed-line', labelAr: 'خط متقطع', labelEn: 'Dashed line' },
-  { value: 'triangle', labelAr: 'مثلث', labelEn: 'Triangle' },
+  { value: 'triangle', labelAr: 'خيمة / مثلث', labelEn: 'Tent / Triangle' },
   { value: 'pin', labelAr: 'دبوس', labelEn: 'Pin' },
+  { value: 'star', labelAr: 'نجمة', labelEn: 'Star' },
 ];
 
 export const LegendPopover: React.FC<LegendPopoverProps> = ({
@@ -171,7 +172,7 @@ export const LegendPopover: React.FC<LegendPopoverProps> = ({
         </button>
 
         {/* Items List (CSS Grid row: 28px 28px 104px minmax(0,1fr) 28px) */}
-        <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+        <div className="space-y-1.5 max-h-[min(65vh,480px)] overflow-y-auto pr-1">
           {items.map((item, idx) => {
             const original = defaultItems.find(d => d.id === item.id);
             const isOverridden = original && (
