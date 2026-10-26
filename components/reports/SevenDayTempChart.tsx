@@ -12,6 +12,7 @@ interface SevenDayTempChartProps {
   lat: number;
   lon: number;
   language: 'ar' | 'en';
+  regionName?: string;
   maxColor?: string;
   minColor?: string;
   customTitle?: string;
@@ -23,6 +24,7 @@ export const SevenDayTempChart: React.FC<SevenDayTempChartProps> = ({
   lat,
   lon,
   language,
+  regionName,
   maxColor = '#dc2626',
   minColor = '#0284c7',
   customTitle,
@@ -83,8 +85,8 @@ export const SevenDayTempChart: React.FC<SevenDayTempChartProps> = ({
 
   const defaultTitle =
     language === 'ar'
-      ? 'درجات الحرارة لآخر 7 أيام (الصغرى / الكبرى °C)'
-      : 'Last 7 Days Temperature (Min / Max °C)';
+      ? (regionName ? `درجات الحرارة لآخر 7 أيام - ${regionName} (الصغرى / الكبرى °C)` : 'درجات الحرارة لآخر 7 أيام (الصغرى / الكبرى °C)')
+      : (regionName ? `Last 7 Days Temperature - ${regionName} (Min / Max °C)` : 'Last 7 Days Temperature (Min / Max °C)');
 
   const displayTitle = customTitle || defaultTitle;
 

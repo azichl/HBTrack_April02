@@ -570,14 +570,16 @@ const MapGraticuleListener = ({
 // Map click listener for distance measurement
 const MeasureMapEvents = ({
   isMeasuring,
+  isDraggingPoint,
   onMapClick
 }: {
   isMeasuring: boolean;
+  isDraggingPoint: React.MutableRefObject<boolean>;
   onMapClick: (lat: number, lon: number) => void;
 }) => {
   useMapEvents({
     click: (e) => {
-      if (isMeasuring) {
+      if (isMeasuring && !isDraggingPoint.current) {
         onMapClick(e.latlng.lat, e.latlng.lng);
       }
     }
@@ -585,21 +587,25 @@ const MeasureMapEvents = ({
   return null;
 };
 
-// Distance Measurement Tool Icons
+// Distance Measurement Tool Icons (Optimized with easy-to-grab target and clear cursor)
 const measureDotIcon = L.divIcon({
-  className: 'bg-transparent cursor-grab active:cursor-grabbing',
-  html: `<div style="width: 12px; height: 12px; background-color: #ffffff; border-radius: 9999px; border: 2.5px solid #f59e0b; box-shadow: 0 1px 4px rgba(0,0,0,0.5);"></div>`,
-  iconSize: [12, 12],
-  iconAnchor: [6, 6]
+  className: 'bg-transparent',
+  html: `<div style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: grab;" title="اسحب لتحريك النقطة / Drag to adjust point">
+    <div style="width: 12px; height: 12px; background-color: #ffffff; border-radius: 9999px; border: 2.5px solid #f59e0b; box-shadow: 0 1px 4px rgba(0,0,0,0.5);"></div>
+  </div>`,
+  iconSize: [22, 22],
+  iconAnchor: [11, 11]
 });
 
 const measureEndIcon = L.divIcon({
-  className: 'bg-transparent cursor-grab active:cursor-grabbing',
-  html: `<div style="width: 18px; height: 18px; background-color: #f59e0b; border-radius: 9999px; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
-    <div style="width: 5px; height: 5px; background-color: #ffffff; border-radius: 9999px;"></div>
+  className: 'bg-transparent',
+  html: `<div style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: grab;" title="اسحب لتحريك النقطة الأخيرة / Drag to adjust last point">
+    <div style="width: 18px; height: 18px; background-color: #f59e0b; border-radius: 9999px; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
+      <div style="width: 5px; height: 5px; background-color: #ffffff; border-radius: 9999px;"></div>
+    </div>
   </div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9]
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
 });
 
 // ─── INTERFACES ─────────────────────────────────────────────────────────────
@@ -866,6 +872,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // ─── DISTANCE MEASUREMENT TOOL ON MAP (AS REQUESTED) ──────────────────────
   const [isMeasuring, setIsMeasuring] = useState<boolean>(false);
   const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
+  const measurePolylineRef = useRef<L.Polyline | null>(null);
+  const isDraggingMeasurePointRef = useRef<boolean>(false);
 
   // ─── RELEASE & TRACK TOGGLES ──────────────────────────────────────────────
   const [showReleaseMarker, setShowReleaseMarker] = useState<boolean>(true);
@@ -917,6 +925,54 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
   // ─── MAP CONTAINER REF & LABELS & TRACK SETTINGS ───────────────────────────
   const mapContainerRef = useRef<HTMLDivElement>(null);
+
+  // Floating measurement bar drag & reposition state
+  const [measureBarPos, setMeasureBarPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDraggingBar, setIsDraggingBar] = useState<boolean>(false);
+  const dragBarStartRef = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null);
+
+  const handleBarPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const parentRect = mapContainerRef.current?.getBoundingClientRect() || { left: 0, top: 0, width: 800, height: 600 };
+    
+    const currentX = measureBarPos ? measureBarPos.x : (rect.left - parentRect.left);
+    const currentY = measureBarPos ? measureBarPos.y : (rect.top - parentRect.top);
+    
+    dragBarStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initX: currentX,
+      initY: currentY
+    };
+    setIsDraggingBar(true);
+  }, [measureBarPos]);
+
+  const handleBarPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragBarStartRef.current || !isDraggingBar) return;
+    const dx = e.clientX - dragBarStartRef.current.startX;
+    const dy = e.clientY - dragBarStartRef.current.startY;
+    
+    const parentRect = mapContainerRef.current?.getBoundingClientRect();
+    const maxW = parentRect ? parentRect.width - 120 : 800;
+    const maxH = parentRect ? parentRect.height - 35 : 600;
+    
+    const newX = Math.max(8, Math.min(maxW, dragBarStartRef.current.initX + dx));
+    const newY = Math.max(8, Math.min(maxH, dragBarStartRef.current.initY + dy));
+    
+    setMeasureBarPos({ x: newX, y: newY });
+  }, [isDraggingBar]);
+
+  const handleBarPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (dragBarStartRef.current) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      dragBarStartRef.current = null;
+      setIsDraggingBar(false);
+    }
+  }, []);
   const [coordFormat, setCoordFormat] = useState<'DD' | 'DMM' | 'DMS'>('DMM');
   const [distUnit, setDistUnit] = useState<'km' | 'mi'>('km');
 
@@ -2107,6 +2163,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     }
     return insetMapData.countryNameAr || autoLocation.countryAr || 'كازاخستان';
   }, [reportLanguage, insetMapData.countryNameEn, insetMapData.countryNameAr, autoLocation.countryEn, autoLocation.countryAr]);
+
+  const detectedRegionName = useMemo(() => {
+    if (customMetadata.regionName?.trim()) {
+      const res = resolveRegionBilingual(customMetadata.regionName, customMetadata.regionName);
+      return reportLanguage === 'ar' ? res.regionAr : res.regionEn;
+    }
+    return reportLanguage === 'ar' ? autoLocation.regionAr : autoLocation.regionEn;
+  }, [customMetadata.regionName, reportLanguage, autoLocation.regionAr, autoLocation.regionEn]);
 
   useEffect(() => {
     const lastFix = reportFixes.length ? reportFixes[reportFixes.length - 1] : null;
@@ -5305,6 +5369,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   lat={metrics.hasLast ? metrics.lLat : (metrics.hasRelease ? metrics.rLat : NaN)}
                   lon={metrics.hasLast ? metrics.lLon : (metrics.hasRelease ? metrics.rLon : NaN)}
                   language={reportLanguage}
+                  regionName={detectedRegionName}
                   isEditing={isTableEditing}
                 />
               )}
@@ -5437,6 +5502,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {/* Measure Map Click Events Listener */}
                       <MeasureMapEvents
                         isMeasuring={isMeasuring}
+                        isDraggingPoint={isDraggingMeasurePointRef}
                         onMapClick={(lat, lon) => {
                           setMeasurePoints(prev => [...prev, [lat, lon]]);
                         }}
@@ -5718,6 +5784,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {measurePoints.length > 0 && (
                         <>
                           <Polyline
+                            ref={measurePolylineRef}
                             positions={measurePoints}
                             pathOptions={{
                               color: '#eab308',
@@ -5731,8 +5798,53 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               key={`custom-measure-point-${idx}`}
                               position={point}
                               icon={idx === measurePoints.length - 1 ? measureEndIcon : measureDotIcon}
-                              zIndexOffset={2200}
-                              interactive={false}
+                              zIndexOffset={2500 + idx}
+                              interactive={true}
+                              draggable={true}
+                              eventHandlers={{
+                                mousedown: (e) => {
+                                  (e as any).originalEvent?.stopPropagation?.();
+                                  if (L.DomEvent?.stopPropagation) {
+                                    L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                  }
+                                },
+                                click: (e) => {
+                                  (e as any).originalEvent?.stopPropagation?.();
+                                  if (L.DomEvent?.stopPropagation) {
+                                    L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                  }
+                                },
+                                dragstart: (e) => {
+                                  isDraggingMeasurePointRef.current = true;
+                                  (e as any).originalEvent?.stopPropagation?.();
+                                  if (L.DomEvent?.stopPropagation) {
+                                    L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                  }
+                                },
+                                drag: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng && measurePolylineRef.current) {
+                                    const latLng = marker.getLatLng();
+                                    const currentPts = [...measurePoints];
+                                    currentPts[idx] = [latLng.lat, latLng.lng];
+                                    measurePolylineRef.current.setLatLngs(currentPts);
+                                  }
+                                },
+                                dragend: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng) {
+                                    const latLng = marker.getLatLng();
+                                    setMeasurePoints(prev => {
+                                      const updated = [...prev];
+                                      updated[idx] = [latLng.lat, latLng.lng];
+                                      return updated;
+                                    });
+                                  }
+                                  setTimeout(() => {
+                                    isDraggingMeasurePointRef.current = false;
+                                  }, 150);
+                                }
+                              }}
                             />
                           ))}
                           {segmentDistances.map((seg, idx) => (
@@ -5761,43 +5873,88 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {/* Floating Measurement Tool Controls (Like Live Tracking Overlay) */}
                     {(isMeasuring || measurePoints.length > 0) && (
                       <div 
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] no-export-snapshot no-print no-export flex items-center gap-2 bg-slate-900/95 backdrop-blur text-white px-3.5 py-1.5 rounded-full shadow-2xl border border-slate-700 text-xs select-none animate-in fade-in slide-in-from-bottom-2"
+                        onPointerDown={handleBarPointerDown}
+                        onPointerMove={handleBarPointerMove}
+                        onPointerUp={handleBarPointerUp}
+                        className={`absolute z-[1000] no-export-snapshot no-print no-export select-none ${
+                          isDraggingBar ? 'cursor-grabbing' : 'cursor-grab'
+                        } animate-in fade-in`}
+                        style={
+                          measureBarPos
+                            ? { left: `${measureBarPos.x}px`, top: `${measureBarPos.y}px`, touchAction: 'none' }
+                            : { left: '50%', bottom: '16px', transform: 'translateX(-50%)', touchAction: 'none' }
+                        }
                       >
-                        <div className="flex items-center gap-1.5 text-amber-400 font-bold">
-                          <Ruler size={14} />
-                          <span>{isMeasuring ? 'وضع القياس (انقر للإضافة):' : 'المسافة المقاسة:'}</span>
-                        </div>
-                        
-                        <div className="h-3.5 w-px bg-slate-700"></div>
-                        
-                        <div className="font-mono font-bold text-amber-300 text-xs">
-                          {totalMeasureDistanceKm} km
-                        </div>
-                        
-                        <div className="text-[10px] text-gray-400 font-normal">
-                          ({measurePoints.length} نقاط)
-                        </div>
-                        
-                        <div className="h-3.5 w-px bg-slate-700"></div>
-                        
-                        <button
-                          type="button"
-                          onClick={() => setMeasurePoints([])}
-                          className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-red-400 transition-colors"
-                          title="مسح نقاط القياس"
-                          disabled={measurePoints.length === 0}
+                        <div 
+                          style={{ transform: 'scale(0.85)', transformOrigin: 'center center' }}
+                          className="flex items-center gap-1.5 bg-slate-900/95 backdrop-blur text-white px-3 py-1 rounded-full shadow-2xl border border-slate-700/80 text-xs shadow-black/50"
                         >
-                          <Trash2 size={13} />
-                        </button>
-                        
-                        <button
-                          type="button"
-                          onClick={() => setIsMeasuring(false)}
-                          className="p-1 hover:bg-emerald-800/60 rounded-full text-emerald-400 hover:text-emerald-300 transition-colors"
-                          title="إنهاء الرسم والاحتفاظ بالخط على الخريطة لتصديره"
-                        >
-                          <Check size={14} />
-                        </button>
+                          <div className="flex items-center text-slate-400 hover:text-slate-200 cursor-grab active:cursor-grabbing px-0.5" title={reportLanguage === 'ar' ? 'اسحب لتحريك شريط القياس' : 'Drag to reposition bar'}>
+                            <GripHorizontal size={13} />
+                          </div>
+
+                          <div className="flex items-center gap-1 text-amber-400 font-bold">
+                            <Ruler size={13} />
+                            <span>
+                              {isMeasuring 
+                                ? (reportLanguage === 'ar' ? 'وضع القياس (انقر للإضافة):' : 'Measuring (click to add):')
+                                : (reportLanguage === 'ar' ? 'المسافة المقاسة:' : 'Measured Distance:')
+                              }
+                            </span>
+                          </div>
+                          
+                          <div className="h-3 w-px bg-slate-700"></div>
+                          
+                          <div className="font-mono font-bold text-amber-300 text-xs">
+                            {totalMeasureDistanceKm} km
+                          </div>
+                          
+                          <div className="text-[10px] text-gray-400 font-normal">
+                            ({measurePoints.length} {reportLanguage === 'ar' ? 'نقاط' : 'pts'})
+                          </div>
+                          
+                          <div className="h-3 w-px bg-slate-700"></div>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMeasurePoints([]);
+                              setIsMeasuring(false);
+                            }}
+                            className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-red-400 transition-colors"
+                            title={reportLanguage === 'ar' ? 'مسح نقاط القياس' : 'Clear measurement points'}
+                            disabled={measurePoints.length === 0}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                          
+                          {isMeasuring ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMeasuring(false);
+                              }}
+                              className="p-1 hover:bg-emerald-800/60 rounded-full text-emerald-400 hover:text-emerald-300 transition-colors"
+                              title={reportLanguage === 'ar' ? 'اعتماد المسافة وتثبيتها' : 'Validate & lock distance'}
+                            >
+                              <Check size={13} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsMeasuring(true);
+                              }}
+                              className="p-1 hover:bg-amber-800/60 rounded-full text-amber-400 hover:text-amber-300 transition-colors"
+                              title={reportLanguage === 'ar' ? 'استئناف تعديل القياس' : 'Resume measuring'}
+                            >
+                              <Ruler size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
 
