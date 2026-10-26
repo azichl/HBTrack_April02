@@ -138,7 +138,7 @@ export function buildMarkers(fixes: Fix[], s: TrackSettings): PointMarker[] {
     const p = periodFor(f.t, s);
     const fill =
       s.pointColorMode === 'type' ? (f.kind === 'GPS' ? s.gpsColor : s.dopplerColor)
-      : s.pointColorMode === 'period' ? (p?.color ?? s.color)
+      : (s.periodsEnabled || s.pointColorMode === 'period') ? (p?.color ?? s.color)
       : s.color;
     return { id: f.id, lat: f.lat, lon: f.lon, t: f.t, kind: f.kind,
              diameter: s.pointSize, fill, stroke: '#ffffff', opacity: s.pointOpacity };

@@ -486,7 +486,15 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
         <div className="space-y-2">
           <Switch
             checked={draft.periodsEnabled}
-            onChange={(periodsEnabled) => updateDraft({ periodsEnabled })}
+            onChange={(periodsEnabled) => {
+              if (periodsEnabled && draft.pointColorMode === 'track') {
+                updateDraft({ periodsEnabled, pointColorMode: 'period' });
+              } else if (!periodsEnabled && draft.pointColorMode === 'period') {
+                updateDraft({ periodsEnabled, pointColorMode: 'track' });
+              } else {
+                updateDraft({ periodsEnabled });
+              }
+            }}
             label={isAr ? 'تلوين المسار حسب الفترات' : 'Color Path by Periods'}
             description={isAr ? 'تقسيم المسار إلى فترات زمنية ملونة' : 'Split track into seasonal segments'}
             size="sm"

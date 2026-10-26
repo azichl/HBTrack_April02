@@ -55,6 +55,16 @@ test('points: size, colour modes, labels imply points', () => {
   assert.equal(m.markers.length, 10); assert.equal(m.markers[0].diameter, 9);
   assert.equal(m.markers[0].fill, D.gpsColor); assert.equal(m.markers[1].fill, D.dopplerColor);
   assert.equal(buildTrackRenderModel(fixes, S({ showCoordinateLabels: true })).markers.length, 10);
+  const mPeriod = buildTrackRenderModel(fixes, S({
+    showPoints: true,
+    periodsEnabled: true,
+    periods: [
+      { id: 'a', from: '2026-01-01', to: '2026-04-30', color: '#ff0000' },
+      { id: 'b', from: '2026-05-01', to: '2026-10-31', color: '#00ff00' }
+    ]
+  }));
+  assert.equal(mPeriod.markers[0].fill, '#ff0000');
+  assert.equal(mPeriod.markers[4].fill, '#00ff00');
 });
 test('show=false draws nothing', () => {
   const m = buildTrackRenderModel(fixes, S({ show: false }));
