@@ -597,26 +597,60 @@ const MeasureMapEvents = ({
   return null;
 };
 
-// Distance Measurement Tool Icons (Optimized with easy-to-grab target and clear cursor)
-const measureDotIcon = L.divIcon({
-  className: 'bg-transparent',
-  html: `<div style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: grab;" title="اسحب لتحريك النقطة / Drag to adjust point">
-    <div style="width: 12px; height: 12px; background-color: #ffffff; border-radius: 9999px; border: 2.5px solid #f59e0b; box-shadow: 0 1px 4px rgba(0,0,0,0.5);"></div>
-  </div>`,
-  iconSize: [22, 22],
-  iconAnchor: [11, 11]
-});
+// Multi-Measurement Data Model & Palette
+export interface MapMeasurement {
+  id: string;
+  points: [number, number][];
+  color: string;
+  totalKm: string;
+}
 
-const measureEndIcon = L.divIcon({
-  className: 'bg-transparent',
-  html: `<div style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: grab;" title="اسحب لتحريك النقطة الأخيرة / Drag to adjust last point">
-    <div style="width: 18px; height: 18px; background-color: #f59e0b; border-radius: 9999px; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
-      <div style="width: 5px; height: 5px; background-color: #ffffff; border-radius: 9999px;"></div>
-    </div>
-  </div>`,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14]
-});
+export const MEASUREMENT_COLORS = [
+  '#eab308', // Amber / Yellow (default primary measurement)
+  '#0284c7', // Sky Blue
+  '#16a34a', // Emerald Green
+  '#dc2626', // Red
+  '#9333ea', // Purple
+  '#ea580c', // Orange
+  '#0d9488', // Teal
+  '#e11d48', // Rose
+];
+
+// Distance Measurement Tool Icons (Optimized with easy-to-grab target and clear cursor)
+const measureDotIconCache = new Map<string, L.DivIcon>();
+const getMeasureDotIcon = (color: string = '#f59e0b') => {
+  if (!measureDotIconCache.has(color)) {
+    measureDotIconCache.set(color, L.divIcon({
+      className: 'bg-transparent',
+      html: `<div style="width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; cursor: grab;" title="اسحب لتحريك النقطة / Drag to adjust point">
+        <div style="width: 12px; height: 12px; background-color: #ffffff; border-radius: 9999px; border: 2.5px solid ${color}; box-shadow: 0 1px 4px rgba(0,0,0,0.5);"></div>
+      </div>`,
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    }));
+  }
+  return measureDotIconCache.get(color)!;
+};
+
+const measureEndIconCache = new Map<string, L.DivIcon>();
+const getMeasureEndIcon = (color: string = '#f59e0b') => {
+  if (!measureEndIconCache.has(color)) {
+    measureEndIconCache.set(color, L.divIcon({
+      className: 'bg-transparent',
+      html: `<div style="width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: grab;" title="اسحب لتحريك النقطة الأخيرة / Drag to adjust last point">
+        <div style="width: 18px; height: 18px; background-color: ${color}; border-radius: 9999px; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;">
+          <div style="width: 5px; height: 5px; background-color: #ffffff; border-radius: 9999px;"></div>
+        </div>
+      </div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    }));
+  }
+  return measureEndIconCache.get(color)!;
+};
+
+const measureDotIcon = getMeasureDotIcon('#f59e0b');
+const measureEndIcon = getMeasureEndIcon('#f59e0b');
 
 // ─── INTERFACES ─────────────────────────────────────────────────────────────
 
@@ -879,10 +913,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   // Distance between camps
   const [showCampDistance, setShowCampDistance] = useState<boolean>(false);
 
-  // ─── DISTANCE MEASUREMENT TOOL ON MAP (AS REQUESTED) ──────────────────────
+  // ─── DISTANCE MEASUREMENT TOOL ON MAP (MULTI-MEASUREMENT SUPPORT) ───────────
   const [isMeasuring, setIsMeasuring] = useState<boolean>(false);
-  const [measurePoints, setMeasurePoints] = useState<[number, number][]>([]);
-  const measurePolylineRef = useRef<L.Polyline | null>(null);
+  const [savedMeasurements, setSavedMeasurements] = useState<MapMeasurement[]>([]);
+  const [currentMeasurePoints, setCurrentMeasurePoints] = useState<[number, number][]>([]);
+  const activeMeasurePolylineRef = useRef<L.Polyline | null>(null);
   const isDraggingMeasurePointRef = useRef<boolean>(false);
 
   // ─── RELEASE & TRACK TOGGLES ──────────────────────────────────────────────
@@ -1452,25 +1487,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return [45.2, 72.1];
   }, []);
 
-  // Distance Measurement Tool Calculations (Live Tracking Ruler Feature)
-  const totalMeasureDistanceKm = useMemo(() => {
-    if (measurePoints.length < 2) return '0.00';
+  // Distance Measurement Tool Calculations (Multi-measurement support)
+  const calcPointsDistKm = useCallback((pts: [number, number][]): string => {
+    if (pts.length < 2) return '0.00';
     let total = 0;
-    for (let i = 0; i < measurePoints.length - 1; i++) {
+    for (let i = 0; i < pts.length - 1; i++) {
       total += calculateDistanceKm(
-        measurePoints[i][0], measurePoints[i][1],
-        measurePoints[i+1][0], measurePoints[i+1][1]
+        pts[i][0], pts[i][1],
+        pts[i + 1][0], pts[i + 1][1]
       );
     }
     return total.toFixed(2);
-  }, [measurePoints]);
+  }, []);
 
-  const segmentDistances = useMemo(() => {
-    if (measurePoints.length < 2) return [];
+  const calcPointsSegments = useCallback((pts: [number, number][]) => {
+    if (pts.length < 2) return [];
     const list: { midpoint: [number, number]; distKm: string }[] = [];
-    for (let i = 0; i < measurePoints.length - 1; i++) {
-      const p1 = measurePoints[i];
-      const p2 = measurePoints[i+1];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
       const d = calculateDistanceKm(p1[0], p1[1], p2[0], p2[1]);
       list.push({
         midpoint: [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2],
@@ -1478,7 +1513,61 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       });
     }
     return list;
-  }, [measurePoints]);
+  }, []);
+
+  const totalMeasurePointsCount = useMemo(() => {
+    return savedMeasurements.reduce((acc, m) => acc + m.points.length, 0) + currentMeasurePoints.length;
+  }, [savedMeasurements, currentMeasurePoints]);
+
+  const totalAllMeasureDistanceKm = useMemo(() => {
+    let sum = 0;
+    savedMeasurements.forEach(m => {
+      sum += parseFloat(m.totalKm) || 0;
+    });
+    if (currentMeasurePoints.length >= 2) {
+      sum += parseFloat(calcPointsDistKm(currentMeasurePoints)) || 0;
+    }
+    return sum.toFixed(2);
+  }, [savedMeasurements, currentMeasurePoints, calcPointsDistKm]);
+
+  // Backward compatibility alias for total distance
+  const totalMeasureDistanceKm = totalAllMeasureDistanceKm;
+
+  // Validate current active measurement and add to saved list
+  const handleValidateCurrentMeasure = useCallback(() => {
+    if (currentMeasurePoints.length >= 2) {
+      const dist = calcPointsDistKm(currentMeasurePoints);
+      const color = MEASUREMENT_COLORS[savedMeasurements.length % MEASUREMENT_COLORS.length];
+      const newMeasurement: MapMeasurement = {
+        id: `measure-${Date.now()}-${savedMeasurements.length + 1}`,
+        points: [...currentMeasurePoints],
+        color,
+        totalKm: dist
+      };
+      setSavedMeasurements(prev => [...prev, newMeasurement]);
+      setCurrentMeasurePoints([]);
+      setIsMeasuring(false);
+    } else {
+      setCurrentMeasurePoints([]);
+      setIsMeasuring(false);
+    }
+  }, [currentMeasurePoints, savedMeasurements.length, calcPointsDistKm]);
+
+  // Undo last point or last measurement
+  const handleUndoLastMeasurement = useCallback(() => {
+    if (currentMeasurePoints.length > 0) {
+      setCurrentMeasurePoints(prev => prev.slice(0, -1));
+    } else if (savedMeasurements.length > 0) {
+      setSavedMeasurements(prev => prev.slice(0, -1));
+    }
+  }, [currentMeasurePoints.length, savedMeasurements.length]);
+
+  // Clear all measurements
+  const handleClearAllMeasurements = useCallback(() => {
+    setSavedMeasurements([]);
+    setCurrentMeasurePoints([]);
+    setIsMeasuring(false);
+  }, []);
 
   // ─── ONE SHARED LEGEND STORE (Pass 7 Single Source of Truth) ───────────────
   const legendStore = useMemo(() => {
@@ -1660,17 +1749,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         visible: true
       });
     }
-    if (measurePoints.length > 1) {
+    if (savedMeasurements.length > 0 || currentMeasurePoints.length > 1) {
+      const count = savedMeasurements.length + (currentMeasurePoints.length > 1 ? 1 : 0);
       items.push({
         id: 'measure_distance',
-        label: `مسافة مقاسة: ${totalMeasureDistanceKm} km`,
+        label: reportLanguage === 'ar'
+          ? (count > 1 ? `مسافات مقاسة (${count}): ${totalMeasureDistanceKm} km` : `مسافة مقاسة: ${totalMeasureDistanceKm} km`)
+          : (count > 1 ? `Measured Distances (${count}): ${totalMeasureDistanceKm} km` : `Measured Distance: ${totalMeasureDistanceKm} km`),
         color: '#eab308',
         symbol: 'dashed-line',
         visible: true
       });
     }
     setLegendItems(items);
-  }, [showReleaseMarker, visibleCampIds, showCampDistance, campDistanceKm, measurePoints.length, totalMeasureDistanceKm, reportLanguage]);
+  }, [showReleaseMarker, visibleCampIds, showCampDistance, campDistanceKm, savedMeasurements, currentMeasurePoints.length, totalMeasureDistanceKm, reportLanguage]);
 
   // Keep legend items smoothly in sync with language & filters if not manually customized
   useEffect(() => {
@@ -3370,11 +3462,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             };
             setMapLabels(prev => [...prev, newLabel]);
           }}
-          measurePointsCount={measurePoints.length}
+          measurePointsCount={totalMeasurePointsCount}
           totalMeasureKm={totalMeasureDistanceKm}
           onPinMeasure={() => {
-            if (measurePoints.length >= 2) {
-              const lastPt = measurePoints[measurePoints.length - 1];
+            const lastPt = currentMeasurePoints.length >= 2
+              ? currentMeasurePoints[currentMeasurePoints.length - 1]
+              : savedMeasurements.length > 0
+                ? savedMeasurements[savedMeasurements.length - 1].points[savedMeasurements[savedMeasurements.length - 1].points.length - 1]
+                : null;
+            if (lastPt) {
               const pinnedLabel: MapLabel = {
                 id: `measure-pin-${Date.now()}`,
                 text: `${totalMeasureDistanceKm} km`,
@@ -3392,7 +3488,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               setMapLabels(prev => [...prev, pinnedLabel]);
             }
           }}
-          onClearMeasure={() => setMeasurePoints([])}
+          onClearMeasure={handleClearAllMeasurements}
           language={reportLanguage}
         />
       )}
@@ -3491,7 +3587,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
             {/* Distance Measurement Ruler */}
             <button
-              onClick={() => setIsMeasuring(!isMeasuring)}
+              onClick={() => {
+                if (isMeasuring) {
+                  if (currentMeasurePoints.length >= 2) {
+                    handleValidateCurrentMeasure();
+                  } else {
+                    setIsMeasuring(false);
+                    setCurrentMeasurePoints([]);
+                  }
+                } else {
+                  setIsMeasuring(true);
+                  setCurrentMeasurePoints([]);
+                }
+              }}
               className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap ${
                 isMeasuring 
                   ? 'bg-amber-500 hover:bg-amber-600 text-white ring-2 ring-amber-300' 
@@ -3501,18 +3609,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             >
               <Ruler size={14} className={isMeasuring ? 'animate-pulse' : ''} />
               <span>{isMeasuring ? 'إنهاء' : 'قياس'}</span>
-              {measurePoints.length > 1 && (
+              {(totalMeasurePointsCount > 1 || savedMeasurements.length > 0) && (
                 <span className="bg-amber-700 text-white text-[10px] px-1 py-0.2 rounded font-mono">
                   {totalMeasureDistanceKm}k
                 </span>
               )}
             </button>
 
-            {measurePoints.length > 0 && (
+            {(totalMeasurePointsCount > 0 || savedMeasurements.length > 0) && (
               <button
-                onClick={() => setMeasurePoints([])}
+                onClick={handleClearAllMeasurements}
                 className="p-1.5 bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-red-600 dark:bg-slate-700 dark:text-gray-300 rounded-lg whitespace-nowrap"
-                title="مسح خط القياس من على الخريطة"
+                title="مسح جميع خطوط القياس من على الخريطة"
               >
                 <Trash2 size={14} />
               </button>
@@ -3887,32 +3995,44 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
                     أداة قياس المسافة على الخريطة:
                   </span>
-                  {measurePoints.length > 1 && (
+                  {(totalMeasurePointsCount > 1 || savedMeasurements.length > 0) && (
                     <span className="text-[11px] font-mono font-bold text-amber-800 dark:text-amber-200 bg-amber-200/80 dark:bg-amber-800/60 px-1.5 py-0.5 rounded">
-                      {totalMeasureDistanceKm} km ({measurePoints.length} نقاط)
+                      {totalMeasureDistanceKm} km ({savedMeasurements.length > 0 ? `${savedMeasurements.length} قياسات / ` : ''}{totalMeasurePointsCount} نقاط)
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setIsMeasuring(!isMeasuring)}
+                    onClick={() => {
+                      if (isMeasuring) {
+                        if (currentMeasurePoints.length >= 2) {
+                          handleValidateCurrentMeasure();
+                        } else {
+                          setIsMeasuring(false);
+                          setCurrentMeasurePoints([]);
+                        }
+                      } else {
+                        setIsMeasuring(true);
+                        setCurrentMeasurePoints([]);
+                      }
+                    }}
                     className={`py-1 px-3 rounded-lg text-xs font-bold transition-all ${
                       isMeasuring 
                         ? 'bg-amber-600 text-white' 
                         : 'bg-white dark:bg-slate-800 text-amber-800 dark:text-amber-300 border border-amber-300 hover:bg-amber-100'
                     }`}
                   >
-                    {isMeasuring ? 'إنهاء الرسم' : 'بدء القياس بالمسطرة'}
+                    {isMeasuring ? 'إنهاء الرسم' : (savedMeasurements.length > 0 ? '+ إضافة قياس' : 'بدء القياس بالمسطرة')}
                   </button>
-                  {measurePoints.length > 0 && (
+                  {(totalMeasurePointsCount > 0 || savedMeasurements.length > 0) && (
                     <button
                       type="button"
-                      onClick={() => setMeasurePoints([])}
+                      onClick={handleClearAllMeasurements}
                       className="py-1 px-2 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-red-600 border border-red-200 hover:bg-red-50"
                       title="مسح نقاط القياس"
                     >
-                      مسح ({measurePoints.length})
+                      مسح ({savedMeasurements.length > 0 ? `${savedMeasurements.length} قياس` : totalMeasurePointsCount})
                     </button>
                   )}
                 </div>
@@ -5525,7 +5645,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         isMeasuring={isMeasuring}
                         isDraggingPoint={isDraggingMeasurePointRef}
                         onMapClick={(lat, lon) => {
-                          setMeasurePoints(prev => [...prev, [lat, lon]]);
+                          setCurrentMeasurePoints(prev => [...prev, [lat, lon]]);
                         }}
                       />
 
@@ -5809,88 +5929,190 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         />
                       ))}
 
-                      {/* Interactive Distance Measurement Tool Drawing (EXPORTED WITH PNG & PDF) */}
-                      {measurePoints.length > 0 && (
+                      {/* Interactive Distance Measurement Tool Drawing (MULTI-MEASURE SUPPORT) */}
+                      {/* 1. Previously Saved & Validated Measurements */}
+                      {savedMeasurements.map((m, mIdx) => {
+                        const mSegs = calcPointsSegments(m.points);
+                        return (
+                          <React.Fragment key={m.id}>
+                            <Polyline
+                              positions={m.points}
+                              pathOptions={{
+                                color: m.color,
+                                weight: 3.5,
+                                dashArray: '7, 7',
+                                opacity: 0.95
+                              }}
+                            />
+                            {m.points.map((point, pIdx) => (
+                              <Marker
+                                key={`${m.id}-pt-${pIdx}`}
+                                position={point}
+                                icon={pIdx === m.points.length - 1 ? getMeasureEndIcon(m.color) : getMeasureDotIcon(m.color)}
+                                zIndexOffset={2500 + mIdx * 50 + pIdx}
+                                interactive={true}
+                                draggable={true}
+                                eventHandlers={{
+                                  mousedown: (e) => {
+                                    (e as any).originalEvent?.stopPropagation?.();
+                                    if (L.DomEvent?.stopPropagation) {
+                                      L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                    }
+                                  },
+                                  click: (e) => {
+                                    (e as any).originalEvent?.stopPropagation?.();
+                                    if (L.DomEvent?.stopPropagation) {
+                                      L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                    }
+                                  },
+                                  dragstart: (e) => {
+                                    isDraggingMeasurePointRef.current = true;
+                                    (e as any).originalEvent?.stopPropagation?.();
+                                    if (L.DomEvent?.stopPropagation) {
+                                      L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                    }
+                                  },
+                                  dragend: (e) => {
+                                    const marker = e.target;
+                                    if (marker && marker.getLatLng) {
+                                      const latLng = marker.getLatLng();
+                                      setSavedMeasurements(prev => prev.map((item, idx) => {
+                                        if (idx !== mIdx) return item;
+                                        const newPts = [...item.points] as [number, number][];
+                                        newPts[pIdx] = [latLng.lat, latLng.lng];
+                                        return {
+                                          ...item,
+                                          points: newPts,
+                                          totalKm: calcPointsDistKm(newPts)
+                                        };
+                                      }));
+                                    }
+                                    setTimeout(() => {
+                                      isDraggingMeasurePointRef.current = false;
+                                    }, 150);
+                                  }
+                                }}
+                              />
+                            ))}
+                            {mSegs.map((seg, sIdx) => (
+                              <Marker
+                                key={`${m.id}-seg-${sIdx}`}
+                                position={seg.midpoint}
+                                icon={createDistancePillIcon(`${seg.distKm} km`, m.color, [32, 26])}
+                                zIndexOffset={2300}
+                                interactive={false}
+                              />
+                            ))}
+                            {m.points.length > 2 && (
+                              <Marker
+                                position={m.points[m.points.length - 1]}
+                                icon={createDistancePillIcon(
+                                  reportLanguage === 'ar' ? `المجموع: ${m.totalKm} km` : `Total: ${m.totalKm} km`,
+                                  m.color,
+                                  [42, 30]
+                                )}
+                                zIndexOffset={2400}
+                                interactive={false}
+                              />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+
+                      {/* 2. Active In-Progress Measurement Line */}
+                      {currentMeasurePoints.length > 0 && (
                         <>
                           <Polyline
-                            ref={measurePolylineRef}
-                            positions={measurePoints}
+                            ref={activeMeasurePolylineRef}
+                            positions={currentMeasurePoints}
                             pathOptions={{
-                              color: '#eab308',
+                              color: MEASUREMENT_COLORS[savedMeasurements.length % MEASUREMENT_COLORS.length],
                               weight: 3.5,
                               dashArray: '7, 7',
                               opacity: 0.95
                             }}
                           />
-                          {measurePoints.map((point, idx) => (
+                          {currentMeasurePoints.map((point, idx) => {
+                            const activeColor = MEASUREMENT_COLORS[savedMeasurements.length % MEASUREMENT_COLORS.length];
+                            return (
+                              <Marker
+                                key={`active-measure-point-${idx}`}
+                                position={point}
+                                icon={idx === currentMeasurePoints.length - 1 ? getMeasureEndIcon(activeColor) : getMeasureDotIcon(activeColor)}
+                                zIndexOffset={3000 + idx}
+                                interactive={true}
+                                draggable={true}
+                                eventHandlers={{
+                                  mousedown: (e) => {
+                                    (e as any).originalEvent?.stopPropagation?.();
+                                    if (L.DomEvent?.stopPropagation) {
+                                      L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                    }
+                                  },
+                                  click: (e) => {
+                                    (e as any).originalEvent?.stopPropagation?.();
+                                    if (L.DomEvent?.stopPropagation) {
+                                      L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                    }
+                                  },
+                                  dragstart: (e) => {
+                                    isDraggingMeasurePointRef.current = true;
+                                    (e as any).originalEvent?.stopPropagation?.();
+                                    if (L.DomEvent?.stopPropagation) {
+                                      L.DomEvent.stopPropagation((e as any).originalEvent || e);
+                                    }
+                                  },
+                                  drag: (e) => {
+                                    const marker = e.target;
+                                    if (marker && marker.getLatLng && activeMeasurePolylineRef.current) {
+                                      const latLng = marker.getLatLng();
+                                      const currentPts = [...currentMeasurePoints];
+                                      currentPts[idx] = [latLng.lat, latLng.lng];
+                                      activeMeasurePolylineRef.current.setLatLngs(currentPts);
+                                    }
+                                  },
+                                  dragend: (e) => {
+                                    const marker = e.target;
+                                    if (marker && marker.getLatLng) {
+                                      const latLng = marker.getLatLng();
+                                      setCurrentMeasurePoints(prev => {
+                                        const updated = [...prev];
+                                        updated[idx] = [latLng.lat, latLng.lng];
+                                        return updated;
+                                      });
+                                    }
+                                    setTimeout(() => {
+                                      isDraggingMeasurePointRef.current = false;
+                                    }, 150);
+                                  }
+                                }}
+                              />
+                            );
+                          })}
+                          {calcPointsSegments(currentMeasurePoints).map((seg, idx) => (
                             <Marker
-                              key={`custom-measure-point-${idx}`}
-                              position={point}
-                              icon={idx === measurePoints.length - 1 ? measureEndIcon : measureDotIcon}
-                              zIndexOffset={2500 + idx}
-                              interactive={true}
-                              draggable={true}
-                              eventHandlers={{
-                                mousedown: (e) => {
-                                  (e as any).originalEvent?.stopPropagation?.();
-                                  if (L.DomEvent?.stopPropagation) {
-                                    L.DomEvent.stopPropagation((e as any).originalEvent || e);
-                                  }
-                                },
-                                click: (e) => {
-                                  (e as any).originalEvent?.stopPropagation?.();
-                                  if (L.DomEvent?.stopPropagation) {
-                                    L.DomEvent.stopPropagation((e as any).originalEvent || e);
-                                  }
-                                },
-                                dragstart: (e) => {
-                                  isDraggingMeasurePointRef.current = true;
-                                  (e as any).originalEvent?.stopPropagation?.();
-                                  if (L.DomEvent?.stopPropagation) {
-                                    L.DomEvent.stopPropagation((e as any).originalEvent || e);
-                                  }
-                                },
-                                drag: (e) => {
-                                  const marker = e.target;
-                                  if (marker && marker.getLatLng && measurePolylineRef.current) {
-                                    const latLng = marker.getLatLng();
-                                    const currentPts = [...measurePoints];
-                                    currentPts[idx] = [latLng.lat, latLng.lng];
-                                    measurePolylineRef.current.setLatLngs(currentPts);
-                                  }
-                                },
-                                dragend: (e) => {
-                                  const marker = e.target;
-                                  if (marker && marker.getLatLng) {
-                                    const latLng = marker.getLatLng();
-                                    setMeasurePoints(prev => {
-                                      const updated = [...prev];
-                                      updated[idx] = [latLng.lat, latLng.lng];
-                                      return updated;
-                                    });
-                                  }
-                                  setTimeout(() => {
-                                    isDraggingMeasurePointRef.current = false;
-                                  }, 150);
-                                }
-                              }}
-                            />
-                          ))}
-                          {segmentDistances.map((seg, idx) => (
-                            <Marker
-                              key={`custom-measure-seg-${idx}`}
+                              key={`active-measure-seg-${idx}`}
                               position={seg.midpoint}
-                              icon={createDistancePillIcon(`${seg.distKm} km`, '#d97706', [32, 26])}
-                              zIndexOffset={2300}
-                              interactive={true}
-                              draggable={true}
+                              icon={createDistancePillIcon(
+                                `${seg.distKm} km`,
+                                MEASUREMENT_COLORS[savedMeasurements.length % MEASUREMENT_COLORS.length],
+                                [32, 26]
+                              )}
+                              zIndexOffset={2900}
+                              interactive={false}
                             />
                           ))}
-                          {measurePoints.length > 2 && (
+                          {currentMeasurePoints.length > 2 && (
                             <Marker
-                              position={measurePoints[measurePoints.length - 1]}
-                              icon={createDistancePillIcon(`المجموع: ${totalMeasureDistanceKm} km`, '#b45309', [42, 30])}
-                              zIndexOffset={2400}
+                              position={currentMeasurePoints[currentMeasurePoints.length - 1]}
+                              icon={createDistancePillIcon(
+                                reportLanguage === 'ar' 
+                                  ? `المجموع: ${calcPointsDistKm(currentMeasurePoints)} km` 
+                                  : `Total: ${calcPointsDistKm(currentMeasurePoints)} km`,
+                                MEASUREMENT_COLORS[savedMeasurements.length % MEASUREMENT_COLORS.length],
+                                [42, 30]
+                              )}
+                              zIndexOffset={2950}
                               interactive={false}
                             />
                           )}
@@ -5900,7 +6122,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </MapContainer>
 
                     {/* Floating Measurement Tool Controls (Like Live Tracking Overlay) */}
-                    {(isMeasuring || measurePoints.length > 0) && (
+                    {(isMeasuring || savedMeasurements.length > 0 || currentMeasurePoints.length > 0) && (
                       <div 
                         onPointerDown={handleBarPointerDown}
                         onPointerMove={handleBarPointerMove}
@@ -5922,66 +6144,123 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             <GripHorizontal size={13} />
                           </div>
 
-                          <div className="flex items-center gap-1 text-amber-400 font-bold">
+                          <div className="flex items-center gap-1 text-amber-400 font-bold whitespace-nowrap">
                             <Ruler size={13} />
                             <span>
                               {isMeasuring 
-                                ? (reportLanguage === 'ar' ? 'وضع القياس (انقر للإضافة):' : 'Measuring (click to add):')
-                                : (reportLanguage === 'ar' ? 'المسافة المقاسة:' : 'Measured Distance:')
+                                ? (savedMeasurements.length > 0
+                                    ? (reportLanguage === 'ar' ? `قياس #${savedMeasurements.length + 1} (انقر للإضافة):` : `Measure #${savedMeasurements.length + 1} (click to add):`)
+                                    : (reportLanguage === 'ar' ? 'وضع القياس (انقر للإضافة):' : 'Measuring (click to add):')
+                                  )
+                                : (savedMeasurements.length > 1
+                                    ? (reportLanguage === 'ar' ? `المجموع (${savedMeasurements.length} قياسات):` : `Total (${savedMeasurements.length} measures):`)
+                                    : (reportLanguage === 'ar' ? 'المسافة المقاسة:' : 'Measured Distance:')
+                                  )
                               }
                             </span>
                           </div>
                           
                           <div className="h-3 w-px bg-slate-700"></div>
                           
-                          <div className="font-mono font-bold text-amber-300 text-xs">
-                            {totalMeasureDistanceKm} km
+                          <div className="font-mono font-bold text-amber-300 text-xs whitespace-nowrap">
+                            {isMeasuring && currentMeasurePoints.length >= 2 
+                              ? `${calcPointsDistKm(currentMeasurePoints)} km` 
+                              : `${totalAllMeasureDistanceKm} km`
+                            }
                           </div>
+
+                          {/* If measuring additional line and already have saved lines, show total badge */}
+                          {isMeasuring && savedMeasurements.length > 0 && currentMeasurePoints.length >= 2 && (
+                            <span className="text-[10px] text-amber-200/90 font-mono bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-800/60 whitespace-nowrap" title={reportLanguage === 'ar' ? 'الإجمالي لجميع المسافات' : 'Total of all distances'}>
+                              {reportLanguage === 'ar' ? 'الإجمالي:' : 'Total:'} {totalAllMeasureDistanceKm} km
+                            </span>
+                          )}
                           
-                          <div className="text-[10px] text-gray-400 font-normal">
-                            ({measurePoints.length} {reportLanguage === 'ar' ? 'نقاط' : 'pts'})
+                          <div className="text-[10px] text-gray-400 font-normal whitespace-nowrap">
+                            ({isMeasuring ? currentMeasurePoints.length : totalMeasurePointsCount} {reportLanguage === 'ar' ? 'نقاط' : 'pts'})
                           </div>
                           
                           <div className="h-3 w-px bg-slate-700"></div>
                           
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMeasurePoints([]);
-                              setIsMeasuring(false);
-                            }}
-                            className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-red-400 transition-colors"
-                            title={reportLanguage === 'ar' ? 'مسح نقاط القياس' : 'Clear measurement points'}
-                            disabled={measurePoints.length === 0}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                          
                           {isMeasuring ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsMeasuring(false);
-                              }}
-                              className="p-1 hover:bg-emerald-800/60 rounded-full text-emerald-400 hover:text-emerald-300 transition-colors"
-                              title={reportLanguage === 'ar' ? 'اعتماد المسافة وتثبيتها' : 'Validate & lock distance'}
-                            >
-                              <Check size={13} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              {/* Cancel/Discard current drawing */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCurrentMeasurePoints([]);
+                                  if (savedMeasurements.length > 0) {
+                                    setIsMeasuring(false);
+                                  }
+                                }}
+                                className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-red-400 transition-colors"
+                                title={reportLanguage === 'ar' ? 'إلغاء الرسم الحالي' : 'Cancel current measure'}
+                              >
+                                <X size={12} />
+                              </button>
+
+                              {/* Validate & lock this measurement */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleValidateCurrentMeasure();
+                                }}
+                                disabled={currentMeasurePoints.length < 2}
+                                className={`p-1 rounded-full transition-colors ${
+                                  currentMeasurePoints.length >= 2
+                                    ? 'hover:bg-emerald-800/60 text-emerald-400 hover:text-emerald-300'
+                                    : 'text-gray-600 cursor-not-allowed'
+                                }`}
+                                title={reportLanguage === 'ar' ? 'اعتماد وتثبيت المسافة' : 'Validate & lock distance'}
+                              >
+                                <Check size={13} />
+                              </button>
+                            </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsMeasuring(true);
-                              }}
-                              className="p-1 hover:bg-amber-800/60 rounded-full text-amber-400 hover:text-amber-300 transition-colors"
-                              title={reportLanguage === 'ar' ? 'استئناف تعديل القياس' : 'Resume measuring'}
-                            >
-                              <Ruler size={12} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              {/* + Add Another Measurement Button */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCurrentMeasurePoints([]);
+                                  setIsMeasuring(true);
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-[11px] rounded-full shadow transition-colors whitespace-nowrap"
+                                title={reportLanguage === 'ar' ? 'إضافة مسافة قياس أخرى على الخريطة' : 'Add another measurement on the map'}
+                              >
+                                <Plus size={12} />
+                                <span>{reportLanguage === 'ar' ? 'قياس آخر' : 'Add Measure'}</span>
+                              </button>
+
+                              {/* Undo last measurement */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUndoLastMeasurement();
+                                }}
+                                className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-amber-400 transition-colors"
+                                title={reportLanguage === 'ar' ? 'تراجع عن آخر قياس' : 'Undo last measurement'}
+                              >
+                                <RotateCcw size={12} />
+                              </button>
+
+                              {/* Clear all measurements */}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleClearAllMeasurements();
+                                }}
+                                className="p-1 hover:bg-slate-800 rounded-full text-gray-400 hover:text-red-400 transition-colors"
+                                title={reportLanguage === 'ar' ? 'مسح جميع القياسات' : 'Clear all measurements'}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
                           )}
                         </div>
                       </div>
