@@ -5,6 +5,7 @@ export type SectionId =
   | 'header'
   | 'regionInfo'
   | 'birdTable'
+  | 'frequency'
   | 'coordsTable'
   | 'kpis'
   | 'distTraveledKpi'
@@ -225,6 +226,7 @@ export const DEFAULT_SECTIONS: Record<SectionId, boolean> = {
   header: true,
   regionInfo: true,
   birdTable: true,
+  frequency: false,
   coordsTable: true,
   kpis: true,
   distTraveledKpi: true,
@@ -239,6 +241,7 @@ export const DEFAULT_SECTION_ORDER: SectionId[] = [
   'header',
   'regionInfo',
   'birdTable',
+  'frequency',
   'coordsTable',
   'kpis',
   'distTraveledKpi',

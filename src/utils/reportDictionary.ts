@@ -33,6 +33,10 @@ export const REPORT_DICTIONARY: Record<string, { ar: string; en: string }> = {
     ar: 'حالة الطائر',
     en: 'Bird Status'
   },
+  'report.frequency': {
+    ar: 'التردد',
+    en: 'Frequency'
+  },
   'report.region': {
     ar: 'المنطقة',
     en: 'Region'

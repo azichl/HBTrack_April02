@@ -19,6 +19,7 @@ describe('KPI Distance Traveled & Map Legend Spec', () => {
     expect(DEFAULT_SECTIONS.distTraveledKpi).toBe(true);
     expect(DEFAULT_SECTIONS.kpis).toBe(true);
     expect(DEFAULT_SECTIONS.legend).toBe(true);
+    expect(DEFAULT_SECTIONS.frequency).toBe(false);
 
     const sectionsCopy: Record<SectionId, boolean> = { ...DEFAULT_SECTIONS };
     sectionsCopy.distTraveledKpi = false;

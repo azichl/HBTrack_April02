@@ -16,6 +16,7 @@ const SECTION_DEFS: { id: SectionId; ar: string; en: string }[] = [
   { id: 'header', ar: 'رأس الصفحة والشعارات', en: 'Header & Logos' },
   { id: 'regionInfo', ar: 'معلومات المنطقة والجهاز', en: 'Region & Device' },
   { id: 'birdTable', ar: 'جدول بيانات الطائر', en: 'Bird Data Table' },
+  { id: 'frequency', ar: 'تردد الجهاز (Frequency)', en: 'Frequency' },
   { id: 'coordsTable', ar: 'جدول الإحداثيات', en: 'Coordinates Table' },
   { id: 'kpis', ar: 'بطاقات المؤشرات (KPIs)', en: 'KPI Cards' },
   { id: 'distTraveledKpi', ar: 'المسافة المقطوعة (Distance Traveled)', en: 'Distance Traveled KPI' },

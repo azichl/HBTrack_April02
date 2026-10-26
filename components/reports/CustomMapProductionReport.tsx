@@ -748,6 +748,7 @@ export interface ReportSectionVisibility {
   headerLogos: boolean;
   subtitle: boolean;
   birdDataCard: boolean;
+  frequencyRow?: boolean;
   coordinatesCard: boolean;
   kpiCards: boolean;
   distTraveledKpi: boolean;
@@ -788,6 +789,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     headerLogos: true,
     subtitle: true,
     birdDataCard: true,
+    frequencyRow: false,
     coordinatesCard: true,
     kpiCards: true,
     distTraveledKpi: true,
@@ -1102,7 +1104,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.tableMode) setTableMode(parsed.tableMode);
         if (parsed.reportLanguage) setReportLanguage(parsed.reportLanguage);
         if (parsed.mapImageFit) setMapImageFit(parsed.mapImageFit);
-        if (parsed.sectionVisibility) setSectionVisibility(parsed.sectionVisibility);
+        if (parsed.sectionVisibility) setSectionVisibility(prev => ({ ...prev, ...parsed.sectionVisibility, frequencyRow: parsed.sectionVisibility.frequencyRow ?? false }));
         if (parsed.themeColors) setThemeColors(parsed.themeColors);
         if (parsed.flightTrackConfig) setFlightTrackConfig(parsed.flightTrackConfig);
       } catch (e) {
@@ -1145,6 +1147,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     species: string;
     gender: string;
     birdStatus: string;
+    frequency?: string;
     issueDate: string;
     reportTitle: string;
     regionName: string;
@@ -1171,6 +1174,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     species: 'وحش',
     gender: 'ذكر',
     birdStatus: 'حي',
+    frequency: '',
     issueDate: formatDateYYYYMMDD(new Date()) || '2026-10-09',
     reportTitle: 'تقرير متابعة طائر حبارى مزود بجهاز تتبع',
     regionName: '',
@@ -1324,6 +1328,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     campLabel: reportLanguage === 'ar' ? 'مخيم' : 'Camp',
     birdData: reportLanguage === 'ar' ? 'بيانات الطائر' : 'Bird Data',
     txId: reportLanguage === 'ar' ? 'رقم جهاز التتبع' : 'Transmitter ID',
+    frequency: reportLanguage === 'ar' ? 'التردد' : 'Frequency',
     ringId: reportLanguage === 'ar' ? 'رقم الحجل' : 'Ring Number',
     species: reportLanguage === 'ar' ? 'النوعية' : 'Species',
     gender: reportLanguage === 'ar' ? 'الجنس' : 'Gender',
@@ -1476,6 +1481,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     }
     return String(selectedPttId).replace(/^trans-/, '');
   }, [isPttNA, selectedPttId, customMetadata.birdRing]);
+
+  const currentTransmitter = useMemo(() => {
+    if (reportSubject.active) return reportSubject.active;
+    const clean = String(selectedPttId || '').trim().replace(/^trans-/, '');
+    return transmitters.find(t =>
+      String(t.platform_id) === clean ||
+      String(t.id) === clean ||
+      String(t.platform_id) === String(selectedPttId) ||
+      String(t.id) === String(selectedPttId)
+    );
+  }, [reportSubject.active, transmitters, selectedPttId]);
+
+  const autoFrequency = useMemo(() => {
+    return currentTransmitter?.frequency || '';
+  }, [currentTransmitter]);
 
   // Distance between camps (Zhezkazgan & Almaty)
   const campDistanceKm = useMemo(() => {
@@ -1843,6 +1863,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     header: sectionVisibility.headerLogos,
     regionInfo: sectionVisibility.subtitle,
     birdTable: sectionVisibility.birdDataCard,
+    frequency: !!sectionVisibility.frequencyRow,
     coordsTable: sectionVisibility.coordinatesCard,
     kpis: sectionVisibility.kpiCards,
     distTraveledKpi: sectionVisibility.distTraveledKpi !== false,
@@ -1859,6 +1880,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       headerLogos: s.header,
       subtitle: s.regionInfo,
       birdDataCard: s.birdTable,
+      frequencyRow: s.frequency,
       coordinatesCard: s.coordsTable,
       kpiCards: s.kpis,
       distTraveledKpi: s.distTraveledKpi,
@@ -2031,6 +2053,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           species: currentBird?.species === 'Asian Houbara' ? 'وحش' : (currentBird?.species || prev.species || 'وحش'),
           gender: currentBird?.sex === 'M' ? 'ذكر' : currentBird?.sex === 'F' ? 'أنثى' : prev.gender,
           birdStatus: currentTransmitter?.status === 'active' ? 'حي' : (currentTransmitter?.status || prev.birdStatus || 'حي'),
+          frequency: currentTransmitter?.frequency || prev.frequency || '',
           issueDate: formatDateYYYYMMDD(new Date()) || prev.issueDate,
           regionName: '',
           statDirection: '',
@@ -2520,13 +2543,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         birdRing: b.ring_id && b.ring_id !== 'NA' ? b.ring_id : 'NA',
         species: b.species === 'Asian Houbara' ? 'وحش' : (b.species || prev.species),
         gender: b.sex === 'M' ? 'ذكر' : b.sex === 'F' ? 'أنثى' : prev.gender,
-        birdStatus: subject.status.value === 'alive' ? (reportLanguage === 'ar' ? 'حي' : 'Alive') : subject.status.value
+        birdStatus: subject.status.value === 'alive' ? (reportLanguage === 'ar' ? 'حي' : 'Alive') : subject.status.value,
+        frequency: subject.active?.frequency || prev.frequency || ''
       }));
     } else {
       setCustomMetadata(prev => ({
         ...prev,
         birdRing: 'NA',
-        birdStatus: subject.status.value === 'alive' ? (reportLanguage === 'ar' ? 'حي' : 'Alive') : subject.status.value
+        birdStatus: subject.status.value === 'alive' ? (reportLanguage === 'ar' ? 'حي' : 'Alive') : subject.status.value,
+        frequency: subject.active?.frequency || prev.frequency || ''
       }));
     }
 
@@ -4235,6 +4260,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
                   <input
                     type="checkbox"
+                    checked={!!sectionVisibility.frequencyRow}
+                    onChange={(e) => setSectionVisibility(prev => ({ ...prev, frequencyRow: e.target.checked }))}
+                    className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>تردد الجهاز (Frequency)</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-800 p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
                     checked={sectionVisibility.coordinatesCard}
                     onChange={(e) => setSectionVisibility(prev => ({ ...prev, coordinatesCard: e.target.checked }))}
                     className="rounded text-brand-600 w-3.5 h-3.5 cursor-pointer"
@@ -5062,6 +5096,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       )}
                     </span>
                   </div>
+
+                  {sectionVisibility.frequencyRow && (
+                    <div className="trk-row">
+                      <span className="k">{T.frequency}</span>
+                      <span className="v">
+                        {isTableEditing ? (
+                          <input
+                            type="text"
+                            value={customMetadata.frequency !== undefined && customMetadata.frequency !== '' ? customMetadata.frequency : (autoFrequency || '')}
+                            onChange={(e) => setCustomMetadata(prev => ({ ...prev, frequency: e.target.value }))}
+                            placeholder={autoFrequency || 'NA'}
+                            className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                          />
+                        ) : (
+                          <span className="font-mono font-bold text-gray-800 text-[13px]">
+                            {customMetadata.frequency || autoFrequency || 'NA'}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="trk-row">
                     <span className="k">{T.ringId}</span>
