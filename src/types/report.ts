@@ -1,3 +1,5 @@
+import { IconScaleState, DEFAULT_ICON_SCALE } from '../features/report-track/iconScale';
+
 export type SectionId =
   | 'header'
   | 'regionInfo'
@@ -61,9 +63,12 @@ export interface MapElementState {
   pinnedInLegend?: boolean;
 }
 
-export type MapElements = Record<MapElementId, MapElementState>;
+export interface MapElements extends Partial<Record<MapElementId, MapElementState>> {
+  iconScale?: IconScaleState;
+}
 
 export const DEFAULT_MAP_ELEMENTS: MapElements = {
+  iconScale: DEFAULT_ICON_SCALE,
   release: { visible: true, showLabel: true, size: 8, color: '#701a2b' },
   latest: { visible: true, showLabel: true, size: 10, color: '#22c55e' },
   camps: { visible: true, showLabel: true, size: 8, color: '#f59e0b' },

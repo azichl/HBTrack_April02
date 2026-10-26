@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Popover } from '../ui/Popover';
 import { Segmented } from '../ui/Segmented';
 import { Switch } from '../ui/Switch';
-import { PeriodsEditor } from './PeriodsEditor';
+import { PeriodsEditor } from '../../features/report-track/PeriodsEditor';
+import { DataRange } from '../../features/report-track/periodsModel';
 import {
   TrackPathSettings,
   DEFAULT_TRACK_SETTINGS,
@@ -485,28 +486,7 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
         <div className="space-y-2">
           <Switch
             checked={draft.periodsEnabled}
-            onChange={(periodsEnabled) => {
-              if (periodsEnabled && (!draft.periods || draft.periods.length === 0)) {
-                const currentYear = new Date().getFullYear();
-                let fromDate = dataDateRange?.from || `${currentYear}-01-01`;
-                let toDate = dataDateRange?.to || `${currentYear}-10-22`;
-                let midDate = `${currentYear}-04-30`;
-                if (dataDateRange?.from && dataDateRange?.to) {
-                  const s = new Date(`${fromDate}T00:00:00Z`).getTime();
-                  const e = new Date(`${toDate}T00:00:00Z`).getTime();
-                  if (e > s) {
-                    midDate = new Date(s + (e - s) / 2).toISOString().slice(0, 10);
-                  }
-                }
-                const defaultPeriods = [
-                  { id: `p1-${Date.now()}`, from: fromDate, to: midDate, color: '#2563eb', label: `${fromDate} → ${midDate}` },
-                  { id: `p2-${Date.now() + 1}`, from: midDate, to: toDate, color: '#f97316', label: `${midDate} → ${toDate}` }
-                ];
-                updateDraft({ periodsEnabled, periods: defaultPeriods });
-              } else {
-                updateDraft({ periodsEnabled });
-              }
-            }}
+            onChange={(periodsEnabled) => updateDraft({ periodsEnabled })}
             label={isAr ? 'تلوين المسار حسب الفترات' : 'Color Path by Periods'}
             description={isAr ? 'تقسيم المسار إلى فترات زمنية ملونة' : 'Split track into seasonal segments'}
             size="sm"
@@ -514,10 +494,9 @@ export const TrackPathPopover: React.FC<TrackPathPopoverProps> = ({
 
           {draft.periodsEnabled && (
             <PeriodsEditor
-              periods={draft.periods}
+              periods={draft.periods || []}
+              range={dataDateRange && dataDateRange.from && dataDateRange.to ? { from: dataDateRange.from, to: dataDateRange.to } : null}
               onChange={(periods) => updateDraft({ periods })}
-              language={language}
-              dataDateRange={dataDateRange}
             />
           )}
         </div>

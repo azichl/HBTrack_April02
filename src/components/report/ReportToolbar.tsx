@@ -31,6 +31,8 @@ import { TextPopover, ReportTexts } from './popovers/TextPopover';
 import { TrackPathPopover } from '../track/TrackPathPopover';
 import { SectionId, MapLabel, ReportLegendItem, ReportLegendLayout, MapElements, ReportLanguage } from '../../types/report';
 import { TrackPathSettings } from '../../types/track';
+import { LegendStore } from '../../features/report-track/legendStore';
+import { ExtraItem } from '../../features/report-track/legendModel';
 
 export interface ReportToolbarProps {
   // Edit Mode
@@ -69,6 +71,9 @@ export interface ReportToolbarProps {
   mapCenter?: { lat: number; lon: number };
 
   // Legend
+  legendStore?: LegendStore;
+  legendPresence?: Record<string, boolean>;
+  legendExtra?: ExtraItem[];
   legendItems?: ReportLegendItem[];
   onChangeLegendItems?: (items: ReportLegendItem[]) => void;
   legendLayout?: ReportLegendLayout;
@@ -152,6 +157,9 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   labels,
   onChangeLabels,
   mapCenter,
+  legendStore,
+  legendPresence,
+  legendExtra,
   legendItems = [],
   onChangeLegendItems = () => {},
   legendLayout,
@@ -621,17 +629,17 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
         language={language}
       />
 
-      <LegendPopover
-        anchorRef={legendBtnRef}
-        open={activePopover === 'legend'}
-        onClose={() => setActivePopover(null)}
-        items={legendItems}
-        onChangeItems={onChangeLegendItems}
-        layout={legendLayout}
-        onChangeLayout={onChangeLegendLayout}
-        defaultItems={defaultLegendItems}
-        language={language}
-      />
+      {legendStore && (
+        <LegendPopover
+          anchorRef={legendBtnRef}
+          open={activePopover === 'legend'}
+          onClose={() => setActivePopover(null)}
+          store={legendStore}
+          presence={legendPresence}
+          extra={legendExtra}
+          language={language}
+        />
+      )}
 
       <TextPopover
         anchorRef={textBtnRef}

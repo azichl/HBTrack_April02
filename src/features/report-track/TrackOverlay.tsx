@@ -1,5 +1,5 @@
 // src/features/report-track/TrackOverlay.tsx
-// REFERENCE (not compiled here — adapt imports/types to the project).
+// Compiled and exercised in tests (jsdom) — see ReportTrackFeature.test.tsx.
 //
 // Draws the Custom Map Report track as an SVG overlay on the report map. It is deliberately
 // independent from the live map: it imports nothing from it and the live map imports nothing from here.
@@ -23,78 +23,36 @@ export interface MapAdapter {
 /* ----------------------------- Leaflet adapter ------------------------------ */
 // Custom pane (zIndex 450: above vector overlays 400, below markers 600), projects with layer points,
 // draws 25 % extra on every side so panning never reveals blank edges before `moveend`.
-export function leafletAdapter(map: import('leaflet').Map | null | undefined): MapAdapter | null {
-  if (!map || !(map as any)._mapPane) return null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function leafletAdapter(map: any): MapAdapter {
   const PAD = 0.25;
-  let pane: HTMLElement;
-  try {
-    pane = map.getPane('hbTrack') ?? map.createPane('hbTrack');
-    pane.style.zIndex = '450';
-    pane.style.pointerEvents = 'none';
-  } catch {
-    return null;
-  }
-  const isAlive = () => Boolean(map && (map as any)._mapPane);
-  const pad = () => {
-    if (!isAlive()) return { x: 0, y: 0 };
-    try {
-      const s = map.getSize();
-      return { x: s.x * PAD, y: s.y * PAD };
-    } catch {
-      return { x: 0, y: 0 };
-    }
-  };
-  const origin = () => {
-    if (!isAlive()) return { x: 0, y: 0 };
-    try {
-      const p = pad();
-      const o = map.containerPointToLayerPoint([-p.x, -p.y]);
-      return { x: o.x, y: o.y };
-    } catch {
-      return { x: 0, y: 0 };
-    }
-  };
+  const pane = map.getPane('hbTrack') ?? map.createPane('hbTrack');
+  pane.style.zIndex = '450';
+  pane.style.pointerEvents = 'none';
+  const pad = () => { const s = map.getSize(); return { x: s.x * PAD, y: s.y * PAD }; };
+  const origin = () => { const p = pad(); const o = map.containerPointToLayerPoint([-p.x, -p.y]); return { x: o.x, y: o.y }; };
   return {
     mount: pane,
     origin,
     project: (lat, lon) => {
-      if (!isAlive()) return { x: 0, y: 0 };
-      try {
-        const o = origin();
-        const p = map.latLngToLayerPoint([lat, lon]);
-        return { x: p.x - o.x, y: p.y - o.y };
-      } catch {
-        return { x: 0, y: 0 };
-      }
+      const o = origin();
+      const p = map.latLngToLayerPoint([lat, lon]);
+      return { x: p.x - o.x, y: p.y - o.y };
     },
-    size: () => {
-      if (!isAlive()) return { w: 0, h: 0 };
-      try {
-        const s = map.getSize();
-        return { w: s.x * (1 + 2 * PAD), h: s.y * (1 + 2 * PAD) };
-      } catch {
-        return { w: 0, h: 0 };
-      }
-    },
+    size: () => { const s = map.getSize(); return { w: s.x * (1 + 2 * PAD), h: s.y * (1 + 2 * PAD) }; },
     subscribe: cb => {
-      if (!isAlive()) return () => {};
-      try {
-        map.on('moveend zoomend resize viewreset', cb);
-        return () => {
-          try { map.off('moveend zoomend resize viewreset', cb); } catch {}
-        };
-      } catch {
-        return () => {};
-      }
+      map.on('moveend zoomend resize viewreset', cb);
+      return () => { map.off('moveend zoomend resize viewreset', cb); };
     },
   };
 }
 
 /* ---------------------------- MapLibre / Mapbox ----------------------------- */
 // Inserts a div right after the canvas, so DOM markers (added later) render above it.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function maplibreAdapter(map: any): MapAdapter {
-  const container = map.getCanvasContainer();
-  let host = container?.querySelector?.('.hb-track-host') as HTMLElement | null;
+  const container: HTMLElement = map.getCanvasContainer();
+  let host: HTMLElement | null = container.querySelector('.hb-track-host');
   if (!host) {
     host = document.createElement('div');
     host.className = 'hb-track-host';
@@ -145,7 +103,7 @@ export function TrackOverlay({ model, settings, adapter, avoid = [], debug }: Pr
     [adapter, model, settings, tick, size.w, size.h, avoid],
   );
 
-  if (!adapter || !adapter.mount || (typeof document !== 'undefined' && !document.contains(adapter.mount)) || !svg) return null;
+  if (!adapter || !svg) return null;
 
   const node = (
     <svg

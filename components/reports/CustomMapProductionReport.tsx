@@ -47,6 +47,12 @@ import { useReportFixes } from '../../src/features/report-track/useReportFixes';
 import { TrackOverlay, leafletAdapter } from '../../src/features/report-track/TrackOverlay';
 import { buildTrackRenderModel } from '../../src/features/report-track/trackRenderModel';
 import { useReportTrackSettings } from '../../src/features/report-track/useReportTrackSettings';
+import '../../src/features/report-track/ReportTrack.css';
+import { LegendBlock } from '../../src/features/report-track/LegendBlock';
+import { LegendEditorPanel } from '../../src/features/report-track/LegendEditorPanel';
+import { createLegendStore, LegendStore } from '../../src/features/report-track/legendStore';
+import { DEFAULT_LEGEND_STATE, LegendState, ExtraItem } from '../../src/features/report-track/legendModel';
+import { iconScaleVars, DEFAULT_ICON_SCALE } from '../../src/features/report-track/iconScale';
 import { getReportString } from '../../src/utils/reportDictionary';
 import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
 import { BirdStatus } from '../../src/constants/statusColors';
@@ -116,14 +122,16 @@ export const formatTableDMM = (val: number, isLat: boolean): string => {
 
 // ─── LEAFLET ICONS ────────────────────────────────────────────────────────────
 
-const createLiveTrackingPinIcon = (pinColorHex: string) => {
+const createLiveTrackingPinIcon = (pinColorHex: string, innerClass: string = '') => {
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
-        <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
-        <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
-      </svg>
+      <div class="${innerClass}" style="width: 25px; height: 41px; transform-origin: 50% 100%;">
+        <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+          <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0Z" fill="${pinColorHex}" stroke="#000000" stroke-width="1.2" stroke-opacity="0.3" />
+          <circle cx="12.5" cy="12.5" r="5" fill="#ffffff" opacity="0.95" />
+        </svg>
+      </div>
     `,
     iconSize: [25, 41],
     iconAnchor: [12.5, 41],
@@ -222,14 +230,16 @@ const createLiveTrackingCampPinIcon = (pinColorHex: string = '#f59e0b') => {
   return L.divIcon({
     className: 'bg-transparent',
     html: `
-      <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
-        <circle cx="15" cy="15" r="14" fill="${pinColorHex}" stroke="#ffffff" stroke-width="2"/>
-        <g transform="translate(6, 6) scale(0.75)">
-          <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
-          <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
-          <path d="m10 4 4.5 16" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
-        </g>
-      </svg>
+      <div class="hb-icon-camp" style="width: 30px; height: 30px; transform-origin: 50% 50%;">
+        <svg width="30" height="30" viewBox="0 0 30 30" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+          <circle cx="15" cy="15" r="14" fill="${pinColorHex}" stroke="#ffffff" stroke-width="2"/>
+          <g transform="translate(6, 6) scale(0.75)">
+            <path d="M19 20 10 4 1 20h18Z" fill="#ffffff" fill-opacity="0.35"/>
+            <path d="M10 4 23 20" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+            <path d="m10 4 4.5 16" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
     `,
     iconSize: [30, 30],
     iconAnchor: [15, 15]
@@ -1402,6 +1412,29 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return list;
   }, [measurePoints]);
 
+  // ─── ONE SHARED LEGEND STORE (Pass 7 Single Source of Truth) ───────────────
+  const legendStore = useMemo(() => {
+    let initial = DEFAULT_LEGEND_STATE;
+    try {
+      const saved = localStorage.getItem('hbtrack_report_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.legend) initial = parsed.legend;
+      }
+    } catch (e) {
+      console.error('Failed to load saved legend', e);
+    }
+    return createLegendStore(initial, (s) => {
+      try {
+        const saved = localStorage.getItem('hbtrack_report_settings');
+        const parsed = saved ? JSON.parse(saved) : {};
+        localStorage.setItem('hbtrack_report_settings', JSON.stringify({ ...parsed, legend: s }));
+      } catch (e) {
+        console.error('Failed to save legend', e);
+      }
+    });
+  }, []);
+
   // ─── CUSTOMIZABLE MAP LEGEND ITEMS (ITEM BY ITEM) ───────────────────────────
   const [legendItems, setLegendItems] = useState<CustomLegendItem[]>([
     {
@@ -1983,6 +2016,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       ] as [number, number]
     };
   }, [telemetryData, activeCamp, reportLanguage, coordFormat]);
+
+  // Presence of elements on this map (for Pass 7 Legend sync)
+  const presence = useMemo(() => ({
+    release: !!metrics.hasRelease && mapElements.release?.visible !== false,
+    latest: !!metrics.hasLast && mapElements.latest?.visible !== false,
+    camp: visibleCampIds.length > 0 && mapElements.camps?.visible !== false,
+    distCamp: !!(campDistToLastEnabled && Object.values(campDistToLastEnabled).some(Boolean) && metrics.hasLast && visibleCampIds.length > 0 && mapElements.distCamp?.visible !== false),
+    distRelease: !!(metrics.hasRelease && metrics.hasLast && mapElements.distRelease?.visible !== false),
+    track: effectiveTrackSettings.show && trackRenderModel.shown > 0 && !effectiveTrackSettings.periodsEnabled && mapElements.track?.visible !== false,
+    mainRoad: !!showGoogleLabels,
+    towns: !!showGoogleLabels,
+  }), [metrics.hasRelease, metrics.hasLast, mapElements, visibleCampIds.length, campDistToLastEnabled, effectiveTrackSettings.show, effectiveTrackSettings.periodsEnabled, trackRenderModel.shown, showGoogleLabels]);
+
+  const periodItems: ExtraItem[] = useMemo(() => {
+    if (!effectiveTrackSettings.periodsEnabled || !effectiveTrackSettings.show || mapElements.track?.visible === false) return [];
+    return trackRenderModel.legend.map(l => ({
+      id: l.id,
+      label: l.label,
+      color: l.color,
+      shape: 'line' as const,
+    }));
+  }, [effectiveTrackSettings.periodsEnabled, effectiveTrackSettings.show, mapElements.track?.visible, trackRenderModel.legend]);
 
   // Recenter Map Helper (Fits bounds around Release Point, Last GPS Fix, and Active Camp)
   const handleRecenterMap = useCallback(() => {
@@ -3174,6 +3229,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           labels={mapLabels}
           onChangeLabels={setMapLabels}
           mapCenter={{ lat: metrics.lLat || 46.9965, lon: metrics.lLon || 67.0222 }}
+          legendStore={legendStore}
+          legendPresence={presence}
+          legendExtra={periodItems}
           legendItems={toolbarLegendItems}
           defaultLegendItems={defaultToolbarLegendItems}
           onChangeLegendItems={handleToolbarLegendItemsChange}
@@ -4286,6 +4344,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         <div 
           id="custom-map-production-print-area"
           ref={reportContainerRef}
+          data-exporting={isExportingPdf || isExportingPng ? 'true' : undefined}
           className="trk-page bg-white text-gray-900 w-[1122px] min-w-[1122px] max-w-[1122px] h-[885px] min-h-[885px] max-h-[885px] p-[28px_36px_18px] shadow-2xl rounded-sm border border-gray-300 relative select-none box-border overflow-hidden"
           dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}
           style={{
@@ -4815,7 +4874,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
-                        <span className="pill pill--grey">{translateValue(reportSubject.display.ringNumber || 'NA')}</span>
+                        <span className="pill pill--grey hb-chip">{translateValue(reportSubject.display.ringNumber || 'NA')}</span>
                       )}
                     </span>
                   </div>
@@ -5253,13 +5312,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
             </aside>
 
             {/* ─── COLUMN 2 (LEFT in RTL): MAP WINDOW & LEGEND (1fr) ───── */}
-            <div className="flex flex-col space-y-2.5" style={{ direction: 'ltr', minWidth: 0 }}>
+            <div className="flex flex-col space-y-2.5 flex-1 min-h-0" style={{ direction: 'ltr', minWidth: 0 }}>
               
               {/* Map Viewport Frame */}
               <div 
                 ref={mapViewportRef}
-                className="trk-map relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-[#ece8de] h-[465px] shadow-xs flex items-center justify-center"
-                style={{ direction: 'ltr', textAlign: 'left' }}
+                className="trk-map relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-[#ece8de] shadow-xs flex items-center justify-center flex-1 min-h-0"
+                style={{ direction: 'ltr', textAlign: 'left', minHeight: 0, flex: '1 1 0%', ...(iconScaleVars(mapElements.iconScale ?? DEFAULT_ICON_SCALE) as any) }}
               >
                 
                 {/* 1. SCREENED PHOTO FROM LIVE TRACK OR UPLOADED QGIS MAP */}
@@ -5539,7 +5598,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.rLat, metrics.rLon]}
-                            icon={createLiveTrackingPinIcon(mapElements.release?.color || themeColors.releasePinColor)}
+                            icon={createLiveTrackingPinIcon(mapElements.release?.color || themeColors.releasePinColor, 'hb-pin-release')}
                             zIndexOffset={1800}
                             interactive={false}
                           />
@@ -5572,7 +5631,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.lLat, metrics.lLon]}
-                            icon={createLiveTrackingPinIcon(mapElements.latest?.color || themeColors.latestPinColor)}
+                            icon={createLiveTrackingPinIcon(mapElements.latest?.color || themeColors.latestPinColor, 'hb-pin-latest')}
                             zIndexOffset={2000}
                             interactive={false}
                           />
@@ -6108,218 +6167,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               {sectionVisibility.legendBar && (
                 <div 
                   id="custom-map-legend-bar"
-                className="trk-legend relative group select-none transition-all"
-                style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%' }}
-              >
-                {/* Hover Quick Edit Button (when not in table edit mode) */}
-                {!isTableEditing && (
-                  <div className="no-export-snapshot no-print no-export absolute -top-3 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <button
-                      type="button"
-                      onClick={() => setIsLegendEditorOpen(true)}
-                      className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold flex items-center gap-1 shadow-md cursor-pointer"
-                      title="تعديل نصوص وألوان ورموز مفتاح الخريطة عنصراً بعنصر"
-                    >
-                      <Edit3 size={10} />
-                      <span>تعديل المفتاح</span>
-                    </button>
-                  </div>
-                )}
-
-                {/* Edit Mode Top Toolbar */}
-                {isTableEditing && (
-                  <div className="no-export-snapshot no-print no-export mb-1.5 pb-1 border-b border-amber-200 flex items-center justify-between text-xs w-full bg-amber-50/70 p-1.5 rounded">
-                    <span className="font-bold text-gray-800 flex items-center gap-1 text-[11px]">
-                      <Edit3 size={12} className="text-amber-600" />
-                      <span>تعديل مفتاح الخريطة:</span>
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setIsLegendEditorOpen(true)}
-                        className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10.5px] font-bold flex items-center gap-1 shadow-xs cursor-pointer"
-                        title="فتح نافذة تعديل المفتاح بالكامل لعرض وتعديل جميع العناصر"
-                      >
-                        <Palette size={11} />
-                        <span>فتح نافذة التعديل المنبثقة</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddLegendItem}
-                        className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10.5px] font-bold flex items-center gap-1 shadow-xs cursor-pointer"
-                      >
-                        <Plus size={11} />
-                        <span>إضافة عنصر</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleResetLegendItems}
-                        className="px-2 py-0.5 bg-white hover:bg-gray-100 text-gray-700 rounded text-[10.5px] font-bold flex items-center gap-1 border border-gray-200 cursor-pointer"
-                        title="إعادة تعيين مفتاح الخريطة للوضع الافتراضي"
-                      >
-                        <RotateCcw size={11} />
-                        <span>الافتراضي</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Content: Edit View vs Clean Official Report View */}
-                {isTableEditing ? (
-                  <div className="flex flex-wrap items-center gap-2 py-1 w-full max-h-[105px] overflow-y-auto pr-1">
-                    {legendItems.map((item, index) => (
-                      <div 
-                        key={item.id} 
-                        className={`flex items-center gap-1.5 p-1 rounded-md border text-xs transition-colors ${
-                          item.visible ? 'bg-amber-50/80 border-amber-300 shadow-xs' : 'bg-gray-100/60 border-gray-200 opacity-60'
-                        }`}
-                      >
-                        {/* Visibility Toggle */}
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateLegendItem(item.id, { visible: !item.visible })}
-                          className={`p-0.5 rounded hover:bg-white/80 ${item.visible ? 'text-emerald-700' : 'text-gray-400'}`}
-                          title={item.visible ? 'إخفاء هذا العنصر من التقرير' : 'إظهار هذا العنصر في التقرير'}
-                        >
-                          {item.visible ? <Eye size={13} /> : <EyeOff size={13} />}
-                        </button>
-
-                        {/* Color Picker */}
-                        <input
-                          type="color"
-                          value={item.color}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { color: e.target.value })}
-                          className="w-5 h-5 rounded cursor-pointer border border-gray-300 p-0"
-                          title="تغيير اللون"
-                        />
-
-                        {/* Symbol Selector */}
-                        <select
-                          value={item.symbol}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { symbol: e.target.value as any })}
-                          className="text-[10.5px] bg-white border border-gray-200 rounded px-1 py-0.5 font-sans cursor-pointer outline-none"
-                          title="نوع الرمز"
-                        >
-                          <option value="circle">دائرة</option>
-                          <option value="line">خط</option>
-                          <option value="dashed-line">متقطع</option>
-                          <option value="tent">خيمة</option>
-                          <option value="square">مربع</option>
-                          <option value="star">نجمة</option>
-                          <option value="pin">دبوس</option>
-                        </select>
-
-                        {/* Editable Label */}
-                        <input
-                          type="text"
-                          value={item.label}
-                          onChange={(e) => handleUpdateLegendItem(item.id, { label: e.target.value })}
-                          className="px-1.5 py-0.5 text-[11px] font-bold text-gray-900 border border-gray-300 rounded bg-white w-28 md:w-36 outline-none focus:ring-1 focus:ring-amber-500 font-sans"
-                          placeholder="نص العنصر..."
-                        />
-
-                        {/* Reorder: Move Left / Right */}
-                        <button
-                          type="button"
-                          onClick={() => handleMoveLegendItem(index, 'left')}
-                          disabled={index === 0}
-                          className="p-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 cursor-pointer"
-                          title="تحريك للأمام (اليمين)"
-                        >
-                          <ChevronRight size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveLegendItem(index, 'right')}
-                          disabled={index === legendItems.length - 1}
-                          className="p-0.5 text-gray-500 hover:text-gray-800 disabled:opacity-30 cursor-pointer"
-                          title="تحريك للخلف (اليسار)"
-                        >
-                          <ChevronLeft size={13} />
-                        </button>
-
-                        {/* Delete Item */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteLegendItem(item.id)}
-                          className="p-0.5 text-red-500 hover:text-red-700 cursor-pointer"
-                          title="حذف هذا العنصر من المفتاح"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-
-                    {/* Flight Track Period Legend info during edit mode */}
-                    {effectiveTrackSettings.show && mapElements.track?.visible !== false && trackRenderModel.shown > 0 && (
-                      <div className="flex items-center gap-1.5 p-1 rounded-md border text-xs bg-indigo-50/80 border-indigo-300 text-indigo-900 font-bold">
-                        <span className="text-[10px]">{reportLanguage === 'en' ? 'Track:' : 'المسار:'}</span>
-                        {trackRenderModel.legend.map(seg => (
-                          <span key={`edit-seg-${seg.id}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white text-[10.5px]">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: seg.color }} />
-                            {seg.label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div 
-                    className="trk-legend flex flex-row items-center flex-wrap gap-x-4 gap-y-1.5 w-full px-2 py-0.5 text-[11px] font-bold text-gray-800"
-                    style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', minWidth: 0 }}
-                  >
-                    {legendItems.filter(item => {
-                      if (!item.visible) return false;
-                      if (item.id === 'release_pos' && (mapElements.release?.visible === false || !metrics.hasRelease)) return false;
-                      if (item.id === 'last_pos' && (mapElements.latest?.visible === false || !metrics.hasLast)) return false;
-                      if (item.id === 'camp_dist' && (mapElements.distCamp?.visible === false || !metrics.hasLast)) return false;
-                      if (item.id === 'dist_release' && (mapElements.distRelease?.visible === false || !metrics.hasLast)) return false;
-                      if (item.id === 'flight_track' && (mapElements.track?.visible === false || (trackRenderModel.shown === 0 && activeTrackPoints.length === 0))) return false;
-                      return true;
-                    }).map(item => {
-                      let lbl = item.label;
-                      if (reportLanguage === 'en') {
-                        if (lbl === 'طريق رئيسي' || item.id === 'main_road') lbl = 'Main Road';
-                        else if (lbl === 'المسافة إلى المخيم' || lbl === 'البعد عنه' || item.id === 'camp_dist') lbl = 'Distance to Camp';
-                        else if (lbl === 'المسافة من موقع الإطلاق' || lbl === 'المسافة من موقع التركيب' || item.id === 'dist_release') lbl = 'Distance from Release';
-                        else if (lbl === 'مسار الطيران' || item.id === 'flight_track') lbl = 'Flight Track';
-                        else if (lbl === 'مخيم' || lbl === 'المخيم' || item.id === 'camps') lbl = 'Camp';
-                        else if (lbl.includes('آخر موقع') || item.id === 'last_pos') lbl = 'Latest Location';
-                        else if (lbl === 'موقع تركيب الجهاز' || item.id === 'release_pos') lbl = 'Release Location';
-                        else lbl = translateValue(lbl);
-                      } else {
-                        if (lbl === 'Main Road' || item.id === 'main_road') lbl = 'طريق رئيسي';
-                        else if (lbl === 'Distance to Camp' || item.id === 'camp_dist') lbl = 'المسافة إلى المخيم';
-                        else if (lbl === 'Distance from Release' || item.id === 'dist_release') lbl = 'المسافة من موقع الإطلاق';
-                        else if (lbl === 'Flight Track' || item.id === 'flight_track') lbl = 'مسار الطيران';
-                        else if (lbl === 'Camp' || item.id === 'camps') lbl = 'مخيم';
-                        else if (lbl === 'Latest Location' || item.id === 'last_pos') lbl = 'آخر موقع';
-                        else if (lbl === 'Release Location' || item.id === 'release_pos') lbl = 'موقع تركيب الجهاز';
-                      }
-
-                      return (
-                        <div key={item.id} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                          {renderLegendSymbol(item.symbol, item.color)}
-                          <span>{lbl}</span>
-                        </div>
-                      );
-                    })}
-
-                    {/* Official Report Legend: Flight Track Single or Multi-Period entries from model */}
-                    {effectiveTrackSettings.show && mapElements.track?.visible !== false && trackRenderModel.shown > 0 && effectiveTrackSettings.periodsEnabled && trackRenderModel.legend.length > 1 && (
-                      trackRenderModel.legend.map(seg => (
-                        <div key={`legend-track-${seg.id}`} className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                          <span 
-                            className="w-5 h-1 rounded-sm inline-block shrink-0" 
-                            style={{ backgroundColor: seg.color }}
-                          />
-                          <span>{seg.label}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
+                  className="trk-legend relative group select-none transition-all flex-none"
+                  style={{ direction: reportLanguage === 'ar' ? 'rtl' : 'ltr', margin: '4px 0 0 0', width: '100%', flex: 'none' }}
+                >
+                  <LegendBlock
+                    store={legendStore}
+                    lang={reportLanguage === 'ar' ? 'ar' : 'en'}
+                    presence={presence}
+                    extra={periodItems}
+                    onEdit={isTableEditing ? () => setIsLegendEditorOpen(true) : undefined}
+                  />
+                </div>
               )}
 
             </div>
@@ -6405,164 +6263,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               </button>
             </div>
 
-            {/* Modal Subheader Controls */}
-            <div className="px-5 py-2.5 border-b border-gray-100 dark:border-slate-800 bg-gray-50/40 dark:bg-slate-800/30 flex items-center justify-between text-xs">
-              <span className="font-semibold text-gray-600 dark:text-gray-300">
-                {reportLanguage === 'ar' 
-                  ? `العناصر الظاهرة: ${legendItems.filter(i => i.visible).length} من ${legendItems.length}`
-                  : `${legendItems.filter(i => i.visible).length} / ${legendItems.length} visible`
-                }
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleAddLegendItem}
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold flex items-center gap-1 text-[11px] shadow-xs transition-colors cursor-pointer"
-                >
-                  <Plus size={12} />
-                  <span>{reportLanguage === 'ar' ? 'إضافة عنصر جديد' : 'Add Item'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLegendItems(prev => prev.map(i => ({ ...i, visible: true })))}
-                  className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline font-semibold"
-                >
-                  {reportLanguage === 'ar' ? 'إظهار الكل' : 'Show All'}
-                </button>
-                <span className="text-gray-300">|</span>
-                <button
-                  type="button"
-                  onClick={handleResetLegendItems}
-                  className="px-2 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-lg font-bold flex items-center gap-1 text-[11px] transition-colors cursor-pointer"
-                  title="استعادة الحالة الافتراضية للمفتاح"
-                >
-                  <RotateCcw size={12} />
-                  <span>{reportLanguage === 'ar' ? 'الافتراضي' : 'Reset'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable Items List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {legendItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`flex items-center gap-2 p-2 rounded-xl border transition-all ${
-                    item.visible
-                      ? 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-xs'
-                      : 'bg-gray-50 dark:bg-slate-800/40 border-gray-200/60 dark:border-slate-800 opacity-60'
-                  }`}
-                >
-                  {/* Visibility Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleUpdateLegendItem(item.id, { visible: !item.visible })}
-                    className={`w-7 h-7 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
-                      item.visible
-                        ? 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
-                        : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                    title={item.visible ? 'إخفاء من التقرير' : 'إظهار في التقرير'}
-                  >
-                    {item.visible ? <Eye size={16} /> : <EyeOff size={16} />}
-                  </button>
-
-                  {/* Color Picker */}
-                  <div className="relative w-7 h-7 rounded-lg border border-gray-300 dark:border-slate-600 overflow-hidden shrink-0 shadow-2xs">
-                    <input
-                      type="color"
-                      value={item.color}
-                      onChange={(e) => handleUpdateLegendItem(item.id, { color: e.target.value })}
-                      className="absolute inset-0 w-full h-full cursor-pointer opacity-0"
-                    />
-                    <div className="w-full h-full" style={{ backgroundColor: item.color }} />
-                  </div>
-
-                  {/* Symbol Selector */}
-                  <select
-                    value={item.symbol}
-                    onChange={(e) => handleUpdateLegendItem(item.id, { symbol: e.target.value as any })}
-                    className="text-xs bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-gray-200 rounded-lg px-2 py-1 font-sans cursor-pointer outline-none"
-                  >
-                    <option value="circle">{reportLanguage === 'ar' ? 'دائرة' : 'Circle'}</option>
-                    <option value="line">{reportLanguage === 'ar' ? 'خط متصل' : 'Line'}</option>
-                    <option value="dashed-line">{reportLanguage === 'ar' ? 'خط متقطع' : 'Dashed Line'}</option>
-                    <option value="tent">{reportLanguage === 'ar' ? 'خيمة' : 'Tent'}</option>
-                    <option value="square">{reportLanguage === 'ar' ? 'مربع' : 'Square'}</option>
-                    <option value="star">{reportLanguage === 'ar' ? 'نجمة' : 'Star'}</option>
-                    <option value="pin">{reportLanguage === 'ar' ? 'دبوس' : 'Pin'}</option>
-                  </select>
-
-                  {/* Label Text Input */}
-                  <input
-                    type="text"
-                    value={item.label}
-                    onChange={(e) => handleUpdateLegendItem(item.id, { label: e.target.value })}
-                    className="flex-1 min-w-0 px-2.5 py-1 text-xs font-bold text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-amber-500/50"
-                    placeholder="نص العنصر..."
-                  />
-
-                  {/* Reorder Buttons */}
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => handleMoveLegendItem(index, 'right')}
-                      disabled={index === 0}
-                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-20 cursor-pointer"
-                      title={reportLanguage === 'ar' ? 'تحريك للأعلى' : 'Move Up'}
-                    >
-                      <ChevronRight size={14} className="rotate-90" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMoveLegendItem(index, 'left')}
-                      disabled={index === legendItems.length - 1}
-                      className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-20 cursor-pointer"
-                      title={reportLanguage === 'ar' ? 'تحريك للأسفل' : 'Move Down'}
-                    >
-                      <ChevronLeft size={14} className="rotate-90" />
-                    </button>
-                  </div>
-
-                  {/* Delete Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteLegendItem(item.id)}
-                    className="p-1 text-red-400 hover:text-red-600 dark:hover:text-red-400 rounded-md cursor-pointer"
-                    title="حذف"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-
-              {/* Multi-Period Track segments preview if active */}
-              {effectiveTrackSettings.show && mapElements.track?.visible !== false && trackRenderModel.shown > 0 && effectiveTrackSettings.periodsEnabled && trackRenderModel.legend.length > 1 && (
-                <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-800 space-y-1.5">
-                  <span className="text-[11px] font-bold text-indigo-900 dark:text-indigo-300 block">
-                    {reportLanguage === 'ar' ? 'فترات مسار الطيران (من إعدادات المسار):' : 'Flight Track Periods (from track settings):'}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {trackRenderModel.legend.map(seg => (
-                      <span key={`modal-seg-${seg.id}`} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white dark:bg-slate-800 text-[11px] font-bold shadow-2xs border border-indigo-100 dark:border-slate-700">
-                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-                        <span>{seg.label}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-5 py-3 border-t border-gray-200 dark:border-slate-800 bg-gray-50/80 dark:bg-slate-800/60 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => setIsLegendEditorOpen(false)}
-                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors cursor-pointer"
-              >
-                {reportLanguage === 'ar' ? 'حفظ وإغلاق' : 'Done'}
-              </button>
+            {/* Modal Body: LegendEditorPanel (Pass 7 Single Source of Truth) */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <LegendEditorPanel
+                store={legendStore}
+                lang={reportLanguage === 'ar' ? 'ar' : 'en'}
+                presence={presence}
+                extra={periodItems}
+                onDone={() => setIsLegendEditorOpen(false)}
+              />
             </div>
           </div>
         </div>

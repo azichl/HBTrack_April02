@@ -31,7 +31,7 @@ export const BirdStatusChip: React.FC<BirdStatusChipProps> = ({
     return (
       <span
         id="rpt-bird-status-badge"
-        className="inline-flex items-center gap-1 justify-center px-2 py-0.5 rounded-full font-bold text-xs select-none border transition-colors shadow-2xs"
+        className="hb-chip inline-flex items-center gap-1 justify-center rounded-full font-bold select-none border transition-colors shadow-2xs"
         style={{
           backgroundColor: colors.bg,
           color: colors.color,
@@ -41,7 +41,7 @@ export const BirdStatusChip: React.FC<BirdStatusChipProps> = ({
         <span>{labelText}</span>
         {!isEditable && (
           <span title={isAr ? 'الحالة مأخوذة من جهاز التتبع' : 'Status comes from the transmitter'}>
-            <Lock size={10} className="opacity-60" />
+            <Lock className="hb-lock opacity-60" />
           </span>
         )}
       </span>
@@ -53,7 +53,7 @@ export const BirdStatusChip: React.FC<BirdStatusChipProps> = ({
     return (
       <span
         id="rpt-bird-status-badge"
-        className="inline-flex items-center gap-1.5 justify-center px-2.5 py-0.5 rounded-full font-bold text-xs select-none border transition-colors shadow-2xs cursor-not-allowed"
+        className="hb-chip inline-flex items-center gap-1.5 justify-center rounded-full font-bold select-none border transition-colors shadow-2xs cursor-not-allowed"
         style={{
           backgroundColor: colors.bg,
           color: colors.color,
@@ -62,7 +62,7 @@ export const BirdStatusChip: React.FC<BirdStatusChipProps> = ({
         title={isAr ? 'الحالة مأخوذة من جهاز التتبع (غير قابلة للتعديل اليدوي)' : 'Status comes from the transmitter (read-only)'}
       >
         <span>{labelText}</span>
-        <Lock size={11} className="opacity-75" />
+        <Lock className="hb-lock opacity-75" />
       </span>
     );
   }
@@ -73,7 +73,7 @@ export const BirdStatusChip: React.FC<BirdStatusChipProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-bold text-xs border transition-all cursor-pointer shadow-xs hover:ring-2 hover:ring-amber-400"
+        className="hb-chip inline-flex items-center gap-1.5 rounded-full font-bold border transition-all cursor-pointer shadow-xs hover:ring-2 hover:ring-amber-400"
         style={{
           backgroundColor: colors.bg,
           color: colors.color,

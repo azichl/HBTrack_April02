@@ -3,6 +3,8 @@ import { Popover } from '../../ui/Popover';
 import { Switch } from '../../ui/Switch';
 import { ColorChip } from '../../ui/ColorChip';
 import { MapElements, MapElementId, DEFAULT_MAP_ELEMENTS, ReportLanguage } from '../../../types/report';
+import { IconSizeSection } from '../../../features/report-track/IconSizeSection';
+import { DEFAULT_ICON_SCALE } from '../../../features/report-track/iconScale';
 import { FIXED_FIELD_CAMPS } from '../../../../constants';
 import { RotateCcw, Check, MapPin, Navigation, Compass, Ruler, Globe, Mountain } from 'lucide-react';
 
@@ -386,6 +388,14 @@ export const MapElementsPopover: React.FC<MapElementsPopoverProps> = ({
                 onChange={v => update('miniMap', { visible: v })}
               />
             </div>
+          </div>
+
+          {/* GROUP: ICON SIZES (POINTS & LOCATIONS) */}
+          <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700">
+            <IconSizeSection
+              value={elements.iconScale ?? DEFAULT_ICON_SCALE}
+              onChange={iconScale => onChangeElements({ ...elements, iconScale })}
+            />
           </div>
 
           {/* FOOTER */}
