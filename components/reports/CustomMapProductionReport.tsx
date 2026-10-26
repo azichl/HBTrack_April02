@@ -1350,7 +1350,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     const dict: any = { 
       'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
       'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp', 'البعد عن المخيم': 'Distance to Camp',
-      'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty',
+      'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty', 'أوزبكستان': 'Uzbekistan', 'أوزباكستان': 'Uzbekistan', 'البنود': 'El Bnoud',
       'شمال': 'North', 'شمال شرق': 'Northeast', 'شرق': 'East', 'جنوب شرق': 'Southeast',
       'جنوب': 'South', 'جنوب غرب': 'Southwest', 'غرب': 'West', 'شمال غرب': 'Northwest'
     };
@@ -1371,6 +1371,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       res = 'Almaty camp';
     } else if (res.includes('ألماتي')) {
       res = 'Almaty';
+    }
+    if (res.includes('مخيم البنود')) {
+      res = 'El Bnoud camp';
+    } else if (res.includes('البنود')) {
+      res = 'El Bnoud';
+    }
+    if (res.includes('مخيم أوزبكستان') || res.includes('مخيم أوزباكستان')) {
+      res = 'Uzbekistan camp';
+    } else if (res.includes('أوزبكستان') || res.includes('أوزباكستان')) {
+      res = 'Uzbekistan';
     }
     return res;
   };

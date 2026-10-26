@@ -108,7 +108,8 @@ const GlobalSearch = ({ onNavigate }: { onNavigate: (tab: string) => void }) => 
         q.includes('مخيم') ||
         (c.id === 'almaty_camp' && (q.includes('ألماتي') || q.includes('الماتي') || q.includes('almaty'))) ||
         (c.id === 'zhezkazgan_camp' && (q.includes('جيزقازغان') || q.includes('zhezkazgan') || q.includes('جيز'))) ||
-        (c.id === 'el_bnoud_camp' && (q.includes('البنود') || q.includes('بنود') || q.includes('bnoud') || q.includes('el bnoud')))
+        (c.id === 'el_bnoud_camp' && (q.includes('البنود') || q.includes('بنود') || q.includes('bnoud') || q.includes('el bnoud'))) ||
+        (c.id === 'uzbekistan_camp' && (q.includes('أوزبكستان') || q.includes('اوزبكستان') || q.includes('أوزباكستان') || q.includes('اوزباكستان') || q.includes('uzbekistan') || q.includes('uzbek')))
       )
     : [];
 

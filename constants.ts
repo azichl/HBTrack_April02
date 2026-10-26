@@ -167,5 +167,14 @@ export const FIXED_FIELD_CAMPS: FieldCampPoint[] = [
     lon: 0.244456,
     region: 'El Bayadh',
     country: 'Algeria'
+  },
+  {
+    id: 'uzbekistan_camp',
+    name: 'مخيم أوزبكستان',
+    nameEn: 'Uzbekistan Camp',
+    lat: 40.83967,
+    lon: 66.43867,
+    region: 'Navoiy / Kyzylkum',
+    country: 'Uzbekistan'
   }
 ];
