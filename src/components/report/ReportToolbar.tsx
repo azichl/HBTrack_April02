@@ -600,6 +600,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
         distUnit={distUnit}
         onChangeDistUnit={onChangeDistUnit}
         language={reportLanguage}
+        onOpenLabelsManager={() => setActivePopover('labels')}
       />
       <SectionsPopover
         anchorRef={sectionsBtnRef}

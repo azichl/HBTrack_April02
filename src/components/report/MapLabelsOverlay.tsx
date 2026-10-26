@@ -424,7 +424,7 @@ export const MapLabelsOverlay: React.FC<MapLabelsOverlayProps> = ({
                   boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
                   whiteSpace: 'nowrap'
                 }}
-                className="flex items-center gap-1 select-none"
+                className="flex items-center gap-1 select-none hb-label-custom"
               >
                 <span>{label.text}</span>
               </div>

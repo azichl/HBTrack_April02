@@ -5,6 +5,9 @@ import { ColorChip } from '../../ui/ColorChip';
 import { MapElements, MapElementId, DEFAULT_MAP_ELEMENTS, ReportLanguage } from '../../../types/report';
 import { IconSizeSection } from '../../../features/report-track/IconSizeSection';
 import { DEFAULT_ICON_SCALE } from '../../../features/report-track/iconScale';
+import { LabelsEditSection } from '../LabelsEditSection';
+import { DEFAULT_LABEL_SCALE } from '../../../features/report-track/labelScale';
+import { DEFAULT_LABELS_CONFIG } from '../../../types/report';
 import { FIXED_FIELD_CAMPS } from '../../../../constants';
 import { RotateCcw, Check, MapPin, Navigation, Compass, Ruler, Globe, Mountain } from 'lucide-react';
 
@@ -29,6 +32,7 @@ interface MapElementsPopoverProps {
   distUnit?: 'km' | 'mi';
   onChangeDistUnit?: (unit: 'km' | 'mi') => void;
   language?: ReportLanguage;
+  onOpenLabelsManager?: () => void;
 }
 
 export const MapElementsPopover: React.FC<MapElementsPopoverProps> = ({
@@ -51,7 +55,8 @@ export const MapElementsPopover: React.FC<MapElementsPopoverProps> = ({
   onChangeCoordFormat,
   distUnit = 'km',
   onChangeDistUnit,
-  language = 'ar'
+  language = 'ar',
+  onOpenLabelsManager
 }) => {
   const isAr = language === 'ar';
 
@@ -395,6 +400,18 @@ export const MapElementsPopover: React.FC<MapElementsPopoverProps> = ({
             <IconSizeSection
               value={elements.iconScale ?? DEFAULT_ICON_SCALE}
               onChange={iconScale => onChangeElements({ ...elements, iconScale })}
+            />
+          </div>
+
+          {/* GROUP: LABELS EDIT & SIZES */}
+          <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700">
+            <LabelsEditSection
+              scale={elements.labelScale ?? DEFAULT_LABEL_SCALE}
+              onChangeScale={labelScale => onChangeElements({ ...elements, labelScale })}
+              labelsConfig={elements.labelsConfig ?? DEFAULT_LABELS_CONFIG}
+              onChangeLabelsConfig={labelsConfig => onChangeElements({ ...elements, labelsConfig })}
+              language={language}
+              onOpenLabelsManager={onOpenLabelsManager}
             />
           </div>
 

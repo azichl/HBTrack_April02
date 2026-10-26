@@ -1,4 +1,5 @@
 import { IconScaleState, DEFAULT_ICON_SCALE } from '../features/report-track/iconScale';
+import { LabelScaleState, DEFAULT_LABEL_SCALE } from '../features/report-track/labelScale';
 
 export type SectionId =
   | 'header'
@@ -63,12 +64,38 @@ export interface MapElementState {
   pinnedInLegend?: boolean;
 }
 
+export interface LabelsConfigState {
+  releaseTitle?: string;
+  releasePosition?: 'top' | 'right' | 'bottom' | 'left';
+  showReleaseLabel?: boolean;
+  latestTitle?: string;
+  latestPosition?: 'top' | 'right' | 'bottom' | 'left';
+  showLatestLabel?: boolean;
+  showCampLabels?: boolean;
+  showDistanceLabels?: boolean;
+}
+
+export const DEFAULT_LABELS_CONFIG: LabelsConfigState = {
+  releaseTitle: '',
+  releasePosition: 'right',
+  showReleaseLabel: true,
+  latestTitle: '',
+  latestPosition: 'top',
+  showLatestLabel: true,
+  showCampLabels: true,
+  showDistanceLabels: true
+};
+
 export interface MapElements extends Partial<Record<MapElementId, MapElementState>> {
   iconScale?: IconScaleState;
+  labelScale?: LabelScaleState;
+  labelsConfig?: LabelsConfigState;
 }
 
 export const DEFAULT_MAP_ELEMENTS: MapElements = {
   iconScale: DEFAULT_ICON_SCALE,
+  labelScale: DEFAULT_LABEL_SCALE,
+  labelsConfig: DEFAULT_LABELS_CONFIG,
   release: { visible: true, showLabel: true, size: 8, color: '#701a2b' },
   latest: { visible: true, showLabel: true, size: 10, color: '#22c55e' },
   camps: { visible: true, showLabel: true, size: 8, color: '#f59e0b' },

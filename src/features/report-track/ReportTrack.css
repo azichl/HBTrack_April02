@@ -65,6 +65,13 @@
 .hb-icon-camp    {transform:scale(var(--hb-icon-scale-camps,1));    transform-origin:50% 50%}
 .hb-icon-stopover{transform:scale(var(--hb-icon-scale-stopovers,1));transform-origin:50% 50%}
 
+/* ---------- label size on the map (apply to the INNER element of each label marker) ---------- */
+.hb-label-release  {transform:scale(var(--hb-label-scale-release,1));   transform-origin:50% 50%}
+.hb-label-latest   {transform:scale(var(--hb-label-scale-latest,1));    transform-origin:50% 50%}
+.hb-label-camp     {transform:scale(var(--hb-label-scale-camps,1));     transform-origin:50% 50%}
+.hb-label-distance {transform:scale(var(--hb-label-scale-distances,1)); transform-origin:50% 50%}
+.hb-label-custom   {transform:scale(var(--hb-label-scale-custom,1));    transform-origin:50% 50%}
+
 /* ---------- Bird Data chips (Alive / Dead / NA …): same size as the value text ("Male"), bold ---------- */
 .hb-chip{
   font-size:inherit !important;          /* = the size of the neighbouring value text */

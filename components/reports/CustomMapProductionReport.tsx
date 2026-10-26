@@ -53,6 +53,7 @@ import { LegendEditorPanel } from '../../src/features/report-track/LegendEditorP
 import { createLegendStore, LegendStore } from '../../src/features/report-track/legendStore';
 import { DEFAULT_LEGEND_STATE, LegendState, ExtraItem } from '../../src/features/report-track/legendModel';
 import { iconScaleVars, DEFAULT_ICON_SCALE } from '../../src/features/report-track/iconScale';
+import { labelScaleVars, DEFAULT_LABEL_SCALE } from '../../src/features/report-track/labelScale';
 import { getReportString } from '../../src/utils/reportDictionary';
 import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
 import { BirdStatus } from '../../src/constants/statusColors';
@@ -143,13 +144,15 @@ const createLiveTrackingLabelIcon = ({
   ringId,
   borderColorHex,
   labelTitle,
-  position = 'top'
+  position = 'top',
+  innerClass = ''
 }: {
   number: string;
   ringId?: string;
   borderColorHex: string;
   labelTitle?: string;
   position?: 'top' | 'right' | 'bottom' | 'left';
+  innerClass?: string;
 }) => {
   const rawId = String(number || '').trim().replace(/^trans-/, '');
   const isNA = !rawId || rawId.toUpperCase() === 'NA' || rawId.toUpperCase() === 'N/A' || rawId.toUpperCase() === 'NONE';
@@ -178,48 +181,50 @@ const createLiveTrackingLabelIcon = ({
   return L.divIcon({
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
-      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
-        ${hasTitle ? `
+      <div class="${innerClass}" style="transform-origin: ${anchorX}px ${anchorY}px; display: inline-block;">
+        <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+          ${hasTitle ? `
+            <text 
+              x="${totalW / 2}" 
+              y="12" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              font-family="'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" 
+              font-size="12" 
+              font-weight="800" 
+              fill="#ffffff" 
+              stroke="#000000" 
+              stroke-width="2.6" 
+              stroke-linejoin="round" 
+              paint-order="stroke fill"
+            >
+              ${labelTitle}
+            </text>
+          ` : ''}
+          <rect 
+            x="${(totalW - pillW) / 2}" 
+            y="${hasTitle ? 20 : 2}" 
+            width="${pillW}" 
+            height="20" 
+            rx="10" 
+            fill="#ffffff" 
+            stroke="${borderColorHex}" 
+            stroke-width="2"
+          />
           <text 
             x="${totalW / 2}" 
-            y="12" 
+            y="${hasTitle ? 30.5 : 12.5}" 
             text-anchor="middle" 
             dominant-baseline="middle"
-            font-family="'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" 
-            font-size="12" 
+            font-family="'Cairo', monospace, Arial" 
+            font-size="11.5" 
             font-weight="800" 
-            fill="#ffffff" 
-            stroke="#000000" 
-            stroke-width="2.6" 
-            stroke-linejoin="round" 
-            paint-order="stroke fill"
+            fill="#0f172a"
           >
-            ${labelTitle}
+            ${cleanId}
           </text>
-        ` : ''}
-        <rect 
-          x="${(totalW - pillW) / 2}" 
-          y="${hasTitle ? 20 : 2}" 
-          width="${pillW}" 
-          height="20" 
-          rx="10" 
-          fill="#ffffff" 
-          stroke="${borderColorHex}" 
-          stroke-width="2"
-        />
-        <text 
-          x="${totalW / 2}" 
-          y="${hasTitle ? 30.5 : 12.5}" 
-          text-anchor="middle" 
-          dominant-baseline="middle"
-          font-family="'Cairo', monospace, Arial" 
-          font-size="11.5" 
-          font-weight="800" 
-          fill="#0f172a"
-        >
-          ${cleanId}
-        </text>
-      </svg>
+        </svg>
+      </div>
     `,
     iconSize: [totalW, totalH],
     iconAnchor: [anchorX, anchorY],
@@ -246,33 +251,35 @@ const createLiveTrackingCampPinIcon = (pinColorHex: string = '#f59e0b') => {
   });
 };
 
-const createLiveTrackingCampLabelIcon = (campName: string) => {
+const createLiveTrackingCampLabelIcon = (campName: string, innerClass: string = 'hb-label-camp') => {
   const totalW = 140;
   const totalH = 20;
 
   return L.divIcon({
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
-      <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
-        <rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" pointer-events="all" style="cursor: grab;" />
-        <text 
-          x="${totalW / 2}" 
-          y="12" 
-          text-anchor="middle" 
-          dominant-baseline="middle"
-          font-family="'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" 
-          font-size="12" 
-          font-weight="800" 
-          fill="#ffffff" 
-          stroke="#000000" 
-          stroke-width="2.6" 
-          stroke-linejoin="round" 
-          paint-order="stroke fill"
-          pointer-events="none"
-        >
-          ${campName}
-        </text>
-      </svg>
+      <div class="${innerClass}" style="transform-origin: 50% 50%; display: inline-block;">
+        <svg width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block;">
+          <rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" pointer-events="all" style="cursor: grab;" />
+          <text 
+            x="${totalW / 2}" 
+            y="12" 
+            text-anchor="middle" 
+            dominant-baseline="middle"
+            font-family="'Cairo', 'Tajawal', 'Segoe UI', Arial, sans-serif" 
+            font-size="12" 
+            font-weight="800" 
+            fill="#ffffff" 
+            stroke="#000000" 
+            stroke-width="2.6" 
+            stroke-linejoin="round" 
+            paint-order="stroke fill"
+            pointer-events="none"
+          >
+            ${campName}
+          </text>
+        </svg>
+      </div>
     `,
     iconSize: [totalW, totalH],
     iconAnchor: [totalW / 2, totalH + 20]
@@ -282,7 +289,8 @@ const createLiveTrackingCampLabelIcon = (campName: string) => {
 const createDistancePillIcon = (
   text: string, 
   borderColor: string, 
-  anchorOffset?: [number, number]
+  anchorOffset?: [number, number],
+  innerClass: string = 'hb-label-distance'
 ) => {
   const pillW = Math.max(70, text.length * 7.5 + 16);
   const pillH = 24;
@@ -291,30 +299,32 @@ const createDistancePillIcon = (
   return L.divIcon({
     className: 'bg-transparent cursor-grab active:cursor-grabbing',
     html: `
-      <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block; cursor: grab; pointer-events: auto;">
-        <rect 
-          x="1" 
-          y="1" 
-          width="${pillW - 2}" 
-          height="${pillH - 2}" 
-          rx="11" 
-          fill="#ffffff" 
-          stroke="${borderColor}" 
-          stroke-width="1.8"
-        />
-        <text 
-          x="${pillW / 2}" 
-          y="${pillH / 2 + 0.5}" 
-          text-anchor="middle" 
-          dominant-baseline="middle"
-          font-family="monospace, Arial, sans-serif" 
-          font-size="11" 
-          font-weight="800" 
-          fill="${borderColor}"
-        >
-          ${text}
-        </text>
-      </svg>
+      <div class="${innerClass}" style="transform-origin: 50% 50%; display: inline-block;">
+        <svg width="${pillW}" height="${pillH}" viewBox="0 0 ${pillW} ${pillH}" xmlns="http://www.w3.org/2000/svg" style="overflow: visible; display: block; cursor: grab; pointer-events: auto;">
+          <rect 
+            x="1" 
+            y="1" 
+            width="${pillW - 2}" 
+            height="${pillH - 2}" 
+            rx="11" 
+            fill="#ffffff" 
+            stroke="${borderColor}" 
+            stroke-width="1.8"
+          />
+          <text 
+            x="${pillW / 2}" 
+            y="${pillH / 2 + 0.5}" 
+            text-anchor="middle" 
+            dominant-baseline="middle"
+            font-family="monospace, Arial, sans-serif" 
+            font-size="11" 
+            font-weight="800" 
+            fill="${borderColor}"
+          >
+            ${text}
+          </text>
+        </svg>
+      </div>
     `,
     iconSize: [pillW, pillH],
     iconAnchor: finalAnchor
@@ -5387,7 +5397,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               <div 
                 ref={mapViewportRef}
                 className="trk-map relative border border-[#d9dbe1] rounded-[10px] overflow-hidden bg-[#ece8de] shadow-xs flex items-center justify-center flex-1 min-h-0"
-                style={{ direction: 'ltr', textAlign: 'left', minHeight: 0, flex: '1 1 0%', ...(iconScaleVars(mapElements.iconScale ?? DEFAULT_ICON_SCALE) as any) }}
+                style={{
+                  direction: 'ltr',
+                  textAlign: 'left',
+                  minHeight: 0,
+                  flex: '1 1 0%',
+                  ...(iconScaleVars(mapElements.iconScale ?? DEFAULT_ICON_SCALE) as any),
+                  ...(labelScaleVars(mapElements.labelScale ?? DEFAULT_LABEL_SCALE) as any)
+                }}
               >
                 
                 {/* 1. SCREENED PHOTO FROM LIVE TRACK OR UPLOADED QGIS MAP */}
@@ -5672,27 +5689,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             zIndexOffset={1800}
                             interactive={false}
                           />
-                          <Marker
-                            position={customReleaseMarkerPos || [metrics.rLat, metrics.rLon]}
-                            icon={createLiveTrackingLabelIcon({
-                              number: reportSubject.display.mapChipLabel,
-                              ringId: reportSubject.display.ringNumber,
-                              borderColorHex: mapElements.release?.color || themeColors.releasePinColor,
-                              labelTitle: reportLanguage === 'en' ? 'Release' : T.installHead,
-                              position: 'right'
-                            })}
-                            zIndexOffset={1801}
-                            draggable={true}
-                            eventHandlers={{
-                              dragend: (e) => {
-                                const marker = e.target;
-                                if (marker && marker.getLatLng) {
-                                  const latLng = marker.getLatLng();
-                                  setCustomReleaseMarkerPos([latLng.lat, latLng.lng]);
+                          {(mapElements.labelsConfig?.showReleaseLabel ?? true) && (
+                            <Marker
+                              position={customReleaseMarkerPos || [metrics.rLat, metrics.rLon]}
+                              icon={createLiveTrackingLabelIcon({
+                                number: reportSubject.display.mapChipLabel,
+                                ringId: reportSubject.display.ringNumber,
+                                borderColorHex: mapElements.release?.color || themeColors.releasePinColor,
+                                labelTitle: mapElements.labelsConfig?.releaseTitle || (reportLanguage === 'en' ? 'Release' : T.installHead),
+                                position: mapElements.labelsConfig?.releasePosition || 'right',
+                                innerClass: 'hb-label-release'
+                              })}
+                              zIndexOffset={1801}
+                              draggable={true}
+                              eventHandlers={{
+                                dragend: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng) {
+                                    const latLng = marker.getLatLng();
+                                    setCustomReleaseMarkerPos([latLng.lat, latLng.lng]);
+                                  }
                                 }
-                              }
-                            }}
-                          />
+                              }}
+                            />
+                          )}
                         </>
                       )}
 
@@ -5705,27 +5725,30 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             zIndexOffset={2000}
                             interactive={false}
                           />
-                          <Marker
-                            position={customLastPosMarkerPos || [metrics.lLat, metrics.lLon]}
-                            icon={createLiveTrackingLabelIcon({
-                              number: reportSubject.display.mapChipLabel,
-                              ringId: reportSubject.display.ringNumber,
-                              borderColorHex: mapElements.latest?.color || themeColors.latestPinColor,
-                              labelTitle: reportLanguage === 'en' ? 'Latest Location' : T.lastHead,
-                              position: 'top'
-                            })}
-                            zIndexOffset={2001}
-                            draggable={true}
-                            eventHandlers={{
-                              dragend: (e) => {
-                                const marker = e.target;
-                                if (marker && marker.getLatLng) {
-                                  const latLng = marker.getLatLng();
-                                  setCustomLastPosMarkerPos([latLng.lat, latLng.lng]);
+                          {(mapElements.labelsConfig?.showLatestLabel ?? true) && (
+                            <Marker
+                              position={customLastPosMarkerPos || [metrics.lLat, metrics.lLon]}
+                              icon={createLiveTrackingLabelIcon({
+                                number: reportSubject.display.mapChipLabel,
+                                ringId: reportSubject.display.ringNumber,
+                                borderColorHex: mapElements.latest?.color || themeColors.latestPinColor,
+                                labelTitle: mapElements.labelsConfig?.latestTitle || (reportLanguage === 'en' ? 'Latest Location' : T.lastHead),
+                                position: mapElements.labelsConfig?.latestPosition || 'top',
+                                innerClass: 'hb-label-latest'
+                              })}
+                              zIndexOffset={2001}
+                              draggable={true}
+                              eventHandlers={{
+                                dragend: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng) {
+                                    const latLng = marker.getLatLng();
+                                    setCustomLastPosMarkerPos([latLng.lat, latLng.lng]);
+                                  }
                                 }
-                              }
-                            }}
-                          />
+                              }}
+                            />
+                          )}
                         </>
                       )}
 
@@ -5740,25 +5763,27 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               zIndexOffset={1000}
                               interactive={false}
                             />
-                            <Marker
-                              key={`camp-label-${camp.id}`}
-                              position={labelPos}
-                              icon={createLiveTrackingCampLabelIcon(translateValue(camp.name))}
-                              zIndexOffset={1001}
-                              draggable={true}
-                              eventHandlers={{
-                                dragend: (e) => {
-                                  const marker = e.target;
-                                  if (marker && marker.getLatLng) {
-                                    const latLng = marker.getLatLng();
-                                    setCustomCampLabelPositions(prev => ({
-                                      ...prev,
-                                      [camp.id]: [latLng.lat, latLng.lng]
-                                    }));
+                            {(mapElements.labelsConfig?.showCampLabels ?? true) && (
+                              <Marker
+                                key={`camp-label-${camp.id}`}
+                                position={labelPos}
+                                icon={createLiveTrackingCampLabelIcon(translateValue(camp.name), 'hb-label-camp')}
+                                zIndexOffset={1001}
+                                draggable={true}
+                                eventHandlers={{
+                                  dragend: (e) => {
+                                    const marker = e.target;
+                                    if (marker && marker.getLatLng) {
+                                      const latLng = marker.getLatLng();
+                                      setCustomCampLabelPositions(prev => ({
+                                        ...prev,
+                                        [camp.id]: [latLng.lat, latLng.lng]
+                                      }));
+                                    }
                                   }
-                                }
-                              }}
-                            />
+                                }}
+                              />
+                            )}
                           </React.Fragment>
                         );
                       })}
