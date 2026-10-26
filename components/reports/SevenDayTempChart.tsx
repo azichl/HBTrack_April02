@@ -85,10 +85,19 @@ export const SevenDayTempChart: React.FC<SevenDayTempChartProps> = ({
 
   const defaultTitle =
     language === 'ar'
-      ? (regionName ? `درجات الحرارة لآخر 7 أيام - ${regionName} (الصغرى / الكبرى °C)` : 'درجات الحرارة لآخر 7 أيام (الصغرى / الكبرى °C)')
-      : (regionName ? `Last 7 Days Temperature - ${regionName} (Min / Max °C)` : 'Last 7 Days Temperature (Min / Max °C)');
+      ? (regionName ? `حرارة آخر 7 أيام - ${regionName} (الصغرى / الكبرى °C)` : 'حرارة آخر 7 أيام (الصغرى / الكبرى °C)')
+      : (regionName ? `Last 7 Days Temp - ${regionName} (Min / Max °C)` : 'Last 7 Days Temp (Min / Max °C)');
 
-  const displayTitle = customTitle || defaultTitle;
+  const [localTitle, setLocalTitle] = useState<string | null>(null);
+
+  const displayTitle = customTitle !== undefined ? customTitle : (localTitle !== null ? localTitle : defaultTitle);
+
+  const handleTitleChange = (val: string) => {
+    setLocalTitle(val);
+    if (onTitleChange) {
+      onTitleChange(val);
+    }
+  };
 
   if (data.length === 0 && !loading) return null;
 
@@ -132,26 +141,26 @@ export const SevenDayTempChart: React.FC<SevenDayTempChartProps> = ({
         className="px-3 py-1.5 bg-[#f6f7f9] border-b border-[#eceef2] flex items-center justify-between text-[11.5px] font-bold text-gray-800"
         dir={language === 'ar' ? 'rtl' : 'ltr'}
       >
-        <div className="flex items-center gap-1.5 flex-1">
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-1">
           <Thermometer size={13} className="text-red-500 shrink-0" />
-          {isEditing && onTitleChange ? (
+          {isEditing ? (
             <input
               type="text"
               value={displayTitle}
-              onChange={e => onTitleChange(e.target.value)}
-              className="w-full px-1.5 py-0.5 text-[11px] bg-amber-50 border border-amber-300 rounded"
+              onChange={e => handleTitleChange(e.target.value)}
+              className="w-full px-1.5 py-0.5 text-[10.5px] bg-amber-50 border border-amber-300 rounded font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           ) : (
-            <span>{displayTitle}</span>
+            <span className="whitespace-nowrap text-[10.5px] font-bold text-gray-800 tracking-tight">{displayTitle}</span>
           )}
         </div>
 
         {data.length > 0 && (
-          <div className="flex items-center gap-2 text-[10.5px] font-mono shrink-0" dir="ltr">
-            <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-bold border border-sky-200">
+          <div className="flex items-center gap-1 text-[10px] font-mono shrink-0" dir="ltr">
+            <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 font-bold border border-sky-200 whitespace-nowrap">
               Min: {absMin.toFixed(1)}°C
             </span>
-            <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-bold border border-red-200">
+            <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-bold border border-red-200 whitespace-nowrap">
               Max: {absMax.toFixed(1)}°C
             </span>
           </div>

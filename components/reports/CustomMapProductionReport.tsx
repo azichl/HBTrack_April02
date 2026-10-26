@@ -1103,6 +1103,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     issueDate: string;
     reportTitle: string;
     regionName: string;
+    tempChartTitle: string;
     agencyNameAr: string;
     agencyNameEn: string;
     footerRight: string;
@@ -1128,6 +1129,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     issueDate: formatDateYYYYMMDD(new Date()) || '2026-10-09',
     reportTitle: 'تقرير متابعة طائر حبارى مزود بجهاز تتبع',
     regionName: '',
+    tempChartTitle: '',
     agencyNameAr: 'مكتب محميات الدولة الخارجية',
     agencyNameEn: 'External Reserves Office of The State',
     footerRight: 'المركز القطري لتكاثر الحبارى والصقور – كازاخستان',
@@ -5370,6 +5372,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   lon={metrics.hasLast ? metrics.lLon : (metrics.hasRelease ? metrics.rLon : NaN)}
                   language={reportLanguage}
                   regionName={detectedRegionName}
+                  customTitle={customMetadata.tempChartTitle || undefined}
+                  onTitleChange={(newTitle) => setCustomMetadata(prev => ({ ...prev, tempChartTitle: newTitle }))}
                   isEditing={isTableEditing}
                 />
               )}
