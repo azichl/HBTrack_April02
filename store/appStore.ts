@@ -1393,7 +1393,7 @@ export const useAppStore = create<AppState>()(
               const isGps = msg.locationType === 'GPS' || !msg.locationType || msg.lc === 'GPS';
               const trueMsgTs = (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr])
                   ? KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]
-                  : (msg.timestamp || (msg as any).locationDate);
+                  : ((msg as any).locationDate || msg.locationDate || msg.timestamp);
               const parsedMsgTs = safeParseDate(trueMsgTs);
               const msgIsoTimestamp = !isNaN(parsedMsgTs) ? new Date(parsedMsgTs).toISOString() : trueMsgTs;
 
