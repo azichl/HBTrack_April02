@@ -135,11 +135,10 @@ export interface PointMarker {
 export function buildMarkers(fixes: Fix[], s: TrackSettings): PointMarker[] {
   if (!s.showPoints && !s.showCoordinateLabels) return [];   // labels imply points
   return fixes.map(f => {
-    const p = periodFor(f.t, s);
-    const fill =
-      s.pointColorMode === 'type' ? (f.kind === 'GPS' ? s.gpsColor : s.dopplerColor)
-      : (s.periodsEnabled || s.pointColorMode === 'period') ? (p?.color ?? s.color)
-      : s.color;
+    // Dot colour = the colour of the LINE at that fix: the period colour while "Color Path by Periods" is on,
+    // otherwise the track colour. ('track' and 'period' therefore behave the same; 'type' = GPS / Doppler colours.)
+    const lineColor = periodFor(f.t, s)?.color ?? s.color;
+    const fill = s.pointColorMode === 'type' ? (f.kind === 'GPS' ? s.gpsColor : s.dopplerColor) : lineColor;
     return { id: f.id, lat: f.lat, lon: f.lon, t: f.t, kind: f.kind,
              diameter: s.pointSize, fill, stroke: '#ffffff', opacity: s.pointOpacity };
   });

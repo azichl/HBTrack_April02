@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { buildFixes, buildTrack, filterFixes, lastFix, mapLayers, partitionByQuality, isSuspectGpsDate, parseUtc, type RawFix } from './positionsEngine';
+import clsRaw from './fixtures/cls_positions_43574.json';
+import appRaw from './fixtures/app_export_43574.json';
 
-const cls: RawFix[] = JSON.parse(readFileSync(new URL('./fixtures/cls_positions_43574.json', import.meta.url), 'utf8'));
-const app: RawFix[] = JSON.parse(readFileSync(new URL('./fixtures/app_export_43574.json', import.meta.url), 'utf8'));
+const cls: RawFix[] = clsRaw as any[];
+const app: RawFix[] = appRaw as any[];
 // CLS web-map window in the screenshot: 2026-10-16 07:46 -> 2026-10-17 07:46 (UTC)
 const W = { fromMs: parseUtc('2026-10-16T07:46:00Z'), toMs: parseUtc('2026-10-17T07:46:00Z') };
 

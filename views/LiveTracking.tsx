@@ -14,6 +14,7 @@ import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { fetchAllLayers } from '../services/qgisLayerService';
 import { HistoryTrackLayer } from '../src/components/map/HistoryTrackLayer';
+import { normalizeFixes, isChronological, diagnoseOrder, popupTimes, parseUtc, type TimedFix } from '../src/features/track-order/fixTime';
 import Draggable from 'react-draggable';
 import { mark } from '../src/diagnostics/bootProfiler';
 
@@ -355,6 +356,9 @@ const LSTPopupContent = ({
   lat, 
   lon, 
   timestamp, 
+  fixDate,
+  messageDate,
+  usedFallback,
   pttId, 
   color, 
   type, 
@@ -366,6 +370,9 @@ const LSTPopupContent = ({
   lat: number; 
   lon: number; 
   timestamp: string; 
+  fixDate?: string;
+  messageDate?: string | null;
+  usedFallback?: boolean;
   pttId: string; 
   color: string; 
   type?: string; 
@@ -383,10 +390,18 @@ const LSTPopupContent = ({
     timezone?: string;
   }>({ airTemp: null, soilTemp: null, temp: null, loading: true });
 
+  const pTimes = useMemo(() => popupTimes({
+    t: parseUtc(fixDate || timestamp) ?? Date.now(),
+    messageT: messageDate ? parseUtc(messageDate) : null,
+    usedFallback: !!usedFallback,
+  }), [fixDate, timestamp, messageDate, usedFallback]);
+
+  const weatherTime = pTimes.fixUtc ? new Date(pTimes.fixUtc.replace(' ', 'T') + 'Z').toISOString() : timestamp;
+
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
-      const result = await fetchLSTData(lat, lon, timestamp);
+      const result = await fetchLSTData(lat, lon, weatherTime);
       if (isMounted) {
         if (result) {
           setData({
@@ -404,7 +419,7 @@ const LSTPopupContent = ({
     };
     fetchData();
     return () => { isMounted = false; };
-  }, [lat, lon, timestamp]);
+  }, [lat, lon, weatherTime]);
 
   const formatDM = (val: number, isLat: boolean) => {
     const abs = Math.abs(val || 0);
@@ -428,11 +443,11 @@ const LSTPopupContent = ({
   const hdmsStr = `${formatDMS(lat, true)}  ${formatDMS(lon, false)}`;
 
   const isGps = (type || '').toUpperCase() === 'GPS';
-  const delayStr = delay !== undefined && delay !== null && delay !== ''
+  const delayStr = pTimes.delayText || (delay !== undefined && delay !== null && delay !== ''
     ? typeof delay === 'number'
       ? delay >= 60 ? `+${(delay / 60).toFixed(1)} h` : `+${Math.round(delay)} m`
       : `+${delay}`
-    : null;
+    : null);
 
   return (
     <div className="text-center p-1 min-w-[210px]" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
@@ -455,8 +470,11 @@ const LSTPopupContent = ({
              )}
         </div>
         <div className="text-[12px] font-semibold text-gray-800 border-b border-gray-100 pb-2 mb-2 leading-tight">
-            <div className="text-[11px] font-mono text-slate-700">UTC: {formatUtcDateTime(timestamp)}</div>
-            <div className="text-[10px] text-gray-500 font-normal mt-0.5">Local: {formatDateTime(timestamp, data.timezone || timeZone)}</div>
+            <div className="text-[11px] font-mono text-slate-700">Fix time (UTC): {pTimes.fixUtc}</div>
+            <div className="text-[10px] text-gray-500 font-normal mt-0.5">Local: {formatDateTime(pTimes.fixUtc, data.timezone || timeZone)}</div>
+            {pTimes.receivedUtc && (
+              <div className="text-[10px] font-mono text-slate-500 mt-0.5">Received (UTC): {pTimes.receivedUtc}</div>
+            )}
             {delayStr && (
               <div className="text-[9px] text-brand-600 font-medium mt-0.5">Delay: {delayStr}</div>
             )}
@@ -1167,6 +1185,9 @@ interface HistoricalMarkerProps {
       lat: number; 
       lon: number; 
       timestamp: string; 
+      fixDate?: string;
+      messageDate?: string | null;
+      usedFallback?: boolean;
       type?: string; 
       isDegraded?: boolean;
       locationClass?: string | null;
@@ -1216,6 +1237,9 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
                         lat={point.lat} 
                         lon={point.lon} 
                         timestamp={point.timestamp} 
+                        fixDate={point.fixDate}
+                        messageDate={point.messageDate}
+                        usedFallback={point.usedFallback}
                         pttId={pttId} 
                         color={color}
                         type={point.type}
@@ -1236,6 +1260,9 @@ const HistoricalMarker: React.FC<HistoricalMarkerProps> = React.memo(({
         prevProps.point.lat === nextProps.point.lat &&
         prevProps.point.lon === nextProps.point.lon &&
         prevProps.point.timestamp === nextProps.point.timestamp &&
+        prevProps.point.fixDate === nextProps.point.fixDate &&
+        prevProps.point.messageDate === nextProps.point.messageDate &&
+        prevProps.point.usedFallback === nextProps.point.usedFallback &&
         prevProps.point.type === nextProps.point.type &&
         prevProps.point.locationClass === nextProps.point.locationClass &&
         prevProps.point.errorRadiusM === nextProps.point.errorRadiusM &&
@@ -1894,30 +1921,51 @@ const LiveTrackingInner = () => {
     const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
 
     selectedTransmitterIds.forEach((pttId, index) => {
-        let track = rawPositions.filter(p => p.transmitter_id === pttId);
+        let track = rawPositions.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
 
         // For Static Test tags, only display positions from the current calendar month on live map history track
         const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
         const st = tr?.derived_status || tr?.status;
         if (st === 'Static test' || st === 'Static Test' || st === 'static') {
-          track = track.filter(p => getYearMonthKey(p.timestamp) === currentYearMonthKey);
+          track = track.filter(p => getYearMonthKey(p.locationDate || p.timestamp) === currentYearMonthKey);
         }
 
-        const pttFixes: Fix[] = track.map(p => {
-          const locTs = safeParseTimestamp(p.timestamp || p.locationDate);
+        const normalized = normalizeFixes(track, {
+          getLat: (p: any) => p.lat ?? p.latitude,
+          getLon: (p: any) => p.lon ?? p.longitude,
+          getId: (p: any, i: number) => p.id || `${pttId}_${i}`
+        });
+        console.assert(isChronological(normalized), `[LiveTracking] History track for ${pttId} must be chronological`);
+
+        if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {
+          const drawnBefore = [...track].map(r => normalizeFixes([r], { getLat: x => x.lat, getLon: x => x.lon })[0]).filter(Boolean);
+          drawnBefore.sort((a, b) => (a.messageT ?? a.t) - (b.messageT ?? b.t));
+          console.log(`[TrackOrder] Diagnostics for device ${pttId}:`);
+          console.log('Before fix (message order):');
+          console.table(diagnoseOrder(drawnBefore));
+          console.log('After fix (fix-time order):');
+          console.table(diagnoseOrder(normalized));
+        }
+
+        const normMap = new Map<string, TimedFix<any>>(normalized.map(nf => [nf.id, nf]));
+
+        const pttFixes: Fix[] = normalized.map(nf => {
+          const p = nf.raw;
+          const locTs = nf.t;
           const fType: 'GPS' | 'DOPPLER' = canonType(p.locationType || p.lc) === 'GPS' ? 'GPS' : 'DOPPLER';
-          const validFirstMsg = p.firstMessageDate ? safeParseTimestamp(p.firstMessageDate) : (p.lagMinutes !== undefined ? locTs + (p.lagMinutes * 60000) : undefined);
+          const validFirstMsg = nf.messageT != null ? nf.messageT : (p.lagMinutes !== undefined ? locTs + (p.lagMinutes * 60000) : undefined);
           return {
-            id: p.id,
+            id: nf.id,
             pttId,
             type: fType,
             cls: fType === 'GPS' ? null : (p.locationClass || (p.lc !== 'GPS' ? p.lc : null) || null),
             errorRadiusM: fType === 'GPS' ? 0 : (Number(p.errorRadiusM) || 0),
             t: locTs,
-            lat: Number(p.lat),
-            lon: Number(p.lon),
+            lat: nf.lat,
+            lon: nf.lon,
             firstMessageMs: validFirstMsg,
             deliveries: p.deliveryCount || 1,
+            revision: p.revision ?? null,
             unitTypes: [p.unitType || 'Houbara']
           };
         }).filter(f => isValidCoordinate(f.lat, f.lon) && !isNaN(f.t) && f.t > 0);
@@ -1931,16 +1979,24 @@ const LiveTrackingInner = () => {
 
         const polylineCoords: Array<[number, number]> = layers.line.points.map(f => [f.lat, f.lon] as [number, number]);
 
-        const formatPoint = (f: Fix) => ({
-          lat: f.lat,
-          lon: f.lon,
-          timestamp: new Date(f.t).toISOString(),
-          type: f.type,
-          isDegraded: f.cls === 'A' || f.cls === 'B',
-          locationClass: f.cls,
-          errorRadiusM: f.errorRadiusM,
-          delay: f.firstMessageMs ? Math.max(0, Math.round((f.firstMessageMs - f.t) / 60000)) : 0
-        });
+        const formatPoint = (f: Fix) => {
+          const nf = normMap.get(f.id);
+          const locIso = new Date(f.t).toISOString();
+          const msgIso = nf?.messageT ? new Date(nf.messageT).toISOString() : null;
+          return {
+            lat: f.lat,
+            lon: f.lon,
+            timestamp: locIso,
+            fixDate: locIso,
+            messageDate: msgIso,
+            usedFallback: nf ? nf.usedFallback : false,
+            type: f.type,
+            isDegraded: f.cls === 'A' || f.cls === 'B',
+            locationClass: f.cls,
+            errorRadiusM: f.errorRadiusM,
+            delay: nf?.messageT ? Math.max(0, Math.round((nf.messageT - f.t) / 60000)) : (f.firstMessageMs ? Math.max(0, Math.round((f.firstMessageMs - f.t) / 60000)) : 0)
+          };
+        };
 
         const markers = layers.markers.map(formatPoint);
 

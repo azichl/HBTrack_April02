@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { messagesToRawFixes, inspectMessageSchema, calibrateDopplerDate } from './messagesToRawFixes';
 import { buildFixes, partitionByQuality, type RawFix } from './positionsEngine';
+import msgsRaw from './fixtures/cls_messages_43574.json';
+import posRaw from './fixtures/cls_positions_43574.json';
 
-const msgs = JSON.parse(readFileSync(new URL('./fixtures/cls_messages_43574.json', import.meta.url), 'utf8'));
-const pos: RawFix[] = JSON.parse(readFileSync(new URL('./fixtures/cls_positions_43574.json', import.meta.url), 'utf8'));
+const msgs: any = msgsRaw;
+const pos: RawFix[] = posRaw as any[];
 
 /** The CLS API JSON shape seen in the log (values are the same real data, re-keyed). dopplerAcqDatetime is SYNTHETIC (+90 s) for the calibration test. */
 const apiMsgs = msgs.map((m: any, i: number) => ({

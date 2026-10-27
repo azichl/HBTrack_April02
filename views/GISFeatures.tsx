@@ -11,6 +11,7 @@ import readXlsxFile from 'read-excel-file';
 import { useAppStore } from '../store/appStore';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { findBirdForTransmitter } from '../utils/formatting';
+import { parseUtc } from '../src/features/track-order/fixTime';
 import { MapContainer, TileLayer, CircleMarker, Popup, ZoomControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -828,7 +829,8 @@ export const GISFeatures = () => {
 
       const lat = parseFloat(latVal);
       const lon = parseFloat(lonVal);
-      const timestamp = new Date(dateStr);
+      const utcMs = parseUtc(dateStr);
+      const timestamp = utcMs != null ? new Date(utcMs) : null;
 
       if (!isNaN(lat) && !isNaN(lon) && !isNaN(timestamp.getTime())) {
         points.push({ deviceId: idVal, lat, lon, timestamp });
@@ -874,7 +876,10 @@ export const GISFeatures = () => {
       
       let timestamp: Date | null = null;
       if (dateVal instanceof Date) timestamp = dateVal;
-      else if (typeof dateVal === 'string') timestamp = new Date(dateVal);
+      else {
+        const utcMs = parseUtc(dateVal as any);
+        if (utcMs != null) timestamp = new Date(utcMs);
+      }
 
       if (timestamp && !isNaN(lat) && !isNaN(lon) && !isNaN(timestamp.getTime())) {
         points.push({ deviceId: String(idVal), lat, lon, timestamp });

@@ -57,6 +57,7 @@ import { labelScaleVars, DEFAULT_LABEL_SCALE } from '../../src/features/report-t
 import { getReportString } from '../../src/utils/reportDictionary';
 import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
 import { BirdStatus } from '../../src/constants/statusColors';
+import { normalizeFixes, isChronological, diagnoseOrder, parseUtc } from '../../src/features/track-order/fixTime';
 import {
   FlightTrackCustomizer,
   FlightTrackConfig,
@@ -1994,12 +1995,40 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
       const allPositions = [...rawPositions, ...storePositions];
 
-      // Sort positions chronologically
-      allPositions.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+      // Normalize strictly by LOCATION (fix) date, de-duplicated
+      const normalizedPositions = normalizeFixes(allPositions, {
+        getLat: (p: any) => p.lat ?? p.latitude,
+        getLon: (p: any) => p.lon ?? p.longitude,
+        getId: (p: any, i: number) => p.id ?? String(i)
+      });
+      console.assert(isChronological(normalizedPositions), '[CustomMapReport] Positions must be strictly chronological by fix time');
+
+      if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {
+        const drawnBefore = [...allPositions].map(r => normalizeFixes([r], { getLat: x => x.lat, getLon: x => x.lon })[0]).filter(Boolean);
+        drawnBefore.sort((a, b) => (a.messageT ?? a.t) - (b.messageT ?? b.t));
+        console.log(`[CustomMapReport] Order diagnostics for PTT ${pttId}:`);
+        console.log('Before fix (message order):');
+        console.table(diagnoseOrder(drawnBefore));
+        console.log('After fix (fix-time order):');
+        console.table(diagnoseOrder(normalizedPositions));
+      }
+
+      const allSortedPositions = normalizedPositions.map(nf => {
+        const iso = new Date(nf.t).toISOString();
+        return {
+          ...nf.raw,
+          lat: nf.lat,
+          lon: nf.lon,
+          timestamp: iso,
+          locationDate: iso,
+          messageDate: nf.messageT ? new Date(nf.messageT).toISOString() : (nf.raw.messageDate || null),
+          usedFallback: nf.usedFallback,
+        };
+      });
 
       // Filter valid coordinates for trajectory
       const validPoints: Array<[number, number]> = [];
-      allPositions.forEach(p => {
+      allSortedPositions.forEach(p => {
         const lat = parseFloat(String(p.lat));
         const lon = parseFloat(String(p.lon));
         if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
@@ -2007,9 +2036,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         }
       });
       setAllHistoryPoints(validPoints);
-      setRawHistoryRecords(allPositions);
+      setRawHistoryRecords(allSortedPositions);
 
-      const gpsPositions = allPositions.filter(p => {
+      const gpsPositions = allSortedPositions.filter(p => {
         const locType = classifyLocationType(p.lc, p.locationType, (p as any).satellite);
         return locType === 'GPS';
       });

@@ -57,3 +57,22 @@ test('huge coordinates are clamped', () => {
   const o = buildSvgOverlay(m, s, (la, lo) => ({ x: (lo - 66) * 1e9, y: 0 }), B);
   assert.ok(!/e\+/.test(o.lines[0].d)); assert.ok(o.lines[0].d.includes('1000000'));
 });
+
+test('points follow the line colour per period, each with a white halo', () => {
+  const o = build({ showPoints: true, pointColorMode: 'track', periodsEnabled: true, periods: [
+    { id: 'a', from: '2026-01-01', to: '2026-04-30', color: '#f59e0b' },
+    { id: 'b', from: '2026-05-01', to: '2026-10-31', color: '#10b981' }] });
+  assert.deepEqual(o.dots.map(d => d.color).sort(), ['#10b981', '#f59e0b']);
+  assert.deepEqual(o.lines.map(l => l.color), ['#f59e0b', '#10b981']);       // same colours as the line
+  assert.equal(o.haloDots.length, 2); assert.ok(o.haloDots.every(h => h.color === '#ffffff' && h.size === 8));
+  assert.equal(o.stats.dots, 10);
+  // without periods the dots keep the track colour (the existing blue look)
+  const plain = build({ showPoints: true, pointColorMode: 'track' });
+  assert.deepEqual(plain.dots.map(d => d.color), ['#6366f1']);
+});
+test('"period" mode is an alias of "track" mode', () => {
+  const per = { periodsEnabled: true, periods: [{ id: 'a', from: '2026-01-01', to: '2026-12-31', color: '#ef4444' }] };
+  const a = build({ showPoints: true, pointColorMode: 'track', ...per });
+  const b = build({ showPoints: true, pointColorMode: 'period', ...per });
+  assert.deepEqual(a.dots.map(d => d.color), b.dots.map(d => d.color));
+});

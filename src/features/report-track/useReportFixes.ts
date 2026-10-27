@@ -3,6 +3,7 @@ import { getHistoricalPositions } from '../../../services/firestoreService';
 import { normalizePttId } from '../../../utils/formatting';
 import { toFix } from './toFix';
 import type { Fix } from './trackRenderModel';
+import { normalizeFixes, isChronological, diagnoseOrder } from '../track-order/fixTime';
 
 export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
   fixes: Fix[];
@@ -11,7 +12,12 @@ export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
 } {
   const [fixes, setFixes] = useState<Fix[]>(() => {
     if (initialRawPositions && initialRawPositions.length > 0) {
-      return initialRawPositions.map(toFix).filter((f): f is Fix => f !== null).sort((a, b) => a.t - b.t);
+      const normalized = normalizeFixes(initialRawPositions, {
+        getLat: (r: any) => r.lat ?? r.latitude,
+        getLon: (r: any) => r.lon ?? r.longitude,
+        getId: (r: any, i: number) => r.id ?? String(i)
+      });
+      return normalized.map(nf => toFix({ ...nf.raw, t: nf.t, lat: nf.lat, lon: nf.lon })).filter((f): f is Fix => f !== null);
     }
     return [];
   });
@@ -38,12 +44,28 @@ export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
         const rawPositions = await getHistoricalPositions([cleanId], tenYearsAgo, now);
         if (!isMounted) return;
 
+        const normalized = normalizeFixes(rawPositions, {
+          getLat: (r: any) => r.lat ?? r.latitude,
+          getLon: (r: any) => r.lon ?? r.longitude,
+          getId: (r: any, i: number) => r.id ?? String(i)
+        });
+        console.assert(isChronological(normalized), '[useReportFixes] Fixes must be strictly chronological by fix time');
+
+        if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {
+          const drawnBefore = [...rawPositions].map(r => normalizeFixes([r], { getLat: x => x.lat, getLon: x => x.lon })[0]).filter(Boolean);
+          drawnBefore.sort((a, b) => (a.messageT ?? a.t) - (b.messageT ?? b.t));
+          console.log(`[report-track] Order diagnostics for PTT ${cleanId}:`);
+          console.log('Before fix (message order):');
+          console.table(diagnoseOrder(drawnBefore));
+          console.log('After fix (fix-time order):');
+          console.table(diagnoseOrder(normalized));
+        }
+
         const mapped: Fix[] = [];
-        for (const r of rawPositions) {
-          const fx = toFix(r);
+        for (const nf of normalized) {
+          const fx = toFix({ ...nf.raw, t: nf.t, lat: nf.lat, lon: nf.lon });
           if (fx) mapped.push(fx);
         }
-        mapped.sort((a, b) => a.t - b.t);
 
         if (cleanId && mapped.length === 0) {
           console.error('[report-track] no fixes for', cleanId);

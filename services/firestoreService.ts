@@ -9,6 +9,7 @@ import { buildFixes, lastFix, type RawFix, type Fix } from '../utils/positionsEn
 import { ArgosMessage, StatusHistoryRecord, Transmitter, Position } from '../types';
 import { KNOWN_CLS_RAW_LOCATION_DATES, decodeBatteryVoltage } from './argosService';
 import { trackedGetDocs, trackedGetDoc, trackedOnSnapshot, trackedOnDocSnapshot } from '../src/perf/firestoreTracked';
+import { resolveTimes } from '../src/features/track-order/fixTime';
 
 
 // ─── System Ingestion Metadata ────────────────────────────────────────────────
@@ -1287,28 +1288,24 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
     const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
     const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
     
-    let rawTs: string | undefined = undefined;
-    const explicitLocDate = d.locationDate || d.gpsLocDate || d.location?.locationDate || d.dateOfPosition;
-
-    if (explicitLocDate) {
-      rawTs = explicitLocDate;
-    } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
-      rawTs = KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr];
-    } else if (!isGps) {
-      rawTs = d.timestamp || d.date || d.msgDatetime || d.bestDate;
-    } else {
-      // Rule 1: Never fall back to message arrival date for GPS fixes!
-      // GPS fixes without a true acquisition date must be rejected.
-      return null;
+    const { fix, message } = resolveTimes(d);
+    let locDateMs: number | null = fix;
+    if (locDateMs == null) {
+      if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+        locDateMs = safeParseTimestamp(KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]);
+      } else if (!isGps && message != null) {
+        locDateMs = message;
+      } else if (message != null) {
+        // Fallback for older GPS docs where acquisition date was stored in timestamp/date
+        locDateMs = message;
+      }
     }
-
-    const locDateMs = safeParseTimestamp(rawTs);
-    if (isNaN(locDateMs) || locDateMs <= 0) return null;
+    if (locDateMs == null || isNaN(locDateMs) || locDateMs <= 0) return null;
 
     const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
     const locClass = locType === 'GPS' ? null : (d.locationClass || (d.lc !== 'GPS' ? d.lc : null) || null);
     const errRadiusM = locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
-    const arrivalDate = d.receivedAt || d.firstMessageDate || d.messageDate || d.msgDatetime || d.timestamp || null;
+    const arrivalDate = message != null ? new Date(message).toISOString() : (d.receivedAt || d.firstMessageDate || d.messageDate || d.msgDatetime || d.timestamp || null);
 
     return {
       pttId: pidStr,
@@ -1392,16 +1389,16 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       // Cache all positions for this transmitter
       transmitterHistoryCache.set(pidStr, { cachedAt: Date.now(), docs: pttDocs });
 
-      // Filter to requested date window
+      // Filter to requested date window by location fix date
       const dateFiltered = pttDocs.filter(r => {
-        const ts = safeParseTimestamp(r.timestamp);
+        const ts = safeParseTimestamp(r.locationDate || r.timestamp);
         return !isNaN(ts) && ts >= startMs && ts <= endMs;
       });
 
       allResults.push(...dateFiltered);
     }
 
-    allResults.sort((a, b) => safeParseTimestamp(a.timestamp) - safeParseTimestamp(b.timestamp));
+    allResults.sort((a, b) => safeParseTimestamp(a.locationDate || a.timestamp) - safeParseTimestamp(b.locationDate || b.timestamp));
     return allResults;
   } catch (error) {
     console.error('[Firestore] Error in getHistoricalPositions:', error);

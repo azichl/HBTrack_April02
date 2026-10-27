@@ -1,5 +1,6 @@
 import { classifyLocationType, safeParseTimestamp, isValidCoordinate } from '../../../utils/formatting';
 import type { Fix } from './trackRenderModel';
+import { resolveTimes } from '../track-order/fixTime';
 
 export function toFix(raw: any): Fix | null {
   if (!raw) return null;
@@ -25,8 +26,8 @@ export function toFix(raw: any): Fix | null {
         ? raw.locationType
         : classifyLocationType(raw.lc || raw.locationClass, raw.locationType, raw.satellite);
 
-    const dateStr = raw.locationDate || raw.timestamp || raw.fixTime || raw.date || raw.ts;
-    t = safeParseTimestamp(dateStr);
+    const { fix, message } = resolveTimes(raw);
+    t = fix ?? message ?? (typeof raw.t === 'number' ? raw.t : safeParseTimestamp(raw.locationDate || raw.timestamp || raw.fixTime || raw.date || raw.ts));
     id = String(raw.id || `${raw.transmitter_id || raw.platformId || 'tx'}_${t}_${lat}_${lon}`);
   }
 
