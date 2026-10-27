@@ -94,39 +94,26 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
       {isEnabled && historyPaths.map((hp) => {
         const itemColor = hp.color || trackColor;
 
-        // In Live Tracking mode, render directly from the normalized chronological styled segments / polyline and points
+        // In Live Tracking mode, render directly from the normalized chronological polyline and points
         if (mode === 'live') {
+          const polyPositions: [number, number][] = (hp.polyline && hp.polyline.length > 1)
+            ? hp.polyline
+            : (hp.path.length > 1 ? hp.path.map(p => [p.lat, p.lon] as [number, number]) : []);
+
           return (
             <React.Fragment key={`history-track-${hp.id}`}>
-              {/* Polylines: Styled Segments or continuous polyline */}
-              {hp.styledSegments && hp.styledSegments.length > 0 ? (
-                hp.styledSegments.map((seg, sIdx) => (
-                  <Polyline
-                    key={`seg-${hp.id}-${sIdx}`}
-                    positions={seg.positions}
-                    pathOptions={{
-                      color: seg.color || itemColor,
-                      weight: seg.weight || trackWidth,
-                      dashArray: seg.dashArray,
-                      opacity: seg.opacity ?? 0.85,
-                      lineJoin: 'round',
-                      lineCap: 'round'
-                    }}
-                  />
-                ))
-              ) : (
-                hp.polyline && hp.polyline.length > 1 && (
-                  <Polyline
-                    positions={hp.polyline}
-                    pathOptions={{
-                      color: itemColor,
-                      weight: trackWidth,
-                      opacity: 0.85,
-                      lineJoin: 'round',
-                      lineCap: 'round'
-                    }}
-                  />
-                )
+              {/* Continuous chronological polyline */}
+              {polyPositions.length > 1 && (
+                <Polyline
+                  positions={polyPositions}
+                  pathOptions={{
+                    color: itemColor,
+                    weight: trackWidth,
+                    opacity: 0.85,
+                    lineJoin: 'round',
+                    lineCap: 'round'
+                  }}
+                />
               )}
 
               {/* Point Markers along the path with full metadata preserved */}
