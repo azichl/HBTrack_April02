@@ -16,8 +16,16 @@ export function normalizeHistoryFixes<T = any>(records: readonly T[]): TimedFix<
     getLon: (r: any) => r.lon ?? r.longitude,
     getId: (r: any, i: number) => r.id ?? `${r.pttId || r.platformId || r.transmitter_id || 'fix'}_${i}`
   });
-  console.assert(isChronological(fixes), '[track-order] Normalized fixes must be strictly chronological by fix time');
-  return fixes;
+
+  // FORCE strict chronological sorting on the normalized output by fix time (oldest to newest)
+  const strictlySortedFixes = [...fixes].sort((a, b) => {
+    const timeA = new Date(a.time || (a as any).locationDate || (a as any).fixTime || (a as any).t || 0).getTime();
+    const timeB = new Date(b.time || (b as any).locationDate || (b as any).fixTime || (b as any).t || 0).getTime();
+    return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+  });
+
+  console.assert(isChronological(strictlySortedFixes), '[track-order] Normalized fixes must be strictly chronological by fix time');
+  return strictlySortedFixes;
 }
 
 export function logOrderDiagnostics(pttId: string, rawRecords: readonly any[], normalizedFixes: TimedFix<any>[]): {

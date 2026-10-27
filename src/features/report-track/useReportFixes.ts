@@ -4,6 +4,7 @@ import { normalizePttId } from '../../../utils/formatting';
 import { toFix } from './toFix';
 import type { Fix } from './trackRenderModel';
 import { normalizeFixes, isChronological, diagnoseOrder } from '../track-order/fixTime';
+import { normalizeHistoryFixes } from '../track-order/useHistoryFixes';
 
 export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
   fixes: Fix[];
@@ -12,11 +13,7 @@ export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
 } {
   const [fixes, setFixes] = useState<Fix[]>(() => {
     if (initialRawPositions && initialRawPositions.length > 0) {
-      const normalized = normalizeFixes(initialRawPositions, {
-        getLat: (r: any) => r.lat ?? r.latitude,
-        getLon: (r: any) => r.lon ?? r.longitude,
-        getId: (r: any, i: number) => r.id ?? String(i)
-      });
+      const normalized = normalizeHistoryFixes(initialRawPositions);
       return normalized.map(nf => toFix({ ...nf.raw, t: nf.t, lat: nf.lat, lon: nf.lon })).filter((f): f is Fix => f !== null);
     }
     return [];
@@ -51,11 +48,7 @@ export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
           return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Oldest to newest chronological path
         });
 
-        const normalized = normalizeFixes(sortedTelemetry, {
-          getLat: (r: any) => r.lat ?? r.latitude,
-          getLon: (r: any) => r.lon ?? r.longitude,
-          getId: (r: any, i: number) => r.id ?? String(i)
-        });
+        const normalized = normalizeHistoryFixes(sortedTelemetry);
         console.assert(isChronological(normalized), '[useReportFixes] Fixes must be strictly chronological by fix time');
 
         if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {

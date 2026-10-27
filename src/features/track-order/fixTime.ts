@@ -101,6 +101,9 @@ export interface TimedFix<T> {
   lat: number;
   lon: number;
   t: number;                 // position time, epoch ms UTC  (fix date, or message date when missing)
+  time?: number;             // timestamp alias
+  locationDate?: string;     // ISO fix date
+  fixTime?: string;          // ISO fix date
   messageT: number | null;   // when the message was received (info only)
   usedFallback: boolean;     // true = no fix date on the record, t is the message date
 }
@@ -122,7 +125,19 @@ export function normalizeFixes<T>(raws: readonly T[], o: NormalizeOptions<T>): T
     const { fix, message } = resolveTimes(raw, o.fields);
     const t = fix ?? message;
     if (t == null) return;
-    out.push({ raw, id: o.getId?.(raw, i) ?? String(i), lat, lon, t, messageT: message, usedFallback: fix == null });
+    const locDateVal = (raw as any)?.locationDate || (raw as any)?.fixDate || (raw as any)?.gpsDate || (raw as any)?.fixTime || (raw as any)?.gpsLocDate || new Date(t).toISOString();
+    out.push({
+      raw,
+      id: o.getId?.(raw, i) ?? String(i),
+      lat,
+      lon,
+      t,
+      time: t,
+      locationDate: locDateVal,
+      fixTime: locDateVal,
+      messageT: message,
+      usedFallback: fix == null
+    });
   });
 
   out.sort((a, b) => a.t - b.t || (a.messageT ?? Infinity) - (b.messageT ?? Infinity) || a.id.localeCompare(b.id));

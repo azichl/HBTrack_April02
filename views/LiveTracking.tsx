@@ -16,6 +16,7 @@ import { fetchAllLayers } from '../services/qgisLayerService';
 import { HistoryTrackLayer } from '../src/components/map/HistoryTrackLayer';
 import { orderLine } from '../src/features/track-order/orderLine';
 import { normalizeFixes, isChronological, diagnoseOrder, popupTimes, parseUtc, type TimedFix } from '../src/features/track-order/fixTime';
+import { normalizeHistoryFixes } from '../src/features/track-order/useHistoryFixes';
 import Draggable from 'react-draggable';
 import { mark } from '../src/diagnostics/bootProfiler';
 
@@ -1949,11 +1950,7 @@ const LiveTrackingInner = () => {
           track = track.filter(p => getYearMonthKey(p.locationDate || p.timestamp) === currentYearMonthKey);
         }
 
-        const normalized = normalizeFixes(track, {
-          getLat: (p: any) => p.lat ?? p.latitude,
-          getLon: (p: any) => p.lon ?? p.longitude,
-          getId: (p: any, i: number) => p.id || `${pttId}_${i}`
-        });
+        const normalized = normalizeHistoryFixes(track);
         console.assert(isChronological(normalized), `[LiveTracking] History track for ${pttId} must be chronological`);
 
         if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {

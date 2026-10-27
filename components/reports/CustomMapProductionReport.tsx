@@ -58,6 +58,7 @@ import { getReportString } from '../../src/utils/reportDictionary';
 import { resolveReportSubject, ReportSubject } from '../../src/utils/reportSubject';
 import { BirdStatus } from '../../src/constants/statusColors';
 import { normalizeFixes, isChronological, diagnoseOrder, parseUtc } from '../../src/features/track-order/fixTime';
+import { normalizeHistoryFixes } from '../../src/features/track-order/useHistoryFixes';
 import {
   FlightTrackCustomizer,
   FlightTrackConfig,
@@ -2003,11 +2004,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       });
 
       // Normalize strictly by LOCATION (fix) date, de-duplicated
-      const normalizedPositions = normalizeFixes(sortedTelemetry, {
-        getLat: (p: any) => p.lat ?? p.latitude,
-        getLon: (p: any) => p.lon ?? p.longitude,
-        getId: (p: any, i: number) => p.id ?? String(i)
-      });
+      const normalizedPositions = normalizeHistoryFixes(sortedTelemetry);
       console.assert(isChronological(normalizedPositions), '[CustomMapReport] Positions must be strictly chronological by fix time');
 
       if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {
