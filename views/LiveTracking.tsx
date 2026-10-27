@@ -1993,8 +1993,6 @@ const LiveTrackingInner = () => {
           describe: f => ({ id: f.id, type: f.type, cls: f.cls }),
         }).points;
 
-        const polylineCoords: Array<[number, number]> = orderedLine.map(f => [f.lat, f.lon] as [number, number]);
-
         const formatPoint = (f: Fix) => {
           const nf = normMap.get(f.id);
           const locIso = new Date(f.t).toISOString();
@@ -2015,12 +2013,27 @@ const LiveTrackingInner = () => {
           };
         };
 
-        const markers = orderedLine.map(formatPoint);
+        // Enforce strict chronological ascending order for historical track lines
+        const sortedHistoryPoints = [...orderedLine.map(formatPoint)].sort((a, b) => {
+          const timeA = new Date(a.locationDate || a.fixDate || 0).getTime();
+          const timeB = new Date(b.locationDate || b.fixDate || 0).getTime();
+          return timeA - timeB; // Prevents packet ingestion-order zig-zag jumps
+        });
+
+        const sortedPositions = [...sortedHistoryPoints].sort((a, b) => {
+    const timeA = new Date(a.locationDate || a.fixTime || a.gpsDate || 0).getTime();
+    const timeB = new Date(b.locationDate || b.fixTime || b.gpsDate || 0).getTime();
+    return timeA - timeB; // Strictly chronological: oldest to newest
+  });
+
+  const trackCoordinates = sortedPositions.map(p => [p.lat, p.lon] as [number, number]);
+        const polylineCoords: Array<[number, number]> = trackCoordinates;
+        const markers = sortedPositions;
 
         const styledSegments: Array<{ points: [number, number][]; kind: 'GPS' | 'TOUCHING_DOPPLER' }> = [];
-        for (let i = 1; i < orderedLine.length; i++) {
-          const p1 = orderedLine[i - 1];
-          const p2 = orderedLine[i];
+        for (let i = 1; i < sortedPositions.length; i++) {
+          const p1 = sortedPositions[i - 1];
+          const p2 = sortedPositions[i];
           const kind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
           styledSegments.push({
             points: [[p1.lat, p1.lon], [p2.lat, p2.lon]],

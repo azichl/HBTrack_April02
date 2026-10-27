@@ -96,9 +96,16 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
 
         // In Live Tracking mode, render directly from the normalized chronological polyline and points
         if (mode === 'live') {
-          const polyPositions: [number, number][] = (hp.polyline && hp.polyline.length > 1)
-            ? hp.polyline
-            : (hp.path.length > 1 ? hp.path.map(p => [p.lat, p.lon] as [number, number]) : []);
+          // Enforce strict chronological ascending order for historical track lines
+          const sortedHistoryPoints = [...hp.path].sort((a, b) => {
+            const timeA = new Date(a.locationDate || a.fixDate || a.timestamp || 0).getTime();
+            const timeB = new Date(b.locationDate || b.fixDate || b.timestamp || 0).getTime();
+            return timeA - timeB; // Prevents packet ingestion-order zig-zag jumps
+          });
+
+          const polyPositions: [number, number][] = sortedHistoryPoints.length > 1
+            ? sortedHistoryPoints.map(p => [p.lat, p.lon] as [number, number])
+            : (hp.polyline && hp.polyline.length > 1 ? hp.polyline : []);
 
           return (
             <React.Fragment key={`history-track-${hp.id}`}>
@@ -117,7 +124,7 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
               )}
 
               {/* Point Markers along the path with full metadata preserved */}
-              {hp.path.map((pt, idx) => {
+              {sortedHistoryPoints.map((pt, idx) => {
                 if (renderPointMarker) {
                   return (
                     <React.Fragment key={`custom-pt-${hp.id}-${idx}`}>
