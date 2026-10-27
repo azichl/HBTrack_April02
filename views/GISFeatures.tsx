@@ -312,24 +312,27 @@ export const GISFeatures = () => {
           const validPos = tPos.filter(p => !isNaN(p.lat) && !isNaN(p.lon) && (p.lat !== 0 || p.lon !== 0));
           if (validPos.length === 0) continue;
           
-          const sorted = [...validPos].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          const getTimeMs = (p: any) => parseUtc(p.locationDate || p.timestamp) ?? new Date(p.timestamp).getTime();
+          const sorted = [...validPos].sort((a, b) => getTimeMs(a) - getTimeMs(b));
           
           const lats = validPos.map(p => p.lat);
           const lons = validPos.map(p => p.lon);
           const meanLat = lats.reduce((a, b) => a + b, 0) / lats.length;
           const meanLon = lons.reduce((a, b) => a + b, 0) / lons.length;
+          const firstMs = getTimeMs(sorted[0]);
+          const lastMs = getTimeMs(sorted[sorted.length - 1]);
           
           results.push({
             Identifier: t.platform_id,
             AggN: validPos.length,
-            AggDur: Math.max(1, Math.round((new Date(sorted[sorted.length-1].timestamp).getTime() - new Date(sorted[0].timestamp).getTime()) / 86400000)),
+            AggDur: Math.max(1, Math.round((lastMs - firstMs) / 86400000)),
             Agg_mLat: meanLat,
             Agg_mLon: meanLon,
-            AggDateMin: new Date(sorted[0].timestamp).toLocaleDateString(),
-            AggDateMax: new Date(sorted[sorted.length-1].timestamp).toLocaleDateString(),
+            AggDateMin: new Date(firstMs).toLocaleDateString(),
+            AggDateMax: new Date(lastMs).toLocaleDateString(),
             LastLat: sorted[sorted.length-1].lat,
             LastLon: sorted[sorted.length-1].lon,
-            LastDate: new Date(sorted[sorted.length-1].timestamp).toLocaleDateString()
+            LastDate: new Date(lastMs).toLocaleDateString()
           });
         }
         
@@ -408,21 +411,22 @@ export const GISFeatures = () => {
           const tPos = pos.filter(p => p.deviceId === pid);
           if (tPos.length === 0) continue;
           
-          const sorted = [...tPos].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          const getTimeMs = (p: any) => parseUtc(p.locationDate || p.timestamp) ?? new Date(p.timestamp).getTime();
+          const sorted = [...tPos].sort((a, b) => getTimeMs(a) - getTimeMs(b));
 
           for (let i = 0; i < sorted.length; i++) {
             const p = sorted[i];
-            const pTime = new Date(p.timestamp).getTime();
+            const pTime = getTimeMs(p);
 
             // 1. Invalid coords
             if (p.lat === 0 && p.lon === 0 || isNaN(p.lat) || isNaN(p.lon)) {
-              results.push({ Individual_ID: pid, Location_ID: `loc_${i}`, Location_Date: new Date(p.timestamp).toLocaleString(), Location_Latitude: p.lat, Location_Longitude: p.lon, Type: 'InvalidCoordinate' });
+              results.push({ Individual_ID: pid, Location_ID: `loc_${i}`, Location_Date: new Date(pTime).toLocaleString(), Location_Latitude: p.lat, Location_Longitude: p.lon, Type: 'InvalidCoordinate' });
               continue;
             }
 
             // 2. Duplicate timestamp
-            if (i > 0 && new Date(sorted[i-1].timestamp).getTime() === pTime) {
-              results.push({ Individual_ID: pid, Location_ID: `loc_${i}`, Location_Date: new Date(p.timestamp).toLocaleString(), Location_Latitude: p.lat, Location_Longitude: p.lon, Type: 'DuplicateTimestamp' });
+            if (i > 0 && getTimeMs(sorted[i-1]) === pTime) {
+              results.push({ Individual_ID: pid, Location_ID: `loc_${i}`, Location_Date: new Date(pTime).toLocaleString(), Location_Latitude: p.lat, Location_Longitude: p.lon, Type: 'DuplicateTimestamp' });
               continue;
             }
 
@@ -431,7 +435,7 @@ export const GISFeatures = () => {
               const prev = sorted[i-1];
               if (prev.lat !== 0 && prev.lon !== 0 && !isNaN(prev.lat) && !isNaN(prev.lon)) {
                 const distM = haversDistance(prev.lat, prev.lon, p.lat, p.lon);
-                const timeDiffHours = (pTime - new Date(prev.timestamp).getTime()) / 3600000;
+                const timeDiffHours = (pTime - getTimeMs(prev)) / 3600000;
                 if (timeDiffHours > 0) {
                   const speedKmH = (distM / 1000) / timeDiffHours;
                   if (speedKmH > 120 || distM > (maxDistanceM * 100)) { 
@@ -754,7 +758,8 @@ export const GISFeatures = () => {
             const ptt = transmitters.find(t => t.bird_id === r.Individual_ID)?.platform_id;
             const tPos = pos.filter(p => p.deviceId === ptt && !isNaN(p.lat) && p.lat !== 0);
             if (tPos.length > 1) {
-              const sorted = tPos.sort((a,b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+              const getTimeMs = (p: any) => parseUtc(p.locationDate || p.timestamp) ?? new Date(p.timestamp).getTime();
+              const sorted = tPos.sort((a,b) => getTimeMs(a) - getTimeMs(b));
               const first = sorted[0];
               const last = sorted[sorted.length - 1];
               r.DispersalDistance = Number((haversDistance(first.lat, first.lon, last.lat, last.lon) / 1000).toFixed(1));

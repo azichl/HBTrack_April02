@@ -1331,7 +1331,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
       const cached = transmitterHistoryCache.get(pidStr);
       if (cached && (Date.now() - cached.cachedAt < HISTORY_CACHE_TTL)) {
         const filtered = cached.docs.filter(r => {
-          const ts = safeParseTimestamp(r.timestamp);
+          const ts = safeParseTimestamp(r.locationDate || r.timestamp);
           return !isNaN(ts) && ts >= startMs && ts <= endMs;
         });
         allResults.push(...filtered);
@@ -1368,6 +1368,7 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
           id: f.id,
           transmitter_id: f.pttId,
           platformId: f.pttId,
+          deviceId: f.pttId,
           lat: f.lat,
           lon: f.lon,
           timestamp: locDateIso,
