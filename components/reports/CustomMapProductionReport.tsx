@@ -2375,7 +2375,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return () => {
       isMounted = false;
     };
-  }, [metrics.lLat, metrics.lLon]);
+  }, [metrics.lLat, metrics.lLon, reportFixes]);
 
   // Graticule Top Longitude (Meridian) Line Label (e.g. 067° 00.0000'E or 074° 15.0000'E)
   const graticuleLonLabel = useMemo(() => {

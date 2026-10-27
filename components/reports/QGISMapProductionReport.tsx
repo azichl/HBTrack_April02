@@ -663,7 +663,26 @@ export const resolveRegionBilingual = (
     'أبوظبي': { ar: 'أبوظبي', en: 'Abu Dhabi' },
     'abu dhabi': { ar: 'أبوظبي', en: 'Abu Dhabi' },
     'الدوحة': { ar: 'الدوحة', en: 'Doha' },
-    'doha': { ar: 'الدوحة', en: 'Doha' }
+    'doha': { ar: 'الدوحة', en: 'Doha' },
+    'الأندلس': { ar: 'الأندلس', en: 'Andalusia' },
+    'andalusia': { ar: 'الأندلس', en: 'Andalusia' },
+    'andalucía': { ar: 'الأندلس', en: 'Andalusia' },
+    'andalucia': { ar: 'الأندلس', en: 'Andalusia' },
+    'مدريد': { ar: 'مدريد', en: 'Madrid' },
+    'madrid': { ar: 'مدريد', en: 'Madrid' },
+    'كتالونيا': { ar: 'كتالونيا', en: 'Catalonia' },
+    'catalonia': { ar: 'كتالونيا', en: 'Catalonia' },
+    'catalunya': { ar: 'كتالونيا', en: 'Catalonia' },
+    'cataluña': { ar: 'كتالونيا', en: 'Catalonia' },
+    'إسبانيا': { ar: 'إسبانيا', en: 'Spain' },
+    'spain': { ar: 'إسبانيا', en: 'Spain' },
+    'españa': { ar: 'إسبانيا', en: 'Spain' },
+    'قرطبة': { ar: 'قرطبة', en: 'Cordoba' },
+    'córdoba': { ar: 'قرطبة', en: 'Cordoba' },
+    'cordoba': { ar: 'قرطبة', en: 'Cordoba' },
+    'إشبيلية': { ar: 'إشبيلية', en: 'Seville' },
+    'sevilla': { ar: 'إشبيلية', en: 'Seville' },
+    'seville': { ar: 'إشبيلية', en: 'Seville' }
   };
 
   if (cleanAr && map[cleanAr]) {
@@ -711,9 +730,23 @@ export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolve
     console.warn('countryCoder.feature([lon, lat]) failed:', e);
   }
 
-  const countryNameEn = feat?.properties?.nameEn || 'Kazakhstan';
+  if (!feat) {
+    try {
+      const containing = (countryCoder as any).featuresContaining([lon, lat]) || [];
+      feat = containing.find((f: any) => f && (f.properties?.iso1A2 || f.properties?.country));
+    } catch (_) {}
+  }
+
+  const iso2 = feat?.properties?.iso1A2 || feat?.properties?.country;
+  let countryNameEn = feat?.properties?.nameEn;
+  if (!countryNameEn && iso2) {
+    try {
+      countryNameEn = (countries as any).getName(iso2, 'en');
+    } catch (_) {}
+  }
+  if (!countryNameEn) countryNameEn = 'Kazakhstan';
+
   let countryNameAr = 'كازاخستان';
-  const iso2 = feat?.properties?.iso1A2;
   if (iso2) {
     try {
       const ar = (countries as any).getName(iso2, 'ar');
@@ -758,6 +791,20 @@ export const resolveLocationFromCoords = (lat: number, lon: number): AutoResolve
   } else if (iso2 === 'MA') {
     regionAr = 'كلميم';
     regionEn = 'Guelmim';
+  } else if (iso2 === 'ES') {
+    if (lat < 38.5) {
+      regionAr = 'الأندلس';
+      regionEn = 'Andalusia';
+    } else if (lat < 41.5 && lon < -2) {
+      regionAr = 'مدريد';
+      regionEn = 'Madrid';
+    } else if (lat >= 41 && lon > 0) {
+      regionAr = 'كتالونيا';
+      regionEn = 'Catalonia';
+    } else {
+      regionAr = 'الأندلس';
+      regionEn = 'Andalusia';
+    }
   } else {
     regionAr = countryNameAr;
     regionEn = countryNameEn;
@@ -816,18 +863,109 @@ export function buildCountrySvgData(
     }
   }
 
-  if (!feat || !feat.geometry) {
+  // Multi-territory / composite country geometry resolution:
+  // Countries like Spain (ES), United Kingdom (GB), France (FR), Portugal (PT),
+  // United States (US), Russia (RU), China (CN), India (IN), etc. have geometry: null
+  // on their top-level country feature because their borders are stored in
+  // constituent member territories. We resolve their geometries dynamically so that
+  // the mini map displays the correct country silhouette rather than falling back to Kazakhstan.
+  if (feat && !feat.geometry) {
+    const iso = feat.properties?.iso1A2;
+    if (iso === 'ES') {
+      const inCanary = (lon < -13 && lat < 30);
+      if (inCanary) {
+        const ic = (countryCoder as any).feature('IC');
+        if (ic?.geometry) {
+          feat = { ...feat, geometry: ic.geometry };
+        }
+      } else {
+        const pSpain = (countryCoder as any).feature('Q16390686'); // Peninsular Spain
+        const balearics = (countryCoder as any).feature('Q5765');  // Balearic Islands
+        const spainCoords: any[] = [];
+        if (pSpain?.geometry) {
+          if (pSpain.geometry.type === 'MultiPolygon') spainCoords.push(...pSpain.geometry.coordinates);
+          else if (pSpain.geometry.type === 'Polygon') spainCoords.push(pSpain.geometry.coordinates);
+        }
+        if (balearics?.geometry) {
+          if (balearics.geometry.type === 'MultiPolygon') spainCoords.push(...balearics.geometry.coordinates);
+          else if (balearics.geometry.type === 'Polygon') spainCoords.push(balearics.geometry.coordinates);
+        }
+        if (spainCoords.length > 0) {
+          feat = { ...feat, geometry: { type: 'MultiPolygon', coordinates: spainCoords } };
+        }
+      }
+    } else if (iso === 'GB') {
+      const ukParts = ['GB-ENG', 'GB-SCT', 'GB-WLS', 'GB-NIR']
+        .map(id => (countryCoder as any).feature(id))
+        .filter(f => f?.geometry);
+      if (ukParts.length > 0) {
+        const ukCoords: any[] = [];
+        for (const p of ukParts) {
+          if (p.geometry.type === 'MultiPolygon') ukCoords.push(...p.geometry.coordinates);
+          else if (p.geometry.type === 'Polygon') ukCoords.push(p.geometry.coordinates);
+        }
+        feat = { ...feat, geometry: { type: 'MultiPolygon', coordinates: ukCoords } };
+      }
+    }
+
+    if (!feat.geometry) {
+      try {
+        const containing = (countryCoder as any).featuresContaining([lon, lat]) || [];
+        const subFeat = containing.find((f: any) => f && f.geometry);
+        if (subFeat?.geometry) {
+          feat = { ...feat, geometry: subFeat.geometry };
+        }
+      } catch (_) {}
+    }
+
+    if (!feat.geometry && Array.isArray(feat.properties?.members)) {
+      const memberCoords: any[] = [];
+      for (const mId of feat.properties.members) {
+        try {
+          const mFeat = (countryCoder as any).feature(mId);
+          if (mFeat?.geometry) {
+            if (mFeat.geometry.type === 'MultiPolygon') memberCoords.push(...mFeat.geometry.coordinates);
+            else if (mFeat.geometry.type === 'Polygon') memberCoords.push(mFeat.geometry.coordinates);
+          }
+        } catch (_) {}
+      }
+      if (memberCoords.length > 0) {
+        feat = { ...feat, geometry: { type: 'MultiPolygon', coordinates: memberCoords } };
+      }
+    }
+  }
+
+  // If initial feature lookup was null, try containing features
+  if (!feat) {
+    try {
+      const containing = (countryCoder as any).featuresContaining([lon, lat]) || [];
+      const anyFeat = containing.find((f: any) => f && (f.properties?.iso1A2 || f.properties?.country || f.geometry));
+      if (anyFeat) {
+        feat = anyFeat;
+      }
+    } catch (_) {}
+  }
+
+  // Absolute fallback: only if no country was detected at all, default to Kazakhstan
+  if (!feat) {
     try {
       feat = (countryCoder as any).feature('KZ');
     } catch (_) {}
   }
 
-  const countryNameEn = feat?.properties?.nameEn || 'Kazakhstan';
+  const iso2 = feat?.properties?.iso1A2 || feat?.properties?.country;
+  let countryNameEn = feat?.properties?.nameEn;
+  if (!countryNameEn && iso2) {
+    try {
+      countryNameEn = (countries as any).getName(iso2, 'en');
+    } catch (_) {}
+  }
+  if (!countryNameEn) countryNameEn = 'Kazakhstan';
+
   let countryNameAr = 'كازاخستان';
-  const iso2 = feat?.properties?.iso1A2;
   if (iso2) {
     try {
-      const ar = countries.getName(iso2, 'ar');
+      const ar = (countries as any).getName(iso2, 'ar');
       if (ar) countryNameAr = ar;
     } catch (_) {}
   }

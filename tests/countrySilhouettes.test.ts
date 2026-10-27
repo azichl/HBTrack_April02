@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { QATAR_POLYGON_COORDS, CUSTOM_COUNTRY_POLYGONS } from '../src/constants/countryGeometries';
+import { buildCountrySvgData, resolveLocationFromCoords } from '../components/reports/QGISMapProductionReport';
 
-describe('Country Silhouettes & Qatar Peninsula Shape', () => {
+describe('Country Silhouettes & Locator Mini-Map', () => {
   it('correctly exports high-resolution Qatar polygon coordinates', () => {
     expect(CUSTOM_COUNTRY_POLYGONS.QA).toBe(QATAR_POLYGON_COORDS);
     expect(QATAR_POLYGON_COORDS.length).toBeGreaterThan(200);
@@ -20,5 +21,55 @@ describe('Country Silhouettes & Qatar Peninsula Shape', () => {
     expect(maxLon).toBeLessThan(51.7);
     expect(minLat).toBeGreaterThan(24.5);
     expect(maxLat).toBeLessThan(26.2);
+  });
+
+  it('correctly resolves Spain for PTT 43627 coordinates in buildCountrySvgData', () => {
+    // PTT 43627 last GPS fix in Cordoba, Andalusia, Spain
+    const lon = -4.726;
+    const lat = 37.6722;
+
+    const result = buildCountrySvgData(lon, lat, 140, 78, 5);
+
+    expect(result.countryNameEn).toBe('Spain');
+    expect(result.countryNameAr).toBe('إسبانيا');
+    expect(result.svgPath).toBeTruthy();
+    expect(result.svgPath.length).toBeGreaterThan(100);
+    expect(result.birdPoint.x).toBeGreaterThan(5);
+    expect(result.birdPoint.x).toBeLessThan(135);
+    expect(result.birdPoint.y).toBeGreaterThan(5);
+    expect(result.birdPoint.y).toBeLessThan(73);
+  });
+
+  it('correctly resolves Spain in resolveLocationFromCoords', () => {
+    const lon = -4.726;
+    const lat = 37.6722;
+
+    const loc = resolveLocationFromCoords(lat, lon);
+
+    expect(loc.iso2).toBe('ES');
+    expect(loc.countryEn).toBe('Spain');
+    expect(loc.countryAr).toBe('إسبانيا');
+    expect(loc.regionEn).toBe('Andalusia');
+    expect(loc.regionAr).toBe('الأندلس');
+  });
+
+  it('correctly resolves Kazakhstan coordinates', () => {
+    const lon = 67.0222;
+    const lat = 46.9965;
+
+    const result = buildCountrySvgData(lon, lat, 140, 78, 5);
+    expect(result.countryNameEn).toBe('Kazakhstan');
+    expect(result.countryNameAr).toBe('كازاخستان');
+    expect(result.svgPath).toBeTruthy();
+  });
+
+  it('correctly resolves Qatar coordinates', () => {
+    const lon = 51.2;
+    const lat = 25.3;
+
+    const result = buildCountrySvgData(lon, lat, 140, 78, 5);
+    expect(result.countryNameEn).toBe('Qatar');
+    expect(result.countryNameAr).toBe('قطر');
+    expect(result.svgPath).toBeTruthy();
   });
 });
