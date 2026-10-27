@@ -1918,11 +1918,19 @@ const LiveTrackingInner = () => {
     }
 
     const rawPositions = rawHistoryCache.current;
+
+    // Ensure the history track polyline sorts strictly by the actual location timestamp
+    const sortedTelemetry = [...rawPositions].sort((a, b) => {
+      const timeA = new Date(a.locationDate || a.fixTime || a.timestamp || 0).getTime();
+      const timeB = new Date(b.locationDate || b.fixTime || b.timestamp || 0).getTime();
+      return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Oldest to newest chronological path
+    });
+
     const newPaths: Array<typeof historyPaths[0]> = [];
     const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
 
     selectedTransmitterIds.forEach((pttId, index) => {
-        let track = rawPositions.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
+        let track = sortedTelemetry.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
 
         // For Static Test tags, only display positions from the current calendar month on live map history track
         const tr = transmitters.find(t => String(t.platform_id) === String(pttId));

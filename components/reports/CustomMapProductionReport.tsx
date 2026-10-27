@@ -1995,8 +1995,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
       const allPositions = [...rawPositions, ...storePositions];
 
+      // Ensure the history track polyline sorts strictly by the actual location timestamp
+      const sortedTelemetry = [...allPositions].sort((a, b) => {
+        const timeA = new Date(a.locationDate || a.fixTime || a.timestamp || 0).getTime();
+        const timeB = new Date(b.locationDate || b.fixTime || b.timestamp || 0).getTime();
+        return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Oldest to newest chronological path
+      });
+
       // Normalize strictly by LOCATION (fix) date, de-duplicated
-      const normalizedPositions = normalizeFixes(allPositions, {
+      const normalizedPositions = normalizeFixes(sortedTelemetry, {
         getLat: (p: any) => p.lat ?? p.latitude,
         getLon: (p: any) => p.lon ?? p.longitude,
         getId: (p: any, i: number) => p.id ?? String(i)

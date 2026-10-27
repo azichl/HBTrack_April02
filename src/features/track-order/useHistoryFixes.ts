@@ -92,7 +92,14 @@ export function useHistoryFixes(pttId?: string, initialRawPositions?: any[]): {
         const rawPositions = await getHistoricalPositions([cleanId], tenYearsAgo, now);
         if (!isMounted) return;
 
-        const normalized = normalizeHistoryFixes(rawPositions);
+        // Ensure the history track polyline sorts strictly by the actual location timestamp
+        const sortedTelemetry = [...rawPositions].sort((a, b) => {
+          const timeA = new Date(a.locationDate || a.fixTime || a.timestamp || 0).getTime();
+          const timeB = new Date(b.locationDate || b.fixTime || b.timestamp || 0).getTime();
+          return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Oldest to newest chronological path
+        });
+
+        const normalized = normalizeHistoryFixes(sortedTelemetry);
 
         if (typeof window !== 'undefined' && window.location.search.includes('debug=order')) {
           logOrderDiagnostics(cleanId, rawPositions, normalized);

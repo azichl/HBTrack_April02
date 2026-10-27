@@ -44,7 +44,14 @@ export function useReportFixes(pttId?: string, initialRawPositions?: any[]): {
         const rawPositions = await getHistoricalPositions([cleanId], tenYearsAgo, now);
         if (!isMounted) return;
 
-        const normalized = normalizeFixes(rawPositions, {
+        // Ensure the history track polyline sorts strictly by the actual location timestamp
+        const sortedTelemetry = [...rawPositions].sort((a, b) => {
+          const timeA = new Date(a.locationDate || a.fixTime || a.timestamp || 0).getTime();
+          const timeB = new Date(b.locationDate || b.fixTime || b.timestamp || 0).getTime();
+          return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Oldest to newest chronological path
+        });
+
+        const normalized = normalizeFixes(sortedTelemetry, {
           getLat: (r: any) => r.lat ?? r.latitude,
           getLon: (r: any) => r.lon ?? r.longitude,
           getId: (r: any, i: number) => r.id ?? String(i)
