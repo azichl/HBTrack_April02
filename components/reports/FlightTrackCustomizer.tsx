@@ -1,7 +1,7 @@
 import React from 'react';
 import { Calendar, Plus, Trash2, Filter, Route, Sparkles } from 'lucide-react';
 import { classifyLocationType, safeParseTimestamp } from '../../utils/formatting';
-import { resolveTimes } from '../../src/features/track-order/fixTime';
+import { resolveTimes, parseUtc } from '../../src/features/track-order/fixTime';
 
 export type TrackLocationTypeFilter = 'ALL' | 'GPS' | 'DOPPLER';
 
@@ -109,8 +109,14 @@ export function buildColoredTrackSegments(
       locType = (pt.type === 'GPS' || pt.type === 'DOPPLER')
         ? pt.type
         : classifyLocationType(pt.lc || pt.locationClass, pt.locationType, pt.satellite);
-      const { fix, message } = resolveTimes(pt);
-      ts = fix ?? message ?? (typeof pt.t === 'number' ? pt.t : safeParseTimestamp(pt.locationDate || pt.fixTime || pt.timestamp || pt.date || pt.ts));
+      if (typeof pt.t === 'number' && Number.isFinite(pt.t) && pt.t > 0) {
+        ts = pt.t;
+      } else {
+        const { fix, message } = resolveTimes(pt);
+        const locTs = parseUtc(pt.locationDate || pt.fixDate || pt.fixTime);
+        const msgTs = parseUtc(pt.timestamp || pt.date || pt.ts);
+        ts = fix ?? locTs ?? message ?? msgTs ?? 0;
+      }
     }
 
     if (isNaN(lat) || isNaN(lon) || (lat === 0 && lon === 0)) continue;

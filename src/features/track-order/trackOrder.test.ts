@@ -146,4 +146,32 @@ describe('Latest Location in report and Argos Table consistency', () => {
     expect(fx!.lon).toBe(67.1639);
     expect(fx!.kind).toBe('GPS');
   });
+
+  it('toFix prioritizes fixDate when locationDate is missing and timestamp is message date', () => {
+    const rawWithFixDate = {
+      id: 'fix-2',
+      fixDate: '2026-10-25 04:00:00',
+      timestamp: '2026-10-26 13:19:12',
+      lat: 34.7646,
+      lon: 67.1639,
+      type: 'GPS'
+    };
+
+    const fx = toFix(rawWithFixDate);
+    expect(fx).not.toBeNull();
+    expect(fx!.t).toBe(Date.UTC(2026, 9, 25, 4, 0, 0)); // Fix date, NOT message timestamp!
+  });
+
+  it('popupTimes generates exact required text and delay for late arriving fix', () => {
+    const point = {
+      t: Date.UTC(2026, 9, 25, 4, 0, 0),
+      messageT: Date.UTC(2026, 9, 26, 13, 19, 12),
+      usedFallback: false
+    };
+
+    const pt = popupTimes(point);
+    expect(pt.fixUtc).toBe('2026-10-25 04:00:00');
+    expect(pt.receivedUtc).toBe('2026-10-26 13:19:12');
+    expect(pt.delayText).toBe('1 d 9 h');
+  });
 });

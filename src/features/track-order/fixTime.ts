@@ -70,8 +70,8 @@ export interface TimeFieldConfig { fixFields: string[]; messageFields: string[] 
  * "UTC:" line today. Dotted paths are allowed ("gps.date").
  */
 export const DEFAULT_TIME_FIELDS: TimeFieldConfig = {
-  fixFields: ['locationDate', 'location_date', 'locDate', 'gpsDate', 'gps_date', 'gpsDateOfPosition', 'dateOfPosition',
-              'date_of_position', 'fixTime', 'fix_time', 'positionDate', 'position_date'],
+  fixFields: ['fixDate', 'fix_date', 'locationDate', 'location_date', 'locDate', 'gpsDate', 'gps_date', 'gpsDateOfPosition', 'dateOfPosition',
+              'date_of_position', 'fixTime', 'fix_time', 'positionDate', 'position_date', 't'],
   messageFields: ['messageDate', 'message_date', 'msgDate', 'msg_date', 'receivedAt', 'received_at', 'timestamp',
                   'createdAt', 'created_at', 'date', 'time'],
 };

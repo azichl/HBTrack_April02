@@ -8,11 +8,16 @@ export interface HistoryPoint {
   lat: number;
   lon: number;
   timestamp: string;
+  fixDate?: string;
+  locationDate?: string;
+  messageDate?: string | null;
+  usedFallback?: boolean;
   type?: string;
   isDegraded?: boolean;
   locationClass?: string | null;
   errorRadiusM?: number;
   delay?: number | string;
+  color?: string;
 }
 
 export interface HistoryPathItem {
@@ -20,6 +25,13 @@ export interface HistoryPathItem {
   color?: string;
   path: HistoryPoint[];
   polyline?: [number, number][];
+  styledSegments?: Array<{
+    positions: [number, number][];
+    color: string;
+    weight?: number;
+    dashArray?: string;
+    opacity?: number;
+  }>;
 }
 
 export interface HistoryTrackLayerProps {
@@ -80,13 +92,83 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
   return (
     <>
       {isEnabled && historyPaths.map((hp) => {
-        // Build segments if multi-period is enabled
+        const itemColor = hp.color || trackColor;
+
+        // In Live Tracking mode, render directly from the normalized chronological styled segments / polyline and points
+        if (mode === 'live') {
+          return (
+            <React.Fragment key={`history-track-${hp.id}`}>
+              {/* Polylines: Styled Segments or continuous polyline */}
+              {hp.styledSegments && hp.styledSegments.length > 0 ? (
+                hp.styledSegments.map((seg, sIdx) => (
+                  <Polyline
+                    key={`seg-${hp.id}-${sIdx}`}
+                    positions={seg.positions}
+                    pathOptions={{
+                      color: seg.color || itemColor,
+                      weight: seg.weight || trackWidth,
+                      dashArray: seg.dashArray,
+                      opacity: seg.opacity ?? 0.85,
+                      lineJoin: 'round',
+                      lineCap: 'round'
+                    }}
+                  />
+                ))
+              ) : (
+                hp.polyline && hp.polyline.length > 1 && (
+                  <Polyline
+                    positions={hp.polyline}
+                    pathOptions={{
+                      color: itemColor,
+                      weight: trackWidth,
+                      opacity: 0.85,
+                      lineJoin: 'round',
+                      lineCap: 'round'
+                    }}
+                  />
+                )
+              )}
+
+              {/* Point Markers along the path with full metadata preserved */}
+              {hp.path.map((pt, idx) => {
+                if (renderPointMarker) {
+                  return (
+                    <React.Fragment key={`custom-pt-${hp.id}-${idx}`}>
+                      {renderPointMarker(pt, hp.id, itemColor)}
+                    </React.Fragment>
+                  );
+                }
+                const isDoppler = (pt.type || '').toUpperCase() === 'DOPPLER';
+                return (
+                  <CircleMarker
+                    key={`pt-${hp.id}-${idx}`}
+                    center={[pt.lat, pt.lon]}
+                    radius={isDoppler ? 3 : 4}
+                    pathOptions={isDoppler ? {
+                      color: itemColor,
+                      fillColor: '#ffffff',
+                      fillOpacity: 0.4,
+                      weight: 1.5
+                    } : {
+                      color: itemColor,
+                      fillColor: itemColor,
+                      fillOpacity: 0.9,
+                      weight: 1.5
+                    }}
+                  />
+                );
+              })}
+            </React.Fragment>
+          );
+        }
+
+        // Report mode: multi-period segmentation if enabled
         const config: FlightTrackConfig = {
           enabled: true,
           locationType: settings?.type || 'ALL',
           filterStartDate: settings?.from || '',
           filterEndDate: settings?.to || '',
-          defaultColor: trackColor,
+          defaultColor: itemColor,
           lineWeight: trackWidth,
           lineDashed: false,
           showTrackPoints: showPoints,
@@ -145,30 +227,33 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
                 <Polyline
                   positions={hp.polyline}
                   pathOptions={{
-                    color: trackColor,
+                    color: itemColor,
                     weight: trackWidth,
-                    opacity: 0.85
+                    opacity: 0.85,
+                    lineJoin: 'round',
+                    lineCap: 'round'
                   }}
                 />
               )
             )}
 
             {/* Vertices / Point Markers */}
-            {(showPoints || mode === 'live') && filteredPoints.map((pt, idx) => {
+            {showPoints && filteredPoints.map((pt, idx) => {
               if (renderPointMarker) {
+                const origPt = hp.path[idx] || {
+                  lat: pt.lat,
+                  lon: pt.lon,
+                  timestamp: new Date(pt.ts).toISOString(),
+                  type: pt.type
+                };
                 return (
                   <React.Fragment key={`custom-pt-${hp.id}-${idx}`}>
-                    {renderPointMarker({
-                      lat: pt.lat,
-                      lon: pt.lon,
-                      timestamp: new Date(pt.ts).toISOString(),
-                      type: pt.type
-                    }, hp.id, pt.color || trackColor)}
+                    {renderPointMarker(origPt, hp.id, pt.color || itemColor)}
                   </React.Fragment>
                 );
               }
               const isDoppler = pt.type === 'DOPPLER';
-              const dotColor = pt.color || trackColor;
+              const dotColor = pt.color || itemColor;
 
               return (
                 <CircleMarker

@@ -1988,6 +1988,7 @@ const LiveTrackingInner = () => {
             lon: f.lon,
             timestamp: locIso,
             fixDate: locIso,
+            locationDate: locIso,
             messageDate: msgIso,
             usedFallback: nf ? nf.usedFallback : false,
             type: f.type,
