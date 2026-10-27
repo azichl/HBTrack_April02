@@ -96,15 +96,20 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
 
         // In Live Tracking mode, render directly from the normalized chronological polyline and points
         if (mode === 'live') {
-          // Enforce strict chronological ascending order for historical track lines
+          // 2. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
           const sortedHistoryPoints = [...hp.path].sort((a, b) => {
-            const timeA = new Date(a.locationDate || a.fixDate || a.timestamp || 0).getTime();
-            const timeB = new Date(b.locationDate || b.fixDate || b.timestamp || 0).getTime();
-            return timeA - timeB; // Prevents packet ingestion-order zig-zag jumps
+            const timeA = new Date(a.locationDate || a.timestamp || a.fixTime || a.fixDate || 0).getTime();
+            const timeB = new Date(b.locationDate || b.timestamp || b.fixTime || b.fixDate || 0).getTime();
+            return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Prevents packet ingestion-order zig-zag jumps
           });
 
-          const polyPositions: [number, number][] = sortedHistoryPoints.length > 1
-            ? sortedHistoryPoints.map(p => [p.lat, p.lon] as [number, number])
+          // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline
+          const polylineCoordinates: [number, number][] = sortedHistoryPoints
+            .filter(pt => (pt.lat !== undefined && (pt.lon !== undefined || (pt as any).lng !== undefined)) || (pt as any).HDD)
+            .map(pt => [pt.lat ?? (pt as any).HDD?.lat, pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon] as [number, number]);
+
+          const polyPositions: [number, number][] = polylineCoordinates.length > 1
+            ? polylineCoordinates
             : (hp.polyline && hp.polyline.length > 1 ? hp.polyline : []);
 
           return (

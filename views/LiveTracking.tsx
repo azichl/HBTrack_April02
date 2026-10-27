@@ -1930,7 +1930,17 @@ const LiveTrackingInner = () => {
     const colors = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#10b981', '#3b82f6'];
 
     selectedTransmitterIds.forEach((pttId, index) => {
-        let track = sortedTelemetry.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
+        // 1. Filter points for the active PTT track
+        const rawTrackPoints = rawPositions.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
+
+        // 2. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
+        const sortedTrackPoints = [...rawTrackPoints].sort((a, b) => {
+            const timeA = new Date(a.locationDate || a.timestamp || a.fixTime || 0).getTime();
+            const timeB = new Date(b.locationDate || b.timestamp || b.fixTime || 0).getTime();
+            return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+        });
+
+        let track = sortedTrackPoints;
 
         // For Static Test tags, only display positions from the current calendar month on live map history track
         const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
@@ -2013,27 +2023,26 @@ const LiveTrackingInner = () => {
           };
         };
 
-        // Enforce strict chronological ascending order for historical track lines
+        // 2. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
         const sortedHistoryPoints = [...orderedLine.map(formatPoint)].sort((a, b) => {
-          const timeA = new Date(a.locationDate || a.fixDate || 0).getTime();
-          const timeB = new Date(b.locationDate || b.fixDate || 0).getTime();
-          return timeA - timeB; // Prevents packet ingestion-order zig-zag jumps
+          const timeA = new Date(a.locationDate || a.timestamp || a.fixTime || a.fixDate || 0).getTime();
+          const timeB = new Date(b.locationDate || b.timestamp || b.fixTime || b.fixDate || 0).getTime();
+          return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Prevents packet ingestion-order zig-zag jumps
         });
 
-        const sortedPositions = [...sortedHistoryPoints].sort((a, b) => {
-    const timeA = new Date(a.locationDate || a.fixTime || a.gpsDate || 0).getTime();
-    const timeB = new Date(b.locationDate || b.fixTime || b.gpsDate || 0).getTime();
-    return timeA - timeB; // Strictly chronological: oldest to newest
-  });
+        // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline
+        const polylineCoordinates = sortedHistoryPoints
+          .filter(pt => (pt.lat !== undefined && (pt.lon !== undefined || (pt as any).lng !== undefined)) || (pt as any).HDD)
+          .map(pt => [pt.lat ?? (pt as any).HDD?.lat, pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon] as [number, number]);
 
-  const trackCoordinates = sortedPositions.map(p => [p.lat, p.lon] as [number, number]);
-        const polylineCoords: Array<[number, number]> = trackCoordinates;
-        const markers = sortedPositions;
+        const trackCoordinates = polylineCoordinates;
+        const polylineCoords: Array<[number, number]> = polylineCoordinates;
+        const markers = sortedHistoryPoints;
 
         const styledSegments: Array<{ points: [number, number][]; kind: 'GPS' | 'TOUCHING_DOPPLER' }> = [];
-        for (let i = 1; i < sortedPositions.length; i++) {
-          const p1 = sortedPositions[i - 1];
-          const p2 = sortedPositions[i];
+        for (let i = 1; i < sortedHistoryPoints.length; i++) {
+          const p1 = sortedHistoryPoints[i - 1];
+          const p2 = sortedHistoryPoints[i];
           const kind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
           styledSegments.push({
             points: [[p1.lat, p1.lon], [p2.lat, p2.lon]],
