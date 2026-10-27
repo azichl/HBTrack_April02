@@ -2,6 +2,7 @@ import React from 'react';
 import { Calendar, Plus, Trash2, Filter, Route, Sparkles } from 'lucide-react';
 import { classifyLocationType, safeParseTimestamp } from '../../utils/formatting';
 import { resolveTimes, parseUtc } from '../../src/features/track-order/fixTime';
+import { orderLine } from '../../src/features/track-order/orderLine';
 
 export type TrackLocationTypeFilter = 'ALL' | 'GPS' | 'DOPPLER';
 
@@ -132,16 +133,19 @@ export function buildColoredTrackSegments(
     normalized.push({ lat, lon, ts, type: locType });
   }
 
-  // 2. Sort strictly chronologically by location timestamp
-  normalized.sort((a, b) => a.ts - b.ts);
+  // 2. Sort strictly chronologically by location timestamp with orderLine guard
+  const ordered = orderLine(normalized, {
+    timeOf: p => p.ts,
+    label: 'FlightTrackCustomizer'
+  }).points;
 
-  if (normalized.length === 0) {
+  if (ordered.length === 0) {
     return { segments: [], filteredPoints: [] };
   }
 
   // 3. If multi-period coloring is OFF, return a single segment with defaultColor
   if (!config.useColorPeriods || config.periods.length === 0) {
-    const coloredPts = normalized.map(p => ({ ...p, color: config.defaultColor }));
+    const coloredPts = ordered.map(p => ({ ...p, color: config.defaultColor }));
     return {
       segments: [
         {
@@ -151,8 +155,8 @@ export function buildColoredTrackSegments(
               ? `${config.filterStartDate || '...'} → ${config.filterEndDate || '...'}`
               : 'Flight Path',
           color: config.defaultColor,
-          positions: normalized.map(p => [p.lat, p.lon] as [number, number]),
-          pointCount: normalized.length,
+          positions: ordered.map(p => [p.lat, p.lon] as [number, number]),
+          pointCount: ordered.length,
           startDate: config.filterStartDate || '',
           endDate: config.filterEndDate || ''
         }
@@ -179,9 +183,9 @@ export function buildColoredTrackSegments(
 
   // Color every point
   const coloredPoints: Array<{ lat: number; lon: number; ts: number; type: 'GPS' | 'DOPPLER'; color: string }> = [];
-  const pointPeriodMap: Array<{ point: typeof normalized[0]; period: TrackColorPeriod | null }> = [];
+  const pointPeriodMap: Array<{ point: typeof ordered[0]; period: TrackColorPeriod | null }> = [];
 
-  for (const pt of normalized) {
+  for (const pt of ordered) {
     const period = findPeriodForPoint(pt.ts);
     const color = period ? period.color : config.defaultColor;
     coloredPoints.push({ ...pt, color });
@@ -195,7 +199,7 @@ export function buildColoredTrackSegments(
   for (const period of sortedPeriods) {
     const pStartMs = parseBoundaryDate(period.startDate, false);
     const pEndMs = parseBoundaryDate(period.endDate, true);
-    const ptsInPeriod = normalized.filter(p => p.ts >= pStartMs && p.ts <= pEndMs);
+    const ptsInPeriod = ordered.filter(p => p.ts >= pStartMs && p.ts <= pEndMs);
     if (ptsInPeriod.length === 0) continue;
 
     segments.push({

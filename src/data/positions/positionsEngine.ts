@@ -14,6 +14,8 @@
  *  4. Coordinates are stored with full precision (5+ decimals), never rounded for storage.
  */
 
+import { orderLine } from '../../features/track-order/orderLine';
+
 export type LocType = 'GPS' | 'DOPPLER';
 export type TypeFilter = 'ALL' | LocType;
 
@@ -246,6 +248,13 @@ export interface MapLayers {
 
 export function mapLayers(fixes: Fix[], o: LayerOpts): MapLayers {
   const line = buildTrack(fixes, o);
+  const orderedLine = orderLine(line.points, {
+    timeOf: f => f.t,
+    tieOf: f => f.firstMessageMs,
+    label: 'mapLayers',
+    describe: f => ({ id: f.id, type: f.type, cls: f.cls })
+  });
+  line.points = orderedLine.points;
   const pts = line.points;
   const segmentKind = pts.map((p, i) => {
     if (i === 0) return p.type === 'GPS' ? 'gps' : 'doppler';

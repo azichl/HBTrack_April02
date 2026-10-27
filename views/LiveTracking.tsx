@@ -14,6 +14,7 @@ import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
 import { fetchAllLayers } from '../services/qgisLayerService';
 import { HistoryTrackLayer } from '../src/components/map/HistoryTrackLayer';
+import { orderLine } from '../src/features/track-order/orderLine';
 import { normalizeFixes, isChronological, diagnoseOrder, popupTimes, parseUtc, type TimedFix } from '../src/features/track-order/fixTime';
 import Draggable from 'react-draggable';
 import { mark } from '../src/diagnostics/bootProfiler';
@@ -1977,7 +1978,14 @@ const LiveTrackingInner = () => {
           dopplerMaxErrorM: 2000
         });
 
-        const polylineCoords: Array<[number, number]> = layers.line.points.map(f => [f.lat, f.lon] as [number, number]);
+        const orderedLine = orderLine(layers.line.points, {
+          timeOf: f => normMap.get(f.id)?.t ?? f.t,
+          tieOf: f => normMap.get(f.id)?.messageT ?? f.firstMessageMs,
+          label: `live-history-${pttId}`,
+          describe: f => ({ id: f.id, type: f.type, cls: f.cls }),
+        }).points;
+
+        const polylineCoords: Array<[number, number]> = orderedLine.map(f => [f.lat, f.lon] as [number, number]);
 
         const formatPoint = (f: Fix) => {
           const nf = normMap.get(f.id);
@@ -1999,7 +2007,18 @@ const LiveTrackingInner = () => {
           };
         };
 
-        const markers = layers.markers.map(formatPoint);
+        const markers = orderedLine.map(formatPoint);
+
+        const styledSegments: Array<{ points: [number, number][]; kind: 'GPS' | 'TOUCHING_DOPPLER' }> = [];
+        for (let i = 1; i < orderedLine.length; i++) {
+          const p1 = orderedLine[i - 1];
+          const p2 = orderedLine[i];
+          const kind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
+          styledSegments.push({
+            points: [[p1.lat, p1.lon], [p2.lat, p2.lon]],
+            kind
+          });
+        }
 
         if (markers.length > 0) {
           newPaths.push({
@@ -2008,7 +2027,7 @@ const LiveTrackingInner = () => {
             dopplerDots: [],
             polyline: polylineCoords,
             segments: polylineCoords.length > 0 ? [polylineCoords] : [],
-            styledSegments: layers.styledSegments,
+            styledSegments: styledSegments,
             color: colors[index % colors.length]
           });
         }

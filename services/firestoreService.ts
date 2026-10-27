@@ -1291,12 +1291,12 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
     const { fix, message } = resolveTimes(d);
     let locDateMs: number | null = fix;
     if (locDateMs == null) {
-      if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+      const explicitLoc = d.locationDate || d.gpsLocDate || d.location?.locationDate || d.gpsDate || d.gpsDateOfPosition || d.dateOfPosition || d.fixTime;
+      if (explicitLoc) {
+        locDateMs = parseUtc(explicitLoc);
+      } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
         locDateMs = safeParseTimestamp(KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]);
       } else if (!isGps && message != null) {
-        locDateMs = message;
-      } else if (message != null) {
-        // Fallback for older GPS docs where acquisition date was stored in timestamp/date
         locDateMs = message;
       }
     }

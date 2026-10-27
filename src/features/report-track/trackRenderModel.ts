@@ -7,6 +7,8 @@
 // classification the live map uses (do not invent a second classifier):
 //   const fixes: Fix[] = rawPoints.map(toFix)   // toFix sets kind: 'GPS' | 'DOPPLER'
 
+import { orderLine } from '../track-order/orderLine';
+
 export type PointType = 'ALL' | 'GPS' | 'DOPPLER';
 export type CoordFormat = 'DD' | 'DMM' | 'DMS';
 export type DashStyle = 'solid' | 'dashed' | 'dotted';
@@ -92,9 +94,11 @@ export function validateSettings(s: TrackSettings): { ok: boolean; errors: strin
 export function filterFixes(fixes: Fix[], s: TrackSettings): Fix[] {
   const lo = s.from ? dayStart(s.from) : -Infinity;
   const hi = s.to ? dayEnd(s.to) : Infinity;
-  return fixes
-    .filter(f => (s.type === 'ALL' || f.kind === s.type) && f.t >= lo && f.t <= hi)
-    .sort((a, b) => a.t - b.t);
+  const filtered = fixes.filter(f => (s.type === 'ALL' || f.kind === s.type) && f.t >= lo && f.t <= hi);
+  return orderLine(filtered, {
+    timeOf: f => f.t,
+    label: 'report-track-model'
+  }).points;
 }
 
 export function periodFor(t: number, s: TrackSettings): TrackPeriod | undefined {
