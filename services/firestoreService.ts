@@ -700,47 +700,106 @@ export const loadAllArgosPositions = async (startDate?: Date, endDate?: Date): P
  */
 export const loadAllPositions = async (startDate?: Date, endDate?: Date): Promise<any[]> => {
   try {
-    let q;
+    let qPos, qArgos;
     if (startDate && endDate) {
-      q = query(
-        collection(db, 'positions'),
-        where('timestamp', '>=', startDate.toISOString()),
-        where('timestamp', '<=', endDate.toISOString()),
-        orderBy('timestamp', 'desc')
-      );
+      const sIso = startDate.toISOString();
+      const eIso = endDate.toISOString();
+      qPos = query(collection(db, 'positions'), where('timestamp', '>=', sIso), where('timestamp', '<=', eIso), orderBy('timestamp', 'desc'));
+      qArgos = query(collection(db, 'argos_positions'), where('timestamp', '>=', sIso), where('timestamp', '<=', eIso), orderBy('timestamp', 'desc'));
     } else {
       const defaultStart = new Date();
       defaultStart.setDate(defaultStart.getDate() - 7);
-      q = query(
-        collection(db, 'positions'),
-        where('timestamp', '>=', defaultStart.toISOString()),
-        orderBy('timestamp', 'desc')
-      );
+      const sIso = defaultStart.toISOString();
+      qPos = query(collection(db, 'positions'), where('timestamp', '>=', sIso), orderBy('timestamp', 'desc'));
+      qArgos = query(collection(db, 'argos_positions'), where('timestamp', '>=', sIso), orderBy('timestamp', 'desc'));
     }
 
-    const snapshot = await getDocs(q);
+    const [snapArgos, snapPos] = await Promise.all([
+      getDocs(qArgos).catch(() => null),
+      getDocs(qPos).catch(() => null)
+    ]);
+
+    const coordToTrueDate = new Map<string, string>();
     const data: any[] = [];
-    snapshot.forEach(docSnap => {
-      const d = docSnap.data() as any;
-      data.push({
-        id: docSnap.id,
-        _collection: 'positions',
-        platformId: d.transmitter_id || '',
-        programId: '',
-        lat: d.lat,
-        lon: d.lon,
-        lc: d.lc || '',
-        locationType: d.locationType || '',
-        msgType: '',
-        dopplerError: '',
-        timestamp: d.locationDate || d.gpsLocDate || d.timestamp,
-        locationDate: d.locationDate || d.gpsLocDate || d.timestamp,
-        satellite: d.satellite || '',
-        speed_kmh: d.speed_kmh,
-        course: d.course
+    const seenKey = new Set<string>();
+
+    // 1. Process authoritative argos_positions FIRST
+    if (snapArgos) {
+      snapArgos.forEach(docSnap => {
+        const d = docSnap.data() as any;
+        const pid = normalizePttId(d.platformId || d.pttId || d.transmitter_id || '');
+        const lat = Number(d.lat ?? d.latitude);
+        const lon = Number(d.lon ?? d.longitude);
+        if (!pid || !isValidCoordinate(lat, lon)) return;
+        const trueLocDate = d.locationDate || d.gpsLocDate || d.timestamp;
+        const cKey = `${pid}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
+        if (trueLocDate && !coordToTrueDate.has(cKey)) {
+          coordToTrueDate.set(cKey, trueLocDate);
+        }
+        const uKey = `${pid}_${trueLocDate}`;
+        if (seenKey.has(uKey)) return;
+        seenKey.add(uKey);
+
+        data.push({
+          id: docSnap.id,
+          _collection: 'argos_positions',
+          transmitter_id: pid,
+          platformId: pid,
+          programId: d.programId || '',
+          lat,
+          lon,
+          lc: d.lc || 'GPS',
+          locationType: d.locationType || 'GPS',
+          msgType: d.msgType || '',
+          dopplerError: d.dopplerError || '',
+          timestamp: trueLocDate,
+          locationDate: trueLocDate,
+          messageDate: d.messageDate || d.firstMessageDate || null,
+          satellite: d.satellite || 'GPS',
+          speed_kmh: d.speed_kmh || 0,
+          course: d.course || 0
+        });
       });
-    });
-    console.log(`[Firestore] Loaded ${data.length} total positions.`);
+    }
+
+    // 2. Process legacy positions collection, mapping any message-date mirror to its true locationDate
+    if (snapPos) {
+      snapPos.forEach(docSnap => {
+        const d = docSnap.data() as any;
+        const pid = normalizePttId(d.transmitter_id || d.platformId || '');
+        const lat = Number(d.lat ?? d.latitude);
+        const lon = Number(d.lon ?? d.longitude);
+        if (!pid || !isValidCoordinate(lat, lon)) return;
+        const cKey = `${pid}_${lat.toFixed(4)}_${lon.toFixed(4)}`;
+
+        // If this coordinate already has an authoritative locationDate in argos_positions, use it!
+        const resolvedDate = d.locationDate || d.gpsLocDate || coordToTrueDate.get(cKey) || d.timestamp;
+        const uKey = `${pid}_${resolvedDate}`;
+        if (seenKey.has(uKey)) return; // Skip duplicate message-date echo!
+        seenKey.add(uKey);
+
+        data.push({
+          id: docSnap.id,
+          _collection: 'positions',
+          transmitter_id: pid,
+          platformId: pid,
+          programId: '',
+          lat,
+          lon,
+          lc: d.lc || '',
+          locationType: d.locationType || '',
+          msgType: '',
+          dopplerError: '',
+          timestamp: resolvedDate,
+          locationDate: resolvedDate,
+          satellite: d.satellite || '',
+          speed_kmh: d.speed_kmh,
+          course: d.course
+        });
+      });
+    }
+
+    data.sort((a, b) => safeParseTimestamp(a.locationDate || a.timestamp) - safeParseTimestamp(b.locationDate || b.timestamp));
     return data;
   } catch (error) {
     console.error('[Firestore] Error loading all positions:', error);
@@ -748,9 +807,6 @@ export const loadAllPositions = async (startDate?: Date, endDate?: Date): Promis
   }
 };
 
-/**
- * Get all unique platform IDs across transmitters, argos_positions, and positions.
- */
 export const getArgosTransmitterIds = async (): Promise<string[]> => {
   try {
     const [snapTx, snapArgos, snapPos] = await Promise.all([
@@ -1277,99 +1333,12 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   const endMs   = endDate.getTime();
   const allResults: any[] = [];
 
-  const getCoordKey = (lat: number, lon: number) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
-
-  const processDocToRawFix = (
-    docSnap: any,
-    pidStr: string,
-    sourceCol: 'argos_positions' | 'positions',
-    canonicalCoordToLocMs: Map<string, number>
-  ): RawFix | null => {
-    const d = docSnap.data();
-    const rawLat = d.lat !== undefined ? d.lat : d.latitude;
-    const rawLon = d.lon !== undefined ? d.lon : d.longitude;
-    const lat = Number(rawLat);
-    let lon = Number(rawLon);
-    if (!isValidCoordinate(lat, lon)) return null;
-    if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
-
-    const coordKey = getCoordKey(lat, lon);
-    const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
-    const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
-
-    // Extract explicit GPS/location date fields FIRST (never messageDate or generic timestamp)
-    const explicitLoc =
-      d.locationDate ||
-      d.gpsLocDate ||
-      d.location?.locationDate ||
-      d.gpsDate ||
-      d.gpsDateOfPosition ||
-      d.dateOfPosition ||
-      d.fixTime;
-
-    let locDateMs: number | null = null;
-
-    if (explicitLoc) {
-      locDateMs = safeParseTimestamp(explicitLoc);
-    } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
-      locDateMs = safeParseTimestamp(KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]);
-    } else if (sourceCol === 'positions' && canonicalCoordToLocMs.has(coordKey)) {
-      // CRITICAL FIX: This doc in 'positions' is a legacy mirror without 'locationDate'
-      // (where d.timestamp is the Argos Message Date like 2026-10-26 13:19:12.761 instead of GPS Date 2026-10-25 04:00:00).
-      // Map it to its true canonical GPS locationDate from argos_positions so it deduplicates cleanly!
-      locDateMs = canonicalCoordToLocMs.get(coordKey)!;
-    } else {
-      const { fix, message } = resolveTimes(d);
-      locDateMs = fix ?? (!isGps ? message : null);
-    }
-
-    if (locDateMs == null || isNaN(locDateMs) || locDateMs <= 0) return null;
-
-    // Register authoritative GPS locationDate from argos_positions
-    if (sourceCol === 'argos_positions' && !canonicalCoordToLocMs.has(coordKey)) {
-      canonicalCoordToLocMs.set(coordKey, locDateMs);
-    }
-
-    const { message } = resolveTimes(d);
-    const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
-    const locClass = locType === 'GPS' ? null : (d.locationClass || (d.lc !== 'GPS' ? d.lc : null) || null);
-    const errRadiusM = locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
-    const arrivalDate = message != null
-      ? new Date(message).toISOString()
-      : (d.receivedAt || d.firstMessageDate || d.messageDate || d.msgDatetime || null);
-
-    return {
-      pttId: pidStr,
-      unitType: d.unitType || d.msgType || 'Houbara',
-      locationType: locType,
-      locationClass: locClass,
-      errorRadiusM: errRadiusM,
-      locationDate: new Date(locDateMs).toISOString(),
-      lat,
-      lon,
-      messageDate: arrivalDate,
-      deliveries: d.deliveryCount || 1
-    };
-  };
-
   try {
     for (const pttId of transmitterIds) {
       const pidStr = normalizePttId(pttId);
       const idNum = Number(pttId);
       const isNumValid = !isNaN(idNum);
 
-      // 1. Check in-memory cache first to avoid redundant Firestore reads
-      const cached = transmitterHistoryCache.get(pidStr);
-      if (cached && (Date.now() - cached.cachedAt < HISTORY_CACHE_TTL)) {
-        const filtered = cached.docs.filter(r => {
-          const ts = safeParseTimestamp(r.locationDate || r.timestamp);
-          return !isNaN(ts) && ts >= startMs && ts <= endMs;
-        });
-        allResults.push(...filtered);
-        continue;
-      }
-
-      // 2. Fetch from Firestore: process argos_positions FIRST so canonical locationDates are known
       const rawFixesForPtt: RawFix[] = [];
       const canonicalCoordToLocMs = new Map<string, number>();
 
@@ -1390,27 +1359,93 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         Promise.all(posPromises)
       ]);
 
+      const extractFix = (ds: any, sourceCol: 'argos_positions' | 'positions'): RawFix | null => {
+        const d = ds.data();
+        const lat = Number(d.lat !== undefined ? d.lat : d.latitude);
+        let lon = Number(d.lon !== undefined ? d.lon : d.longitude);
+        if (!isValidCoordinate(lat, lon)) return null;
+        if (pidStr === '242086' && lon < 0) lon = Math.abs(lon);
+
+        const coordKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+        const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
+        const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
+
+        const explicitLoc =
+          d.locationDate ||
+          d.gpsLocDate ||
+          d.location?.locationDate ||
+          d.gpsDate ||
+          d.gpsDateOfPosition ||
+          d.dateOfPosition ||
+          d.fixTime;
+
+        let locDateMs: number | null = null;
+
+        if (explicitLoc) {
+          locDateMs = safeParseTimestamp(explicitLoc);
+        } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+          locDateMs = safeParseTimestamp(KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]);
+        } else if (sourceCol === 'positions') {
+          // If this coordinate is already in argos_positions, use its canonical locationDate!
+          if (canonicalCoordToLocMs.has(coordKey)) {
+            locDateMs = canonicalCoordToLocMs.get(coordKey)!;
+          } else if (typeof d.timestamp === 'string' && /\.\d{3}Z$/.test(d.timestamp) && !d.timestamp.endsWith('.000Z')) {
+            // Fractional milliseconds (.761Z, .701Z) on a GPS fix in 'positions' means d.timestamp is an Argos Message Reception timestamp!
+            // Ignore it if argos_positions has data for this PTT.
+            if (canonicalCoordToLocMs.size > 0) return null;
+            locDateMs = safeParseTimestamp(d.timestamp);
+          } else {
+            locDateMs = safeParseTimestamp(d.timestamp);
+          }
+        } else {
+          const { fix, message } = resolveTimes(d);
+          locDateMs = fix ?? (!isGps ? message : safeParseTimestamp(d.timestamp));
+        }
+
+        if (locDateMs == null || isNaN(locDateMs) || locDateMs <= 0) return null;
+
+        if (sourceCol === 'argos_positions' && !canonicalCoordToLocMs.has(coordKey)) {
+          canonicalCoordToLocMs.set(coordKey, locDateMs);
+        }
+
+        const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
+        const locClass = locType === 'GPS' ? null : (d.locationClass || (d.lc !== 'GPS' ? d.lc : null) || null);
+        const errRadiusM = locType === 'GPS' ? 0 : (typeof d.errorRadiusM === 'number' ? d.errorRadiusM : (parseFloat(String(d.dopplerError || '0')) || 0));
+        const arrivalDate = d.messageDate || d.firstMessageDate || d.receivedAt || d.msgDatetime || null;
+
+        return {
+          pttId: pidStr,
+          unitType: d.unitType || d.msgType || 'Houbara',
+          locationType: locType,
+          locationClass: locClass,
+          errorRadiusM: errRadiusM,
+          locationDate: new Date(locDateMs).toISOString(),
+          lat,
+          lon,
+          messageDate: arrivalDate,
+          deliveries: d.deliveryCount || 1
+        };
+      };
+
       // Pass 1: Authoritative argos_positions
       argosSnaps.forEach(snap => {
         if (!snap) return;
         snap.forEach((ds: any) => {
-          const rawFix = processDocToRawFix(ds, pidStr, 'argos_positions', canonicalCoordToLocMs);
-          if (rawFix) rawFixesForPtt.push(rawFix);
+          const rf = extractFix(ds, 'argos_positions');
+          if (rf) rawFixesForPtt.push(rf);
         });
       });
 
-      // Pass 2: Legacy positions collection (only add if not already covered or map to canonical locationDate)
+      // Pass 2: Legacy positions
       posSnaps.forEach(snap => {
         if (!snap) return;
         snap.forEach((ds: any) => {
-          const rawFix = processDocToRawFix(ds, pidStr, 'positions', canonicalCoordToLocMs);
-          if (rawFix) rawFixesForPtt.push(rawFix);
+          const rf = extractFix(ds, 'positions');
+          if (rf) rawFixesForPtt.push(rf);
         });
       });
 
       const { fixes } = buildFixes(rawFixesForPtt);
-
-      // Strictly sort fixes ascending by true locationDateMs (f.t)
       const sortedFixes = [...fixes].sort((a, b) => a.t - b.t);
 
       const pttDocs = sortedFixes.map((f: Fix) => {
@@ -1438,10 +1473,8 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         };
       });
 
-      // Cache all positions for this transmitter
       transmitterHistoryCache.set(pidStr, { cachedAt: Date.now(), docs: pttDocs });
 
-      // Filter to requested date window by location fix date
       const dateFiltered = pttDocs.filter(r => {
         const ts = safeParseTimestamp(r.locationDate || r.timestamp);
         return !isNaN(ts) && ts >= startMs && ts <= endMs;
