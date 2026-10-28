@@ -1370,6 +1370,11 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         const isGps = d.locationType === 'GPS' || (!d.locationType && (!d.lc || d.lc === 'GPS'));
         const rawDataStr = String(d.rawData || d.raw_data || '').trim().toLowerCase();
 
+        // If positions collection duplicates a coordinate already in argos_positions, discard it
+        if (sourceCol === 'positions' && (canonicalCoordToLocMs.has(coordKey) || canonicalCoordToLocMs.size > 0)) {
+          return null;
+        }
+
         const explicitLoc =
           d.locationDate ||
           d.gpsLocDate ||
@@ -1381,32 +1386,28 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
 
         let locDateMs: number | null = null;
 
-        if (explicitLoc) {
-          locDateMs = safeParseTimestamp(explicitLoc);
-        } else if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+        if (isGps && rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
           locDateMs = safeParseTimestamp(KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]);
-        } else if (sourceCol === 'positions') {
-          // If this coordinate is already in argos_positions, use its canonical locationDate!
-          if (canonicalCoordToLocMs.has(coordKey)) {
-            locDateMs = canonicalCoordToLocMs.get(coordKey)!;
-          } else if (typeof d.timestamp === 'string' && /\.\d{3}Z$/.test(d.timestamp) && !d.timestamp.endsWith('.000Z')) {
-            // Fractional milliseconds (.761Z, .701Z) on a GPS fix in 'positions' means d.timestamp is an Argos Message Reception timestamp!
-            // Ignore it if argos_positions has data for this PTT.
-            if (canonicalCoordToLocMs.size > 0) return null;
-            locDateMs = safeParseTimestamp(d.timestamp);
-          } else {
-            locDateMs = safeParseTimestamp(d.timestamp);
+        } else if (explicitLoc) {
+          locDateMs = safeParseTimestamp(explicitLoc);
+          // If GPS date has fractional milliseconds, it is an arrival timestamp masquerading as fix date
+          if (isGps && locDateMs != null && locDateMs % 1000 !== 0) {
+            if (rawDataStr && KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]) {
+              locDateMs = safeParseTimestamp(KNOWN_CLS_RAW_LOCATION_DATES[rawDataStr]);
+            } else {
+              locDateMs = Math.round(locDateMs / 60000) * 60000;
+            }
           }
         } else {
+          if (isGps) {
+            // Rule 1: Never fall back to message arrival date for GPS fixes!
+            return null;
+          }
           const { fix, message } = resolveTimes(d);
-          locDateMs = fix ?? (!isGps ? message : safeParseTimestamp(d.timestamp));
+          locDateMs = fix ?? message;
         }
 
         if (locDateMs == null || isNaN(locDateMs) || locDateMs <= 0) return null;
-
-        if (sourceCol === 'argos_positions' && !canonicalCoordToLocMs.has(coordKey)) {
-          canonicalCoordToLocMs.set(coordKey, locDateMs);
-        }
 
         const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
         const locClass = locType === 'GPS' ? null : (d.locationClass || (d.lc !== 'GPS' ? d.lc : null) || null);
@@ -1436,19 +1437,46 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         });
       });
 
-      // Pass 2: Legacy positions
-      posSnaps.forEach(snap => {
-        if (!snap) return;
-        snap.forEach((ds: any) => {
-          const rf = extractFix(ds, 'positions');
-          if (rf) rawFixesForPtt.push(rf);
+      // Pass 2: Legacy positions ONLY IF argos_positions has NO data for this PTT
+      if (rawFixesForPtt.length === 0) {
+        posSnaps.forEach(snap => {
+          if (!snap) return;
+          snap.forEach((ds: any) => {
+            const rf = extractFix(ds, 'positions');
+            if (rf) rawFixesForPtt.push(rf);
+          });
         });
-      });
+      }
 
-      const { fixes } = buildFixes(rawFixesForPtt);
+      // Sort candidate raw fixes ascending by true location date
+      rawFixesForPtt.sort((a, b) => safeParseTimestamp(a.locationDate) - safeParseTimestamp(b.locationDate));
+
+      // Coordinate deduplication: keep earliest genuine GPS acquisition, drop late arrival echoes
+      const coordToEarliestFix = new Map<string, RawFix>();
+      for (const rf of rawFixesForPtt) {
+        const cKey = `${rf.lat.toFixed(4)},${rf.lon.toFixed(4)}`;
+        if (!coordToEarliestFix.has(cKey)) {
+          coordToEarliestFix.set(cKey, rf);
+        }
+      }
+      const dedupedRawFixes = Array.from(coordToEarliestFix.values());
+
+      const { fixes } = buildFixes(dedupedRawFixes);
       const sortedFixes = [...fixes].sort((a, b) => a.t - b.t);
 
-      const pttDocs = sortedFixes.map((f: Fix) => {
+      // Deduplicate identical coordinates: keep earliest GPS acquisition fix, drop late arrival echoes
+      const seenPttCoords = new Set<string>();
+      const cleanFixes: Fix[] = [];
+      for (const f of sortedFixes) {
+        const cKey = `${f.lat.toFixed(4)},${f.lon.toFixed(4)}`;
+        if (seenPttCoords.has(cKey)) {
+          continue;
+        }
+        seenPttCoords.add(cKey);
+        cleanFixes.push(f);
+      }
+
+      const pttDocs = cleanFixes.map((f: Fix) => {
         const locDateIso = new Date(f.t).toISOString();
         return {
           id: f.id,

@@ -8,7 +8,7 @@ import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import { FIXED_FIELD_CAMPS } from '../constants';
 import { formatDateTime, formatUtcDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
-import { canonType, mapLayers, type TypeFilter, type Fix } from '../utils/positionsEngine';
+import { canonType, mapLayers, haversineKm, type TypeFilter, type Fix } from '../utils/positionsEngine';
 import { isVisibleOnLiveMap } from '../utils/statusCalculator';
 import { fetchLSTData } from '../utils/weatherService';
 import { getHistoricalPositions } from '../services/firestoreService';
@@ -2027,19 +2027,72 @@ const LiveTrackingInner = () => {
           return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Prevents packet ingestion-order zig-zag jumps
         });
 
+        // 2.5 Hard Anti-Zigzag Guard:
+        // A) Coordinate deduplication - keep earliest genuine GPS acquisition fix, purge late arrival echo packets
+        const seenCoordSet = new Set<string>();
+        const coordDedupedPoints: typeof sortedHistoryPoints = [];
+        for (const pt of sortedHistoryPoints) {
+          const cKey = `${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
+          if (seenCoordSet.has(cKey)) {
+            continue; // Drop duplicate coordinate echo!
+          }
+          seenCoordSet.add(cKey);
+          coordDedupedPoints.push(pt);
+        }
+
+        // B) Robust Excursion / Hairpin Reversal Filter
+        // Catches both single-point spikes and multi-point buffered echo bursts (k = 3, 2, 1 consecutive points)
+        // that jump >35km away from the base location and return to <25km of where they started.
+        const cleanHistoryPoints: typeof sortedHistoryPoints = [];
+        let curIdx = 0;
+        while (curIdx < coordDedupedPoints.length) {
+          const prev = cleanHistoryPoints[cleanHistoryPoints.length - 1];
+          if (prev && curIdx < coordDedupedPoints.length - 1) {
+            let matchedBurstLen = 0;
+            for (let k = Math.min(3, coordDedupedPoints.length - 1 - curIdx); k >= 1; k--) {
+              const after = coordDedupedPoints[curIdx + k];
+              const dNet = haversineKm(prev.lat, prev.lon, after.lat, after.lon);
+              if (dNet < 25) {
+                let allAway = true;
+                for (let j = 0; j < k; j++) {
+                  const pt = coordDedupedPoints[curIdx + j];
+                  const dAway = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
+                  if (dAway < 35) {
+                    allAway = false;
+                    break;
+                  }
+                }
+                if (allAway) {
+                  matchedBurstLen = k;
+                  break;
+                }
+              }
+            }
+
+            if (matchedBurstLen > 0) {
+              console.warn(`[LiveTracking] Purged ${matchedBurstLen}-point excursion spike for ${pttId} at index ${curIdx}`);
+              curIdx += matchedBurstLen;
+              continue;
+            }
+          }
+
+          cleanHistoryPoints.push(coordDedupedPoints[curIdx]);
+          curIdx++;
+        }
+
         // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline
-        const polylineCoordinates = sortedHistoryPoints
+        const polylineCoordinates = cleanHistoryPoints
           .filter(pt => (pt.lat !== undefined && (pt.lon !== undefined || (pt as any).lng !== undefined)) || (pt as any).HDD)
           .map(pt => [pt.lat ?? (pt as any).HDD?.lat, pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon] as [number, number]);
 
         const trackCoordinates = polylineCoordinates;
         const polylineCoords: Array<[number, number]> = polylineCoordinates;
-        const markers = sortedHistoryPoints;
+        const markers = cleanHistoryPoints;
 
         const styledSegments: Array<{ points: [number, number][]; kind: 'GPS' | 'TOUCHING_DOPPLER' }> = [];
-        for (let i = 1; i < sortedHistoryPoints.length; i++) {
-          const p1 = sortedHistoryPoints[i - 1];
-          const p2 = sortedHistoryPoints[i];
+        for (let i = 1; i < cleanHistoryPoints.length; i++) {
+          const p1 = cleanHistoryPoints[i - 1];
+          const p2 = cleanHistoryPoints[i];
           const kind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
           styledSegments.push({
             points: [[p1.lat, p1.lon], [p2.lat, p2.lon]],

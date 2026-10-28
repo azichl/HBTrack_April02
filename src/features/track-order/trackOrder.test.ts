@@ -174,4 +174,51 @@ describe('Latest Location in report and Argos Table consistency', () => {
     expect(pt.receivedUtc).toBe('2026-10-26 13:19:12');
     expect(pt.delayText).toBe('1 d 9 h');
   });
+
+  it('multi-point excursion burst filter removes 2-point Bamyan spike between Ghazni fixes', () => {
+    const rawTrack = [
+      { lat: 33.7407, lon: 68.2640, t: 1000 }, // Ghazni
+      { lat: 34.7597, lon: 67.1658, t: 2000 }, // Bamyan 1 (153 km away)
+      { lat: 34.7646, lon: 67.1639, t: 3000 }, // Bamyan 2 (153 km away)
+      { lat: 33.7339, lon: 68.2646, t: 4000 }, // Ghazni (1.2 km from Ghazni 1)
+      { lat: 33.7341, lon: 68.2636, t: 5000 }, // Ghazni
+    ];
+
+    const clean: typeof rawTrack = [];
+    let curIdx = 0;
+    while (curIdx < rawTrack.length) {
+      const prev = clean[clean.length - 1];
+      if (prev && curIdx < rawTrack.length - 1) {
+        let matchedBurstLen = 0;
+        for (let k = Math.min(3, rawTrack.length - 1 - curIdx); k >= 1; k--) {
+          const after = rawTrack[curIdx + k];
+          const dNet = haversineKm(prev, after);
+          if (dNet < 25) {
+            let allAway = true;
+            for (let j = 0; j < k; j++) {
+              const pt = rawTrack[curIdx + j];
+              const dAway = haversineKm(prev, pt);
+              if (dAway < 35) {
+                allAway = false;
+                break;
+              }
+            }
+            if (allAway) {
+              matchedBurstLen = k;
+              break;
+            }
+          }
+        }
+        if (matchedBurstLen > 0) {
+          curIdx += matchedBurstLen;
+          continue;
+        }
+      }
+      clean.push(rawTrack[curIdx]);
+      curIdx++;
+    }
+
+    expect(clean.length).toBe(3);
+    expect(clean.map(p => p.lat)).toEqual([33.7407, 33.7339, 33.7341]);
+  });
 });
