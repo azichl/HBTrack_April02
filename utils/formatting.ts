@@ -355,5 +355,30 @@ export function makeDeterministicFixDocId(pttId: string | number, locationType: 
   return fixId(normPtt, typeTag, locationDateEpochMs);
 }
 
+/**
+ * Safely parses a bird's official release date (ISO, YYYY-MM-DD, or DD/MM/YYYY)
+ * into a UTC millisecond timestamp (00:00:00.000Z unless explicit time is provided).
+ */
+export function parseReleaseDateMs(releaseDateStr?: string | null): number | null {
+  if (!releaseDateStr || typeof releaseDateStr !== 'string' || !releaseDateStr.trim()) return null;
+  const str = releaseDateStr.trim();
+  if (str.includes('T')) {
+    const exact = new Date(str).getTime();
+    if (!isNaN(exact) && exact > 0) return exact;
+  }
+  const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) {
+    const [_, y, m, d] = ymd;
+    return Date.UTC(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0);
+  }
+  const dmy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmy) {
+    const [_, d, m, y] = dmy;
+    return Date.UTC(Number(y), Number(m) - 1, Number(d), 0, 0, 0, 0);
+  }
+  const parsed = new Date(str).getTime();
+  return (!isNaN(parsed) && parsed > 0) ? parsed : null;
+}
+
 
 

@@ -7,7 +7,7 @@ import html2canvas from 'html2canvas';
 import { useAppStore } from '../store/appStore';
 import { Transmitter } from '../types';
 import { FIXED_FIELD_CAMPS } from '../constants';
-import { formatDateTime, formatUtcDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter } from '../utils/formatting';
+import { formatDateTime, formatUtcDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, safeParseTimestamp, classifyLocationType, isHighQualityFix, isValidCoordinate, findBirdForTransmitter, isBirdLinkedToTransmitter, parseReleaseDateMs } from '../utils/formatting';
 import { canonType, mapLayers, haversineKm, type TypeFilter, type Fix } from '../utils/positionsEngine';
 import { isVisibleOnLiveMap } from '../utils/statusCalculator';
 import { fetchLSTData } from '../utils/weatherService';
@@ -1544,6 +1544,7 @@ const LiveTrackingInner = () => {
     polyline?: Array<[number, number]>;
     styledSegments?: Array<{ points: [number, number][]; kind: 'GPS' | 'TOUCHING_DOPPLER' }>;
     color: string;
+    releaseDate?: string;
   }>>([]);
 
   // Search State
@@ -1932,7 +1933,19 @@ const LiveTrackingInner = () => {
 
     selectedTransmitterIds.forEach((pttId, index) => {
         // 1. Filter points for the active PTT track
-        const rawTrackPoints = rawPositions.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
+        let rawTrackPoints = rawPositions.filter(p => p.transmitter_id === pttId || p.platformId === pttId);
+
+        // Filter out positions before the official release date of the bird
+        const tr = transmitters.find(t => String(t.platform_id) === String(pttId) || String(t.id) === String(pttId));
+        const bird = findBirdForTransmitter(birds, tr) || birds.find(b => String(b.assigned_transmitter_id) === String(pttId) || String(b.transmitter_id) === String(pttId));
+        const releaseDateStr = bird?.release_date || (tr as any)?.deployment_date || (tr as any)?.release_date;
+        const relMs = parseReleaseDateMs(releaseDateStr);
+        if (relMs && relMs > 0) {
+          rawTrackPoints = rawTrackPoints.filter(p => {
+            const pTime = new Date(p.locationDate || p.timestamp || p.fixTime || 0).getTime();
+            return !isNaN(pTime) && pTime >= relMs;
+          });
+        }
 
         // 2. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
         const sortedTrackPoints = [...rawTrackPoints].sort((a, b) => {
@@ -1944,7 +1957,6 @@ const LiveTrackingInner = () => {
         let track = sortedTrackPoints;
 
         // For Static Test tags, only display positions from the current calendar month on live map history track
-        const tr = transmitters.find(t => String(t.platform_id) === String(pttId));
         const st = tr?.derived_status || tr?.status;
         if (st === 'Static test' || st === 'Static Test' || st === 'static') {
           track = track.filter(p => getYearMonthKey(p.locationDate || p.timestamp) === currentYearMonthKey);
@@ -2123,49 +2135,8 @@ const LiveTrackingInner = () => {
           curIdx++;
         }
 
-        // D) Track Segmentation Guard:
-        // Breaks continuous polyline into independent segments whenever there is:
-        // - A multi-hour silent gap (>18h) with significant displacement (>40km) e.g. multi-day vehicle transport between field camps
-        // - An impossible flight speed (>120 km/h) over >30km
-        const trackSegments: Array<Array<[number, number]>> = [];
-        let curSegment: Array<[number, number]> = [];
-
-        for (let i = 0; i < cleanHistoryPoints.length; i++) {
-          const pt = cleanHistoryPoints[i];
-          const ptCoord: [number, number] = [
-            pt.lat ?? (pt as any).HDD?.lat,
-            pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon
-          ];
-
-          if (curSegment.length === 0) {
-            curSegment.push(ptCoord);
-            continue;
-          }
-
-          const prevPt = cleanHistoryPoints[i - 1];
-          const tPrev = new Date(prevPt.locationDate || prevPt.timestamp || prevPt.fixDate || 0).getTime();
-          const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
-          const dtHours = Math.abs(tCurr - tPrev) / 3600000;
-          const distKm = haversineKm(prevPt.lat, prevPt.lon, pt.lat, pt.lon);
-          const speedKmh = distKm / Math.max(dtHours, 0.001);
-
-          const shouldCut = (dtHours > 18 && distKm > 40) || (distKm > 30 && speedKmh > 120);
-
-          if (shouldCut) {
-            if (curSegment.length >= 2) {
-              trackSegments.push(curSegment);
-            }
-            curSegment = [ptCoord];
-          } else {
-            curSegment.push(ptCoord);
-          }
-        }
-
-        if (curSegment.length >= 2) {
-          trackSegments.push(curSegment);
-        }
-
-        // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline
+        // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline:
+        // Relays every post-release position chronologically into an unbroken continuous path
         const polylineCoordinates = cleanHistoryPoints
           .filter(pt => (pt.lat !== undefined && (pt.lon !== undefined || (pt as any).lng !== undefined)) || (pt as any).HDD)
           .map(pt => [pt.lat ?? (pt as any).HDD?.lat, pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon] as [number, number]);
@@ -2177,17 +2148,6 @@ const LiveTrackingInner = () => {
         for (let i = 1; i < cleanHistoryPoints.length; i++) {
           const p1 = cleanHistoryPoints[i - 1];
           const p2 = cleanHistoryPoints[i];
-
-          const t1 = new Date(p1.locationDate || p1.timestamp || p1.fixDate || 0).getTime();
-          const t2 = new Date(p2.locationDate || p2.timestamp || p2.fixDate || 0).getTime();
-          const dtH = Math.abs(t2 - t1) / 3600000;
-          const dKm = haversineKm(p1.lat, p1.lon, p2.lat, p2.lon);
-          const spd = dKm / Math.max(dtH, 0.001);
-
-          // Do NOT style a segment across a multi-day camp transport gap or impossible speed
-          if ((dtH > 18 && dKm > 40) || (dKm > 30 && spd > 120)) {
-            continue;
-          }
 
           const kind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
           styledSegments.push({
@@ -2202,15 +2162,16 @@ const LiveTrackingInner = () => {
             path: markers,
             dopplerDots: [],
             polyline: polylineCoords,
-            segments: trackSegments.length > 0 ? trackSegments : (polylineCoords.length > 0 ? [polylineCoords] : []),
+            segments: polylineCoords.length > 0 ? [polylineCoords] : [],
             styledSegments: styledSegments,
-            color: colors[index % colors.length]
+            color: colors[index % colors.length],
+            releaseDate: releaseDateStr
           });
         }
     });
     
     setHistoryPaths(newPaths);
-  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current]);
+  }, [showHistory, historyFixType, selectedTransmitterIds, rawHistoryCache.current, birds, transmitters]);
 
   // Filter transmitters for search suggestion
   const searchResults = useMemo(() => {
