@@ -2028,34 +2028,77 @@ const LiveTrackingInner = () => {
         });
 
         // 2.5 Hard Anti-Zigzag Guard:
-        // A) Coordinate deduplication - keep earliest genuine GPS acquisition fix, purge late arrival echo packets
-        const seenCoordSet = new Set<string>();
+        // A) Consecutive Deduplication: purge rapid repeat echo packets (<0.0001 deg within 4 hours)
         const coordDedupedPoints: typeof sortedHistoryPoints = [];
         for (const pt of sortedHistoryPoints) {
-          const cKey = `${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
-          if (seenCoordSet.has(cKey)) {
-            continue; // Drop duplicate coordinate echo!
+          if (coordDedupedPoints.length > 0) {
+            const prev = coordDedupedPoints[coordDedupedPoints.length - 1];
+            if (Math.abs(pt.lat - prev.lat) < 0.0001 && Math.abs(pt.lon - prev.lon) < 0.0001) {
+              const tPrev = new Date(prev.locationDate || prev.timestamp || prev.fixDate || 0).getTime();
+              const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
+              if (Math.abs(tCurr - tPrev) < 4 * 3600 * 1000) {
+                continue;
+              }
+            }
           }
-          seenCoordSet.add(cKey);
           coordDedupedPoints.push(pt);
         }
 
-        // B) Robust Excursion / Hairpin Reversal Filter
+        // B) Isolated Doppler Mirror Spike & Speed Outlier Filter:
+        // Catches isolated points jumping >25km at impossible speed (>120 km/h) relative to both prev and next
+        const outlierFilteredPoints: typeof sortedHistoryPoints = [];
+        for (let i = 0; i < coordDedupedPoints.length; i++) {
+          const pt = coordDedupedPoints[i];
+          const prev = outlierFilteredPoints[outlierFilteredPoints.length - 1];
+          const next = i + 1 < coordDedupedPoints.length ? coordDedupedPoints[i + 1] : null;
+
+          let isSpike = false;
+          if (prev && next) {
+            const tPrev = new Date(prev.locationDate || prev.timestamp || prev.fixDate || 0).getTime();
+            const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
+            const tNext = new Date(next.locationDate || next.timestamp || next.fixDate || 0).getTime();
+
+            const dtPrevH = Math.max(0.001, (tCurr - tPrev) / 3600000);
+            const dtNextH = Math.max(0.001, (tNext - tCurr) / 3600000);
+
+            const dPrev = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
+            const dNext = haversineKm(pt.lat, pt.lon, next.lat, next.lon);
+
+            const spdPrev = dPrev / dtPrevH;
+            const spdNext = dNext / dtNextH;
+
+            if ((spdPrev > 120 && dPrev > 25) || (spdNext > 120 && dNext > 25)) {
+              const dDirect = haversineKm(prev.lat, prev.lon, next.lat, next.lon);
+              const dtDirectH = Math.max(0.001, (tNext - tPrev) / 3600000);
+              const spdDirect = dDirect / dtDirectH;
+
+              if (spdDirect < 120 || spdDirect < Math.min(spdPrev, spdNext)) {
+                isSpike = true;
+              }
+            }
+          }
+
+          if (!isSpike) {
+            outlierFilteredPoints.push(pt);
+          }
+        }
+
+        // C) Robust Excursion / Hairpin Reversal Filter
         // Catches both single-point spikes and multi-point buffered echo bursts (k = 3, 2, 1 consecutive points)
         // that jump >35km away from the base location and return to <25km of where they started.
         const cleanHistoryPoints: typeof sortedHistoryPoints = [];
         let curIdx = 0;
-        while (curIdx < coordDedupedPoints.length) {
+        while (curIdx < outlierFilteredPoints.length) {
           const prev = cleanHistoryPoints[cleanHistoryPoints.length - 1];
-          if (prev && curIdx < coordDedupedPoints.length - 1) {
+          if (prev && curIdx < outlierFilteredPoints.length - 1) {
             let matchedBurstLen = 0;
-            for (let k = Math.min(3, coordDedupedPoints.length - 1 - curIdx); k >= 1; k--) {
-              const after = coordDedupedPoints[curIdx + k];
+            for (let k = Math.min(3, outlierFilteredPoints.length - 1 - curIdx); k >= 1; k--) {
+              const after = outlierFilteredPoints[curIdx + k];
               const dNet = haversineKm(prev.lat, prev.lon, after.lat, after.lon);
               if (dNet < 25) {
                 let allAway = true;
                 for (let j = 0; j < k; j++) {
-                  const pt = coordDedupedPoints[curIdx + j];
+                  const pt = outlierFilteredPoints[curIdx + j];
                   const dAway = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
                   if (dAway < 35) {
                     allAway = false;
@@ -2076,8 +2119,50 @@ const LiveTrackingInner = () => {
             }
           }
 
-          cleanHistoryPoints.push(coordDedupedPoints[curIdx]);
+          cleanHistoryPoints.push(outlierFilteredPoints[curIdx]);
           curIdx++;
+        }
+
+        // D) Track Segmentation Guard:
+        // Breaks continuous polyline into independent segments whenever there is:
+        // - A multi-hour silent gap (>18h) with significant displacement (>40km) e.g. multi-day vehicle transport between field camps
+        // - An impossible flight speed (>120 km/h) over >30km
+        const trackSegments: Array<Array<[number, number]>> = [];
+        let curSegment: Array<[number, number]> = [];
+
+        for (let i = 0; i < cleanHistoryPoints.length; i++) {
+          const pt = cleanHistoryPoints[i];
+          const ptCoord: [number, number] = [
+            pt.lat ?? (pt as any).HDD?.lat,
+            pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon
+          ];
+
+          if (curSegment.length === 0) {
+            curSegment.push(ptCoord);
+            continue;
+          }
+
+          const prevPt = cleanHistoryPoints[i - 1];
+          const tPrev = new Date(prevPt.locationDate || prevPt.timestamp || prevPt.fixDate || 0).getTime();
+          const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
+          const dtHours = Math.abs(tCurr - tPrev) / 3600000;
+          const distKm = haversineKm(prevPt.lat, prevPt.lon, pt.lat, pt.lon);
+          const speedKmh = distKm / Math.max(dtHours, 0.001);
+
+          const shouldCut = (dtHours > 18 && distKm > 40) || (distKm > 30 && speedKmh > 120);
+
+          if (shouldCut) {
+            if (curSegment.length >= 2) {
+              trackSegments.push(curSegment);
+            }
+            curSegment = [ptCoord];
+          } else {
+            curSegment.push(ptCoord);
+          }
+        }
+
+        if (curSegment.length >= 2) {
+          trackSegments.push(curSegment);
         }
 
         // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline
@@ -2085,7 +2170,6 @@ const LiveTrackingInner = () => {
           .filter(pt => (pt.lat !== undefined && (pt.lon !== undefined || (pt as any).lng !== undefined)) || (pt as any).HDD)
           .map(pt => [pt.lat ?? (pt as any).HDD?.lat, pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon] as [number, number]);
 
-        const trackCoordinates = polylineCoordinates;
         const polylineCoords: Array<[number, number]> = polylineCoordinates;
         const markers = cleanHistoryPoints;
 
@@ -2093,6 +2177,18 @@ const LiveTrackingInner = () => {
         for (let i = 1; i < cleanHistoryPoints.length; i++) {
           const p1 = cleanHistoryPoints[i - 1];
           const p2 = cleanHistoryPoints[i];
+
+          const t1 = new Date(p1.locationDate || p1.timestamp || p1.fixDate || 0).getTime();
+          const t2 = new Date(p2.locationDate || p2.timestamp || p2.fixDate || 0).getTime();
+          const dtH = Math.abs(t2 - t1) / 3600000;
+          const dKm = haversineKm(p1.lat, p1.lon, p2.lat, p2.lon);
+          const spd = dKm / Math.max(dtH, 0.001);
+
+          // Do NOT style a segment across a multi-day camp transport gap or impossible speed
+          if ((dtH > 18 && dKm > 40) || (dKm > 30 && spd > 120)) {
+            continue;
+          }
+
           const kind = (p1.type === 'GPS' && p2.type === 'GPS') ? 'GPS' : 'TOUCHING_DOPPLER';
           styledSegments.push({
             points: [[p1.lat, p1.lon], [p2.lat, p2.lon]],
@@ -2106,7 +2202,7 @@ const LiveTrackingInner = () => {
             path: markers,
             dopplerDots: [],
             polyline: polylineCoords,
-            segments: polylineCoords.length > 0 ? [polylineCoords] : [],
+            segments: trackSegments.length > 0 ? trackSegments : (polylineCoords.length > 0 ? [polylineCoords] : []),
             styledSegments: styledSegments,
             color: colors[index % colors.length]
           });

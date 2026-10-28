@@ -3,6 +3,7 @@ import { Calendar, Plus, Trash2, Filter, Route, Sparkles } from 'lucide-react';
 import { classifyLocationType, safeParseTimestamp } from '../../utils/formatting';
 import { resolveTimes, parseUtc } from '../../src/features/track-order/fixTime';
 import { orderLine } from '../../src/features/track-order/orderLine';
+import { haversineKm } from '../../src/data/positions/positionsEngine';
 
 export type TrackLocationTypeFilter = 'ALL' | 'GPS' | 'DOPPLER';
 
@@ -143,24 +144,48 @@ export function buildColoredTrackSegments(
     return { segments: [], filteredPoints: [] };
   }
 
-  // 3. If multi-period coloring is OFF, return a single segment with defaultColor
+  // 3. If multi-period coloring is OFF, return segments segmented across transport gaps
   if (!config.useColorPeriods || config.periods.length === 0) {
     const coloredPts = ordered.map(p => ({ ...p, color: config.defaultColor }));
+    const subSegments: Array<Array<typeof ordered[0]>> = [];
+    let curSub: Array<typeof ordered[0]> = [];
+
+    for (let i = 0; i < ordered.length; i++) {
+      const pt = ordered[i];
+      if (curSub.length === 0) {
+        curSub.push(pt);
+        continue;
+      }
+      const prev = ordered[i - 1];
+      const dtH = Math.abs(pt.ts - prev.ts) / 3600000;
+      const dKm = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
+      const spd = dKm / Math.max(dtH, 0.001);
+
+      if ((dtH > 18 && dKm > 40) || (dKm > 30 && spd > 120)) {
+        if (curSub.length >= 2) subSegments.push(curSub);
+        curSub = [pt];
+      } else {
+        curSub.push(pt);
+      }
+    }
+    if (curSub.length >= 2) subSegments.push(curSub);
+    if (subSegments.length === 0 && ordered.length >= 2) {
+      subSegments.push(ordered);
+    }
+
     return {
-      segments: [
-        {
-          id: 'single-track',
-          label:
-            config.filterStartDate || config.filterEndDate
-              ? `${config.filterStartDate || '...'} → ${config.filterEndDate || '...'}`
-              : 'Flight Path',
-          color: config.defaultColor,
-          positions: ordered.map(p => [p.lat, p.lon] as [number, number]),
-          pointCount: ordered.length,
-          startDate: config.filterStartDate || '',
-          endDate: config.filterEndDate || ''
-        }
-      ],
+      segments: subSegments.map((sub, sIdx) => ({
+        id: `single-track-${sIdx}`,
+        label:
+          config.filterStartDate || config.filterEndDate
+            ? `${config.filterStartDate || '...'} → ${config.filterEndDate || '...'}`
+            : 'Flight Path',
+        color: config.defaultColor,
+        positions: sub.map(p => [p.lat, p.lon] as [number, number]),
+        pointCount: sub.length,
+        startDate: config.filterStartDate || '',
+        endDate: config.filterEndDate || ''
+      })),
       filteredPoints: coloredPts
     };
   }
@@ -202,14 +227,42 @@ export function buildColoredTrackSegments(
     const ptsInPeriod = ordered.filter(p => p.ts >= pStartMs && p.ts <= pEndMs);
     if (ptsInPeriod.length === 0) continue;
 
-    segments.push({
-      id: period.id,
-      label: period.label || `${period.startDate} → ${period.endDate}`,
-      color: period.color,
-      positions: ptsInPeriod.map(p => [p.lat, p.lon] as [number, number]),
-      pointCount: ptsInPeriod.length,
-      startDate: period.startDate,
-      endDate: period.endDate
+    const subSegments: Array<Array<typeof ptsInPeriod[0]>> = [];
+    let curSub: Array<typeof ptsInPeriod[0]> = [];
+
+    for (let i = 0; i < ptsInPeriod.length; i++) {
+      const pt = ptsInPeriod[i];
+      if (curSub.length === 0) {
+        curSub.push(pt);
+        continue;
+      }
+      const prev = ptsInPeriod[i - 1];
+      const dtH = Math.abs(pt.ts - prev.ts) / 3600000;
+      const dKm = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
+      const spd = dKm / Math.max(dtH, 0.001);
+
+      if ((dtH > 18 && dKm > 40) || (dKm > 30 && spd > 120)) {
+        if (curSub.length >= 2) subSegments.push(curSub);
+        curSub = [pt];
+      } else {
+        curSub.push(pt);
+      }
+    }
+    if (curSub.length >= 2) subSegments.push(curSub);
+    if (subSegments.length === 0 && ptsInPeriod.length >= 2) {
+      subSegments.push(ptsInPeriod);
+    }
+
+    subSegments.forEach((sub, sIdx) => {
+      segments.push({
+        id: `${period.id}-${sIdx}`,
+        label: period.label || `${period.startDate} → ${period.endDate}`,
+        color: period.color,
+        positions: sub.map(p => [p.lat, p.lon] as [number, number]),
+        pointCount: sub.length,
+        startDate: period.startDate,
+        endDate: period.endDate
+      });
     });
   }
 

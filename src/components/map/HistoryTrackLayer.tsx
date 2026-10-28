@@ -97,42 +97,86 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
 
         // In Live Tracking mode, render directly from the normalized chronological polyline and points
         if (mode === 'live') {
-          // 2. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
+          // 1. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
           const sortedHistoryPoints = [...hp.path].sort((a, b) => {
             const timeA = new Date(a.locationDate || a.timestamp || a.fixTime || a.fixDate || 0).getTime();
             const timeB = new Date(b.locationDate || b.timestamp || b.fixTime || b.fixDate || 0).getTime();
             return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Prevents packet ingestion-order zig-zag jumps
           });
 
-          // 2.5 Hard Anti-Zigzag Guard:
-          // A) Coordinate deduplication - keep earliest genuine acquisition fix, purge late arrival echo packets
-          const seenCoordSet = new Set<string>();
+          // 2. Coordinate Deduplication:
+          // Deduplicate rapid repeat echo packets (<0.0001 deg within 4 hours), preserving genuine returns to camps
           const coordDedupedPoints: typeof sortedHistoryPoints = [];
           for (const pt of sortedHistoryPoints) {
-            const cKey = `${pt.lat.toFixed(4)},${pt.lon.toFixed(4)}`;
-            if (seenCoordSet.has(cKey)) {
-              continue;
+            if (coordDedupedPoints.length > 0) {
+              const prev = coordDedupedPoints[coordDedupedPoints.length - 1];
+              if (Math.abs(pt.lat - prev.lat) < 0.0001 && Math.abs(pt.lon - prev.lon) < 0.0001) {
+                const tPrev = new Date(prev.locationDate || prev.timestamp || prev.fixDate || 0).getTime();
+                const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
+                if (Math.abs(tCurr - tPrev) < 4 * 3600 * 1000) {
+                  continue; // Skip rapid duplicate echo packet
+                }
+              }
             }
-            seenCoordSet.add(cKey);
             coordDedupedPoints.push(pt);
           }
 
-          // B) Robust Excursion / Hairpin Reversal Filter
+          // 3. Isolated Doppler Mirror Spike & Speed Outlier Filter:
+          // Catches isolated points jumping >25km at impossible speed (>120 km/h) relative to both prev and next,
+          // where skipping this isolated fix restores a physically realistic flight track
+          const outlierFilteredPoints: typeof sortedHistoryPoints = [];
+          for (let i = 0; i < coordDedupedPoints.length; i++) {
+            const pt = coordDedupedPoints[i];
+            const prev = outlierFilteredPoints[outlierFilteredPoints.length - 1];
+            const next = i + 1 < coordDedupedPoints.length ? coordDedupedPoints[i + 1] : null;
+
+            let isSpike = false;
+            if (prev && next) {
+              const tPrev = new Date(prev.locationDate || prev.timestamp || prev.fixDate || 0).getTime();
+              const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
+              const tNext = new Date(next.locationDate || next.timestamp || next.fixDate || 0).getTime();
+
+              const dtPrevH = Math.max(0.001, (tCurr - tPrev) / 3600000);
+              const dtNextH = Math.max(0.001, (tNext - tCurr) / 3600000);
+
+              const dPrev = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
+              const dNext = haversineKm(pt.lat, pt.lon, next.lat, next.lon);
+
+              const spdPrev = dPrev / dtPrevH;
+              const spdNext = dNext / dtNextH;
+
+              if ((spdPrev > 120 && dPrev > 25) || (spdNext > 120 && dNext > 25)) {
+                const dDirect = haversineKm(prev.lat, prev.lon, next.lat, next.lon);
+                const dtDirectH = Math.max(0.001, (tNext - tPrev) / 3600000);
+                const spdDirect = dDirect / dtDirectH;
+
+                if (spdDirect < 120 || spdDirect < Math.min(spdPrev, spdNext)) {
+                  isSpike = true;
+                }
+              }
+            }
+
+            if (!isSpike) {
+              outlierFilteredPoints.push(pt);
+            }
+          }
+
+          // 4. Robust Excursion / Hairpin Reversal Filter
           // Catches both single-point spikes and multi-point buffered echo bursts (k = 3, 2, 1 consecutive points)
           // that jump >35km away from the base location and return to <25km of where they started.
           const cleanHistoryPoints: typeof sortedHistoryPoints = [];
           let curIdx = 0;
-          while (curIdx < coordDedupedPoints.length) {
+          while (curIdx < outlierFilteredPoints.length) {
             const prev = cleanHistoryPoints[cleanHistoryPoints.length - 1];
-            if (prev && curIdx < coordDedupedPoints.length - 1) {
+            if (prev && curIdx < outlierFilteredPoints.length - 1) {
               let matchedBurstLen = 0;
-              for (let k = Math.min(3, coordDedupedPoints.length - 1 - curIdx); k >= 1; k--) {
-                const after = coordDedupedPoints[curIdx + k];
+              for (let k = Math.min(3, outlierFilteredPoints.length - 1 - curIdx); k >= 1; k--) {
+                const after = outlierFilteredPoints[curIdx + k];
                 const dNet = haversineKm(prev.lat, prev.lon, after.lat, after.lon);
                 if (dNet < 25) {
                   let allAway = true;
                   for (let j = 0; j < k; j++) {
-                    const pt = coordDedupedPoints[curIdx + j];
+                    const pt = outlierFilteredPoints[curIdx + j];
                     const dAway = haversineKm(prev.lat, prev.lon, pt.lat, pt.lon);
                     if (dAway < 35) {
                       allAway = false;
@@ -152,33 +196,82 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
               }
             }
 
-            cleanHistoryPoints.push(coordDedupedPoints[curIdx]);
+            cleanHistoryPoints.push(outlierFilteredPoints[curIdx]);
             curIdx++;
           }
 
-          // 3. Map into clean [lat, lng] tuples for Leaflet's Polyline
-          const polylineCoordinates: [number, number][] = cleanHistoryPoints
-            .filter(pt => (pt.lat !== undefined && (pt.lon !== undefined || (pt as any).lng !== undefined)) || (pt as any).HDD)
-            .map(pt => [pt.lat ?? (pt as any).HDD?.lat, pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon] as [number, number]);
+          // 5. Track Segmentation Guard:
+          // Breaks continuous polyline into independent segments whenever there is:
+          // - A multi-hour silent gap (>18h) with significant displacement (>40km) e.g. multi-day vehicle transport between field camps
+          // - An impossible flight speed (>120 km/h) over >30km
+          const trackSegments: Array<Array<[number, number]>> = [];
+          let curSegment: Array<[number, number]> = [];
 
-          const polyPositions: [number, number][] = polylineCoordinates.length > 1
-            ? polylineCoordinates
-            : (hp.polyline && hp.polyline.length > 1 ? hp.polyline : []);
+          for (let i = 0; i < cleanHistoryPoints.length; i++) {
+            const pt = cleanHistoryPoints[i];
+            const ptCoord: [number, number] = [
+              pt.lat ?? (pt as any).HDD?.lat,
+              pt.lon ?? (pt as any).lng ?? (pt as any).HDD?.lng ?? (pt as any).HDD?.lon
+            ];
+
+            if (curSegment.length === 0) {
+              curSegment.push(ptCoord);
+              continue;
+            }
+
+            const prevPt = cleanHistoryPoints[i - 1];
+            const tPrev = new Date(prevPt.locationDate || prevPt.timestamp || prevPt.fixDate || 0).getTime();
+            const tCurr = new Date(pt.locationDate || pt.timestamp || pt.fixDate || 0).getTime();
+            const dtHours = Math.abs(tCurr - tPrev) / 3600000;
+            const distKm = haversineKm(prevPt.lat, prevPt.lon, pt.lat, pt.lon);
+            const speedKmh = distKm / Math.max(dtHours, 0.001);
+
+            const shouldCut = (dtHours > 18 && distKm > 40) || (distKm > 30 && speedKmh > 120);
+
+            if (shouldCut) {
+              if (curSegment.length >= 2) {
+                trackSegments.push(curSegment);
+              }
+              curSegment = [ptCoord];
+            } else {
+              curSegment.push(ptCoord);
+            }
+          }
+
+          if (curSegment.length >= 2) {
+            trackSegments.push(curSegment);
+          }
 
           return (
             <React.Fragment key={`history-track-${hp.id}`}>
-              {/* Continuous chronological polyline */}
-              {polyPositions.length > 1 && (
-                <Polyline
-                  positions={polyPositions}
-                  pathOptions={{
-                    color: itemColor,
-                    weight: trackWidth,
-                    opacity: 0.85,
-                    lineJoin: 'round',
-                    lineCap: 'round'
-                  }}
-                />
+              {/* Chronological polyline segments (cleanly segmented across vehicle transport gaps) */}
+              {trackSegments.length > 0 ? (
+                trackSegments.map((seg, sIdx) => (
+                  <Polyline
+                    key={`history-seg-${hp.id}-${sIdx}`}
+                    positions={seg}
+                    pathOptions={{
+                      color: itemColor,
+                      weight: trackWidth,
+                      opacity: 0.85,
+                      lineJoin: 'round',
+                      lineCap: 'round'
+                    }}
+                  />
+                ))
+              ) : (
+                hp.polyline && hp.polyline.length > 1 && (
+                  <Polyline
+                    positions={hp.polyline}
+                    pathOptions={{
+                      color: itemColor,
+                      weight: trackWidth,
+                      opacity: 0.85,
+                      lineJoin: 'round',
+                      lineCap: 'round'
+                    }}
+                  />
+                )
               )}
 
               {/* Point Markers along the path with full metadata preserved */}
