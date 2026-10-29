@@ -323,20 +323,28 @@ export const DataUpload = () => {
 
         if (uploadType === 'transmitters') {
             const mappedTransmitters: Transmitter[] = rawData.map((row: any) => {
-                const pid = String(row.platform_id || '').replace(/^trans-/, '').trim();
+                const pid = String(row.platform_id || row.ptt_id || row.id || '').replace(/^trans-/, '').trim();
+                const rawRec = row.reception_date || row.reception || '';
                 return {
                     id: `trans-${pid}`,
                     platform_id: pid,
-                    model: row.model || 'Unknown',
+                    model: row.model || row.transmitter_model || 'Unknown',
                     status: (row.status?.toLowerCase() === 'active' ? 'active' : row.status?.toLowerCase() === 'maintenance' ? 'maintenance' : 'inactive') as any,
                     bird_id: '',
                     battery_voltage: 4.0, 
                     last_fix: new Date().toISOString(),
-                    duty_cycle: 'Unknown',
+                    duty_cycle: row.duty_cycle || row.satellite_time || 'Unknown',
                     frequency: row.frequency,
-                    hex_id: row.hex_id,
-                    manufacturer: row.manufacturer,
-                    deployed: row.status?.toLowerCase() === 'active'
+                    hex_id: row.hex_id || row.serial_number,
+                    reception_date: rawRec ? String(rawRec).trim() : undefined,
+                    manufacturer: row.manufacturer || row.origin_company,
+                    site_location: row.site_location || row.location,
+                    program_region: row.program_region || row.region,
+                    satellite_time: row.satellite_time,
+                    radio_time: row.radio_time,
+                    deployed: row.deployed !== undefined 
+                      ? (String(row.deployed).toLowerCase() === 'yes' || row.deployed === true) 
+                      : (row.status?.toLowerCase() === 'active')
                 };
             }).filter((t: any) => t.platform_id && t.platform_id !== 'Unknown');
 
@@ -1219,7 +1227,7 @@ export const DataUpload = () => {
           case 'transmitters':
               return {
                   title: 'Transmitter Requirements',
-                  columns: ['platform_id (Required)', 'model', 'status', 'frequency', 'hex_id', 'manufacturer'],
+                  columns: ['platform_id (Required)', 'reception_date (Required: year e.g. 2024 or date)', 'model (Required)', 'status (Required)', 'hex_id (replaces serial number)', 'frequency', 'manufacturer', 'site_location', 'program_region'],
                   desc: 'Upload a list of physical devices. The platform_id acts as the unique key.'
               };
           case 'birds':

@@ -357,7 +357,7 @@ export const Transmitters = () => {
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.model}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.bird_species}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.manufacturer || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.reception_date ? (t.reception_date.length === 10 ? t.reception_date : formatDateTime(t.reception_date, timeZone)) : '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.reception_date ? (t.reception_date.length <= 10 ? t.reception_date : formatDateTime(t.reception_date, timeZone)) : '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{formatDateTime(t.last_fix, timeZone)}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.site_location || '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.program_region || '-'}</td>
@@ -511,10 +511,13 @@ export const Transmitters = () => {
                       <input type="text" value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Reception Date</label>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Reception Date * <span className="text-[10px] text-gray-400 font-normal">(Year or Date)</span>
+                      </label>
                       <input 
-                        type="date" 
-                        value={formData.reception_date ? formData.reception_date.slice(0, 10) : ''} 
+                        type="text" 
+                        placeholder="e.g. 2024 or 2024-01-15"
+                        value={formData.reception_date || ''} 
                         onChange={e => setFormData({...formData, reception_date: e.target.value})} 
                         className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" 
                       />
