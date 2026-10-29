@@ -109,6 +109,7 @@ export const Transmitters = () => {
           frequency: '',
           hex_id: '',
           manufacturer: '',
+          reception_date: '',
           program_region: '',
           site_location: '',
           satellite_time: 'Continuous',
@@ -168,6 +169,7 @@ export const Transmitters = () => {
         availableFields={[
           { key: 'status', label: 'Status' },
           { key: 'deployed', label: 'Deployed' },
+          { key: 'reception_date', label: 'Reception Date' },
           { key: 'program_region', label: 'Program Region' },
           { key: 'site_location', label: 'Site Location' },
           { key: 'manufacturer', label: 'Manufacturer' },
@@ -319,6 +321,7 @@ export const Transmitters = () => {
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Model" sortKey="model" currentSort={sortConfig} onSort={requestSort} filterValue={filters['model']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Bird Species" sortKey="bird_species" currentSort={sortConfig} onSort={requestSort} filterValue={filters['bird_species']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Origin Company" sortKey="manufacturer" currentSort={sortConfig} onSort={requestSort} filterValue={filters['manufacturer']} onFilter={setFilter} />
+                <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Reception Date" sortKey="reception_date" currentSort={sortConfig} onSort={requestSort} filterValue={filters['reception_date']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Last Fix" sortKey="last_fix" currentSort={sortConfig} onSort={requestSort} filterValue={filters['last_fix']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Site Location" sortKey="site_location" currentSort={sortConfig} onSort={requestSort} filterValue={filters['site_location']} onFilter={setFilter} />
                 <SortableHeader className="border-r border-sky-300/50 dark:border-sky-800/50 bg-sky-200 dark:bg-sky-900 text-slate-800 dark:text-sky-100" label="Program Region" sortKey="program_region" currentSort={sortConfig} onSort={requestSort} filterValue={filters['program_region']} onFilter={setFilter} />
@@ -354,6 +357,7 @@ export const Transmitters = () => {
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.model}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.bird_species}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.manufacturer || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.reception_date ? (t.reception_date.length === 10 ? t.reception_date : formatDateTime(t.reception_date, timeZone)) : '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{formatDateTime(t.last_fix, timeZone)}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.site_location || '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.program_region || '-'}</td>
@@ -497,14 +501,23 @@ export const Transmitters = () => {
                 {/* Hardware */}
                 <div>
                   <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 pb-2 border-b border-gray-100 dark:border-slate-700">Hardware & Config</h4>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Manufacturer</label>
-                      <input type="text" value={formData.manufacturer} onChange={e => setFormData({...formData, manufacturer: e.target.value})} className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                      <input type="text" value={formData.manufacturer || ''} onChange={e => setFormData({...formData, manufacturer: e.target.value})} className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Model</label>
-                      <input type="text" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                      <input type="text" value={formData.model || ''} onChange={e => setFormData({...formData, model: e.target.value})} className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Reception Date</label>
+                      <input 
+                        type="date" 
+                        value={formData.reception_date ? formData.reception_date.slice(0, 10) : ''} 
+                        onChange={e => setFormData({...formData, reception_date: e.target.value})} 
+                        className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" 
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>

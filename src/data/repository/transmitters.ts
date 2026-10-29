@@ -35,6 +35,7 @@ export const TransmitterSchema = z.object({
   frequency: z.string().optional(),
   hex_id: z.string().optional(),
   manufacturer: z.string().optional(),
+  reception_date: z.string().optional(),
   program_region: z.string().optional(),
   site_location: z.string().optional(),
   satellite_time: z.string().optional(),

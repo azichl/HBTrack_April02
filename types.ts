@@ -51,6 +51,7 @@ export interface Transmitter {
   frequency?: string;
   hex_id?: string;
   manufacturer?: string;
+  reception_date?: string;
   program_region?: string;
   site_location?: string;
   satellite_time?: string;

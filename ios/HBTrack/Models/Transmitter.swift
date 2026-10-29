@@ -15,6 +15,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
     var frequency: Double?
     var hex_id: String?
     var manufacturer: String?
+    var reception_date: String?
     var program_region: String?
     var site_location: String?
     var bird_id: String?
@@ -75,6 +76,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
         case frequency
         case hex_id
         case manufacturer
+        case reception_date
         case program_region
         case site_location
         case bird_id
@@ -87,7 +89,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
         case lon
     }
     
-    init(id: String? = nil, platform_id: String, model: String? = nil, status: String = "Active", derived_status: String? = nil, battery_voltage: Double? = nil, last_fix: String? = nil, duty_cycle: String? = nil, frequency: Double? = nil, hex_id: String? = nil, manufacturer: String? = nil, program_region: String? = nil, site_location: String? = nil, bird_id: String? = nil, assigned_bird_ring: String? = nil, last_latitude: Double? = nil, last_longitude: Double? = nil, latitude: Double? = nil, longitude: Double? = nil, lat: Double? = nil, lon: Double? = nil) {
+    init(id: String? = nil, platform_id: String, model: String? = nil, status: String = "Active", derived_status: String? = nil, battery_voltage: Double? = nil, last_fix: String? = nil, duty_cycle: String? = nil, frequency: Double? = nil, hex_id: String? = nil, manufacturer: String? = nil, reception_date: String? = nil, program_region: String? = nil, site_location: String? = nil, bird_id: String? = nil, assigned_bird_ring: String? = nil, last_latitude: Double? = nil, last_longitude: Double? = nil, latitude: Double? = nil, longitude: Double? = nil, lat: Double? = nil, lon: Double? = nil) {
         self.id = id
         self.platform_id = platform_id
         self.model = model
@@ -99,6 +101,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
         self.frequency = frequency
         self.hex_id = hex_id
         self.manufacturer = manufacturer
+        self.reception_date = reception_date
         self.program_region = program_region
         self.site_location = site_location
         self.bird_id = bird_id
@@ -165,6 +168,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
         
         self.hex_id = try? container.decodeIfPresent(String.self, forKey: .hex_id)
         self.manufacturer = try? container.decodeIfPresent(String.self, forKey: .manufacturer)
+        self.reception_date = try? container.decodeIfPresent(String.self, forKey: .reception_date)
         self.program_region = try? container.decodeIfPresent(String.self, forKey: .program_region)
         self.site_location = try? container.decodeIfPresent(String.self, forKey: .site_location)
         
@@ -210,6 +214,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(frequency, forKey: .frequency)
         try container.encodeIfPresent(hex_id, forKey: .hex_id)
         try container.encodeIfPresent(manufacturer, forKey: .manufacturer)
+        try container.encodeIfPresent(reception_date, forKey: .reception_date)
         try container.encodeIfPresent(program_region, forKey: .program_region)
         try container.encodeIfPresent(site_location, forKey: .site_location)
         try container.encodeIfPresent(bird_id, forKey: .bird_id)

@@ -129,7 +129,7 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                 Bulk Upload Transmitters
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Import multiple PTT devices via Excel template (.xlsx)
+                Import PTT devices & bird info via Excel template (.xlsx)
               </p>
             </div>
           </div>
@@ -150,7 +150,7 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                 1. Standard Template
               </h4>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Download the model file with column headers, instructions, and sample rows.
+                Model adapted with Transmitters table info (including Reception Date) & Birds table info.
               </p>
             </div>
             <a
@@ -224,13 +224,13 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
               <h4 className="text-sm font-bold text-gray-800 dark:text-gray-200">
                 3. Verification Preview
               </h4>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                 <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 rounded-xl text-center">
                   <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
                     {dryRunResult.created}
                   </div>
                   <div className="text-[11px] font-medium text-emerald-800 dark:text-emerald-300">
-                    Will Create
+                    New Transmitters
                   </div>
                 </div>
                 <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 rounded-xl text-center">
@@ -241,6 +241,22 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                     Will Update
                   </div>
                 </div>
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/40 rounded-xl text-center">
+                  <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                    {dryRunResult.linkedBirds}
+                  </div>
+                  <div className="text-[11px] font-medium text-indigo-800 dark:text-indigo-300">
+                    Linked Birds
+                  </div>
+                </div>
+                <div className="p-3 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800/40 rounded-xl text-center">
+                  <div className="text-lg font-bold text-teal-600 dark:text-teal-400">
+                    {dryRunResult.createdBirds}
+                  </div>
+                  <div className="text-[11px] font-medium text-teal-800 dark:text-teal-300">
+                    New Birds
+                  </div>
+                </div>
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 rounded-xl text-center">
                   <div className="text-lg font-bold text-amber-600 dark:text-amber-400">
                     {dryRunResult.skippedDuplicates}
@@ -249,29 +265,19 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                     Skipped (Existing)
                   </div>
                 </div>
-                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/40 rounded-xl text-center">
-                  <div className="text-lg font-bold text-red-600 dark:text-red-400">
-                    {dryRunResult.errors.length}
-                  </div>
-                  <div className="text-[11px] font-medium text-red-800 dark:text-red-300">
-                    Invalid Rows
-                  </div>
-                </div>
               </div>
 
               {dryRunResult.linkedBirds > 0 && (
-                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg text-xs text-indigo-800 dark:text-indigo-300 flex items-center gap-2">
                   <CheckCircle2 size={15} />
                   <span>{dryRunResult.linkedBirds} transmitter(s) matched existing bird rings and will be linked automatically.</span>
                 </div>
               )}
 
-              {dryRunResult.unlinkedRings.length > 0 && (
-                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/20 rounded-lg text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
-                  <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-                  <span>
-                    Unmatched bird rings: {dryRunResult.unlinkedRings.join(', ')} (transmitters will be created unlinked).
-                  </span>
+              {dryRunResult.createdBirds > 0 && (
+                <div className="p-2.5 bg-teal-50 dark:bg-teal-950/20 rounded-lg text-xs text-teal-800 dark:text-teal-300 flex items-center gap-2">
+                  <CheckCircle2 size={15} />
+                  <span>{dryRunResult.createdBirds} new bird profile(s) will be created and linked to their transmitters.</span>
                 </div>
               )}
 
@@ -309,7 +315,10 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                   Bulk Upload Completed!
                 </h4>
                 <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                  {finalResult.created} created · {finalResult.updated} updated · {finalResult.skippedDuplicates} skipped
+                  Transmitters: {finalResult.created} created · {finalResult.updated} updated · {finalResult.skippedDuplicates} skipped
+                </p>
+                <p className="text-xs text-indigo-700 dark:text-indigo-300">
+                  Birds: {finalResult.linkedBirds} linked · {finalResult.createdBirds} created
                 </p>
               </div>
 
