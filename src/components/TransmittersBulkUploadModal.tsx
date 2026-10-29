@@ -32,46 +32,61 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
 
   const downloadTransmitterTemplate = () => {
     const headers = [
-      'ptt_id *', 'frequency', 'hex_id', 'transmitter_model *', 'manufacturer',
-      'reception_date *', 'status *', 'deployed', 'site_location', 'program_region',
-      'satellite_time', 'radio_time', 'duty_cycle', 'weight_g', 'bird_ring_number',
-      'darvic_number', 'species', 'sex', 'origin', 'hatch_date', 'release_date',
-      'release_lat', 'release_lon', 'notes'
+      'ptt_id *',
+      'transmitter_model *',
+      'manufacturer',
+      'hex_id',
+      'reception_date *',
+      'weight_g',
+      'status *',
+      'duty_cycle',
+      'deployment_date',
+      'bird_ring_number',
+      'species',
+      'sex',
+      'origin',
+      'release_lat',
+      'release_lon',
+      'notes'
     ];
     const exampleRow = [
-      '244289', '401.650', '112A3F', 'Solar Argos/GPS PTT', 'Microwave Telemetry',
-      '2024', 'Active', 'Yes', 'Al Ain Desert', 'UAE East',
-      '10h ON / 24h OFF', '12:00 - 18:00', '10h ON / 24h OFF', 22, 'UA-9982',
-      'DV-104', 'Houbara Bustard', 'M', 'Breeding', '2023-05-10', '2024-03-15',
-      24.12345, 54.54321, 'Example row - replace with your data'
+      '244289',
+      'Solar Argos/GPS PTT',
+      'Microwave Telemetry',
+      '112A3F',
+      '2024',
+      22,
+      'Active',
+      '10h ON / 24h OFF',
+      '2024-03-15',
+      'UA-9982',
+      'Houbara Bustard',
+      'M',
+      'Breeding',
+      24.12345,
+      54.54321,
+      'Example row - replace with your data'
     ];
     const instructions = [
-      ['HBTrack — Transmitters & Birds Bulk Upload Instructions'],
+      ['HBTrack — Transmitters Bulk Upload Instructions'],
+      [''],
       ['Column Name', 'Required', 'Format / Allowed Values', 'Description'],
       ['ptt_id', 'YES', '3-10 digits (e.g. 244289)', 'Unique platform ID of the transmitter.'],
-      ['frequency', 'No', 'Number/Text (e.g. 401.650)', 'Transmission frequency in MHz.'],
+      ['transmitter_model', 'YES', 'Text (e.g. Solar Argos/GPS PTT)', 'Transmitter model.'],
+      ['manufacturer', 'No', 'Text (e.g. Microwave Telemetry, North Star)', 'Manufacturer name.'],
       ['hex_id', 'No', 'Hexadecimal (e.g. 112A3F)', 'Argos Hex ID (optional, replaces serial number).'],
-      ['transmitter_model', 'YES', 'Text (e.g. Solar Argos/GPS PTT)', 'Model of the transmitter.'],
-      ['manufacturer', 'No', 'Text (e.g. Microwave Telemetry)', 'Origin company / manufacturer.'],
-      ['reception_date', 'YES (Obligatory)', 'Year (e.g. 2024) or YYYY-MM-DD (e.g. 2024-01-15)', 'Reception date: accepts year only (e.g. 2024) or full date.'],
-      ['status', 'YES', 'Active | Inactive | Dead | Static test | Potential Mortality', 'Operational status of transmitter.'],
-      ['deployed', 'No', 'Yes | No', 'Whether the device is currently deployed on a bird.'],
-      ['site_location', 'No', 'Text', 'Deployment site location.'],
-      ['program_region', 'No', 'Text', 'Operational program region.'],
-      ['satellite_time', 'No', 'Text', 'Satellite transmission schedule/cycle.'],
-      ['radio_time', 'No', 'Text', 'VHF radio beacon transmission time.'],
-      ['duty_cycle', 'No', 'Text', 'Transmission schedule duty cycle.'],
-      ['weight_g', 'No', 'Number', 'Weight in grams.'],
-      ['bird_ring_number', 'No', 'Text', 'Ring ID of bird to link or register.'],
-      ['darvic_number', 'No', 'Text', 'Colored darvic ring/band code.'],
-      ['species', 'No', 'Text', 'Bird species (defaults to Houbara Bustard).'],
-      ['sex', 'No', 'M | F', 'Bird gender/sex.'],
-      ['origin', 'No', 'Wild | Breeding', 'Bird origin.'],
-      ['hatch_date', 'No', 'YYYY-MM-DD', 'Hatch date of bird.'],
-      ['release_date', 'No', 'YYYY-MM-DD', 'Release date of bird / deployment date.'],
-      ['release_lat', 'No', 'Decimal (-90 to 90)', 'Release site latitude.'],
-      ['release_lon', 'No', 'Decimal (-180 to 180)', 'Release site longitude.'],
-      ['notes', 'No', 'Text', 'Comments and notes.']
+      ['reception_date', 'YES', 'Year (e.g. 2024) or YYYY-MM-DD', 'Date transmitter was received (obligatory, can accept only year).'],
+      ['weight_g', 'No', 'Number (e.g. 22)', 'Weight in grams.'],
+      ['status', 'YES', 'Active | Inactive | Dead | Static test', 'Device status.'],
+      ['duty_cycle', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Transmission schedule.'],
+      ['deployment_date', 'No', 'YYYY-MM-DD', 'Date deployed.'],
+      ['bird_ring_number', 'No', 'Text', 'Ring number of existing bird to link with.'],
+      ['species', 'No', 'Text', 'Default: Houbara Bustard.'],
+      ['sex', 'No', 'M or F', 'Bird gender.'],
+      ['origin', 'No', 'Wild or Breeding', 'Bird origin.'],
+      ['release_lat', 'No', 'Decimal (-90.0 to 90.0)', 'Release latitude.'],
+      ['release_lon', 'No', 'Decimal (-180.0 to 180.0)', 'Release longitude.'],
+      ['notes', 'No', 'Text', 'Additional comments.']
     ];
 
     const wb = XLSX.utils.book_new();
@@ -261,110 +276,98 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                       <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
                         <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">ptt_id *</td>
                         <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
-                        <td className="p-2">Platform / PTT device ID (3-10 digits)</td>
+                        <td className="p-2">Unique platform ID of the transmitter (3-10 digits)</td>
                         <td className="p-2 font-mono">244289</td>
-                      </tr>
-                      <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
-                        <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">reception_date *</td>
-                        <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
-                        <td className="p-2">Reception date: <strong>can accept year only</strong> (e.g. 2024) or full date</td>
-                        <td className="p-2 font-mono text-emerald-700 dark:text-emerald-300 font-bold">2024 or 2024-01-15</td>
                       </tr>
                       <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
                         <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">transmitter_model *</td>
                         <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
-                        <td className="p-2">Device model name</td>
+                        <td className="p-2">Transmitter model name</td>
                         <td className="p-2 font-mono">Solar Argos/GPS PTT</td>
-                      </tr>
-                      <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
-                        <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">status *</td>
-                        <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
-                        <td className="p-2">Active | Inactive | Dead | Static test | Potential Mortality</td>
-                        <td className="p-2 font-mono">Active</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-mono font-bold">hex_id</td>
-                        <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2"><strong>Replaces serial number</strong> (Argos Hex ID)</td>
-                        <td className="p-2 font-mono">112A3F</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-mono font-bold">frequency</td>
-                        <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Transmission frequency in MHz</td>
-                        <td className="p-2 font-mono">401.650</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">manufacturer</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Origin company / maker</td>
+                        <td className="p-2">Manufacturer name / origin company</td>
                         <td className="p-2 font-mono">Microwave Telemetry</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">deployed</td>
+                        <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">hex_id</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Yes | No</td>
-                        <td className="p-2 font-mono">Yes</td>
+                        <td className="p-2"><strong>Argos Hex ID</strong> (replaces serial number)</td>
+                        <td className="p-2 font-mono">112A3F</td>
+                      </tr>
+                      <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
+                        <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">reception_date *</td>
+                        <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
+                        <td className="p-2">Reception date: <strong>can accept only year</strong> (e.g. 2024) or full date</td>
+                        <td className="p-2 font-mono text-emerald-700 dark:text-emerald-300 font-bold">2024 or 2024-01-15</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">site_location</td>
+                        <td className="p-2 font-mono font-bold">weight_g</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Site / deployment location</td>
-                        <td className="p-2 font-mono">Al Ain Desert</td>
+                        <td className="p-2">Weight in grams</td>
+                        <td className="p-2 font-mono">22</td>
+                      </tr>
+                      <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
+                        <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">status *</td>
+                        <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
+                        <td className="p-2">Active | Inactive | Dead | Static test</td>
+                        <td className="p-2 font-mono">Active</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">program_region</td>
+                        <td className="p-2 font-mono font-bold">duty_cycle</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Program operational region</td>
-                        <td className="p-2 font-mono">UAE East</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-mono font-bold">satellite_time</td>
-                        <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Satellite transmission schedule / duty cycle</td>
+                        <td className="p-2">Transmission schedule</td>
                         <td className="p-2 font-mono">10h ON / 24h OFF</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">radio_time</td>
+                        <td className="p-2 font-mono font-bold">deployment_date</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">VHF radio beacon transmission hours</td>
-                        <td className="p-2 font-mono">12:00 - 18:00</td>
+                        <td className="p-2">Date deployed (YYYY-MM-DD)</td>
+                        <td className="p-2 font-mono">2024-03-15</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">bird_ring_number</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Ring ID to link with existing bird, or register new bird</td>
+                        <td className="p-2">Ring number of existing bird to link with</td>
                         <td className="p-2 font-mono">UA-9982</td>
-                      </tr>
-                      <tr>
-                        <td className="p-2 font-mono font-bold">darvic_number</td>
-                        <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Colored darvic leg band</td>
-                        <td className="p-2 font-mono">DV-104</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">species</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Bird species (defaults to Houbara Bustard)</td>
+                        <td className="p-2">Default: Houbara Bustard</td>
                         <td className="p-2 font-mono">Houbara Bustard</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">sex / origin</td>
+                        <td className="p-2 font-mono font-bold">sex</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">M | F and Wild | Breeding</td>
-                        <td className="p-2 font-mono">M / Breeding</td>
+                        <td className="p-2">M or F</td>
+                        <td className="p-2 font-mono">M</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">release_date</td>
+                        <td className="p-2 font-mono font-bold">origin</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Date of bird release / deployment</td>
-                        <td className="p-2 font-mono">2024-03-15</td>
+                        <td className="p-2">Wild or Breeding</td>
+                        <td className="p-2 font-mono">Breeding</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">release_lat / release_lon</td>
+                        <td className="p-2 font-mono font-bold">release_lat</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Release coordinates</td>
-                        <td className="p-2 font-mono">24.12345 / 54.54321</td>
+                        <td className="p-2">Release latitude (-90.0 to 90.0)</td>
+                        <td className="p-2 font-mono">24.12345</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-mono font-bold">release_lon</td>
+                        <td className="p-2 text-gray-500">Optional</td>
+                        <td className="p-2">Release longitude (-180.0 to 180.0)</td>
+                        <td className="p-2 font-mono">54.54321</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-mono font-bold">notes</td>
+                        <td className="p-2 text-gray-500">Optional</td>
+                        <td className="p-2">Additional comments / notes</td>
+                        <td className="p-2 font-mono">Optional notes</td>
                       </tr>
                     </tbody>
                   </table>
