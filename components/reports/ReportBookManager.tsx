@@ -7,13 +7,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   BookOpen, Plus, Trash2, Download, ChevronDown, ChevronUp,
   GripVertical, FileText, X, Edit2, Loader2, FolderOpen,
-  Archive,
+  Archive, Check,
 } from 'lucide-react';
 import type { ReportBookMeta, ReportBookPage, ReportBookCategory } from '../../src/types/multiReport';
 import {
   createReportBook, listReportBooks, updateReportBookMeta, deleteReportBook,
   addPageToBook, listPages, removePageFromBook,
-  exportBookAsPdf, exportBookAsPngZip,
+  exportBookAsPdf, exportBookAsPngZip, getPagePdfBytes,
 } from '../../services/multiReportService';
 
 // ─── props ───────────────────────────────────────────────────────────────────
@@ -82,6 +82,8 @@ export function ReportBookManager({
   const [pages, setPages] = useState<Record<string, ReportBookPage[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);   // bookId being saved to
+  const [savedSuccess, setSavedSuccess] = useState<string | null>(null); // bookId that just succeeded
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ step: string; pct: number } | null>(null);
   const [newBookTitle, setNewBookTitle] = useState('');
@@ -113,19 +115,30 @@ export function ReportBookManager({
   const handleCreateBook = async () => {
     if (!newBookTitle.trim() && newBookCat === 'custom') return;
     const title = newBookTitle.trim() || undefined;
-    await createReportBook(newBookCat, title);
-    setNewBookTitle(''); setShowNewForm(false);
+    const newBook = await createReportBook(newBookCat, title);
+    setNewBookTitle('');
+    setShowNewForm(false);
     await refresh();
+    setExpandedBook(newBook.id);
   };
 
   const handleSavePage = async (bookId: string, pageCount: number) => {
     setSaving(bookId);
+    setSaveError(null);
     try {
       const blob = await onGetCurrentPdfBlob();
       const p = await addPageToBook(bookId, blob, currentBirdId, currentBirdLabel, pageCount);
       setPages(prev => ({ ...prev, [bookId]: [...(prev[bookId] ?? []), p] }));
       setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount: pageCount + 1 } : b));
-    } finally { setSaving(null); }
+      setExpandedBook(bookId);
+      setSavedSuccess(bookId);
+      setTimeout(() => setSavedSuccess(null), 3000);
+    } catch (err: any) {
+      console.error('Failed to save report page:', err);
+      setSaveError(err?.message || 'Could not save report page. Please try again.');
+    } finally {
+      setSaving(null);
+    }
   };
 
   const handleDeleteBook = async (bookId: string) => {
@@ -140,6 +153,18 @@ export function ReportBookManager({
     setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount: Math.max(0, b.pageCount - 1) } : b));
   };
 
+  const handleOpenPage = async (page: ReportBookPage) => {
+    try {
+      const bytes = await getPagePdfBytes(page);
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) {
+      alert(`Could not open PDF: ${err?.message || 'Unknown error'}`);
+    }
+  };
+
   const handleExportPdf = async (book: ReportBookMeta) => {
     if (!coverNodeRef.current) return;
     setExporting(book.id);
@@ -149,6 +174,9 @@ export function ReportBookManager({
       await new Promise(r => setTimeout(r, 60));
       await exportBookAsPdf(book, bookPages, coverNodeRef.current,
         (step, pct) => setProgress({ step, pct }));
+    } catch (err: any) {
+      console.error('Export PDF failed:', err);
+      alert(`Export PDF failed: ${err?.message || 'Unknown error'}`);
     } finally { setExporting(null); setProgress(null); }
   };
 
@@ -161,6 +189,9 @@ export function ReportBookManager({
       await new Promise(r => setTimeout(r, 60));
       await exportBookAsPngZip(book, bookPages, coverNodeRef.current,
         (step, pct) => setProgress({ step, pct }));
+    } catch (err: any) {
+      console.error('Export ZIP failed:', err);
+      alert(`Export ZIP failed: ${err?.message || 'Unknown error'}`);
     } finally { setExporting(null); setProgress(null); }
   };
 
@@ -198,6 +229,16 @@ export function ReportBookManager({
           )}
         </div>
       </div>
+
+      {/* error banner */}
+      {saveError && (
+        <div className="mx-3 mt-2 p-2 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg text-xs text-red-600 dark:text-red-400 flex items-center justify-between">
+          <span className="truncate">{saveError}</span>
+          <button type="button" onClick={() => setSaveError(null)} className="text-red-400 hover:text-red-700 ml-2">
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* new collection form */}
       {showNewForm && (
@@ -297,11 +338,27 @@ export function ReportBookManager({
                       type="button"
                       disabled={saving === book.id}
                       onClick={() => handleSavePage(book.id, book.pageCount)}
-                      className="text-[10px] px-2 py-1 rounded-md bg-green-600 hover:bg-green-700 text-white font-bold disabled:opacity-50 flex items-center gap-0.5"
+                      className={`text-[10px] px-2 py-1 rounded-md text-white font-bold disabled:opacity-50 flex items-center gap-1 transition-colors ${
+                        savedSuccess === book.id ? 'bg-emerald-600' : 'bg-green-600 hover:bg-green-700'
+                      }`}
                       title={`Save "${currentBirdLabel}" here`}
                     >
-                      {saving === book.id ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
-                      Save here
+                      {saving === book.id ? (
+                        <>
+                          <Loader2 size={10} className="animate-spin" />
+                          <span>Saving…</span>
+                        </>
+                      ) : savedSuccess === book.id ? (
+                        <>
+                          <Check size={10} />
+                          <span>Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={10} />
+                          <span>Save here</span>
+                        </>
+                      )}
                     </button>
 
                     {/* export PDF */}
@@ -363,10 +420,14 @@ export function ReportBookManager({
                             <FileText size={12} className="text-indigo-400 shrink-0" />
                             <span className="flex-1 truncate font-medium">{p.birdLabel}</span>
                             <span className="text-slate-400 shrink-0">p.{idx + 1}</span>
-                            <a href={p.downloadUrl} target="_blank" rel="noopener noreferrer"
-                              className="p-0.5 text-slate-400 hover:text-sky-600" title="Open PDF">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPage(p)}
+                              className="p-0.5 text-slate-400 hover:text-sky-600"
+                              title="Open PDF"
+                            >
                               <Download size={11} />
-                            </a>
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleRemovePage(book.id, p)}

@@ -3,7 +3,7 @@ import { jsPDF } from 'jspdf';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function waitForImages(root: HTMLElement, timeoutMs = 8000) {
+async function waitForImages(root: HTMLElement, timeoutMs = 1200) {
   const imgs = Array.from(root.querySelectorAll('img'));
   await Promise.race([
     Promise.all(
@@ -63,7 +63,6 @@ export async function generateReportPdfBlob(
       }
     };
 
-    await toCanvas(node, { ...options, pixelRatio: 1 });
     const canvas = await toCanvas(node, options);
 
     const pdf = new jsPDF({
