@@ -22,10 +22,10 @@ jobs:
           node-version: 20
           cache: 'npm'
       - run: npm install --legacy-peer-deps && npm run build
-      - name: Deploy to Firebase Hosting and Firestore Rules
+      - name: Deploy to Firebase Hosting
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TRACKAPP_V2 }}
         run: |
           echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          npx --yes firebase-tools deploy --only hosting,firestore:rules --project trackapp-v2 --non-interactive
+          npx --yes firebase-tools deploy --only hosting --project trackapp-v2 --non-interactive
