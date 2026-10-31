@@ -67,7 +67,15 @@ export const formatBattery = (voltage?: number): string => {
 
 export function safeParseTimestamp(ts: any): number {
   if (!ts) return NaN;
-  if (typeof ts === 'number') return ts;
+  if (typeof ts === 'number') {
+    // Excel serial date number (~25000 is 1968, ~75000 is 2105)
+    if (ts > 25000 && ts < 75000) {
+      return Math.round((ts - 25569) * 86400 * 1000);
+    }
+    // Unix epoch seconds
+    if (ts > 1e9 && ts < 1e11) return ts * 1000;
+    return ts;
+  }
   if (typeof ts === 'object') {
     if (typeof ts.seconds === 'number') return ts.seconds * 1000;
     if (typeof ts._seconds === 'number') return ts._seconds * 1000;
@@ -77,6 +85,12 @@ export function safeParseTimestamp(ts: any): number {
   }
   const str = String(ts).trim();
   if (!str) return NaN;
+
+  // Pure numeric Excel serial number stored as string (e.g. "45480.41666")
+  const numVal = Number(str);
+  if (!isNaN(numVal) && numVal > 25000 && numVal < 75000 && !str.includes('-') && !str.includes('/') && !str.includes(':')) {
+    return Math.round((numVal - 25569) * 86400 * 1000);
+  }
 
   // DD/MM/YYYY HH:mm:ss or DD/MM/YYYY HH:mm
   const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);

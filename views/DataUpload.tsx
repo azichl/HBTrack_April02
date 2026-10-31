@@ -228,7 +228,7 @@ export const DataUpload = () => {
               'Location class': '3',
               'Location type': 'GPS',
               'Doppler Error radius (m)': '0',
-              'Location date (UTC)': '2026-07-07 10:01:00',
+              'Location date': '2026-07-07 10:01:00',
               'Longitude': '66.9021',
               'Latitude': '46.9450'
           }], 'template_argos_data');
@@ -241,16 +241,41 @@ export const DataUpload = () => {
           reader.onload = (e) => {
               const text = e.target?.result as string;
               if (!text) { reject(new Error("Empty file")); return; }
-              const lines = text.split('\n');
-              const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+              const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+              if (lines.length < 2) { resolve([]); return; }
+              
+              // Auto-detect delimiter: comma, tab, or semicolon
+              const firstLine = lines[0];
+              const delimiter = firstLine.includes('\t') ? '\t' : (firstLine.includes(';') && !firstLine.includes(',') ? ';' : ',');
+
+              const splitCsvLine = (line: string, delim: string): string[] => {
+                  const values: string[] = [];
+                  let curr = '';
+                  let inQuotes = false;
+                  for (let i = 0; i < line.length; i++) {
+                      const char = line[i];
+                      if (char === '"') {
+                          inQuotes = !inQuotes;
+                      } else if (char === delim && !inQuotes) {
+                          values.push(curr.trim().replace(/^"+|"+$/g, '').trim());
+                          curr = '';
+                      } else {
+                          curr += char;
+                      }
+                  }
+                  values.push(curr.trim().replace(/^"+|"+$/g, '').trim());
+                  return values;
+              };
+
+              const headers = splitCsvLine(firstLine, delimiter).map(h => h.trim().replace(/^"+|"+$/g, '').trim());
               const result = [];
               for (let i = 1; i < lines.length; i++) {
                   const line = lines[i].trim();
                   if (!line) continue;
-                  const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+                  const values = splitCsvLine(line, delimiter);
                   if (values.length > 0) {
                       const obj: any = {};
-                      headers.forEach((h, idx) => { obj[h] = values[idx]; });
+                      headers.forEach((h, idx) => { if (h) obj[h] = values[idx] ?? ''; });
                       result.push(obj);
                   }
               }
@@ -265,23 +290,25 @@ export const DataUpload = () => {
     try {
       const rows = await readXlsxFile(file);
       if (rows.length < 2) return [];
-      const headers = rows[0].map((h: any) => String(h).trim());
+      const headers = rows[0].map((h: any) => String(h ?? '').trim().replace(/^"+|"+$/g, '').trim());
       const result = [];
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (row.length === 0) continue;
+        if (!row || row.length === 0 || row.every((c: any) => c === null || c === undefined || String(c).trim() === '')) continue;
         const obj: any = {};
         headers.forEach((header: string, index: number) => {
+             if (!header) return;
              let val = row[index];
              if (val === null || val === undefined) obj[header] = "";
              else if (val instanceof Date) obj[header] = val.toISOString();
-             else obj[header] = String(val);
+             else obj[header] = String(val).trim();
         });
         result.push(obj);
       }
       return result;
-    } catch {
-      throw new Error("Failed to parse Excel file.");
+    } catch (err: any) {
+      console.error('[DataUpload] Excel parse error:', err);
+      throw new Error(`Failed to parse Excel file: ${err?.message || 'Invalid format'}`);
     }
   };
 
@@ -387,35 +414,69 @@ export const DataUpload = () => {
         else if (uploadType === 'argos_data') {
             const rawFixes: RawFix[] = [];
 
+            // Case-insensitive, whitespace/punctuation-agnostic field accessor
+            const getVal = (row: any, ...keys: string[]): any => {
+                if (!row) return undefined;
+                // Direct key match
+                for (const k of keys) {
+                    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
+                        return row[k];
+                    }
+                }
+                // Case-insensitive & normalized match
+                const rowKeys = Object.keys(row);
+                for (const k of keys) {
+                    const cleanK = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                    const found = rowKeys.find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === cleanK);
+                    if (found && row[found] !== undefined && row[found] !== null && String(row[found]).trim() !== '') {
+                        return row[found];
+                    }
+                }
+                return undefined;
+            };
+
             for (const row of rawData) {
-                const rawPtt = row['PTT'] || row['Device ID'] || row['DeviceRef'] || row['Platform'] || row['Platform ID'] || row['platformId'] || row['platform_id'] || row['ptt'] || row['pttId'];
+                const rawPtt = getVal(row, 'Device ID', 'DeviceID', 'Device Id', 'Device id', 'PTT', 'ptt', 'Platform ID', 'Platform', 'DeviceRef', 'platformId', 'platform_id', 'pttId');
                 const platformId = normalizePttId(String(rawPtt || ''));
                 if (!platformId) continue;
 
-                const unitType = String(row['Unit type'] || row['Unit Type'] || row['unitType'] || row.msgType || 'Houbara');
-                const satellite = String(row.satellite || row['Satellite'] || 'UNK');
+                const unitType = String(getVal(row, 'Unit type', 'Unit Type', 'unit type', 'unitType', 'msgType') || 'Houbara');
+                const satellite = String(getVal(row, 'satellite', 'Satellite') || 'UNK');
 
-                const msgDateRaw = row['Message date (UTC)'] || row['Message date'] || row['Message Date (UTC)'] || row['Message Date'] || row['msgDatetime'] || row['messageDate'];
+                const msgDateRaw = getVal(row, 'Message date (UTC)', 'Message date', 'Message Date (UTC)', 'Message Date', 'msgDatetime', 'messageDate');
                 const parsedMsgMs = safeParseTimestamp(msgDateRaw);
                 const messageDateIso = !isNaN(parsedMsgMs) && parsedMsgMs > 0 ? new Date(parsedMsgMs).toISOString() : undefined;
 
-                // 1. Check if row is from a CLS 'positions' export (clean, one fix per row)
-                const locDateRaw = row['Location date (UTC)'] || row['Location date'] || row['Location Date (UTC)'] || row['Location Date'] || row.locationDate || row.location_date;
-                if (locDateRaw) {
-                    const locDateMs = safeParseTimestamp(locDateRaw);
+                // 1. Primary check: clean positions format with 'Location date' (or 'Location date (UTC)')
+                const locDateRaw = getVal(row, 'Location date', 'Location Date', 'location date', 'Location date (UTC)', 'Location Date (UTC)', 'locationDate', 'location_date');
+                if (locDateRaw !== undefined) {
+                    let locDateMs = safeParseTimestamp(locDateRaw);
+                    if (isNaN(locDateMs) || locDateMs <= 0) {
+                        const parsed = Date.parse(String(locDateRaw));
+                        if (!isNaN(parsed) && parsed > 0) locDateMs = parsed;
+                    }
+
                     if (!isNaN(locDateMs) && locDateMs > 0) {
-                        const lat = parseFloat(String(row['Latitude'] !== undefined ? row['Latitude'] : (row['lat'] !== undefined ? row['lat'] : (row['Lat'] !== undefined ? row['Lat'] : row.latitude))));
-                        let lon = parseFloat(String(row['Longitude'] !== undefined ? row['Longitude'] : (row['lon'] !== undefined ? row['lon'] : (row['Lon'] !== undefined ? row['Lon'] : row.longitude))));
+                        const rawLat = getVal(row, 'Latitude', 'latitude', 'lat', 'Lat');
+                        const rawLon = getVal(row, 'Longitude', 'longitude', 'lon', 'Lon', 'long', 'Long');
+                        const lat = parseFloat(String(rawLat));
+                        let lon = parseFloat(String(rawLon));
+
                         if (isValidCoordinate(lat, lon)) {
                             if (platformId === '242086' && lon < 0) lon = Math.abs(lon);
 
-                            const locTypeRaw = String(row['Location type'] || row['Location Type'] || row.locationType || '').trim().toUpperCase();
-                            const rawLc = String(row['Location class'] || row['Location Class'] || row.locationClass || row.lc || '').trim().toUpperCase();
-                            const isGps = locTypeRaw.includes('GPS') || (!locTypeRaw && (!rawLc || rawLc === 'GPS'));
+                            const locTypeRaw = String(getVal(row, 'Location type', 'Location Type', 'location type', 'locationType') || '').trim().toUpperCase();
+                            const rawLc = String(getVal(row, 'Location class', 'Location Class', 'location class', 'locationClass', 'lc') || '').trim().toUpperCase();
+                            
+                            const isGps = locTypeRaw.includes('GPS') || (!locTypeRaw && (rawLc === 'GPS' || !rawLc));
                             const locType: 'GPS' | 'DOPPLER' = isGps ? 'GPS' : 'DOPPLER';
 
-                            const locClass = locType === 'GPS' ? null : (rawLc !== 'GPS' && rawLc ? rawLc : 'Z');
-                            const errRadiusM = locType === 'GPS' ? 0 : (parseFloat(String(row['Error radius (m)'] || row['Error radius'] || row['Doppler Error radius (m)'] || row.errorRadiusM || 0)) || 0);
+                            const locClass = locType === 'GPS' ? null : (rawLc && rawLc !== 'GPS' ? rawLc : 'Z');
+                            const rawErr = getVal(row, 'Doppler Error radius (m)', 'Doppler Error Radius (m)', 'Doppler Error radius', 'Doppler Error', 'Error radius (m)', 'Error radius', 'errorRadiusM', 'dopplerError');
+                            const parsedErr = parseFloat(String(rawErr ?? 0));
+                            const errRadiusM = locType === 'GPS' ? 0 : (!isNaN(parsedErr) ? parsedErr : 0);
+
+                            const locDateIso = new Date(locDateMs).toISOString();
 
                             rawFixes.push({
                                 pttId: platformId,
@@ -423,67 +484,73 @@ export const DataUpload = () => {
                                 locationType: locType,
                                 locationClass: locClass,
                                 errorRadiusM: errRadiusM,
-                                locationDate: locDateRaw,
+                                locationDate: locDateIso,
                                 lat,
                                 lon,
-                                messageDate: messageDateIso || null,
-                                deliveries: Number(row.deliveries || row.deliveryCount || 1)
+                                messageDate: messageDateIso || locDateIso,
+                                deliveries: Number(getVal(row, 'deliveries', 'deliveryCount') || 1)
                             });
                             continue;
                         }
                     }
                 }
 
-                // 2. Check if row is from a CLS 'messages' export (may contain GPS fix, Doppler fix, or both)
+                // 2. Check if row is from a CLS 'messages' export (may contain separate GPS fix, Doppler fix, or both)
                 let extractedFixFromRow = false;
 
                 // 2A. GPS fix in messages row
-                const gpsDateRaw = row['GPS Date of position (UTC)'] || row['GPS Date of position'] || row['GPS Date of Position (UTC)'] || row['GPS Date of Position'] || row['Date of position (UTC)'] || row['Date of position'] || row['Date of Position'] || row['gpsLocDate'] || row['gpsDate'];
-                const gpsLat = parseFloat(String(row['GPS Latitude'] || row['Latitude'] || row['lat'] || row['Lat']));
-                let gpsLon = parseFloat(String(row['GPS Longitude'] || row['Longitude'] || row['lon'] || row['Lon']));
+                const gpsDateRaw = getVal(row, 'GPS Date of position (UTC)', 'GPS Date of position', 'GPS Date of Position (UTC)', 'GPS Date of Position', 'Date of position (UTC)', 'Date of position', 'Date of Position', 'gpsLocDate', 'gpsDate');
+                const rawGpsLat = getVal(row, 'GPS Latitude', 'Latitude', 'latitude', 'lat', 'Lat');
+                const rawGpsLon = getVal(row, 'GPS Longitude', 'Longitude', 'longitude', 'lon', 'Lon');
+                const gpsLat = parseFloat(String(rawGpsLat));
+                let gpsLon = parseFloat(String(rawGpsLon));
 
                 if (gpsDateRaw && isValidCoordinate(gpsLat, gpsLon)) {
                     if (platformId === '242086' && gpsLon < 0) gpsLon = Math.abs(gpsLon);
                     const gpsDateMs = safeParseTimestamp(gpsDateRaw);
                     if (!isNaN(gpsDateMs) && gpsDateMs > 0) {
+                        const gpsDateIso = new Date(gpsDateMs).toISOString();
                         rawFixes.push({
                             pttId: platformId,
                             unitType,
                             locationType: 'GPS',
                             locationClass: null,
                             errorRadiusM: 0,
-                            locationDate: gpsDateRaw,
+                            locationDate: gpsDateIso,
                             lat: gpsLat,
                             lon: gpsLon,
                             messageDate: messageDateIso || null,
-                            deliveries: Number(row.deliveries || row.deliveryCount || 1)
+                            deliveries: Number(getVal(row, 'deliveries', 'deliveryCount') || 1)
                         });
                         extractedFixFromRow = true;
                     }
                 }
 
                 // 2B. Doppler fix in messages row
-                const dopDateRaw = row['Doppler Date (UTC)'] || row['Doppler Date'] || row['Doppler date'] || (!gpsDateRaw ? (row['Location date (UTC)'] || row['Location date']) : undefined);
-                const dopLat = parseFloat(String(row['Doppler Latitude'] || (!gpsDateRaw ? (row['Latitude'] || row['lat'] || row['Lat']) : NaN)));
-                let dopLon = parseFloat(String(row['Doppler Longitude'] || (!gpsDateRaw ? (row['Longitude'] || row['lon'] || row['Lon']) : NaN)));
+                const dopDateRaw = getVal(row, 'Doppler Date (UTC)', 'Doppler Date', 'Doppler date') || (!gpsDateRaw ? getVal(row, 'Location date (UTC)', 'Location date') : undefined);
+                const rawDopLat = getVal(row, 'Doppler Latitude') || (!gpsDateRaw ? getVal(row, 'Latitude', 'latitude', 'lat', 'Lat') : NaN);
+                const rawDopLon = getVal(row, 'Doppler Longitude') || (!gpsDateRaw ? getVal(row, 'Longitude', 'longitude', 'lon', 'Lon') : NaN);
+                const dopLat = parseFloat(String(rawDopLat));
+                let dopLon = parseFloat(String(rawDopLon));
 
                 if (dopDateRaw && isValidCoordinate(dopLat, dopLon)) {
                     if (platformId === '242086' && dopLon < 0) dopLon = Math.abs(dopLon);
                     const dopDateMs = safeParseTimestamp(dopDateRaw);
                     if (!isNaN(dopDateMs) && dopDateMs > 0) {
-                        const dopClass = String(row['Doppler Class'] || row['Location class'] || row['Location Class'] || 'Z');
-                        const dopErr = parseFloat(String(row['Doppler Error radius (m)'] || row['Error radius (m)'] || row['Doppler Error'] || 0)) || 0;
+                        const dopClass = String(getVal(row, 'Doppler Class', 'Location class', 'Location Class') || 'Z');
+                        const dopErr = parseFloat(String(getVal(row, 'Doppler Error radius (m)', 'Error radius (m)', 'Doppler Error') || 0)) || 0;
+                        const dopDateIso = new Date(dopDateMs).toISOString();
                         rawFixes.push({
                             pttId: platformId,
                             unitType,
                             locationType: 'DOPPLER',
                             locationClass: dopClass,
                             errorRadiusM: dopErr,
-                            locationDate: dopDateRaw,
+                            locationDate: dopDateIso,
                             lat: dopLat,
                             lon: dopLon,
                             messageDate: messageDateIso || null,
-                            deliveries: Number(row.deliveries || row.deliveryCount || 1)
+                            deliveries: Number(getVal(row, 'deliveries', 'deliveryCount') || 1)
                         });
                         extractedFixFromRow = true;
                     }
@@ -491,22 +558,23 @@ export const DataUpload = () => {
 
                 // 2C. Fallback for generic/legacy rows
                 if (!extractedFixFromRow) {
-                    const fallbackLat = parseFloat(String(row['Latitude'] || row['lat'] || row['Lat']));
-                    let fallbackLon = parseFloat(String(row['Longitude'] || row['lon'] || row['Lon']));
+                    const fallbackLat = parseFloat(String(getVal(row, 'Latitude', 'latitude', 'lat', 'Lat')));
+                    let fallbackLon = parseFloat(String(getVal(row, 'Longitude', 'longitude', 'lon', 'Lon')));
                     const locType = classifyLocationType(row.lc, row.locationType, satellite);
                     const isGps = locType === 'GPS';
-                    const fallbackDateRaw = row['locationDate'] || row['fixTime'] || row['timestamp'] || row['date'] || (!isGps ? msgDateRaw : undefined);
+                    const fallbackDateRaw = getVal(row, 'locationDate', 'fixTime', 'timestamp', 'date') || (!isGps ? msgDateRaw : undefined);
                     if (fallbackDateRaw && isValidCoordinate(fallbackLat, fallbackLon)) {
                         if (platformId === '242086' && fallbackLon < 0) fallbackLon = Math.abs(fallbackLon);
                         const fbDateMs = safeParseTimestamp(fallbackDateRaw);
                         if (!isNaN(fbDateMs) && fbDateMs > 0) {
+                            const fbDateIso = new Date(fbDateMs).toISOString();
                             rawFixes.push({
                                 pttId: platformId,
                                 unitType,
                                 locationType: locType,
                                 locationClass: locType === 'GPS' ? null : String(row.lc || 'Z'),
-                                errorRadiusM: locType === 'GPS' ? 0 : (parseFloat(String(row.dopplerError || 0)) || 0),
-                                locationDate: fallbackDateRaw,
+                                errorRadiusM: locType === 'GPS' ? 0 : (parseFloat(String(getVal(row, 'dopplerError', 'Doppler Error radius (m)') || 0)) || 0),
+                                locationDate: fbDateIso,
                                 lat: fallbackLat,
                                 lon: fallbackLon,
                                 messageDate: messageDateIso || null,
@@ -515,6 +583,10 @@ export const DataUpload = () => {
                         }
                     }
                 }
+            }
+
+            if (rawFixes.length === 0) {
+                throw new Error("No valid tracking fixes found in file. Please ensure columns include: Device ID, Location date, Latitude, Longitude.");
             }
 
             const { fixes: canonicalFixes } = buildFixes(rawFixes);
@@ -1239,7 +1311,7 @@ export const DataUpload = () => {
           case 'argos_data':
               return {
                   title: 'Argos Data Requirements',
-                  columns: ['Device ID (Required)', 'Unit type', 'Location class', 'Location type', 'Doppler Error radius (m)', 'Location date (UTC)', 'Longitude', 'Latitude'],
+                  columns: ['Device ID (Required)', 'Unit type', 'Location class', 'Location type', 'Doppler Error radius (m)', 'Location date', 'Longitude', 'Latitude'],
                   desc: 'Upload raw tracking data. Supports standard Argos CLS CSV/Excel exports.'
               };
       }

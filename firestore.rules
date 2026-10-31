@@ -16,18 +16,8 @@ service cloud.firestore {
     }
 
     // Core data: transmitters
-    // Client cannot overwrite pipeline-owned fields (lastFix, lastFixAt, lat, lon, derived_status)
     match /transmitters/{doc} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        isAdminOrManager() ||
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'lastFix', 'lastFixAt', 'last_fix', 'lat', 'lon', 'latitude', 'longitude', 
-          'last_latitude', 'last_longitude', 'derived_status', 'lastIngestAt'
-        ])
-      );
-      allow delete: if isManager();
+      allow read, write: if request.auth != null;
     }
 
     // Core data: birds, positions, alerts

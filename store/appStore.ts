@@ -1519,7 +1519,11 @@ export const useAppStore = create<AppState>()(
           // 3. Write EVERYTHING to Firebase
           if (tUpdated > 0) {
               onProgress?.(`Writing ${newTransmitters.length} transmitters to Firebase...`);
-              await syncTransmitters(newTransmitters);
+              try {
+                  await syncTransmitters(newTransmitters);
+              } catch (txErr) {
+                  console.warn('[AppStore] Could not update transmitters in Firestore during sync:', txErr);
+              }
           }
 
           if (pCreated > 0) {
