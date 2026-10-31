@@ -93,9 +93,11 @@ export async function deleteReportBook(bookId: string): Promise<void> {
   const pSnap = await getDocs(pagesCol(userId, bookId));
   await Promise.all(pSnap.docs.map(async pd => {
     const page = pd.data() as ReportBookPage;
-    await deletePageBlob(page.id);
-    try { await deleteObject(storageRef(storage, page.storagePath)); } catch { /* ignore */ }
-    await deleteDoc(pd.ref);
+    deletePageBlob(page.id).catch(() => {});
+    if (page.downloadUrl && page.downloadUrl.startsWith('https://firebasestorage')) {
+      deleteObject(storageRef(storage, page.storagePath)).catch(() => {});
+    }
+    await deleteDoc(pd.ref).catch(() => {});
   }));
   await deleteDoc(bookDoc(userId, bookId));
 }
@@ -108,6 +110,7 @@ export async function addPageToBook(
   birdId: string,
   birdLabel: string,
   currentPageCount: number,
+  extra?: { ring?: string; region?: string; location?: string }
 ): Promise<ReportBookPage> {
   const userId = uid();
   const pageId = nanoId();
@@ -139,6 +142,9 @@ export async function addPageToBook(
     order: currentPageCount,
     birdId,
     birdLabel,
+    ring: extra?.ring || undefined,
+    region: extra?.region || undefined,
+    location: extra?.location || undefined,
     storagePath,
     downloadUrl,
     addedAt: Date.now(),
@@ -172,8 +178,10 @@ export async function reorderPages(bookId: string, orderedPageIds: string[]): Pr
 
 export async function removePageFromBook(bookId: string, page: ReportBookPage): Promise<void> {
   const userId = uid();
-  await deletePageBlob(page.id);
-  try { await deleteObject(storageRef(storage, page.storagePath)); } catch { /* ok */ }
+  deletePageBlob(page.id).catch(() => {});
+  if (page.downloadUrl && page.downloadUrl.startsWith('https://firebasestorage')) {
+    deleteObject(storageRef(storage, page.storagePath)).catch(() => {});
+  }
   await deleteDoc(pageDoc(userId, bookId, page.id));
   const remaining = await listPages(bookId);
   await Promise.all(remaining.map((p, idx) =>

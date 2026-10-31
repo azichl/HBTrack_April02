@@ -27,6 +27,9 @@ export interface ReportBookPage {
   order: number;                    // 0-based
   birdId: string;                   // PTT / ring / darvic label (for display)
   birdLabel: string;
+  ring?: string;
+  region?: string;
+  location?: string;
   storagePath: string;              // Firebase Storage path: reportBooks/{bookId}/pages/{pageId}.pdf
   downloadUrl: string;              // tokenised URL
   addedAt: number;

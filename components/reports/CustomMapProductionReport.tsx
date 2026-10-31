@@ -36,7 +36,7 @@ import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
 import { BotReportBridgeModal } from './BotReportBridgeModal';
 import { SaveToReportButton, ReportBookManager } from './ReportBookManager';
 import { CoverPage } from './CoverPage';
-import type { ReportBookMeta, ReportBookPage } from '../../src/types/multiReport';
+import type { ReportBookMeta, ReportBookPage, ReportBookCategory } from '../../src/types/multiReport';
 import { ReportToolbar } from '../../src/components/report/ReportToolbar';
 import { EditToolsPalette } from '../../src/components/report/EditToolsPalette';
 import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
@@ -1407,12 +1407,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [coverTitle, setCoverTitle] = useState('Houbara Bustard Tracking Report');
   const [coverDate, setCoverDate] = useState(new Date().toISOString().slice(0, 10));
   const [coverCount, setCoverCount] = useState(0);
+  const [coverPages, setCoverPages] = useState<ReportBookPage[]>([]);
+  const [coverCategory, setCoverCategory] = useState<ReportBookCategory>('almaty');
   const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
 
   const handleBeforeExport = useCallback((book: ReportBookMeta, pages: ReportBookPage[]) => {
     setCoverTitle(book.title);
     setCoverDate(book.issueDate);
     setCoverCount(pages.length);
+    setCoverPages(pages);
+    setCoverCategory(book.category);
   }, []);
 
   // ─── CUSTOM LOGOS & QGIS MAP UPLOAD (USER REQUESTED) ────────────────────────
@@ -3753,6 +3757,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               coverNodeRef={coverPageRef}
               currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
               currentBirdId={selectedPttId ?? ''}
+              currentBirdRing={customMetadata.birdRing || 'NA'}
+              currentRegion={customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty (ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan (جيزقازغان)' : 'Kazakhstan (كازاخستان)')}
+              currentLocation={telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon ? `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E` : ''}
               onBeforeExport={handleBeforeExport}
             />
 
@@ -4645,6 +4652,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 coverNodeRef={coverPageRef}
                 currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
                 currentBirdId={selectedPttId ?? ''}
+                currentBirdRing={customMetadata.birdRing || 'NA'}
+                currentRegion={customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty (ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan (جيزقازغان)' : 'Kazakhstan (كازاخستان)')}
+                currentLocation={telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon ? `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E` : ''}
                 onBeforeExport={handleBeforeExport}
               />
             </div>
@@ -6905,6 +6915,9 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           coverNodeRef={coverPageRef}
           currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
           currentBirdId={selectedPttId ?? ''}
+          currentBirdRing={customMetadata.birdRing || 'NA'}
+          currentRegion={customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty (ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan (جيزقازغان)' : 'Kazakhstan (كازاخستان)')}
+          currentLocation={telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon ? `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E` : ''}
           inline={false}
           onBeforeExport={handleBeforeExport}
           onClose={() => setIsCollectionsOpen(false)}
@@ -6917,6 +6930,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         title={coverTitle}
         issueDate={coverDate}
         pageCount={coverCount}
+        pages={coverPages}
+        category={coverCategory}
         logoLeftUrl={logoLeftUrl}
         logoRightUrl={logoRightUrl}
         logoLeftHeight={logoLeftHeight}

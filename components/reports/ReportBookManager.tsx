@@ -27,6 +27,12 @@ export interface ReportBookManagerProps {
   currentBirdLabel: string;
   /** PTT / ring / darvic value. */
   currentBirdId: string;
+  /** Bird Ring number */
+  currentBirdRing?: string;
+  /** Bird Region name */
+  currentRegion?: string;
+  /** Bird Coordinates */
+  currentLocation?: string;
   /** If true the panel is shown inline, otherwise it is a modal. */
   inline?: boolean;
   /** Optional callback to notify parent before export (e.g., to update CoverPage props in DOM). */
@@ -39,6 +45,9 @@ export function SaveToReportButton({
   onGetCurrentPdfBlob,
   currentBirdLabel,
   currentBirdId,
+  currentBirdRing,
+  currentRegion,
+  currentLocation,
   coverNodeRef,
   onBeforeExport,
 }: Omit<ReportBookManagerProps, 'inline'>) {
@@ -60,6 +69,9 @@ export function SaveToReportButton({
           coverNodeRef={coverNodeRef}
           currentBirdLabel={currentBirdLabel}
           currentBirdId={currentBirdId}
+          currentBirdRing={currentBirdRing}
+          currentRegion={currentRegion}
+          currentLocation={currentLocation}
           inline={false}
           onBeforeExport={onBeforeExport}
           onClose={() => setOpen(false)}
@@ -76,7 +88,16 @@ interface ManagerProps extends ReportBookManagerProps {
 }
 
 export function ReportBookManager({
-  onGetCurrentPdfBlob, coverNodeRef, currentBirdLabel, currentBirdId, inline, onBeforeExport, onClose,
+  onGetCurrentPdfBlob,
+  coverNodeRef,
+  currentBirdLabel,
+  currentBirdId,
+  currentBirdRing,
+  currentRegion,
+  currentLocation,
+  inline,
+  onBeforeExport,
+  onClose,
 }: ManagerProps) {
   const [books, setBooks] = useState<ReportBookMeta[]>([]);
   const [pages, setPages] = useState<Record<string, ReportBookPage[]>>({});
@@ -114,12 +135,17 @@ export function ReportBookManager({
 
   const handleCreateBook = async () => {
     if (!newBookTitle.trim() && newBookCat === 'custom') return;
-    const title = newBookTitle.trim() || undefined;
-    const newBook = await createReportBook(newBookCat, title);
-    setNewBookTitle('');
-    setShowNewForm(false);
-    await refresh();
-    setExpandedBook(newBook.id);
+    try {
+      const title = newBookTitle.trim() || undefined;
+      const newBook = await createReportBook(newBookCat, title);
+      setNewBookTitle('');
+      setShowNewForm(false);
+      await refresh();
+      setExpandedBook(newBook.id);
+    } catch (err: any) {
+      console.error('Failed to create collection:', err);
+      setSaveError(err?.message || 'Failed to create collection');
+    }
   };
 
   const handleSavePage = async (bookId: string, pageCount: number) => {
@@ -127,7 +153,18 @@ export function ReportBookManager({
     setSaveError(null);
     try {
       const blob = await onGetCurrentPdfBlob();
-      const p = await addPageToBook(bookId, blob, currentBirdId, currentBirdLabel, pageCount);
+      const p = await addPageToBook(
+        bookId,
+        blob,
+        currentBirdId,
+        currentBirdLabel,
+        pageCount,
+        {
+          ring: currentBirdRing,
+          region: currentRegion,
+          location: currentLocation,
+        }
+      );
       setPages(prev => ({ ...prev, [bookId]: [...(prev[bookId] ?? []), p] }));
       setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount: pageCount + 1 } : b));
       setExpandedBook(bookId);
@@ -143,14 +180,46 @@ export function ReportBookManager({
 
   const handleDeleteBook = async (bookId: string) => {
     if (!confirm('Delete this entire report collection? This cannot be undone.')) return;
-    await deleteReportBook(bookId);
-    await refresh();
+    const prevBooks = books;
+    const prevPages = { ...pages };
+
+    // Optimistic UI: remove immediately from state
+    setBooks(prev => prev.filter(b => b.id !== bookId));
+    setPages(prev => {
+      const copy = { ...prev };
+      delete copy[bookId];
+      return copy;
+    });
+    if (expandedBook === bookId) setExpandedBook(null);
+
+    try {
+      await deleteReportBook(bookId);
+    } catch (err: any) {
+      console.error('Failed to delete book from database:', err);
+      setSaveError(err?.message || 'Could not delete collection from server.');
+      setBooks(prevBooks);
+      setPages(prevPages);
+    }
   };
 
   const handleRemovePage = async (bookId: string, page: ReportBookPage) => {
-    await removePageFromBook(bookId, page);
-    await loadPages(bookId);
+    const prevPages = pages[bookId] || [];
+
+    // Optimistic UI: remove page immediately from state
+    setPages(prev => ({
+      ...prev,
+      [bookId]: (prev[bookId] || []).filter(p => p.id !== page.id),
+    }));
     setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount: Math.max(0, b.pageCount - 1) } : b));
+
+    try {
+      await removePageFromBook(bookId, page);
+    } catch (err: any) {
+      console.error('Failed to remove page from database:', err);
+      setSaveError(err?.message || 'Could not remove page from server.');
+      setPages(prev => ({ ...prev, [bookId]: prevPages }));
+      setBooks(prev => prev.map(b => b.id === bookId ? { ...b, pageCount: prevPages.length } : b));
+    }
   };
 
   const handleOpenPage = async (page: ReportBookPage) => {
