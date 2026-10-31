@@ -75,6 +75,14 @@ service cloud.firestore {
       allow delete: if isManager();
     }
 
+    // Report Books (Multi-bird report collections)
+    match /users/{uid}/reportBooks/{bookId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+      match /pages/{pageId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
     // Settings (CLS API, filters, system configurations)
     match /settings/{doc} {
       allow read: if request.auth != null;

@@ -34,6 +34,9 @@ import { SevenDayTempChart } from './SevenDayTempChart';
 import { CustomMapAnnotation, AnnotationShape, createCustomAnnotationDivIcon, renderCustomAnnotationSvg } from './CustomMapAnnotations';
 import { generateReportPdfBlob } from '../TrackingReport/exportReportToBlob';
 import { BotReportBridgeModal } from './BotReportBridgeModal';
+import { SaveToReportButton, ReportBookManager } from './ReportBookManager';
+import { CoverPage } from './CoverPage';
+import type { ReportBookMeta, ReportBookPage } from '../../src/types/multiReport';
 import { ReportToolbar } from '../../src/components/report/ReportToolbar';
 import { EditToolsPalette } from '../../src/components/report/EditToolsPalette';
 import { BirdStatusChip } from '../../src/components/report/BirdStatusChip';
@@ -1400,6 +1403,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const reportContainerRef = useRef<HTMLDivElement>(null);
   const mapViewportRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const coverPageRef = useRef<HTMLDivElement>(null);
+  const [coverTitle, setCoverTitle] = useState('Houbara Bustard Tracking Report');
+  const [coverDate, setCoverDate] = useState(new Date().toISOString().slice(0, 10));
+  const [coverCount, setCoverCount] = useState(0);
+  const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
+
+  const handleBeforeExport = useCallback((book: ReportBookMeta, pages: ReportBookPage[]) => {
+    setCoverTitle(book.title);
+    setCoverDate(book.issueDate);
+    setCoverCount(pages.length);
+  }, []);
 
   // ─── CUSTOM LOGOS & QGIS MAP UPLOAD (USER REQUESTED) ────────────────────────
   const [logoLeftUrl, setLogoLeftUrl] = useState<string>('/qatar-houbara-center-logo.png');
@@ -2918,6 +2932,12 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   };
 
   // ─── EXPORT TO PDF & PNG ───────────────────────────────────────────────────
+  const getCurrentPdfBlob = useCallback(async (): Promise<Blob> => {
+    const node = reportContainerRef.current;
+    if (!node) throw new Error('Report node not found');
+    return generateReportPdfBlob(node);
+  }, []);
+
   const getExportFileName = () => {
     let datePart = (customMetadata.issueDate || '').trim();
     if (!datePart || !/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
@@ -3492,6 +3512,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           onExportPng={handleExportPng}
           onPrint={() => window.print()}
           onShareWhatsApp={() => setIsBotModalOpen(true)}
+          onOpenCollections={() => setIsCollectionsOpen(true)}
           isExporting={isExportingPdf || isExportingPng}
           language={reportLanguage}
         />
@@ -3725,6 +3746,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               <Download size={14} />
               <span>{isExportingPng ? '...' : 'صورة'}</span>
             </button>
+
+            {/* Save to Report */}
+            <SaveToReportButton
+              onGetCurrentPdfBlob={getCurrentPdfBlob}
+              coverNodeRef={coverPageRef}
+              currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
+              currentBirdId={selectedPttId ?? ''}
+              onBeforeExport={handleBeforeExport}
+            />
 
             {/* Fullscreen */}
             <button
@@ -4610,6 +4640,13 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <Download size={14} />
                 <span>{isExportingPng ? 'جارِ التحميل...' : 'تصدير PNG'}</span>
               </button>
+              <SaveToReportButton
+                onGetCurrentPdfBlob={getCurrentPdfBlob}
+                coverNodeRef={coverPageRef}
+                currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
+                currentBirdId={selectedPttId ?? ''}
+                onBeforeExport={handleBeforeExport}
+              />
             </div>
           </div>
         )}
@@ -6860,6 +6897,31 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {`TRACK total ${reportFixes.length} · shown ${reportFixes.length} · ptt ${selectedPttId}`}
         </div>
       )}
+
+      {/* Multi-Report Collection Management Modal */}
+      {isCollectionsOpen && (
+        <ReportBookManager
+          onGetCurrentPdfBlob={getCurrentPdfBlob}
+          coverNodeRef={coverPageRef}
+          currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
+          currentBirdId={selectedPttId ?? ''}
+          inline={false}
+          onBeforeExport={handleBeforeExport}
+          onClose={() => setIsCollectionsOpen(false)}
+        />
+      )}
+
+      {/* Cover Page offscreen container for Multi-Report Export */}
+      <CoverPage
+        ref={coverPageRef}
+        title={coverTitle}
+        issueDate={coverDate}
+        pageCount={coverCount}
+        logoLeftUrl={logoLeftUrl}
+        logoRightUrl={logoRightUrl}
+        logoLeftHeight={logoLeftHeight}
+        logoRightHeight={logoRightHeight}
+      />
 
     </div>
   );

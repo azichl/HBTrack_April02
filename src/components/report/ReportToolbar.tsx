@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   RefreshCw,
   Share2,
-  Image as ImageIcon
+  Image as ImageIcon,
+  BookOpen
 } from 'lucide-react';
 import { MapImagePopover } from './popovers/MapImagePopover';
 import { MapElementsPopover } from './popovers/MapElementsPopover';
@@ -112,6 +113,7 @@ export interface ReportToolbarProps {
   onExportPng: () => void;
   onPrint: () => void;
   onShareWhatsApp?: () => void;
+  onOpenCollections?: () => void;
   isExporting?: boolean;
 
   // Map Image
@@ -186,6 +188,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   onExportPng,
   onPrint,
   onShareWhatsApp,
+  onOpenCollections,
   isExporting = false,
   language = 'ar'
 }) => {
@@ -511,6 +514,19 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
                   <Download size={14} className="text-indigo-500" />
                   <span>{isAr ? 'تصدير صورة (PNG)' : 'Export PNG Image'}</span>
                 </button>
+                {onOpenCollections && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportMenuOpen(false);
+                      onOpenCollections();
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-800"
+                  >
+                    <BookOpen size={14} className="text-indigo-600 dark:text-indigo-400" />
+                    <span>{isAr ? 'مجموعات التقارير (Collections)' : 'Report Collections'}</span>
+                  </button>
+                )}
                 {onShareWhatsApp && (
                   <button
                     type="button"
