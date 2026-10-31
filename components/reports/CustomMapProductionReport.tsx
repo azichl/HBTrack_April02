@@ -2446,8 +2446,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, [metrics.lLon]);
 
   const currentRegionValue = useMemo(() => {
-    return customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty Region (منطقة ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan Region (منطقة جيزقازغان)' : 'Kazakhstan');
-  }, [customMetadata.regionName, selectedCampId]);
+    if (customMetadata.regionName) {
+      const res = resolveRegionBilingual(customMetadata.regionName, customMetadata.regionName);
+      const reg = reportLanguage === 'ar' ? res.regionAr : res.regionEn;
+      const cty = reportLanguage === 'ar' ? autoLocation.countryAr : autoLocation.countryEn;
+      return `${reg ? reg + ' ' : ''}${cty ? '– ' + cty : ''}`.trim() || customMetadata.regionName;
+    }
+    if (autoLocation.regionEn || autoLocation.countryEn) {
+      return reportLanguage === 'ar'
+        ? `${T.regionLabel} ${autoLocation.regionAr || autoLocation.regionEn} – ${autoLocation.countryAr || autoLocation.countryEn}`
+        : `${autoLocation.regionEn || autoLocation.regionAr} ${T.regionLabel} – ${autoLocation.countryEn || autoLocation.countryAr}`;
+    }
+    return selectedCampId === 'camp-almaty' ? 'Almaty Region' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan Region' : 'Kazakhstan';
+  }, [customMetadata.regionName, autoLocation, reportLanguage, selectedCampId, T.regionLabel]);
 
   const currentLocationValue = useMemo(() => {
     if (metrics.lastGpsLatTableDMM && metrics.lastGpsLonTableDMM) {
@@ -6959,10 +6970,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           pageCount={coverCount}
           pages={coverPages}
           category={coverCategory}
+          activeBirdId={selectedPttId ?? ''}
+          activeBirdRegion={currentRegionValue}
+          activeBirdLocation={currentLocationValue}
           logoLeftUrl={logoLeftUrl}
           logoRightUrl={logoRightUrl}
           logoLeftHeight={logoLeftHeight}
+          logoLeftWidth={logoLeftWidth}
           logoRightHeight={logoRightHeight}
+          logoRightWidth={logoRightWidth}
         />
       </div>
 

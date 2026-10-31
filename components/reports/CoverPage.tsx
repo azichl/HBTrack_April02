@@ -1,14 +1,16 @@
 // components/reports/CoverPage.tsx
 // Multi-bird collection report cover page.
 // Design requirements:
-// 1. Two logos identical to single report header (Emblem + Agency titles on right, Houbara Center logo on left).
+// 1. Two logos identical to single report header (State Emblem on right, Houbara Center logo on left).
+//    No duplicated HTML text next to the emblem logo.
 // 2. Maroon horizontal rule (#7a1c32) separating header from body.
 // 3. Large centered title in the middle (name of collection).
-// 4. Subtitle directly under it with Issue Date "Today".
-// 5. Section with points / cards of included PTT IDs with their ID, region, location, ring, and page.
-// 6. Footer matching the report footer with identical agency names and colors (#7a1c32, #4b5563).
+// 4. Clean subtitle directly under it with Issue Date "Today" (no extra tags or bird count pills).
+// 5. Section with points / cards of included PTT IDs (de-duplicated so each PTT ID appears only once).
+// 6. Each card displays PTT ID, Ring Number, Region (from report subtitle, e.g. Lebap Region – Turkmenistan), and Location coordinates.
+// 7. Footer matching the report footer with identical agency names and colors (#6b7280, #4b5563, #d9dbe1).
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { ReportBookPage, ReportBookCategory } from '../../src/types/multiReport';
 import { PRESET_BOOKS } from '../../src/types/multiReport';
 
@@ -18,10 +20,15 @@ export interface CoverPageProps {
   pageCount: number;
   pages?: ReportBookPage[];
   category?: ReportBookCategory;
+  activeBirdId?: string;
+  activeBirdRegion?: string;
+  activeBirdLocation?: string;
   logoLeftUrl?: string;
   logoRightUrl?: string;
   logoLeftHeight?: number;
+  logoLeftWidth?: number;
   logoRightHeight?: number;
+  logoRightWidth?: number;
 }
 
 export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
@@ -32,10 +39,15 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
       pageCount,
       pages = [],
       category,
+      activeBirdId,
+      activeBirdRegion,
+      activeBirdLocation,
       logoLeftUrl = '/qatar-houbara-center-logo.png',
       logoRightUrl = '/qatar-emblem.png',
       logoLeftHeight = 78,
+      logoLeftWidth = 260,
       logoRightHeight = 64,
+      logoRightWidth = 240,
     },
     ref,
   ) => {
@@ -58,12 +70,24 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
     const presetAr = category && category !== 'custom' ? PRESET_BOOKS[category]?.titleAr : '';
 
     const defaultRegion = category === 'almaty'
-      ? 'Almaty Region (منطقة ألماتي)'
+      ? 'Almaty Region'
       : category === 'zhezqazgan'
-      ? 'Zhezqazgan Region (منطقة جيزقازغان)'
-      : 'Kazakhstan (كازاخستان)';
+      ? 'Zhezqazgan Region'
+      : 'Kazakhstan';
 
-    const totalBirds = pageCount || pages.length;
+    // ── De-duplicate pages by unique PTT ID / birdLabel so each PTT ID appears only once ──
+    const uniqueBirds = useMemo(() => {
+      const seen = new Set<string>();
+      const list: ReportBookPage[] = [];
+      for (const p of pages) {
+        const idKey = String(p.birdLabel || p.birdId || '').trim();
+        if (idKey && !seen.has(idKey)) {
+          seen.add(idKey);
+          list.push(p);
+        }
+      }
+      return list;
+    }, [pages]);
 
     return (
       <div
@@ -100,43 +124,20 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
             boxSizing: 'border-box',
           }}
         >
-          {/* Right side: Emblem Logo + Agency Titles */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ textAlign: 'right' }}>
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: 16,
-                  color: '#1e293b',
-                  fontFamily: "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif",
-                  lineHeight: 1.3,
-                }}
-              >
-                مكـــتـــب مــحــمــيـــات الـــدولــــة الخـــارجيــــة
-              </div>
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: 13,
-                  color: '#475569',
-                  fontFamily: "'Inter', Arial, sans-serif",
-                  letterSpacing: '0.2px',
-                }}
-              >
-                External Reserves Office of The State
-              </div>
-            </div>
+          {/* Right side: State Emblem Logo (Contains Emblem + Office Names just like the report) */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
             <img
               src={logoRightUrl}
               alt="شعار الدولة"
               style={{
-                height: logoRightHeight,
-                maxWidth: 180,
+                height: `${logoRightHeight}px`,
+                maxWidth: `${logoRightWidth}px`,
+                width: 'auto',
                 objectFit: 'contain',
                 display: 'block',
               }}
               onError={(e) => {
-                (e.target as HTMLImageElement).src = '/external-reserves-office-logo.png';
+                (e.target as HTMLImageElement).src = '/qatar-emblem.png';
               }}
             />
           </div>
@@ -145,10 +146,11 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <img
               src={logoLeftUrl}
-              alt="Qatar Houbara Center"
+              alt="المركز القطري لتكاثر الحبارى والصقور"
               style={{
-                height: logoLeftHeight,
-                maxWidth: 290,
+                height: `${logoLeftHeight}px`,
+                maxWidth: `${logoLeftWidth}px`,
+                width: 'auto',
                 objectFit: 'contain',
                 display: 'block',
               }}
@@ -167,43 +169,21 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'flex-start',
-            padding: '28px 44px 18px',
+            padding: '36px 48px 24px',
             background: 'linear-gradient(180deg, #ffffff 0%, #fafbfc 45%, #f4f6f8 100%)',
             boxSizing: 'border-box',
             overflow: 'hidden',
           }}
         >
-          {/* Decorative Collection Tag */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '4px 16px',
-              borderRadius: 999,
-              backgroundColor: '#7a1c320d',
-              border: '1px solid #7a1c3230',
-              color: '#7a1c32',
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.5px',
-              marginBottom: 10,
-            }}
-          >
-            <span>🦅 تقرير إطلاق وتتبع طيور الحبارى</span>
-            <span>•</span>
-            <span>HOUBARA TRACKING COLLECTION</span>
-          </div>
-
           {/* Big Title in Middle (as the name of collection) */}
           <h1
             style={{
-              fontSize: 32,
+              fontSize: 34,
               fontWeight: 800,
               color: '#7a1c32',
               textAlign: 'center',
               lineHeight: 1.25,
-              margin: '0 0 6px 0',
+              margin: '10px 0 6px 0',
               maxWidth: 960,
               fontFamily: "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif",
             }}
@@ -215,11 +195,11 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
           {presetAr && (
             <div
               style={{
-                fontSize: 18,
+                fontSize: 19,
                 fontWeight: 700,
                 color: '#334155',
                 textAlign: 'center',
-                marginBottom: 6,
+                marginBottom: 8,
                 direction: 'rtl',
               }}
             >
@@ -227,14 +207,14 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
             </div>
           )}
 
-          {/* Small Title with Issue Date "Today" */}
+          {/* Small Title with Issue Date "Today" (Clean, no extra badges) */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 14,
-              margin: '4px 0 16px',
-              padding: '6px 20px',
+              gap: 16,
+              margin: '8px 0 24px',
+              padding: '7px 26px',
               backgroundColor: '#ffffff',
               borderRadius: 10,
               border: '1px solid #e2e8f0',
@@ -254,19 +234,6 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                 {isToday ? `اليوم (${effectiveDate})` : effectiveDate}
               </strong>
             </span>
-            <span style={{ color: '#cbd5e1' }}>|</span>
-            <span
-              style={{
-                backgroundColor: '#7a1c32',
-                color: '#ffffff',
-                padding: '2px 10px',
-                borderRadius: 999,
-                fontSize: 11,
-                fontWeight: 700,
-              }}
-            >
-              {totalBirds} {totalBirds === 1 ? 'Bird' : 'Birds'}
-            </span>
           </div>
 
           {/* Points of PTT IDs with Information (ID, Region, Location) */}
@@ -281,18 +248,18 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
               minHeight: 0,
             }}
           >
-            {/* Points Section Header */}
+            {/* Points Section Header Bar */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '7px 14px',
+                padding: '8px 16px',
                 backgroundColor: '#7a1c320d',
                 border: '1px solid #7a1c3225',
                 borderRight: '5px solid #7a1c32',
                 borderRadius: 8,
-                marginBottom: 12,
+                marginBottom: 14,
                 direction: 'rtl',
                 boxSizing: 'border-box',
               }}
@@ -311,11 +278,11 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                 <span>بيانات أجهزة التتبع والطيور المشمولة • Included Transmitters & Locations</span>
               </div>
               <div style={{ fontSize: 11, color: '#64748b', fontWeight: 700, direction: 'ltr' }}>
-                Total: {pages.length} Pages
+                Total: {uniqueBirds.length} {uniqueBirds.length === 1 ? 'Transmitter' : 'Transmitters'}
               </div>
             </div>
 
-            {pages.length === 0 ? (
+            {uniqueBirds.length === 0 ? (
               <div
                 style={{
                   padding: 28,
@@ -332,18 +299,35 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
             ) : (
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: pages.length <= 2 ? 'repeat(2, 1fr)' : pages.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-                  gap: 12,
+                  display: uniqueBirds.length === 1 ? 'flex' : 'grid',
+                  justifyContent: uniqueBirds.length === 1 ? 'center' : undefined,
+                  gridTemplateColumns: uniqueBirds.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                  gap: 14,
                   overflow: 'hidden',
                   maxHeight: 390,
+                  width: '100%',
                 }}
               >
-                {pages.slice(0, 9).map((page, idx) => {
+                {uniqueBirds.slice(0, 9).map((page, idx) => {
                   const pttDisplay = page.birdLabel || page.birdId;
-                  const regionDisplay = page.region || defaultRegion;
+
+                  // Use active bird region if this card matches active bird, or stored page region
+                  const isCurrentActive = Boolean(
+                    (activeBirdId && (page.birdLabel === activeBirdId || page.birdId === activeBirdId)) ||
+                    uniqueBirds.length === 1
+                  );
+
+                  const regionDisplay = (isCurrentActive && activeBirdRegion)
+                    ? activeBirdRegion
+                    : (page.region && page.region !== 'Kazakhstan')
+                    ? page.region
+                    : activeBirdRegion || page.region || defaultRegion;
+
+                  const locationDisplay = (isCurrentActive && activeBirdLocation)
+                    ? activeBirdLocation
+                    : page.location || 'Kazakhstan';
+
                   const ringDisplay = page.ring || 'NA';
-                  const locationDisplay = page.location || 'Kazakhstan';
 
                   return (
                     <div
@@ -352,14 +336,15 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                         backgroundColor: '#ffffff',
                         border: '1px solid #e2e8f0',
                         borderRight: '4px solid #7a1c32',
-                        borderRadius: 8,
-                        padding: '10px 14px',
+                        borderRadius: 10,
+                        padding: '12px 18px',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 5,
+                        gap: 7,
                         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                         direction: 'rtl',
                         boxSizing: 'border-box',
+                        width: uniqueBirds.length === 1 ? '560px' : 'auto',
                       }}
                     >
                       {/* Top Row: Point # + PTT ID + Page Number */}
@@ -369,18 +354,18 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           borderBottom: '1px solid #f1f5f9',
-                          paddingBottom: 5,
+                          paddingBottom: 7,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span
                             style={{
-                              width: 20,
-                              height: 20,
+                              width: 22,
+                              height: 22,
                               borderRadius: '50%',
                               backgroundColor: '#7a1c32',
                               color: '#ffffff',
-                              fontSize: 10,
+                              fontSize: 11,
                               fontWeight: 800,
                               display: 'inline-flex',
                               alignItems: 'center',
@@ -392,7 +377,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                           <span
                             style={{
                               fontWeight: 800,
-                              fontSize: 14,
+                              fontSize: 15,
                               color: '#1e293b',
                               fontFamily: 'monospace',
                             }}
@@ -402,11 +387,11 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                         </div>
                         <span
                           style={{
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight: 700,
                             backgroundColor: '#f1f5f9',
                             color: '#7a1c32',
-                            padding: '2px 6px',
+                            padding: '3px 8px',
                             borderRadius: 4,
                             border: '1px solid #e2e8f0',
                           }}
@@ -416,18 +401,18 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                       </div>
 
                       {/* Detail points */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: '#475569' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#475569' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: '#64748b' }}>رقم الحجل (Ring):</span>
                           <strong style={{ color: '#1e293b' }}>{ringDisplay}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: '#64748b' }}>المنطقة (Region):</span>
-                          <strong style={{ color: '#1e293b' }}>{regionDisplay}</strong>
+                          <strong style={{ color: '#7a1c32', fontWeight: 700 }}>{regionDisplay}</strong>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                           <span style={{ color: '#64748b' }}>الموقع (Location):</span>
-                          <strong style={{ color: '#1e293b', fontFamily: 'monospace', fontSize: 10, direction: 'ltr' }}>
+                          <strong style={{ color: '#1e293b', fontFamily: 'monospace', fontSize: 11, direction: 'ltr' }}>
                             📍 {locationDisplay}
                           </strong>
                         </div>
