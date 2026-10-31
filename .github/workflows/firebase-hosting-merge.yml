@@ -28,3 +28,4 @@ jobs:
           firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_TRACKAPP_V2 }}'
           channelId: live
           projectId: trackapp-v2
+          target: trackapp-v2

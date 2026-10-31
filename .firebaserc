@@ -2,6 +2,14 @@
   "projects": {
     "default": "trackapp-v2"
   },
-  "targets": {},
+  "targets": {
+    "trackapp-v2": {
+      "hosting": {
+        "trackapp-v2": [
+          "trackapp-v2"
+        ]
+      }
+    }
+  },
   "etags": {}
 }
