@@ -214,6 +214,23 @@ export async function getPagePdfBytes(page: ReportBookPage): Promise<Uint8Array>
 
 // ── final multi-page PDF export ───────────────────────────────────────────────
 
+async function waitForCoverImages(root: HTMLElement, timeoutMs = 2000): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.race([
+    Promise.all(
+      imgs.map(img =>
+        img.complete && img.naturalWidth > 0
+          ? Promise.resolve()
+          : new Promise<void>(res => {
+              img.addEventListener('load', () => res(), { once: true });
+              img.addEventListener('error', () => res(), { once: true });
+            })
+      )
+    ),
+    new Promise(r => setTimeout(r, timeoutMs))
+  ]);
+}
+
 /**
  * Combines cover page + bird reports into one high-fidelity multi-page PDF using pdf-lib.
  */
@@ -233,15 +250,30 @@ export async function exportBookAsPdf(
 
   // 1. Cover page
   onProgress?.('Rendering cover', 5);
-  coverNode.style.visibility = 'visible';
   await document.fonts.ready;
+  await waitForCoverImages(coverNode);
+  await new Promise(r => setTimeout(r, 120));
+
   let fontCss: string | undefined;
   try { fontCss = await getFontEmbedCSS(coverNode); } catch { /* ok */ }
+
   const coverCanvas = await toCanvas(coverNode, {
-    pixelRatio: 2, width: 1122, height: 885,
-    cacheBust: true, backgroundColor: '#ffffff', fontEmbedCSS: fontCss,
+    pixelRatio: 2,
+    width: 1122,
+    height: 885,
+    cacheBust: true,
+    backgroundColor: '#ffffff',
+    fontEmbedCSS: fontCss,
+    style: {
+      position: 'static',
+      top: '0',
+      left: '0',
+      margin: '0',
+      transform: 'none',
+      visibility: 'visible',
+      opacity: '1',
+    } as Partial<CSSStyleDeclaration>,
   });
-  coverNode.style.visibility = 'hidden';
 
   const coverJpgData = coverCanvas.toDataURL('image/jpeg', 0.94);
   const coverImage = await mergedDoc.embedJpg(coverJpgData);
@@ -292,14 +324,31 @@ export async function exportBookAsPngZip(
   const zip = new JSZip();
 
   onProgress?.('Rendering cover', 5);
-  coverNode.style.visibility = 'visible';
   await document.fonts.ready;
+  await waitForCoverImages(coverNode);
+  await new Promise(r => setTimeout(r, 120));
+
   let fontCss: string | undefined;
   try { fontCss = await getFontEmbedCSS(coverNode); } catch { /* ok */ }
+
   const coverCanvas = await toCanvas(coverNode, {
-    pixelRatio: 2, width: 1122, height: 885, cacheBust: true, backgroundColor: '#ffffff', fontEmbedCSS: fontCss,
+    pixelRatio: 2,
+    width: 1122,
+    height: 885,
+    cacheBust: true,
+    backgroundColor: '#ffffff',
+    fontEmbedCSS: fontCss,
+    style: {
+      position: 'static',
+      top: '0',
+      left: '0',
+      margin: '0',
+      transform: 'none',
+      visibility: 'visible',
+      opacity: '1',
+    } as Partial<CSSStyleDeclaration>,
   });
-  coverNode.style.visibility = 'hidden';
+
   zip.file(`00_cover.png`, await canvasToBlob(coverCanvas));
 
   for (let i = 0; i < pages.length; i++) {

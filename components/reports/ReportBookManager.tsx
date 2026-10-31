@@ -240,7 +240,7 @@ export function ReportBookManager({
     try {
       const bookPages = pages[book.id] ?? await listPages(book.id);
       onBeforeExport?.(book, bookPages);
-      await new Promise(r => setTimeout(r, 60));
+      await new Promise(r => setTimeout(r, 250));
       await exportBookAsPdf(book, bookPages, coverNodeRef.current,
         (step, pct) => setProgress({ step, pct }));
     } catch (err: any) {
@@ -255,7 +255,7 @@ export function ReportBookManager({
     try {
       const bookPages = pages[book.id] ?? await listPages(book.id);
       onBeforeExport?.(book, bookPages);
-      await new Promise(r => setTimeout(r, 60));
+      await new Promise(r => setTimeout(r, 250));
       await exportBookAsPngZip(book, bookPages, coverNodeRef.current,
         (step, pct) => setProgress({ step, pct }));
     } catch (err: any) {

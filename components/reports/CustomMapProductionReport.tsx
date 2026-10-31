@@ -2445,6 +2445,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return `${degStr}° ${minStr}.0000'${dir}`;
   }, [metrics.lLon]);
 
+  const currentRegionValue = useMemo(() => {
+    return customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty Region (منطقة ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan Region (منطقة جيزقازغان)' : 'Kazakhstan');
+  }, [customMetadata.regionName, selectedCampId]);
+
+  const currentLocationValue = useMemo(() => {
+    if (metrics.lastGpsLatTableDMM && metrics.lastGpsLonTableDMM) {
+      return `${metrics.lastGpsLatTableDMM} N, ${metrics.lastGpsLonTableDMM} E`;
+    }
+    if (telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon) {
+      return `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E`;
+    }
+    return '';
+  }, [metrics.lastGpsLatTableDMM, metrics.lastGpsLonTableDMM, telemetryData.lastGpsPos]);
+
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289', '244276'];
     transmitters.forEach(t => {
@@ -3758,8 +3772,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
               currentBirdId={selectedPttId ?? ''}
               currentBirdRing={customMetadata.birdRing || 'NA'}
-              currentRegion={customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty (ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan (جيزقازغان)' : 'Kazakhstan (كازاخستان)')}
-              currentLocation={telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon ? `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E` : ''}
+              currentRegion={currentRegionValue}
+              currentLocation={currentLocationValue}
               onBeforeExport={handleBeforeExport}
             />
 
@@ -4653,8 +4667,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
                 currentBirdId={selectedPttId ?? ''}
                 currentBirdRing={customMetadata.birdRing || 'NA'}
-                currentRegion={customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty (ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan (جيزقازغان)' : 'Kazakhstan (كازاخستان)')}
-                currentLocation={telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon ? `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E` : ''}
+                currentRegion={currentRegionValue}
+                currentLocation={currentLocationValue}
                 onBeforeExport={handleBeforeExport}
               />
             </div>
@@ -6916,8 +6930,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           currentBirdLabel={displayTransmitterLabel || selectedPttId || 'Bird'}
           currentBirdId={selectedPttId ?? ''}
           currentBirdRing={customMetadata.birdRing || 'NA'}
-          currentRegion={customMetadata.regionName || (selectedCampId === 'camp-almaty' ? 'Almaty (ألماتي)' : selectedCampId === 'camp-zhezkazgan' ? 'Zhezqazgan (جيزقازغان)' : 'Kazakhstan (كازاخستان)')}
-          currentLocation={telemetryData.lastGpsPos?.lat && telemetryData.lastGpsPos?.lon ? `${telemetryData.lastGpsPos.lat.toFixed(4)}°N, ${telemetryData.lastGpsPos.lon.toFixed(4)}°E` : ''}
+          currentRegion={currentRegionValue}
+          currentLocation={currentLocationValue}
           inline={false}
           onBeforeExport={handleBeforeExport}
           onClose={() => setIsCollectionsOpen(false)}
@@ -6925,18 +6939,32 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       )}
 
       {/* Cover Page offscreen container for Multi-Report Export */}
-      <CoverPage
-        ref={coverPageRef}
-        title={coverTitle}
-        issueDate={coverDate}
-        pageCount={coverCount}
-        pages={coverPages}
-        category={coverCategory}
-        logoLeftUrl={logoLeftUrl}
-        logoRightUrl={logoRightUrl}
-        logoLeftHeight={logoLeftHeight}
-        logoRightHeight={logoRightHeight}
-      />
+      <div
+        id="cover-page-offscreen-wrapper"
+        style={{
+          position: 'fixed',
+          top: -10000,
+          left: -10000,
+          width: 1122,
+          height: 885,
+          overflow: 'hidden',
+          pointerEvents: 'none',
+          zIndex: -9999,
+        }}
+      >
+        <CoverPage
+          ref={coverPageRef}
+          title={coverTitle}
+          issueDate={coverDate}
+          pageCount={coverCount}
+          pages={coverPages}
+          category={coverCategory}
+          logoLeftUrl={logoLeftUrl}
+          logoRightUrl={logoRightUrl}
+          logoLeftHeight={logoLeftHeight}
+          logoRightHeight={logoRightHeight}
+        />
+      </div>
 
     </div>
   );
