@@ -6970,6 +6970,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           pageCount={coverCount}
           pages={coverPages}
           category={coverCategory}
+          language={reportLanguage}
           activeBirdId={selectedPttId ?? ''}
           activeBirdRegion={currentRegionValue}
           activeBirdLocation={currentLocationValue}
