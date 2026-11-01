@@ -113,7 +113,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
           left: 0,
         }}
       >
-        {/* ── 1. HEADER (Identical to Single Report Header) ── */}
+        {/* ── 1. HEADER (Identical to Single Report Header - Left: Qatari Center, Right: External Reserves in both AR & EN) ── */}
         <header
           style={{
             display: 'flex',
@@ -122,29 +122,11 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
             padding: '16px 36px 14px',
             borderBottom: '2.5px solid #7a1c32',
             backgroundColor: '#ffffff',
-            direction: isAr ? 'rtl' : 'ltr',
+            direction: 'ltr',
             boxSizing: 'border-box',
           }}
         >
-          {/* Emblem Logo */}
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <img
-              src={logoRightUrl}
-              alt="شعار الدولة"
-              style={{
-                height: `${logoRightHeight}px`,
-                maxWidth: `${logoRightWidth}px`,
-                width: 'auto',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/qatar-emblem.png';
-              }}
-            />
-          </div>
-
-          {/* Qatar Houbara Center Logo */}
+          {/* Visual Left: Qatar Houbara Center Logo (identical in AR and EN) */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <img
               src={logoLeftUrl}
@@ -158,6 +140,24 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
               }}
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/qatar-houbara-center-logo.png';
+              }}
+            />
+          </div>
+
+          {/* Visual Right: External Reserves Office of The State Logo (identical in AR and EN) */}
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <img
+              src={logoRightUrl}
+              alt="مكتب محميات الدولة الخارجية"
+              style={{
+                height: `${logoRightHeight}px`,
+                maxWidth: `${logoRightWidth}px`,
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+              }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/external-reserves-office-logo.png';
               }}
             />
           </div>
