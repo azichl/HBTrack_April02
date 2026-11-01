@@ -41,6 +41,6 @@ export interface ReportBook {
 }
 
 export const PRESET_BOOKS: Record<Exclude<ReportBookCategory, 'custom'>, { title: string; titleAr: string }> = {
-  almaty:    { title: 'Almaty Houbara Release Report',    titleAr: 'تقرير إطلاق حبارى ألماتي' },
-  zhezqazgan:{ title: 'Zhezqazgan Houbara Release Report', titleAr: 'تقرير إطلاق حبارى جيزقازغان' },
+  almaty:    { title: 'Almaty Houbara Release Report',    titleAr: 'تقرير إطلاق حباري ألماتي' },
+  zhezqazgan:{ title: 'Zhezqazgan Houbara Release Report', titleAr: 'تقرير إطلاق حباري جيزقازغان' },
 };

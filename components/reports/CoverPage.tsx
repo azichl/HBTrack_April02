@@ -69,7 +69,8 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
       }
     })();
 
-    const presetAr = category && category !== 'custom' ? PRESET_BOOKS[category]?.titleAr : '';
+    const rawPresetAr = category && category !== 'custom' ? PRESET_BOOKS[category]?.titleAr : '';
+    const presetAr = (rawPresetAr || '').replace(/حبارى/g, 'حباري');
 
     const defaultRegion = category === 'almaty'
       ? (isAr ? 'منطقة ألماتي' : 'Almaty Region')
@@ -190,7 +191,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
               fontFamily: "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif",
             }}
           >
-            {title}
+            {title ? title.replace(/حبارى/g, 'حباري') : title}
           </h1>
 
           {/* Optional Arabic Preset Title */}
@@ -205,7 +206,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                 direction: isAr ? 'rtl' : 'ltr',
               }}
             >
-              {presetAr}
+              {presetAr.replace(/حبارى/g, 'حباري')}
             </div>
           )}
 
@@ -255,7 +256,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
           <div
             style={{
               width: '100%',
-              maxWidth: 1030,
+              maxWidth: 1040,
               flex: 1,
               display: 'flex',
               flexDirection: 'column',
@@ -360,7 +361,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                         borderRight: isAr ? '4px solid #7a1c32' : undefined,
                         borderLeft: !isAr ? '4px solid #7a1c32' : undefined,
                         borderRadius: 10,
-                        padding: '12px 18px',
+                        padding: '12px 14px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 7,
@@ -469,11 +470,36 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                         </div>
 
                         {/* Location */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                          <span style={{ color: '#64748b' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 8,
+                            direction: isAr ? 'rtl' : 'ltr',
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: '#64748b',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
                             {isAr ? 'الموقع (Location):' : 'Location:'}
                           </span>
-                          <strong style={{ color: '#1e293b', fontFamily: 'monospace', fontSize: 11, direction: 'ltr' }}>
+                          <strong
+                            style={{
+                              color: '#1e293b',
+                              fontFamily: 'monospace',
+                              fontSize: 10.5,
+                              letterSpacing: '-0.2px',
+                              direction: 'ltr',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                              textAlign: isAr ? 'left' : 'right',
+                            }}
+                          >
                             📍 {locationDisplay}
                           </strong>
                         </div>
