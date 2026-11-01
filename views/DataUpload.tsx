@@ -459,8 +459,8 @@ export const DataUpload = () => {
                     if (!isNaN(locDateMs) && locDateMs > 0) {
                         const rawLat = getVal(row, 'Latitude', 'latitude', 'lat', 'Lat');
                         const rawLon = getVal(row, 'Longitude', 'longitude', 'lon', 'Lon', 'long', 'Long');
-                        const lat = parseFloat(String(rawLat));
-                        let lon = parseFloat(String(rawLon));
+                        const lat = parseFloat(String(rawLat ?? '').trim().replace(',', '.'));
+                        let lon = parseFloat(String(rawLon ?? '').trim().replace(',', '.'));
 
                         if (isValidCoordinate(lat, lon)) {
                             if (platformId === '242086' && lon < 0) lon = Math.abs(lon);

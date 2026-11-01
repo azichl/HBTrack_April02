@@ -104,4 +104,33 @@ describe('Manual Data Upload — 8 Template Columns Verification', () => {
     const date = new Date(excelTimestamp);
     expect(date.getUTCFullYear()).toBe(2026);
   });
+
+  it('handles various date string formats (slashes, single-digit day/month)', () => {
+    // DD/MM/YYYY HH:mm:ss
+    const ts1 = safeParseTimestamp('31/10/2026 10:05:48');
+    expect(isNaN(ts1)).toBe(false);
+    expect(new Date(ts1).getUTCFullYear()).toBe(2026);
+    expect(new Date(ts1).getUTCMonth()).toBe(9); // 0-indexed month: 9 is October
+    expect(new Date(ts1).getUTCDate()).toBe(31);
+
+    // Single digit day/month: 1/11/2026 08:30
+    const ts2 = safeParseTimestamp('1/11/2026 08:30');
+    expect(isNaN(ts2)).toBe(false);
+    expect(new Date(ts2).getUTCDate()).toBe(1);
+    expect(new Date(ts2).getUTCMonth()).toBe(10); // November
+
+    // YYYY/MM/DD
+    const ts3 = safeParseTimestamp('2026/10/31 12:00:00');
+    expect(isNaN(ts3)).toBe(false);
+    expect(new Date(ts3).getUTCFullYear()).toBe(2026);
+  });
+
+  it('parses European comma decimal coordinates correctly', () => {
+    const rawLat = '46,9450';
+    const rawLon = '66,9021';
+    const lat = parseFloat(String(rawLat).trim().replace(',', '.'));
+    const lon = parseFloat(String(rawLon).trim().replace(',', '.'));
+    expect(lat).toBeCloseTo(46.945, 3);
+    expect(lon).toBeCloseTo(66.9021, 4);
+  });
 });

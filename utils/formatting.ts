@@ -92,20 +92,22 @@ export function safeParseTimestamp(ts: any): number {
     return Math.round((numVal - 25569) * 86400 * 1000);
   }
 
-  // DD/MM/YYYY HH:mm:ss or DD/MM/YYYY HH:mm
-  const dmyMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  // DD/MM/YYYY HH:mm:ss or DD/MM/YYYY HH:mm or DD/MM/YYYY (supports 1 or 2 digit day/month)
+  const dmyMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (dmyMatch) {
     const [_, d, m, y, h, min, s] = dmyMatch;
-    return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h), Number(min), Number(s || 0));
+    return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h || 0), Number(min || 0), Number(s || 0));
   }
-  // DD/MM/YYYY
-  const dmyMatch2 = str.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (dmyMatch2) {
-    const [_, d, m, y] = dmyMatch2;
-    return Date.UTC(Number(y), Number(m)-1, Number(d));
+
+  // YYYY/MM/DD HH:mm:ss or YYYY/MM/DD (supports 1 or 2 digit day/month)
+  const ymdSlashMatch = str.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (ymdSlashMatch) {
+    const [_, y, m, d, h, min, s] = ymdSlashMatch;
+    return Date.UTC(Number(y), Number(m)-1, Number(d), Number(h || 0), Number(min || 0), Number(s || 0));
   }
+
   // YYYY-MM-DD HH:mm:ss or YYYY-MM-DD HH:mm (with optional subseconds)
-  const ymdMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
+  const ymdMatch = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[\sT](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
   if (ymdMatch) {
     const [_, y, m, d, h, min, s, ms] = ymdMatch;
     let millis = 0;

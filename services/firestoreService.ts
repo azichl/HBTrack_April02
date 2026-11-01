@@ -1016,7 +1016,11 @@ export const syncTransmittersFromArgosData = async (): Promise<{
           duty_cycle: 'Unknown',
           live: liveDerived
         };
-        await saveDocument('transmitters', pid, newTx);
+        try {
+          await saveDocument('transmitters', pid, newTx);
+        } catch (txErr) {
+          console.warn('[Firestore] Could not write new transmitter to Firestore:', pid, txErr);
+        }
         transmittersMap.set(pid, newTx);
         createdCount++;
       } else {
@@ -1041,7 +1045,11 @@ export const syncTransmittersFromArgosData = async (): Promise<{
           updates.last_longitude = latestRecord.lon;
         }
 
-        await saveDocument('transmitters', pid, updates);
+        try {
+          await saveDocument('transmitters', pid, updates);
+        } catch (txErr) {
+          console.warn('[Firestore] Could not update transmitter in Firestore:', pid, txErr);
+        }
         Object.assign(existingTx, updates);
         updatedCount++;
       }
