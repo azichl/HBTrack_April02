@@ -71,6 +71,14 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
 
     const rawPresetAr = category && category !== 'custom' ? PRESET_BOOKS[category]?.titleAr : '';
     const presetAr = (rawPresetAr || '').replace(/حبارى/g, 'حباري');
+    const cleanTitle = (title || '').replace(/حبارى/g, 'حباري');
+
+    // In Arabic report: Arabic title is primary (large, maroon #7a1c32) on top, English title is secondary (small, black #0f172a) below.
+    // In English report: English title is primary (large, maroon #7a1c32) on top, Arabic title is secondary (small, black #0f172a) below.
+    const primaryTitle = isAr ? (presetAr || cleanTitle) : cleanTitle;
+    const secondaryTitle = isAr
+      ? (presetAr && cleanTitle && presetAr !== cleanTitle ? cleanTitle : '')
+      : (presetAr && cleanTitle && presetAr !== cleanTitle ? presetAr : '');
 
     const defaultRegion = category === 'almaty'
       ? (isAr ? 'منطقة ألماتي' : 'Almaty Region')
@@ -178,7 +186,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
             overflow: 'hidden',
           }}
         >
-          {/* Big Title in Middle (Collection Name) */}
+          {/* Primary Big Title (Maroon #7a1c32, 34px, 800 weight) */}
           <h1
             style={{
               fontSize: 34,
@@ -188,25 +196,31 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
               lineHeight: 1.25,
               margin: '12px 0 6px 0',
               maxWidth: 960,
-              fontFamily: "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif",
+              fontFamily: isAr
+                ? "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif"
+                : "'Inter', 'Cairo', Arial, sans-serif",
+              direction: isAr ? 'rtl' : 'ltr',
             }}
           >
-            {title ? title.replace(/حبارى/g, 'حباري') : title}
+            {primaryTitle}
           </h1>
 
-          {/* Optional Arabic Preset Title */}
-          {presetAr && (
+          {/* Secondary Subtitle (Small, in black #0f172a, 19px, 700 weight) */}
+          {secondaryTitle && (
             <div
               style={{
                 fontSize: 19,
                 fontWeight: 700,
-                color: '#334155',
+                color: '#0f172a',
                 textAlign: 'center',
                 marginBottom: 8,
-                direction: isAr ? 'rtl' : 'ltr',
+                fontFamily: isAr
+                  ? "'Inter', Arial, sans-serif"
+                  : "'Cairo', 'IBM Plex Sans Arabic', Arial, sans-serif",
+                direction: isAr ? 'ltr' : 'rtl',
               }}
             >
-              {presetAr.replace(/حبارى/g, 'حباري')}
+              {secondaryTitle}
             </div>
           )}
 
@@ -329,6 +343,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                   overflow: 'hidden',
                   maxHeight: 390,
                   width: '100%',
+                  direction: isAr ? 'rtl' : 'ltr',
                 }}
               >
                 {uniqueBirds.slice(0, 9).map((page, idx) => {
