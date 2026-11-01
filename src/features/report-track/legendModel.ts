@@ -43,10 +43,81 @@ export const DEFAULT_LEGEND: LegendDefault[] = [
   { id: 'camp',        label: { en: 'Camp',                        ar: 'مخيم' },                color: '#f59e0b', shape: 'triangle' },
   { id: 'distCamp',    label: { en: 'Distance to Camp',            ar: 'المسافة إلى المخيم' },  color: '#d97706', shape: 'dashed' },
   { id: 'distRelease', label: { en: 'Distance from Release point', ar: 'المسافة من نقطة الإطلاق' }, color: '#dc2626', shape: 'dashed' },
-  { id: 'track',       label: { en: 'Flight Track',                ar: 'مسار الطيران' },        color: '#6366f1', shape: 'line' },
+  { id: 'track',       label: { en: 'Flight Track',                ar: 'مسار التتبع' },        color: '#6366f1', shape: 'line' },
   { id: 'mainRoad',    label: { en: 'Main Road',                   ar: 'طريق رئيسي' },          color: '#c4a484', shape: 'line' },
   { id: 'towns',       label: { en: 'Cities & Towns',              ar: 'مدن وقرى' },            color: '#6b7280', shape: 'square' },
 ];
+
+/** Translates known legend labels between English and Arabic automatically */
+export function translateLegendText(text: string, lang: Lang): string {
+  if (!text) return text;
+  const trimmed = text.trim();
+
+  if (lang === 'en') {
+    const arToEn: Record<string, string> = {
+      'آخر موقع': 'Latest Location',
+      'آخر موقع مسجل': 'Latest Location',
+      'آخر موقع تم رصده': 'Latest Location',
+      'مسار التتبع': 'Flight Track',
+      'مسار الطيران': 'Flight Track',
+      'مسار تتبع الطيران': 'Flight Track',
+      'موقع الإطلاق': 'Release Location',
+      'موقع تركيب الجهاز': 'Release Location',
+      'مخيم': 'Camp',
+      'المخيم': 'Camp',
+      'المسافة إلى المخيم': 'Distance to Camp',
+      'المسافة للمخيم': 'Distance to Camp',
+      'البعد عن المخيم': 'Distance to Camp',
+      'البعد عنه': 'Distance to Camp',
+      'المسافة من نقطة الإطلاق': 'Distance from Release point',
+      'المسافة من موقع الإطلاق': 'Distance from Release point',
+      'المسافة من موقع التركيب': 'Distance from Release point',
+      'طريق رئيسي': 'Main Road',
+      'مدن وقرى': 'Cities & Towns',
+    };
+    if (arToEn[trimmed]) return arToEn[trimmed];
+    if (trimmed.startsWith('مخيم ')) {
+      const camp = trimmed.replace('مخيم ', '');
+      const campNames: Record<string, string> = {
+        'ألماتي': 'Almaty',
+        'جيزقازغان': 'Zhezqazgan',
+        'أوزبكستان': 'Uzbekistan',
+        'أوزباكستان': 'Uzbekistan',
+        'البنود': 'El Bnoud',
+      };
+      return `${campNames[camp] || camp} camp`;
+    }
+  } else {
+    const enToAr: Record<string, string> = {
+      'Latest Location': 'آخر موقع',
+      'Flight Track': 'مسار التتبع',
+      'Track': 'مسار التتبع',
+      'Tracking Track': 'مسار التتبع',
+      'Release Location': 'موقع الإطلاق',
+      'Release': 'موقع الإطلاق',
+      'Camp': 'مخيم',
+      'Distance to Camp': 'المسافة إلى المخيم',
+      'Distance from Release point': 'المسافة من نقطة الإطلاق',
+      'Distance from Release': 'المسافة من نقطة الإطلاق',
+      'Main Road': 'طريق رئيسي',
+      'Cities & Towns': 'مدن وقرى',
+      'Cities & Villages': 'مدن وقرى',
+    };
+    if (enToAr[trimmed]) return enToAr[trimmed];
+    if (trimmed.toLowerCase().endsWith(' camp')) {
+      const camp = trimmed.replace(/\s+[Cc]amp$/i, '');
+      const campNames: Record<string, string> = {
+        'Almaty': 'ألماتي',
+        'Zhezqazgan': 'جيزقازغان',
+        'Uzbekistan': 'أوزبكستان',
+        'El Bnoud': 'البنود',
+      };
+      return `مخيم ${campNames[camp] || camp}`;
+    }
+  }
+
+  return text;
+}
 
 /** Items that are NOT in the defaults but come from the data (e.g. one per track period). */
 export type ExtraItem = Omit<LegendItem, 'visible' | 'custom'>;
@@ -84,7 +155,10 @@ export function resolveLegend(
   const items = orderedIds.map(id => {
     const b = byId.get(id)!;
     const ov = state.overrides[id] ?? {};
-    const label = ov.label ?? b.label;
+    let label = ov.label ?? b.label;
+    if (label) {
+      label = translateLegendText(label, lang);
+    }
     const merged: LegendItem = {
       ...b,
       label,
@@ -93,10 +167,12 @@ export function resolveLegend(
       visible: ov.visible ?? b.visible,
     };
     const onMap = presence[id] !== false;
+    const translatedDefault = translateLegendText(b.label, lang);
+    const displayLabel = label.trim() ? label : translatedDefault;
     return {
       ...merged,
-      defaultLabel: b.label,
-      displayLabel: label.trim() ? label : b.label,
+      defaultLabel: translatedDefault,
+      displayLabel,
       onMap,
       overridden: Object.keys(ov).length > 0,
       shown: merged.visible && onMap,

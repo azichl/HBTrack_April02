@@ -1356,43 +1356,55 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   };
 
   const translateValue = (val: string) => {
-    if (reportLanguage === 'ar') return val;
-    const dict: any = { 
-      'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
-      'موقع تركيب الجهاز': 'Release Location', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp', 'البعد عن المخيم': 'Distance to Camp',
-      'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty', 'أوزبكستان': 'Uzbekistan', 'أوزباكستان': 'Uzbekistan', 'البنود': 'El Bnoud',
-      'شمال': 'North', 'شمال شرق': 'Northeast', 'شرق': 'East', 'جنوب شرق': 'Southeast',
-      'جنوب': 'South', 'جنوب غرب': 'Southwest', 'غرب': 'West', 'شمال غرب': 'Northwest'
-    };
+    if (!val) return val;
     let res = val.trim();
-    if (dict[res]) return dict[res];
-    if (res.includes('آخر موقع')) {
-      res = res.replace('آخر موقع', 'Latest Location');
+    if (reportLanguage === 'en') {
+      const dict: any = { 
+        'حي': 'Alive', 'ميت': 'Dead', 'مفقود': 'Lost', 'ذكر': 'Male', 'أنثى': 'Female', 'وحش': 'Wild', 'إكثار أسري': 'Captive', 'NA': 'NA', 'كازاخستان': 'Kazakhstan',
+        'موقع تركيب الجهاز': 'Release Location', 'موقع الإطلاق': 'Release Location', 'تركيب الجهاز': 'Release', 'آخر موقع': 'Latest Location', 'مخيم': 'Camp', 'طريق رئيسي': 'Main Road', 'مدن وقرى': 'Cities & Villages', 'البعد عنه': 'Distance to Camp', 'البعد عن المخيم': 'Distance to Camp',
+        'مسار الطيران': 'Flight Track', 'مسار التتبع': 'Flight Track',
+        'جيزقازغان': 'Zhezqazgan', 'ألماتي': 'Almaty', 'أوزبكستان': 'Uzbekistan', 'أوزباكستان': 'Uzbekistan', 'البنود': 'El Bnoud',
+        'شمال': 'North', 'شمال شرق': 'Northeast', 'شرق': 'East', 'جنوب شرق': 'Southeast',
+        'جنوب': 'South', 'جنوب غرب': 'Southwest', 'غرب': 'West', 'شمال غرب': 'Northwest'
+      };
+      if (dict[res]) return dict[res];
+      if (res.includes('آخر موقع')) res = res.replace('آخر موقع', 'Latest Location');
+      if (res.includes('البعد') || res.includes('المخيمات')) res = 'Distance to Camp';
+      if (res.includes('مسار التتبع') || res.includes('مسار الطيران')) res = 'Flight Track';
+      if (res.includes('مخيم جيزقازغان')) res = 'Zhezqazgan camp';
+      else if (res.includes('جيزقازغان')) res = 'Zhezqazgan';
+      if (res.includes('مخيم ألماتي')) res = 'Almaty camp';
+      else if (res.includes('ألماتي')) res = 'Almaty';
+      if (res.includes('مخيم البنود')) res = 'El Bnoud camp';
+      else if (res.includes('البنود')) res = 'El Bnoud';
+      if (res.includes('مخيم أوزبكستان') || res.includes('مخيم أوزباكستان')) res = 'Uzbekistan camp';
+      else if (res.includes('أوزبكستان') || res.includes('أوزباكستان')) res = 'Uzbekistan';
+      return res;
+    } else {
+      // reportLanguage === 'ar'
+      const dictEnToAr: Record<string, string> = {
+        'Alive': 'حي', 'Dead': 'ميت', 'Lost': 'مفقود', 'Male': 'ذكر', 'Female': 'أنثى', 'Wild': 'وحش', 'Captive': 'إكثار أسري', 'NA': 'NA', 'Kazakhstan': 'كازاخستان',
+        'Release Location': 'موقع تركيب الجهاز', 'Release': 'تركيب الجهاز', 'Latest Location': 'آخر موقع', 'Camp': 'مخيم', 'Main Road': 'طريق رئيسي', 'Cities & Villages': 'مدن وقرى', 'Cities & Towns': 'مدن وقرى', 'Distance to Camp': 'البعد عن المخيم', 'Distance from Release': 'المسافة من موقع الإطلاق', 'Distance from Release point': 'المسافة من نقطة الإطلاق',
+        'Flight Track': 'مسار التتبع', 'Track': 'مسار التتبع',
+        'Zhezqazgan': 'جيزقازغان', 'Almaty': 'ألماتي', 'Uzbekistan': 'أوزبكستان', 'El Bnoud': 'البنود',
+        'North': 'شمال', 'Northeast': 'شمال شرق', 'East': 'شرق', 'Southeast': 'جنوب شرق',
+        'South': 'جنوب', 'Southwest': 'جنوب غرب', 'West': 'غرب', 'Northwest': 'شمال غرب'
+      };
+      if (dictEnToAr[res]) return dictEnToAr[res];
+      if (res.toLowerCase().includes('latest location')) res = 'آخر موقع';
+      if (res.toLowerCase().includes('flight track') || res.toLowerCase() === 'track') res = 'مسار التتبع';
+      if (res.toLowerCase().includes('distance to camp')) res = 'المسافة إلى المخيم';
+      if (res.toLowerCase().includes('distance from release')) res = 'المسافة من موقع الإطلاق';
+      if (res.toLowerCase().includes('zhezqazgan camp')) res = 'مخيم جيزقازغان';
+      else if (res.toLowerCase().includes('zhezqazgan')) res = 'جيزقازغان';
+      if (res.toLowerCase().includes('almaty camp')) res = 'مخيم ألماتي';
+      else if (res.toLowerCase().includes('almaty')) res = 'ألماتي';
+      if (res.toLowerCase().includes('el bnoud camp')) res = 'مخيم البنود';
+      else if (res.toLowerCase().includes('el bnoud')) res = 'البنود';
+      if (res.toLowerCase().includes('uzbekistan camp')) res = 'مخيم أوزبكستان';
+      else if (res.toLowerCase().includes('uzbekistan')) res = 'أوزبكستان';
+      return res;
     }
-    if (res.includes('البعد') || res.includes('المخيمات')) {
-      res = 'Distance to Camp';
-    }
-    if (res.includes('مخيم جيزقازغان')) {
-      res = 'Zhezqazgan camp';
-    } else if (res.includes('جيزقازغان')) {
-      res = 'Zhezqazgan';
-    }
-    if (res.includes('مخيم ألماتي')) {
-      res = 'Almaty camp';
-    } else if (res.includes('ألماتي')) {
-      res = 'Almaty';
-    }
-    if (res.includes('مخيم البنود')) {
-      res = 'El Bnoud camp';
-    } else if (res.includes('البنود')) {
-      res = 'El Bnoud';
-    }
-    if (res.includes('مخيم أوزبكستان') || res.includes('مخيم أوزباكستان')) {
-      res = 'Uzbekistan camp';
-    } else if (res.includes('أوزبكستان') || res.includes('أوزباكستان')) {
-      res = 'Uzbekistan';
-    }
-    return res;
   };
 
   const getBearingLabel = (deg: number) => {
@@ -1818,8 +1830,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   useEffect(() => {
     if (!isLegendCustomizedByUser) {
       setLegendItems(prev => prev.map(item => {
-        if (item.id === 'last_pos') {
-          return { ...item, label: reportLanguage === 'en' ? 'Latest Location' : 'آخر موقع' };
+        const trans: Record<string, { en: string; ar: string }> = {
+          'release_pos': { en: 'Release Location', ar: 'موقع تركيب الجهاز' },
+          'last_pos': { en: 'Latest Location', ar: 'آخر موقع' },
+          'dist_release': { en: 'Distance from Release', ar: 'المسافة من موقع الإطلاق' },
+          'camp_dist': { en: 'Distance to Camp', ar: 'المسافة إلى المخيم' },
+          'flight_track': { en: 'Flight Track', ar: 'مسار التتبع' },
+          'main_road': { en: 'Main Road', ar: 'طريق رئيسي' },
+        };
+        if (trans[item.id]) {
+          return { ...item, label: trans[item.id][reportLanguage as 'ar' | 'en'] || item.label };
         }
         return item;
       }));
@@ -5986,7 +6006,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 number: reportSubject.display.mapChipLabel,
                                 ringId: reportSubject.display.ringNumber,
                                 borderColorHex: mapElements.release?.color || themeColors.releasePinColor,
-                                labelTitle: mapElements.labelsConfig?.releaseTitle || (reportLanguage === 'en' ? 'Release' : T.installHead),
+                                labelTitle: mapElements.labelsConfig?.releaseTitle ? translateValue(mapElements.labelsConfig.releaseTitle) : (reportLanguage === 'en' ? 'Release' : T.installHead),
                                 position: mapElements.labelsConfig?.releasePosition || 'right',
                                 innerClass: 'hb-label-release'
                               })}
@@ -6022,7 +6042,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 number: reportSubject.display.mapChipLabel,
                                 ringId: reportSubject.display.ringNumber,
                                 borderColorHex: mapElements.latest?.color || themeColors.latestPinColor,
-                                labelTitle: mapElements.labelsConfig?.latestTitle || (reportLanguage === 'en' ? 'Latest Location' : T.lastHead),
+                                labelTitle: mapElements.labelsConfig?.latestTitle ? translateValue(mapElements.labelsConfig.latestTitle) : (reportLanguage === 'en' ? 'Latest Location' : T.lastHead),
                                 position: mapElements.labelsConfig?.latestPosition || 'top',
                                 innerClass: 'hb-label-latest'
                               })}
@@ -6475,7 +6495,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           mapInstance?.zoomOut();
                         }}
                         className="p-1 hover:bg-white/20 rounded transition-colors text-white"
-                        title="تصغير الخريطة (Zoom Out)"
+                        title={reportLanguage === 'en' ? 'Zoom Out' : 'تصغير الخريطة (Zoom Out)'}
                       >
                         <Minus size={14} />
                       </button>
@@ -6488,10 +6508,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           handleRecenterMap();
                         }}
                         className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/20 rounded text-[11px] font-medium transition-colors text-white"
-                        title="إعادة ضبط الموقع ليتناسب مع النقاط"
+                        title={reportLanguage === 'en' ? 'Recenter map to fit points' : 'إعادة ضبط الموقع ليتناسب مع النقاط'}
                       >
                         <Crosshair size={13} />
-                        <span>توسيط</span>
+                        <span>{reportLanguage === 'en' ? 'Center' : 'توسيط'}</span>
                       </button>
                       {(customReleaseMarkerPos || customLastPosMarkerPos || customReleaseDistPos || Object.keys(customCampDistPositions).length > 0 || Object.keys(customCampLabelPositions).length > 0) && (
                         <>
@@ -6526,25 +6546,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors text-white ${
                             showLayerMenu ? 'bg-brand-600' : 'hover:bg-white/20'
                           }`}
-                          title="تغيير نوع الخريطة"
+                          title={reportLanguage === 'en' ? 'Map Layers' : 'تغيير نوع الخريطة'}
                         >
                           <Layers size={13} />
-                          <span>الطبقات</span>
+                          <span>{reportLanguage === 'en' ? 'Layers' : 'الطبقات'}</span>
                         </button>
                         {showLayerMenu && (
                           <div 
-                            className="absolute bottom-full left-0 mb-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg p-1.5 shadow-2xl min-w-[175px] space-y-1 text-right z-[1100]"
-                            dir="rtl"
+                            className="absolute bottom-full left-0 mb-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-lg p-1.5 shadow-2xl min-w-[175px] space-y-1 z-[1100]"
+                            style={{
+                              direction: reportLanguage === 'ar' ? 'rtl' : 'ltr',
+                              textAlign: reportLanguage === 'ar' ? 'right' : 'left'
+                            }}
                             onClick={(e) => e.stopPropagation()}
                           >
                             <div className="text-[10px] font-bold text-gray-400 px-2 py-0.5 border-b border-slate-800">
-                              نوع الخريطة (Base Map):
+                              {reportLanguage === 'en' ? 'Base Map Type:' : 'نوع الخريطة (Base Map):'}
                             </div>
                             {[
-                              { id: 'google_hybrid', name: 'جوجل هجين (Google Hybrid)' },
-                              { id: 'google_roadmap', name: 'جوجل شوارع (Google Roadmap)' },
-                              { id: 'google_satellite', name: 'جوجل أقمار (Google Satellite)' },
-                              { id: 'scienceterrain', name: 'أقمار Esri (Esri Satellite)' },
+                              { id: 'google_hybrid', name: reportLanguage === 'en' ? 'Google Hybrid' : 'جوجل هجين (Google Hybrid)' },
+                              { id: 'google_roadmap', name: reportLanguage === 'en' ? 'Google Roadmap' : 'جوجل شوارع (Google Roadmap)' },
+                              { id: 'google_satellite', name: reportLanguage === 'en' ? 'Google Satellite' : 'جوجل أقمار (Google Satellite)' },
+                              { id: 'scienceterrain', name: reportLanguage === 'en' ? 'Esri Satellite' : 'أقمار Esri (Esri Satellite)' },
                               { id: 'roadmap', name: 'OpenStreetMap' }
                             ].map(l => (
                               <button
