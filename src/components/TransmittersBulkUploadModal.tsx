@@ -36,10 +36,12 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       'transmitter_model *',
       'manufacturer',
       'hex_id',
+      'frequency',
       'reception_date *',
       'weight_g',
       'status *',
-      'duty_cycle',
+      'satellite_time',
+      'radio_time',
       'deployment_date',
       'bird_ring_number',
       'species',
@@ -54,10 +56,12 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       'Solar Argos/GPS PTT',
       'Microwave Telemetry',
       '112A3F',
+      '401.650',
       '2024',
       22,
       'Active',
       '10h ON / 24h OFF',
+      '12:00 - 18:00',
       '2024-03-15',
       'UA-9982',
       'Houbara Bustard',
@@ -75,10 +79,12 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       ['transmitter_model', 'YES', 'Text (e.g. Solar Argos/GPS PTT)', 'Transmitter model.'],
       ['manufacturer', 'No', 'Text (e.g. Microwave Telemetry, North Star)', 'Manufacturer name.'],
       ['hex_id', 'No', 'Hexadecimal (e.g. 112A3F)', 'Argos Hex ID (optional, replaces serial number).'],
+      ['frequency', 'No', 'Number/Text (e.g. 401.650)', 'Transmission frequency in MHz.'],
       ['reception_date', 'YES', 'Year (e.g. 2024) or YYYY-MM-DD', 'Date transmitter was received (obligatory, can accept only year).'],
       ['weight_g', 'No', 'Number (e.g. 22)', 'Weight in grams.'],
       ['status', 'YES', 'Active | Inactive | Dead | Static test', 'Device status.'],
-      ['duty_cycle', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Transmission schedule.'],
+      ['satellite_time', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Satellite transmission schedule / duty cycle.'],
+      ['radio_time', 'No', 'Text (e.g. 12:00 - 18:00)', 'VHF radio beacon transmission time.'],
       ['deployment_date', 'No', 'YYYY-MM-DD', 'Date deployed.'],
       ['bird_ring_number', 'No', 'Text', 'Ring number of existing bird to link with.'],
       ['species', 'No', 'Text', 'Default: Houbara Bustard.'],
@@ -96,10 +102,12 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       { wch: 26 }, // transmitter_model *
       { wch: 22 }, // manufacturer
       { wch: 14 }, // hex_id
+      { wch: 16 }, // frequency
       { wch: 22 }, // reception_date * (wide enough so Reception Date is never truncated to reception_da)
       { wch: 12 }, // weight_g
       { wch: 14 }, // status *
-      { wch: 20 }, // duty_cycle
+      { wch: 20 }, // satellite_time
+      { wch: 18 }, // radio_time
       { wch: 18 }, // deployment_date
       { wch: 18 }, // bird_ring_number
       { wch: 20 }, // species
@@ -254,7 +262,7 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                   1. Standard Template & Columns
                 </h4>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Transmitters info (Reception date accepts year, Hex ID) & Birds table info.
+                  Transmitters info (Frequency, Reception date, Sat Time, Radio Time) & Birds table info.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -321,6 +329,12 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                         <td className="p-2"><strong>Argos Hex ID</strong> (replaces serial number)</td>
                         <td className="p-2 font-mono">112A3F</td>
                       </tr>
+                      <tr>
+                        <td className="p-2 font-mono font-bold text-sky-700 dark:text-sky-300">frequency</td>
+                        <td className="p-2 text-gray-500">Optional</td>
+                        <td className="p-2">Transmission frequency in MHz</td>
+                        <td className="p-2 font-mono">401.650</td>
+                      </tr>
                       <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
                         <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">
                           reception_date * / Reception Date
@@ -342,10 +356,16 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                         <td className="p-2 font-mono">Active</td>
                       </tr>
                       <tr>
-                        <td className="p-2 font-mono font-bold">duty_cycle</td>
+                        <td className="p-2 font-mono font-bold">satellite_time</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Transmission schedule</td>
+                        <td className="p-2">Satellite transmission schedule (replaces Duty Cycle)</td>
                         <td className="p-2 font-mono">10h ON / 24h OFF</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-mono font-bold">radio_time</td>
+                        <td className="p-2 text-gray-500">Optional</td>
+                        <td className="p-2">VHF radio beacon transmission hours</td>
+                        <td className="p-2 font-mono">12:00 - 18:00</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">deployment_date</td>
@@ -541,9 +561,11 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                           <th className="p-2 font-bold">PTT ID</th>
                           <th className="p-2">Model</th>
                           <th className="p-2">Hex ID</th>
+                          <th className="p-2">Frequency</th>
                           <th className="p-2 font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/40">Reception Date</th>
                           <th className="p-2">Status</th>
-                          <th className="p-2">Duty Cycle</th>
+                          <th className="p-2">Sat Time</th>
+                          <th className="p-2">Radio Time</th>
                           <th className="p-2">Bird Ring</th>
                           <th className="p-2">Deployment Date</th>
                         </tr>
@@ -555,6 +577,7 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                             <td className="p-2 font-mono font-bold text-gray-900 dark:text-white">{r.ptt_id}</td>
                             <td className="p-2 truncate max-w-[130px]" title={r.transmitter_model}>{r.transmitter_model}</td>
                             <td className="p-2 font-mono text-sky-700 dark:text-sky-300">{r.hex_id || '-'}</td>
+                            <td className="p-2 font-mono text-sky-700 dark:text-sky-300">{r.frequency || '-'}</td>
                             <td className="p-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20 whitespace-nowrap">
                               {r.reception_date}
                             </td>
@@ -565,7 +588,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                                 {r.status}
                               </span>
                             </td>
-                            <td className="p-2 truncate max-w-[110px]" title={r.duty_cycle || '-'}>{r.duty_cycle || '-'}</td>
+                            <td className="p-2 truncate max-w-[110px]" title={r.satellite_time || r.duty_cycle || '-'}>{r.satellite_time || r.duty_cycle || '-'}</td>
+                            <td className="p-2 truncate max-w-[110px]" title={r.radio_time || '-'}>{r.radio_time || '-'}</td>
                             <td className="p-2 font-mono text-indigo-700 dark:text-indigo-300">{r.bird_ring_number || '-'}</td>
                             <td className="p-2 font-mono">{r.deployment_date || '-'}</td>
                           </tr>

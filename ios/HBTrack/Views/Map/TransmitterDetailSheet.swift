@@ -31,6 +31,18 @@ struct TransmitterDetailSheet: View {
                             DetailRow(icon: "calendar", title: "Reception Date", value: reception)
                         }
                         
+                        if let freq = transmitter.frequency {
+                            DetailRow(icon: "wave.3.forward", title: "Frequency", value: String(format: "%.3f MHz", freq))
+                        }
+                        
+                        if let satTime = transmitter.satellite_time ?? transmitter.duty_cycle, !satTime.isEmpty {
+                            DetailRow(icon: "antenna.radiowaves.left.and.right", title: "Sat Time", value: satTime)
+                        }
+                        
+                        if let radioTime = transmitter.radio_time, !radioTime.isEmpty {
+                            DetailRow(icon: "radio", title: "Radio Time", value: radioTime)
+                        }
+                        
                         if let latestPos = viewModel.positions.filter({ $0.effectiveTransmitterId == transmitter.platform_id }).sorted(by: { $0.timestamp > $1.timestamp }).first {
                             
                             DetailRow(icon: "clock", title: "Last Fix", value: latestPos.timestamp)

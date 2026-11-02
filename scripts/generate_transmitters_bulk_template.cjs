@@ -2,16 +2,18 @@ const XLSX = require('xlsx');
 const path = require('path');
 const fs = require('fs');
 
-// Exact headers matching Image 3 with serial_number replaced by hex_id (optional) and reception_date * (obligatory)
+// Exact headers matching Transmitters DB model: with frequency, hex_id, satellite_time (replaces duty_cycle), and radio_time
 const headers = [
   'ptt_id *',
   'transmitter_model *',
   'manufacturer',
   'hex_id',
+  'frequency',
   'reception_date *',
   'weight_g',
   'status *',
-  'duty_cycle',
+  'satellite_time',
+  'radio_time',
   'deployment_date',
   'bird_ring_number',
   'species',
@@ -27,10 +29,12 @@ const exampleRow = [
   'Solar Argos/GPS PTT',
   'Microwave Telemetry',
   '112A3F',
+  '401.650',
   '2024',
   22,
   'Active',
   '10h ON / 24h OFF',
+  '12:00 - 18:00',
   '2024-03-15',
   'UA-9982',
   'Houbara Bustard',
@@ -49,10 +53,12 @@ const instructionsData = [
   ['transmitter_model', 'YES', 'Text (e.g. Solar Argos/GPS PTT)', 'Transmitter model.'],
   ['manufacturer', 'No', 'Text (e.g. Microwave Telemetry, North Star)', 'Manufacturer name.'],
   ['hex_id', 'No', 'Hexadecimal (e.g. 112A3F)', 'Argos Hex ID (optional, replaces serial number).'],
+  ['frequency', 'No', 'Number/Text (e.g. 401.650)', 'Transmission frequency in MHz.'],
   ['reception_date', 'YES', 'Year (e.g. 2024) or YYYY-MM-DD', 'Date transmitter was received (obligatory, can accept only year).'],
   ['weight_g', 'No', 'Number (e.g. 22)', 'Weight in grams.'],
   ['status', 'YES', 'Active | Inactive | Dead | Static test', 'Device status.'],
-  ['duty_cycle', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Transmission schedule.'],
+  ['satellite_time', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Satellite transmission schedule / duty cycle.'],
+  ['radio_time', 'No', 'Text (e.g. 12:00 - 18:00)', 'VHF radio beacon transmission time.'],
   ['deployment_date', 'No', 'YYYY-MM-DD', 'Date deployed.'],
   ['bird_ring_number', 'No', 'Text', 'Ring number of existing bird to link with.'],
   ['species', 'No', 'Text', 'Default: Houbara Bustard.'],
@@ -72,10 +78,12 @@ wsTransmitters['!cols'] = [
   { wch: 26 }, // transmitter_model *
   { wch: 22 }, // manufacturer
   { wch: 14 }, // hex_id
+  { wch: 16 }, // frequency
   { wch: 22 }, // reception_date *
   { wch: 12 }, // weight_g
   { wch: 14 }, // status *
-  { wch: 20 }, // duty_cycle
+  { wch: 20 }, // satellite_time
+  { wch: 18 }, // radio_time
   { wch: 18 }, // deployment_date
   { wch: 18 }, // bird_ring_number
   { wch: 20 }, // species

@@ -140,9 +140,12 @@ export interface ParsedTransmitterRow {
   ptt_id: string;
   transmitter_model: string;
   hex_id?: string;
+  frequency?: string;
   manufacturer?: string;
   reception_date: string;
   status: string;
+  satellite_time?: string;
+  radio_time?: string;
   duty_cycle?: string;
   deployment_date?: string;
   bird_ring_number?: string;
@@ -204,9 +207,9 @@ export async function parseTransmitterWorkbook(file: File) {
       deployed: r.deployed !== undefined && r.deployed !== '' ? r.deployed : undefined,
       site_location: r.site_location || r.site || r.release_site || r.location || '',
       program_region: r.program_region || r.region || '',
-      satellite_time: r.satellite_time || r.sat_time || r.duty_cycle || '',
+      satellite_time: r.satellite_time || r.satelitte_time || r.sat_time || r.satellite || r.sat || r.duty_cycle || '',
       radio_time: r.radio_time || r.vhf_time || r.radio || '',
-      duty_cycle: r.duty_cycle || r.satellite_time || 'Unknown',
+      duty_cycle: r.satellite_time || r.satelitte_time || r.sat_time || r.duty_cycle || 'Unknown',
       deployment_date: r.deployment_date || r.release_date || undefined,
       notes: r.notes || r.comment || r.comments || '',
       comment: r.comment || r.notes || r.comments || '',
@@ -328,10 +331,13 @@ export async function bulkUploadTransmitters(
         ptt_id: v.data.ptt_id,
         transmitter_model: v.data.transmitter_model,
         hex_id: v.data.hex_id,
+        frequency: v.data.frequency,
         manufacturer: v.data.manufacturer,
         reception_date: v.data.reception_date,
         status: v.data.status,
-        duty_cycle: v.data.duty_cycle,
+        satellite_time: v.data.satellite_time || v.data.duty_cycle,
+        radio_time: v.data.radio_time,
+        duty_cycle: v.data.satellite_time || v.data.duty_cycle,
         deployment_date: v.data.deployment_date,
         bird_ring_number: v.data.bird_ring_number,
         species: v.data.species,
@@ -439,7 +445,7 @@ export async function bulkUploadTransmitters(
         program_region: data.program_region || null,
         satellite_time: data.satellite_time || data.duty_cycle || null,
         radio_time: data.radio_time || null,
-        duty_cycle: data.duty_cycle || data.satellite_time || 'Unknown',
+        duty_cycle: data.satellite_time || data.duty_cycle || 'Unknown',
         deployment_date: data.deployment_date || data.release_date || null,
         bird_id: birdDocId || '',
         assigned_bird_ring: ring || null,

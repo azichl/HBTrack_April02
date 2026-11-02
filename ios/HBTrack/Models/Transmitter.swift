@@ -16,6 +16,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
     var hex_id: String?
     var manufacturer: String?
     var reception_date: String?
+    var satellite_time: String?
+    var radio_time: String?
     var program_region: String?
     var site_location: String?
     var bird_id: String?
@@ -73,6 +75,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
         case battery_voltage
         case last_fix
         case duty_cycle
+        case satellite_time
+        case radio_time
         case frequency
         case hex_id
         case manufacturer
@@ -89,7 +93,7 @@ struct Transmitter: Identifiable, Codable, Hashable {
         case lon
     }
     
-    init(id: String? = nil, platform_id: String, model: String? = nil, status: String = "Active", derived_status: String? = nil, battery_voltage: Double? = nil, last_fix: String? = nil, duty_cycle: String? = nil, frequency: Double? = nil, hex_id: String? = nil, manufacturer: String? = nil, reception_date: String? = nil, program_region: String? = nil, site_location: String? = nil, bird_id: String? = nil, assigned_bird_ring: String? = nil, last_latitude: Double? = nil, last_longitude: Double? = nil, latitude: Double? = nil, longitude: Double? = nil, lat: Double? = nil, lon: Double? = nil) {
+    init(id: String? = nil, platform_id: String, model: String? = nil, status: String = "Active", derived_status: String? = nil, battery_voltage: Double? = nil, last_fix: String? = nil, duty_cycle: String? = nil, satellite_time: String? = nil, radio_time: String? = nil, frequency: Double? = nil, hex_id: String? = nil, manufacturer: String? = nil, reception_date: String? = nil, program_region: String? = nil, site_location: String? = nil, bird_id: String? = nil, assigned_bird_ring: String? = nil, last_latitude: Double? = nil, last_longitude: Double? = nil, latitude: Double? = nil, longitude: Double? = nil, lat: Double? = nil, lon: Double? = nil) {
         self.id = id
         self.platform_id = platform_id
         self.model = model
@@ -98,6 +102,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
         self.battery_voltage = battery_voltage
         self.last_fix = last_fix
         self.duty_cycle = duty_cycle
+        self.satellite_time = satellite_time
+        self.radio_time = radio_time
         self.frequency = frequency
         self.hex_id = hex_id
         self.manufacturer = manufacturer
@@ -158,6 +164,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
         
         self.last_fix = try? container.decodeIfPresent(String.self, forKey: .last_fix)
         self.duty_cycle = try? container.decodeIfPresent(String.self, forKey: .duty_cycle)
+        self.satellite_time = try? container.decodeIfPresent(String.self, forKey: .satellite_time)
+        self.radio_time = try? container.decodeIfPresent(String.self, forKey: .radio_time)
         
         // Frequency
         if let d = try? container.decodeIfPresent(Double.self, forKey: .frequency) {
@@ -211,6 +219,8 @@ struct Transmitter: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(battery_voltage, forKey: .battery_voltage)
         try container.encodeIfPresent(last_fix, forKey: .last_fix)
         try container.encodeIfPresent(duty_cycle, forKey: .duty_cycle)
+        try container.encodeIfPresent(satellite_time, forKey: .satellite_time)
+        try container.encodeIfPresent(radio_time, forKey: .radio_time)
         try container.encodeIfPresent(frequency, forKey: .frequency)
         try container.encodeIfPresent(hex_id, forKey: .hex_id)
         try container.encodeIfPresent(manufacturer, forKey: .manufacturer)
