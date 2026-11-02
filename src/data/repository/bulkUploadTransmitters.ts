@@ -70,13 +70,13 @@ const receptionDateObligatory = z.preprocess(
     }
     const s = String(v).trim();
     if (/^\d{4}$/.test(s)) return s;
-    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
     if (dmy) {
       const dd = dmy[1].padStart(2, '0');
       const mm = dmy[2].padStart(2, '0');
       return `${dmy[3]}-${mm}-${dd}`;
     }
-    const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
     if (ymd) {
       const mm = ymd[2].padStart(2, '0');
       const dd = ymd[3].padStart(2, '0');
@@ -135,6 +135,21 @@ export interface RowError {
   messages: string[];
 }
 
+export interface ParsedTransmitterRow {
+  rowNo: number;
+  ptt_id: string;
+  transmitter_model: string;
+  hex_id?: string;
+  manufacturer?: string;
+  reception_date: string;
+  status: string;
+  duty_cycle?: string;
+  deployment_date?: string;
+  bird_ring_number?: string;
+  species?: string;
+  isExisting: boolean;
+}
+
 export interface BulkResult {
   created: number;
   updated: number;
@@ -143,6 +158,7 @@ export interface BulkResult {
   createdBirds: number;
   unlinkedRings: string[];
   errors: RowError[];
+  parsedRows?: ParsedTransmitterRow[];
 }
 
 export async function parseTransmitterWorkbook(file: File) {
@@ -183,7 +199,7 @@ export async function parseTransmitterWorkbook(file: File) {
       manufacturer: r.manufacturer || r.origin_company || r.company || r.make || '',
       serial_number: r.serial_number || r.serial || r.sn || '',
       weight_g: r.weight_g || r.weight || undefined,
-      reception_date: r.reception_date || r.reception || r.date_reception || r.received_date || r.receipt_date || undefined,
+      reception_date: r.reception_date || r.reception_da || r.reception || r.date_reception || r.received_date || r.receipt_date || r.date_of_reception || r['reception date'] || undefined,
       status: canonicalStatus,
       deployed: r.deployed !== undefined && r.deployed !== '' ? r.deployed : undefined,
       site_location: r.site_location || r.site || r.release_site || r.location || '',
@@ -285,6 +301,8 @@ export async function bulkUploadTransmitters(
 
   if (opts.dryRun) {
     const previewCreatedBirds = new Set<string>();
+    const parsedRows: ParsedTransmitterRow[] = [];
+
     valid.forEach((v) => {
       const pid = v.data.ptt_id;
       const exists = existingIds.has(pid);
@@ -304,7 +322,24 @@ export async function bulkUploadTransmitters(
           result.createdBirds++;
         }
       }
+
+      parsedRows.push({
+        rowNo: v.rowNo,
+        ptt_id: v.data.ptt_id,
+        transmitter_model: v.data.transmitter_model,
+        hex_id: v.data.hex_id,
+        manufacturer: v.data.manufacturer,
+        reception_date: v.data.reception_date,
+        status: v.data.status,
+        duty_cycle: v.data.duty_cycle,
+        deployment_date: v.data.deployment_date,
+        bird_ring_number: v.data.bird_ring_number,
+        species: v.data.species,
+        isExisting: exists,
+      });
     });
+
+    result.parsedRows = parsedRows;
     return result;
   }
 

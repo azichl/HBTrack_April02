@@ -69,18 +69,18 @@ const wb = XLSX.utils.book_new();
 const wsTransmitters = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
 wsTransmitters['!cols'] = [
   { wch: 14 }, // ptt_id *
-  { wch: 24 }, // transmitter_model *
+  { wch: 26 }, // transmitter_model *
   { wch: 22 }, // manufacturer
   { wch: 14 }, // hex_id
-  { wch: 18 }, // reception_date *
+  { wch: 22 }, // reception_date *
   { wch: 12 }, // weight_g
   { wch: 14 }, // status *
-  { wch: 18 }, // duty_cycle
-  { wch: 16 }, // deployment_date
+  { wch: 20 }, // duty_cycle
+  { wch: 18 }, // deployment_date
   { wch: 18 }, // bird_ring_number
   { wch: 20 }, // species
-  { wch: 8 },  // sex
-  { wch: 12 }, // origin
+  { wch: 10 }, // sex
+  { wch: 14 }, // origin
   { wch: 14 }, // release_lat
   { wch: 14 }, // release_lon
   { wch: 35 }, // notes

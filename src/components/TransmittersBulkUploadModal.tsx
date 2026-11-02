@@ -91,7 +91,31 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
 
     const wb = XLSX.utils.book_new();
     const wsTx = XLSX.utils.aoa_to_sheet([headers, exampleRow]);
+    wsTx['!cols'] = [
+      { wch: 14 }, // ptt_id *
+      { wch: 26 }, // transmitter_model *
+      { wch: 22 }, // manufacturer
+      { wch: 14 }, // hex_id
+      { wch: 22 }, // reception_date * (wide enough so Reception Date is never truncated to reception_da)
+      { wch: 12 }, // weight_g
+      { wch: 14 }, // status *
+      { wch: 20 }, // duty_cycle
+      { wch: 18 }, // deployment_date
+      { wch: 18 }, // bird_ring_number
+      { wch: 20 }, // species
+      { wch: 10 }, // sex
+      { wch: 14 }, // origin
+      { wch: 14 }, // release_lat
+      { wch: 14 }, // release_lon
+      { wch: 35 }, // notes
+    ];
     const wsInst = XLSX.utils.aoa_to_sheet(instructions);
+    wsInst['!cols'] = [
+      { wch: 22 },
+      { wch: 12 },
+      { wch: 45 },
+      { wch: 65 }
+    ];
     XLSX.utils.book_append_sheet(wb, wsTx, 'Transmitters');
     XLSX.utils.book_append_sheet(wb, wsInst, 'Instructions');
 
@@ -196,7 +220,7 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-4xl w-full border border-gray-100 dark:border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="px-6 py-4 bg-brand-50/50 dark:bg-slate-900/50 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -298,9 +322,11 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                         <td className="p-2 font-mono">112A3F</td>
                       </tr>
                       <tr className="bg-emerald-50/40 dark:bg-emerald-950/20">
-                        <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">reception_date *</td>
+                        <td className="p-2 font-mono font-bold text-brand-700 dark:text-brand-300">
+                          reception_date * / Reception Date
+                        </td>
                         <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
-                        <td className="p-2">Reception date: <strong>can accept only year</strong> (e.g. 2024) or full date</td>
+                        <td className="p-2">Reception Date: <strong>accepts 4-digit year</strong> (e.g. 2024) or full date (YYYY-MM-DD or DD/MM/YYYY)</td>
                         <td className="p-2 font-mono text-emerald-700 dark:text-emerald-300 font-bold">2024 or 2024-01-15</td>
                       </tr>
                       <tr>
@@ -492,6 +518,61 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                 <div className="p-2.5 bg-teal-50 dark:bg-teal-950/20 rounded-lg text-xs text-teal-800 dark:text-teal-300 flex items-center gap-2">
                   <CheckCircle2 size={15} />
                   <span>{dryRunResult.createdBirds} new bird profile(s) will be created and linked to their transmitters.</span>
+                </div>
+              )}
+
+              {/* Parsed Transmitters Preview Table */}
+              {dryRunResult.parsedRows && dryRunResult.parsedRows.length > 0 && (
+                <div className="space-y-2 border border-gray-200 dark:border-slate-700 rounded-xl p-3 bg-white dark:bg-slate-900/60 shadow-sm">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">
+                      Parsed Transmitters Preview ({dryRunResult.parsedRows.length} rows)
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      {dryRunResult.parsedRows.length > 50 ? 'Showing first 50 rows' : `All ${dryRunResult.parsedRows.length} rows`}
+                    </span>
+                  </div>
+
+                  <div className="max-h-56 overflow-x-auto overflow-y-auto border border-gray-100 dark:border-slate-800 rounded-lg">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-gray-100 dark:bg-slate-800 text-[11px] text-gray-600 dark:text-gray-300 sticky top-0">
+                        <tr>
+                          <th className="p-2">#</th>
+                          <th className="p-2 font-bold">PTT ID</th>
+                          <th className="p-2">Model</th>
+                          <th className="p-2">Hex ID</th>
+                          <th className="p-2 font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/40">Reception Date</th>
+                          <th className="p-2">Status</th>
+                          <th className="p-2">Duty Cycle</th>
+                          <th className="p-2">Bird Ring</th>
+                          <th className="p-2">Deployment Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-slate-800 text-[11px]">
+                        {dryRunResult.parsedRows.slice(0, 50).map((r) => (
+                          <tr key={r.rowNo} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                            <td className="p-2 text-gray-400 font-mono">{r.rowNo}</td>
+                            <td className="p-2 font-mono font-bold text-gray-900 dark:text-white">{r.ptt_id}</td>
+                            <td className="p-2 truncate max-w-[130px]" title={r.transmitter_model}>{r.transmitter_model}</td>
+                            <td className="p-2 font-mono text-sky-700 dark:text-sky-300">{r.hex_id || '-'}</td>
+                            <td className="p-2 font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20 whitespace-nowrap">
+                              {r.reception_date}
+                            </td>
+                            <td className="p-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                r.status === 'Active' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-gray-300'
+                              }`}>
+                                {r.status}
+                              </span>
+                            </td>
+                            <td className="p-2 truncate max-w-[110px]" title={r.duty_cycle || '-'}>{r.duty_cycle || '-'}</td>
+                            <td className="p-2 font-mono text-indigo-700 dark:text-indigo-300">{r.bird_ring_number || '-'}</td>
+                            <td className="p-2 font-mono">{r.deployment_date || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

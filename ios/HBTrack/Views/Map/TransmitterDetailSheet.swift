@@ -27,6 +27,10 @@ struct TransmitterDetailSheet: View {
                         }
                         DetailRow(icon: "bird", title: "Ring ID", value: matchingBird?.ring_id ?? "N/A")
                         
+                        if let reception = transmitter.reception_date, !reception.isEmpty {
+                            DetailRow(icon: "calendar", title: "Reception Date", value: reception)
+                        }
+                        
                         if let latestPos = viewModel.positions.filter({ $0.effectiveTransmitterId == transmitter.platform_id }).sorted(by: { $0.timestamp > $1.timestamp }).first {
                             
                             DetailRow(icon: "clock", title: "Last Fix", value: latestPos.timestamp)
