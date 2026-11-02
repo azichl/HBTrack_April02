@@ -25,23 +25,38 @@ const optBool = z.preprocess((v) => {
   return undefined;
 }, z.boolean().optional());
 
+function expandYear(y: string): string {
+  if (y.length === 2) {
+    const num = parseInt(y, 10);
+    return num >= 70 ? `19${y}` : `20${y}`;
+  }
+  return y;
+}
+
 export function toIsoDateOrNow(dateStr?: string | null): string {
   if (!dateStr) return new Date().toISOString();
   const s = String(dateStr).trim();
   if (/^\d{4}$/.test(s)) {
     return new Date(`${s}-01-01T00:00:00.000Z`).toISOString();
   }
-  const my = s.match(/^(\d{2})-(\d{4})$/);
-  if (my) {
-    return new Date(`${my[2]}-${my[1]}-01T00:00:00.000Z`).toISOString();
-  }
-  const dmy = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (dmy) {
-    return new Date(`${dmy[3]}-${dmy[2]}-${dmy[1]}T00:00:00.000Z`).toISOString();
+    const dd = dmy[1].padStart(2, '0');
+    const mm = dmy[2].padStart(2, '0');
+    const yyyy = expandYear(dmy[3]);
+    return new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`).toISOString();
   }
-  const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const my = s.match(/^(\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (my) {
+    const mm = my[1].padStart(2, '0');
+    const yyyy = expandYear(my[2]);
+    return new Date(`${yyyy}-${mm}-01T00:00:00.000Z`).toISOString();
+  }
+  const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if (ymd) {
-    return new Date(`${ymd[1]}-${ymd[2]}-${ymd[3]}T00:00:00.000Z`).toISOString();
+    const mm = ymd[2].padStart(2, '0');
+    const dd = ymd[3].padStart(2, '0');
+    return new Date(`${ymd[1]}-${mm}-${dd}T00:00:00.000Z`).toISOString();
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
@@ -72,26 +87,21 @@ export function normalizeDateToDmy(v: any, allowPartial = true): string | undefi
     return s;
   }
 
-  // MM-YYYY or MM/YYYY or MM.YYYY (e.g. 03-2024 or 3/2024)
-  const my = s.match(/^(\d{1,2})[\/\-\.](\d{4})$/);
-  if (allowPartial && my) {
-    const mm = my[1].padStart(2, '0');
-    return `${mm}-${my[2]}`;
-  }
-
-  // YYYY-MM or YYYY/MM (e.g. 2024-03)
-  const ym = s.match(/^(\d{4})[\/\-\.](\d{1,2})$/);
-  if (allowPartial && ym) {
-    const mm = ym[2].padStart(2, '0');
-    return `${mm}-${ym[1]}`;
-  }
-
-  // DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
-  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY (supports 2 or 4 digit years)
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   if (dmy) {
     const dd = dmy[1].padStart(2, '0');
     const mm = dmy[2].padStart(2, '0');
-    return `${dd}-${mm}-${dmy[3]}`;
+    const yyyy = expandYear(dmy[3]);
+    return `${dd}-${mm}-${yyyy}`;
+  }
+
+  // MM/YYYY or MM-YYYY or MM.YYYY (supports 2 or 4 digit years)
+  const my = s.match(/^(\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (allowPartial && my) {
+    const mm = my[1].padStart(2, '0');
+    const yyyy = expandYear(my[2]);
+    return `${mm}-${yyyy}`;
   }
 
   // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
@@ -102,26 +112,33 @@ export function normalizeDateToDmy(v: any, allowPartial = true): string | undefi
     return `${dd}-${mm}-${ymd[1]}`;
   }
 
+  // YYYY-MM or YYYY/MM (e.g. 2024-03)
+  const ym = s.match(/^(\d{4})[\/\-\.](\d{1,2})$/);
+  if (allowPartial && ym) {
+    const mm = ym[2].padStart(2, '0');
+    return `${mm}-${ym[1]}`;
+  }
+
   return s;
 }
 
-// Flexible optional date (DD-MM-YYYY, MM-YYYY, or YYYY)
+// Flexible optional date (DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY)
 const optFlexibleDate = z.preprocess(
   (v) => normalizeDateToDmy(v, true),
   z.string()
     .refine((val) => /^(\d{2}-\d{2}-\d{4}|\d{2}-\d{4}|\d{4})$/.test(val), {
-      message: 'Use DD-MM-YYYY, MM-YYYY, or YYYY',
+      message: 'Use DD/MM/YYYY, MM/YYYY, or YYYY (e.g. 15/03/2024, 03/2024, or 2024)',
     })
     .optional()
 );
 
-// Reception Date: Obligatory (DD-MM-YYYY, MM-YYYY, or YYYY)
+// Reception Date: Obligatory (DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY)
 const receptionDateObligatory = z.preprocess(
   (v) => normalizeDateToDmy(v, true),
-  z.string({ required_error: 'Reception date is obligatory (DD-MM-YYYY, MM-YYYY, or YYYY)' })
+  z.string({ required_error: 'Reception date is obligatory (DD/MM/YYYY, MM/YYYY, or YYYY)' })
     .min(1, 'Reception date is obligatory')
     .refine((val) => /^(\d{2}-\d{2}-\d{4}|\d{2}-\d{4}|\d{4})$/.test(val), {
-      message: 'Reception date must be in DD-MM-YYYY, MM-YYYY, or YYYY format',
+      message: 'Reception date must be in DD/MM/YYYY, MM/YYYY, or YYYY format (e.g. 15/03/2024, 03/2024, or 2024)',
     })
 );
 

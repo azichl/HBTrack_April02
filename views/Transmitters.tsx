@@ -512,11 +512,11 @@ export const Transmitters = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Reception Date * <span className="text-[10px] text-gray-400 font-normal">(DD-MM-YYYY, MM-YYYY, or YYYY)</span>
+                        Reception Date * <span className="text-[10px] text-gray-400 font-normal">(DD/MM/YYYY, MM/YYYY, or YYYY)</span>
                       </label>
                       <input 
                         type="text" 
-                        placeholder="e.g. 15-03-2024, 03-2024, or 2024"
+                        placeholder="e.g. 15/03/2024, 03/2024, or 2024"
                         value={formData.reception_date || ''} 
                         onChange={e => setFormData({...formData, reception_date: e.target.value})} 
                         className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" 
