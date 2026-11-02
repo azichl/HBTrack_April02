@@ -6,7 +6,7 @@ import { TransmittersBulkUploadModal } from '../src/components/TransmittersBulkU
 import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
-import { formatDateTime, findBirdForTransmitter } from '../utils/formatting';
+import { formatDateTime, formatDisplayDate, findBirdForTransmitter } from '../utils/formatting';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
 import { bulkDeleteRecords, recordStatusTransition } from '../services/firestoreService';
@@ -357,7 +357,7 @@ export const Transmitters = () => {
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.model}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.bird_species}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.manufacturer || '-'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.reception_date ? (t.reception_date.length <= 10 ? t.reception_date : formatDateTime(t.reception_date, timeZone)) : '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{formatDisplayDate(t.reception_date)}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{formatDateTime(t.last_fix, timeZone)}</td>
                   <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.site_location || '-'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 whitespace-nowrap border-r border-gray-100 dark:border-slate-700">{t.program_region || '-'}</td>
@@ -512,11 +512,11 @@ export const Transmitters = () => {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Reception Date * <span className="text-[10px] text-gray-400 font-normal">(Year or Date)</span>
+                        Reception Date * <span className="text-[10px] text-gray-400 font-normal">(DD-MM-YYYY, MM-YYYY, or YYYY)</span>
                       </label>
                       <input 
                         type="text" 
-                        placeholder="e.g. 2024 or 2024-01-15"
+                        placeholder="e.g. 15-03-2024, 03-2024, or 2024"
                         value={formData.reception_date || ''} 
                         onChange={e => setFormData({...formData, reception_date: e.target.value})} 
                         className="input-field w-full border border-gray-200 dark:border-slate-600 dark:bg-slate-900 dark:text-white p-2 rounded text-sm outline-none focus:ring-2 focus:ring-sky-500" 

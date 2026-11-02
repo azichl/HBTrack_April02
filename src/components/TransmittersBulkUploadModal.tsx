@@ -62,7 +62,7 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       'Active',
       '10h ON / 24h OFF',
       '12:00 - 18:00',
-      '2024-03-15',
+      '15-03-2024',
       'UA-9982',
       'Houbara Bustard',
       'M',
@@ -80,12 +80,12 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       ['manufacturer', 'No', 'Text (e.g. Microwave Telemetry, North Star)', 'Manufacturer name.'],
       ['hex_id', 'No', 'Hexadecimal (e.g. 112A3F)', 'Argos Hex ID (optional, replaces serial number).'],
       ['frequency', 'No', 'Number/Text (e.g. 401.650)', 'Transmission frequency in MHz.'],
-      ['reception_date', 'YES', 'Year (e.g. 2024) or YYYY-MM-DD', 'Date transmitter was received (obligatory, can accept only year).'],
+      ['reception_date', 'YES', 'DD-MM-YYYY, MM-YYYY, or YYYY', 'Date transmitter was received (accepts DD-MM-YYYY, MM-YYYY, or only YYYY).'],
       ['weight_g', 'No', 'Number (e.g. 22)', 'Weight in grams.'],
       ['status', 'YES', 'Active | Inactive | Dead | Static test', 'Device status.'],
       ['satellite_time', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Satellite transmission schedule / duty cycle.'],
       ['radio_time', 'No', 'Text (e.g. 12:00 - 18:00)', 'VHF radio beacon transmission time.'],
-      ['deployment_date', 'No', 'YYYY-MM-DD', 'Date deployed.'],
+      ['deployment_date', 'No', 'DD-MM-YYYY, MM-YYYY, or YYYY', 'Date deployed (accepts DD-MM-YYYY, MM-YYYY, or only YYYY).'],
       ['bird_ring_number', 'No', 'Text', 'Ring number of existing bird to link with.'],
       ['species', 'No', 'Text', 'Default: Houbara Bustard.'],
       ['sex', 'No', 'M or F', 'Bird gender.'],
@@ -340,8 +340,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                           reception_date * / Reception Date
                         </td>
                         <td className="p-2 font-bold text-red-600 dark:text-red-400">Obligatory</td>
-                        <td className="p-2">Reception Date: <strong>accepts 4-digit year</strong> (e.g. 2024) or full date (YYYY-MM-DD or DD/MM/YYYY)</td>
-                        <td className="p-2 font-mono text-emerald-700 dark:text-emerald-300 font-bold">2024 or 2024-01-15</td>
+                        <td className="p-2">Reception Date: <strong>accepts YYYY, MM-YYYY, or DD-MM-YYYY</strong></td>
+                        <td className="p-2 font-mono text-emerald-700 dark:text-emerald-300 font-bold">2024, 03-2024, or 15-03-2024</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">weight_g</td>
@@ -370,8 +370,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                       <tr>
                         <td className="p-2 font-mono font-bold">deployment_date</td>
                         <td className="p-2 text-gray-500">Optional</td>
-                        <td className="p-2">Date deployed (YYYY-MM-DD)</td>
-                        <td className="p-2 font-mono">2024-03-15</td>
+                        <td className="p-2">Date deployed (accepts YYYY, MM-YYYY, or DD-MM-YYYY)</td>
+                        <td className="p-2 font-mono">15-03-2024, 03-2024, or 2024</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">bird_ring_number</td>

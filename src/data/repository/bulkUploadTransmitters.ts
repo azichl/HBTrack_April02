@@ -25,69 +25,103 @@ const optBool = z.preprocess((v) => {
   return undefined;
 }, z.boolean().optional());
 
-const optDate = z.preprocess(
-  (v) => {
-    if (v == null || v === '') return undefined;
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
-    if (typeof v === 'number' && !isNaN(v)) {
-      const d = XLSX.SSF.parse_date_code(v);
-      if (d) {
-        const mm = String(d.m).padStart(2, '0');
-        const dd = String(d.d).padStart(2, '0');
-        return `${d.y}-${mm}-${dd}`;
-      }
+export function toIsoDateOrNow(dateStr?: string | null): string {
+  if (!dateStr) return new Date().toISOString();
+  const s = String(dateStr).trim();
+  if (/^\d{4}$/.test(s)) {
+    return new Date(`${s}-01-01T00:00:00.000Z`).toISOString();
+  }
+  const my = s.match(/^(\d{2})-(\d{4})$/);
+  if (my) {
+    return new Date(`${my[2]}-${my[1]}-01T00:00:00.000Z`).toISOString();
+  }
+  const dmy = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dmy) {
+    return new Date(`${dmy[3]}-${dmy[2]}-${dmy[1]}T00:00:00.000Z`).toISOString();
+  }
+  const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    return new Date(`${ymd[1]}-${ymd[2]}-${ymd[3]}T00:00:00.000Z`).toISOString();
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+}
+
+export function normalizeDateToDmy(v: any, allowPartial = true): string | undefined {
+  if (v == null || v === '') return undefined;
+  if (v instanceof Date) {
+    const dd = String(v.getUTCDate()).padStart(2, '0');
+    const mm = String(v.getUTCMonth() + 1).padStart(2, '0');
+    const yyyy = String(v.getUTCFullYear());
+    return `${dd}-${mm}-${yyyy}`;
+  }
+  if (typeof v === 'number' && !isNaN(v)) {
+    if (allowPartial && v >= 1900 && v <= 2100) return String(Math.round(v));
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d) {
+      const dd = String(d.d).padStart(2, '0');
+      const mm = String(d.m).padStart(2, '0');
+      return `${dd}-${mm}-${d.y}`;
     }
-    const s = String(v).trim();
-    const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (dmy) {
-      const dd = dmy[1].padStart(2, '0');
-      const mm = dmy[2].padStart(2, '0');
-      return `${dmy[3]}-${mm}-${dd}`;
-    }
-    const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-    if (ymd) {
-      const mm = ymd[2].padStart(2, '0');
-      const dd = ymd[3].padStart(2, '0');
-      return `${ymd[1]}-${mm}-${dd}`;
-    }
+  }
+  const s = String(v).trim();
+  if (!s || s.toLowerCase() === 'na' || s.toLowerCase() === 'n/a') return undefined;
+
+  // YYYY (e.g. 2024)
+  if (allowPartial && /^\d{4}$/.test(s)) {
     return s;
-  },
-  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD').optional()
+  }
+
+  // MM-YYYY or MM/YYYY or MM.YYYY (e.g. 03-2024 or 3/2024)
+  const my = s.match(/^(\d{1,2})[\/\-\.](\d{4})$/);
+  if (allowPartial && my) {
+    const mm = my[1].padStart(2, '0');
+    return `${mm}-${my[2]}`;
+  }
+
+  // YYYY-MM or YYYY/MM (e.g. 2024-03)
+  const ym = s.match(/^(\d{4})[\/\-\.](\d{1,2})$/);
+  if (allowPartial && ym) {
+    const mm = ym[2].padStart(2, '0');
+    return `${mm}-${ym[1]}`;
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmy) {
+    const dd = dmy[1].padStart(2, '0');
+    const mm = dmy[2].padStart(2, '0');
+    return `${dd}-${mm}-${dmy[3]}`;
+  }
+
+  // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
+  const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if (ymd) {
+    const mm = ymd[2].padStart(2, '0');
+    const dd = ymd[3].padStart(2, '0');
+    return `${dd}-${mm}-${ymd[1]}`;
+  }
+
+  return s;
+}
+
+// Flexible optional date (DD-MM-YYYY, MM-YYYY, or YYYY)
+const optFlexibleDate = z.preprocess(
+  (v) => normalizeDateToDmy(v, true),
+  z.string()
+    .refine((val) => /^(\d{2}-\d{2}-\d{4}|\d{2}-\d{4}|\d{4})$/.test(val), {
+      message: 'Use DD-MM-YYYY, MM-YYYY, or YYYY',
+    })
+    .optional()
 );
 
+// Reception Date: Obligatory (DD-MM-YYYY, MM-YYYY, or YYYY)
 const receptionDateObligatory = z.preprocess(
-  (v) => {
-    if (v == null || v === '') return undefined;
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
-    if (typeof v === 'number' && !isNaN(v)) {
-      if (v >= 1970 && v <= 2100) return String(Math.round(v));
-      const d = XLSX.SSF.parse_date_code(v);
-      if (d) {
-        const mm = String(d.m).padStart(2, '0');
-        const dd = String(d.d).padStart(2, '0');
-        return `${d.y}-${mm}-${dd}`;
-      }
-    }
-    const s = String(v).trim();
-    if (/^\d{4}$/.test(s)) return s;
-    const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-    if (dmy) {
-      const dd = dmy[1].padStart(2, '0');
-      const mm = dmy[2].padStart(2, '0');
-      return `${dmy[3]}-${mm}-${dd}`;
-    }
-    const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
-    if (ymd) {
-      const mm = ymd[2].padStart(2, '0');
-      const dd = ymd[3].padStart(2, '0');
-      return `${ymd[1]}-${mm}-${dd}`;
-    }
-    return s;
-  },
-  z.string({ required_error: 'Reception date is obligatory (year or YYYY-MM-DD)' })
+  (v) => normalizeDateToDmy(v, true),
+  z.string({ required_error: 'Reception date is obligatory (DD-MM-YYYY, MM-YYYY, or YYYY)' })
     .min(1, 'Reception date is obligatory')
-    .refine((val) => /^\d{4}(-\d{2}-\d{2})?$/.test(val), {
-      message: 'Reception date must be a 4-digit year (e.g. 2024) or YYYY-MM-DD',
+    .refine((val) => /^(\d{2}-\d{2}-\d{4}|\d{2}-\d{4}|\d{4})$/.test(val), {
+      message: 'Reception date must be in DD-MM-YYYY, MM-YYYY, or YYYY format',
     })
 );
 
@@ -99,7 +133,7 @@ export const TransmitterRowSchema = z.object({
   transmitter_model: str.pipe(z.string().min(1, 'Model is required')),
   manufacturer: str.optional(),
   weight_g: optNum,
-  reception_date: receptionDateObligatory, // Obligatory, accepts 4-digit year or YYYY-MM-DD
+  reception_date: receptionDateObligatory, // Obligatory, accepts DD-MM-YYYY, MM-YYYY, or YYYY
   status: str.refine((v): v is typeof STATUS[number] => {
     const lower = v.toLowerCase();
     return STATUS.some((s) => s.toLowerCase() === lower);
@@ -112,7 +146,7 @@ export const TransmitterRowSchema = z.object({
   satellite_time: str.optional(),
   radio_time: str.optional(),
   duty_cycle: str.optional(),
-  deployment_date: optDate,
+  deployment_date: optFlexibleDate,
   notes: str.optional(),
   comment: str.optional(),
 
@@ -122,8 +156,8 @@ export const TransmitterRowSchema = z.object({
   species: str.optional(),
   sex: str.optional(),
   origin: str.optional(),
-  hatch_date: optDate,
-  release_date: optDate,
+  hatch_date: optFlexibleDate,
+  release_date: optFlexibleDate,
   release_location: str.optional(),
   release_lat: optNum.refine((n) => n === undefined || Math.abs(n) <= 90, 'Latitude must be between -90 and 90'),
   release_lon: optNum.refine((n) => n === undefined || Math.abs(n) <= 180, 'Longitude must be between -180 and 180'),
@@ -458,13 +492,7 @@ export async function bulkUploadTransmitters(
         longitude: data.release_lon ?? null,
         notes: data.notes || data.comment || null,
         comment: data.comment || data.notes || null,
-        last_fix: data.deployment_date 
-          ? new Date(data.deployment_date).toISOString() 
-          : (data.reception_date 
-              ? (data.reception_date.length === 4 
-                  ? new Date(`${data.reception_date}-01-01`).toISOString() 
-                  : new Date(data.reception_date).toISOString())
-              : new Date().toISOString()),
+        last_fix: toIsoDateOrNow(data.deployment_date || data.reception_date),
         updatedAt: serverTimestamp(),
         updatedBy: uid,
         ...(exists ? {} : { createdAt: serverTimestamp(), createdBy: uid, source: 'bulk-upload' }),

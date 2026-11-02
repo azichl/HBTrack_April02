@@ -372,7 +372,7 @@ export function makeDeterministicFixDocId(pttId: string | number, locationType: 
 }
 
 /**
- * Safely parses a bird's official release date (ISO, YYYY-MM-DD, or DD/MM/YYYY)
+ * Safely parses a bird's official release date (ISO, DD-MM-YYYY, MM-YYYY, YYYY, etc.)
  * into a UTC millisecond timestamp (00:00:00.000Z unless explicit time is provided).
  */
 export function parseReleaseDateMs(releaseDateStr?: string | null): number | null {
@@ -381,6 +381,22 @@ export function parseReleaseDateMs(releaseDateStr?: string | null): number | nul
   if (str.includes('T')) {
     const exact = new Date(str).getTime();
     if (!isNaN(exact) && exact > 0) return exact;
+  }
+  // YYYY (4 digits)
+  if (/^\d{4}$/.test(str)) {
+    return Date.UTC(Number(str), 0, 1, 0, 0, 0, 0);
+  }
+  // MM-YYYY or MM/YYYY
+  const my = str.match(/^(\d{1,2})[-/](\d{4})$/);
+  if (my) {
+    const [_, m, y] = my;
+    return Date.UTC(Number(y), Number(m) - 1, 1, 0, 0, 0, 0);
+  }
+  // YYYY-MM
+  const ym = str.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (ym) {
+    const [_, y, m] = ym;
+    return Date.UTC(Number(y), Number(m) - 1, 1, 0, 0, 0, 0);
   }
   const ymd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (ymd) {
@@ -395,6 +411,56 @@ export function parseReleaseDateMs(releaseDateStr?: string | null): number | nul
   const parsed = new Date(str).getTime();
   return (!isNaN(parsed) && parsed > 0) ? parsed : null;
 }
+
+/**
+ * Standardizes display of dates across tables to DD-MM-YYYY (or MM-YYYY or YYYY)
+ */
+export const formatDisplayDate = (val?: string | null): string => {
+  if (!val) return '-';
+  const s = String(val).trim();
+  if (!s) return '-';
+  // DD-MM-YYYY or DD/MM/YYYY or DD.MM.YYYY
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmy) {
+    const dd = dmy[1].padStart(2, '0');
+    const mm = dmy[2].padStart(2, '0');
+    return `${dd}-${mm}-${dmy[3]}`;
+  }
+  // MM-YYYY or MM/YYYY
+  const my = s.match(/^(\d{1,2})[\/\-](\d{4})$/);
+  if (my) {
+    const mm = my[1].padStart(2, '0');
+    return `${mm}-${my[2]}`;
+  }
+  // YYYY (4 digits)
+  if (/^\d{4}$/.test(s)) {
+    return s;
+  }
+  // YYYY-MM-DD or YYYY/MM/DD
+  const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+  if (ymd) {
+    const dd = ymd[3].padStart(2, '0');
+    const mm = ymd[2].padStart(2, '0');
+    return `${dd}-${mm}-${ymd[1]}`;
+  }
+  // YYYY-MM
+  const ym = s.match(/^(\d{4})[\/\-](\d{1,2})$/);
+  if (ym) {
+    const mm = ym[2].padStart(2, '0');
+    return `${mm}-${ym[1]}`;
+  }
+  // Full ISO timestamp (e.g. 2024-03-15T12:00:00.000Z)
+  if (s.includes('T')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const dd = String(d.getUTCDate()).padStart(2, '0');
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const yyyy = d.getUTCFullYear();
+      return `${dd}-${mm}-${yyyy}`;
+    }
+  }
+  return s;
+};
 
 
 
