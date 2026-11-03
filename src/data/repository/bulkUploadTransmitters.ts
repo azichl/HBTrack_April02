@@ -195,6 +195,8 @@ export interface ParsedTransmitterRow {
   manufacturer?: string;
   reception_date: string;
   status: string;
+  site_location?: string;
+  program_region?: string;
   satellite_time?: string;
   radio_time?: string;
   duty_cycle?: string;
@@ -256,8 +258,8 @@ export async function parseTransmitterWorkbook(file: File) {
       reception_date: r.reception_date || r.reception_da || r.reception || r.date_reception || r.received_date || r.receipt_date || r.date_of_reception || r['reception date'] || undefined,
       status: canonicalStatus,
       deployed: r.deployed !== undefined && r.deployed !== '' ? r.deployed : undefined,
-      site_location: r.site_location || r.site || r.release_site || r.location || '',
-      program_region: r.program_region || r.region || '',
+      site_location: r.site_location || r['site location'] || r.site || r.release_site || r.location || '',
+      program_region: r.program_region || r['program region'] || r.region || r.program || '',
       satellite_time: r.satellite_time || r.satelitte_time || r.sat_time || r.satellite || r.sat || r.duty_cycle || '',
       radio_time: r.radio_time || r.vhf_time || r.radio || '',
       duty_cycle: r.satellite_time || r.satelitte_time || r.sat_time || r.duty_cycle || 'Unknown',
@@ -386,6 +388,8 @@ export async function bulkUploadTransmitters(
         manufacturer: v.data.manufacturer,
         reception_date: v.data.reception_date,
         status: v.data.status,
+        site_location: v.data.site_location,
+        program_region: v.data.program_region,
         satellite_time: v.data.satellite_time || v.data.duty_cycle,
         radio_time: v.data.radio_time,
         duty_cycle: v.data.satellite_time || v.data.duty_cycle,

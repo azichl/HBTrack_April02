@@ -40,6 +40,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       'reception_date *',
       'weight_g',
       'status *',
+      'site_location',
+      'program_region',
       'satellite_time',
       'radio_time',
       'deployment_date',
@@ -60,6 +62,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       '2024',
       22,
       'Active',
+      'Sweihan',
+      'Abu Dhabi',
       '10h ON / 24h OFF',
       '12:00 - 18:00',
       '15-03-2024',
@@ -83,6 +87,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       ['reception_date', 'YES', 'DD/MM/YYYY, MM/YYYY, or YYYY', 'Date transmitter was received (accepts DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY).'],
       ['weight_g', 'No', 'Number (e.g. 22)', 'Weight in grams.'],
       ['status', 'YES', 'Active | Inactive | Dead | Static test', 'Device status.'],
+      ['site_location', 'No', 'Text (e.g. Sweihan)', 'Site or release location name.'],
+      ['program_region', 'No', 'Text (e.g. Abu Dhabi, Dubai)', 'Operational program region.'],
       ['satellite_time', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Satellite transmission schedule / duty cycle.'],
       ['radio_time', 'No', 'Text (e.g. 12:00 - 18:00)', 'VHF radio beacon transmission time.'],
       ['deployment_date', 'No', 'DD/MM/YYYY, MM/YYYY, or YYYY', 'Date deployed (accepts DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY).'],
@@ -106,6 +112,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       { wch: 22 }, // reception_date * (wide enough so Reception Date is never truncated to reception_da)
       { wch: 12 }, // weight_g
       { wch: 14 }, // status *
+      { wch: 18 }, // site_location
+      { wch: 18 }, // program_region
       { wch: 20 }, // satellite_time
       { wch: 18 }, // radio_time
       { wch: 18 }, // deployment_date
@@ -356,6 +364,18 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                         <td className="p-2 font-mono">Active</td>
                       </tr>
                       <tr>
+                        <td className="p-2 font-mono font-bold">site_location</td>
+                        <td className="p-2 text-gray-500">Optional</td>
+                        <td className="p-2">Deployment or project site location</td>
+                        <td className="p-2 font-mono">Sweihan</td>
+                      </tr>
+                      <tr>
+                        <td className="p-2 font-mono font-bold">program_region</td>
+                        <td className="p-2 text-gray-500">Optional</td>
+                        <td className="p-2">Operational program region</td>
+                        <td className="p-2 font-mono">Abu Dhabi</td>
+                      </tr>
+                      <tr>
                         <td className="p-2 font-mono font-bold">satellite_time</td>
                         <td className="p-2 text-gray-500">Optional</td>
                         <td className="p-2">Satellite transmission schedule (replaces Duty Cycle)</td>
@@ -564,6 +584,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                           <th className="p-2">Frequency</th>
                           <th className="p-2 font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/40">Reception Date</th>
                           <th className="p-2">Status</th>
+                          <th className="p-2">Site Location</th>
+                          <th className="p-2">Program Region</th>
                           <th className="p-2">Sat Time</th>
                           <th className="p-2">Radio Time</th>
                           <th className="p-2">Bird Ring</th>
@@ -588,6 +610,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                                 {r.status}
                               </span>
                             </td>
+                            <td className="p-2 truncate max-w-[110px]" title={r.site_location || '-'}>{r.site_location || '-'}</td>
+                            <td className="p-2 truncate max-w-[110px]" title={r.program_region || '-'}>{r.program_region || '-'}</td>
                             <td className="p-2 truncate max-w-[110px]" title={r.satellite_time || r.duty_cycle || '-'}>{r.satellite_time || r.duty_cycle || '-'}</td>
                             <td className="p-2 truncate max-w-[110px]" title={r.radio_time || '-'}>{r.radio_time || '-'}</td>
                             <td className="p-2 font-mono text-indigo-700 dark:text-indigo-300">{r.bird_ring_number || '-'}</td>

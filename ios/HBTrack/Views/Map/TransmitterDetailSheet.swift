@@ -43,6 +43,14 @@ struct TransmitterDetailSheet: View {
                             DetailRow(icon: "radio", title: "Radio Time", value: radioTime)
                         }
                         
+                        if let site = transmitter.site_location, !site.isEmpty {
+                            DetailRow(icon: "mappin.and.ellipse", title: "Site Location", value: site)
+                        }
+                        
+                        if let region = transmitter.program_region, !region.isEmpty {
+                            DetailRow(icon: "map", title: "Program Region", value: region)
+                        }
+                        
                         if let latestPos = viewModel.positions.filter({ $0.effectiveTransmitterId == transmitter.platform_id }).sorted(by: { $0.timestamp > $1.timestamp }).first {
                             
                             DetailRow(icon: "clock", title: "Last Fix", value: latestPos.timestamp)
