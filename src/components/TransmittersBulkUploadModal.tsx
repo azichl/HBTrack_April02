@@ -62,8 +62,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       '2024',
       22,
       'Active',
-      'Sweihan',
-      'Abu Dhabi',
+      'RAF',
+      'Kazakhstan',
       '10h ON / 24h OFF',
       '12:00 - 18:00',
       '15-03-2024',
@@ -87,8 +87,8 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
       ['reception_date', 'YES', 'DD/MM/YYYY, MM/YYYY, or YYYY', 'Date transmitter was received (accepts DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY).'],
       ['weight_g', 'No', 'Number (e.g. 22)', 'Weight in grams.'],
       ['status', 'YES', 'Active | Inactive | Dead | Static test', 'Device status.'],
-      ['site_location', 'No', 'Text (e.g. Sweihan)', 'Site or release location name.'],
-      ['program_region', 'No', 'Text (e.g. Abu Dhabi, Dubai)', 'Operational program region.'],
+      ['site_location', 'No', 'Text (e.g. RAF)', 'Site or release location name.'],
+      ['program_region', 'No', 'Text (e.g. Kazakhstan)', 'Operational program region.'],
       ['satellite_time', 'No', 'Text (e.g. 10h ON / 24h OFF)', 'Satellite transmission schedule / duty cycle.'],
       ['radio_time', 'No', 'Text (e.g. 12:00 - 18:00)', 'VHF radio beacon transmission time.'],
       ['deployment_date', 'No', 'DD/MM/YYYY, MM/YYYY, or YYYY', 'Date deployed (accepts DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY).'],
@@ -367,13 +367,13 @@ export const TransmittersBulkUploadModal: React.FC<Props> = ({ isOpen, onClose, 
                         <td className="p-2 font-mono font-bold">site_location</td>
                         <td className="p-2 text-gray-500">Optional</td>
                         <td className="p-2">Deployment or project site location</td>
-                        <td className="p-2 font-mono">Sweihan</td>
+                        <td className="p-2 font-mono">RAF</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">program_region</td>
                         <td className="p-2 text-gray-500">Optional</td>
                         <td className="p-2">Operational program region</td>
-                        <td className="p-2 font-mono">Abu Dhabi</td>
+                        <td className="p-2 font-mono">Kazakhstan</td>
                       </tr>
                       <tr>
                         <td className="p-2 font-mono font-bold">satellite_time</td>
