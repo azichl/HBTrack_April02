@@ -35,36 +35,77 @@ function expandYear(y: string): string {
 
 export function toIsoDateOrNow(dateStr?: string | null): string {
   if (!dateStr) return new Date().toISOString();
-  const s = String(dateStr).trim();
-  if (/^\d{4}$/.test(s)) {
-    return new Date(`${s}-01-01T00:00:00.000Z`).toISOString();
+  try {
+    const s = String(dateStr).trim();
+    if (!s || s.toLowerCase() === 'na' || s.toLowerCase() === 'n/a') {
+      return new Date().toISOString();
+    }
+
+    if (s.includes('T')) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    }
+
+    if (/^\d{4}$/.test(s)) {
+      const y = parseInt(s, 10);
+      if (y >= 1970 && y <= 2100) {
+        return new Date(Date.UTC(y, 0, 1)).toISOString();
+      }
+    }
+
+    const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+    if (ymd) {
+      const yyyy = parseInt(ymd[1], 10);
+      const mm = Math.max(1, Math.min(12, parseInt(ymd[2], 10)));
+      const dd = Math.max(1, Math.min(31, parseInt(ymd[3], 10)));
+      const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
+      if (!isNaN(dt.getTime())) return dt.toISOString();
+    }
+
+    const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+    if (dmy) {
+      const p1 = parseInt(dmy[1], 10);
+      const p2 = parseInt(dmy[2], 10);
+      const yyyy = parseInt(expandYear(dmy[3]), 10);
+      let day = p1;
+      let month = p2;
+      if (p1 > 12 && p2 <= 12) {
+        day = p1;
+        month = p2;
+      } else if (p2 > 12 && p1 <= 12) {
+        month = p1;
+        day = p2;
+      }
+      month = Math.max(1, Math.min(12, month));
+      day = Math.max(1, Math.min(31, day));
+      const dt = new Date(Date.UTC(yyyy, month - 1, day));
+      if (!isNaN(dt.getTime())) return dt.toISOString();
+    }
+
+    const my = s.match(/^(\d{1,2})[\/\-\.](\d{2,4})/);
+    if (my) {
+      let month = parseInt(my[1], 10);
+      let yyyy = parseInt(expandYear(my[2]), 10);
+      if (month > 12) month = 1;
+      month = Math.max(1, Math.min(12, month));
+      const dt = new Date(Date.UTC(yyyy, month - 1, 1));
+      if (!isNaN(dt.getTime())) return dt.toISOString();
+    }
+
+    const fallback = new Date(s);
+    if (!isNaN(fallback.getTime())) {
+      return fallback.toISOString();
+    }
+  } catch (err) {
+    // Prevent any RangeError
   }
-  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
-  if (dmy) {
-    const dd = dmy[1].padStart(2, '0');
-    const mm = dmy[2].padStart(2, '0');
-    const yyyy = expandYear(dmy[3]);
-    return new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`).toISOString();
-  }
-  const my = s.match(/^(\d{1,2})[\/\-\.](\d{2,4})$/);
-  if (my) {
-    const mm = my[1].padStart(2, '0');
-    const yyyy = expandYear(my[2]);
-    return new Date(`${yyyy}-${mm}-01T00:00:00.000Z`).toISOString();
-  }
-  const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
-  if (ymd) {
-    const mm = ymd[2].padStart(2, '0');
-    const dd = ymd[3].padStart(2, '0');
-    return new Date(`${ymd[1]}-${mm}-${dd}T00:00:00.000Z`).toISOString();
-  }
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  return new Date().toISOString();
 }
 
 export function normalizeDateToDmy(v: any, allowPartial = true): string | undefined {
   if (v == null || v === '') return undefined;
   if (v instanceof Date) {
+    if (isNaN(v.getTime())) return undefined;
     const dd = String(v.getUTCDate()).padStart(2, '0');
     const mm = String(v.getUTCMonth() + 1).padStart(2, '0');
     const yyyy = String(v.getUTCFullYear());
@@ -72,51 +113,67 @@ export function normalizeDateToDmy(v: any, allowPartial = true): string | undefi
   }
   if (typeof v === 'number' && !isNaN(v)) {
     if (allowPartial && v >= 1900 && v <= 2100) return String(Math.round(v));
-    const d = XLSX.SSF.parse_date_code(v);
-    if (d) {
-      const dd = String(d.d).padStart(2, '0');
-      const mm = String(d.m).padStart(2, '0');
-      return `${dd}-${mm}-${d.y}`;
-    }
+    try {
+      const d = XLSX.SSF.parse_date_code(v);
+      if (d && d.y && d.m && d.d) {
+        const dd = String(d.d).padStart(2, '0');
+        const mm = String(d.m).padStart(2, '0');
+        return `${dd}-${mm}-${d.y}`;
+      }
+    } catch (e) {}
   }
   const s = String(v).trim();
-  if (!s || s.toLowerCase() === 'na' || s.toLowerCase() === 'n/a') return undefined;
+  if (!s || s.toLowerCase() === 'na' || s.toLowerCase() === 'n/a' || s.toLowerCase() === 'nan' || s.includes('NaN')) return undefined;
 
   // YYYY (e.g. 2024)
   if (allowPartial && /^\d{4}$/.test(s)) {
     return s;
   }
 
-  // DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY (supports 2 or 4 digit years)
-  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
-  if (dmy) {
-    const dd = dmy[1].padStart(2, '0');
-    const mm = dmy[2].padStart(2, '0');
-    const yyyy = expandYear(dmy[3]);
-    return `${dd}-${mm}-${yyyy}`;
-  }
-
-  // MM/YYYY or MM-YYYY or MM.YYYY (supports 2 or 4 digit years)
-  const my = s.match(/^(\d{1,2})[\/\-\.](\d{2,4})$/);
-  if (allowPartial && my) {
-    const mm = my[1].padStart(2, '0');
-    const yyyy = expandYear(my[2]);
-    return `${mm}-${yyyy}`;
-  }
-
   // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
   const ymd = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
   if (ymd) {
-    const mm = ymd[2].padStart(2, '0');
-    const dd = ymd[3].padStart(2, '0');
+    const mm = String(Math.max(1, Math.min(12, parseInt(ymd[2], 10)))).padStart(2, '0');
+    const dd = String(Math.max(1, Math.min(31, parseInt(ymd[3], 10)))).padStart(2, '0');
     return `${dd}-${mm}-${ymd[1]}`;
   }
 
   // YYYY-MM or YYYY/MM (e.g. 2024-03)
   const ym = s.match(/^(\d{4})[\/\-\.](\d{1,2})$/);
   if (allowPartial && ym) {
-    const mm = ym[2].padStart(2, '0');
+    const mm = String(Math.max(1, Math.min(12, parseInt(ym[2], 10)))).padStart(2, '0');
     return `${mm}-${ym[1]}`;
+  }
+
+  // DD/MM/YYYY or MM/DD/YYYY or DD-MM-YYYY (supports 2 or 4 digit years)
+  const dmy = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (dmy) {
+    const p1 = parseInt(dmy[1], 10);
+    const p2 = parseInt(dmy[2], 10);
+    const yyyy = expandYear(dmy[3]);
+    let day = p1;
+    let month = p2;
+    if (p1 > 12 && p2 <= 12) {
+      day = p1;
+      month = p2;
+    } else if (p2 > 12 && p1 <= 12) {
+      month = p1;
+      day = p2;
+    }
+    month = Math.max(1, Math.min(12, month));
+    day = Math.max(1, Math.min(31, day));
+    const dd = String(day).padStart(2, '0');
+    const mm = String(month).padStart(2, '0');
+    return `${dd}-${mm}-${yyyy}`;
+  }
+
+  // MM/YYYY or MM-YYYY or MM.YYYY (supports 2 or 4 digit years)
+  const my = s.match(/^(\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (allowPartial && my) {
+    const month = Math.max(1, Math.min(12, parseInt(my[1], 10)));
+    const mm = String(month).padStart(2, '0');
+    const yyyy = expandYear(my[2]);
+    return `${mm}-${yyyy}`;
   }
 
   return s;
