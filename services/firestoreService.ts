@@ -1290,10 +1290,11 @@ export const deleteCoordinateRecord = async (argosId: string | undefined, platfo
 /** Bulk delete records by a specific collection and list of IDs */
 export const bulkDeleteRecords = async (collectionName: string, docIds: string[]) => {
   const BATCH_LIMIT = 400;
+  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
   let deleted = 0;
-  for (let i = 0; i < docIds.length; i += BATCH_LIMIT) {
+  for (let i = 0; i < uniqueDocIds.length; i += BATCH_LIMIT) {
     const batch = writeBatch(db);
-    const chunk = docIds.slice(i, i + BATCH_LIMIT);
+    const chunk = uniqueDocIds.slice(i, i + BATCH_LIMIT);
     chunk.forEach(id => batch.delete(doc(db, collectionName, id)));
     await batch.commit();
     deleted += chunk.length;
@@ -1304,11 +1305,13 @@ export const bulkDeleteRecords = async (collectionName: string, docIds: string[]
 /** Bulk update records by a specific collection, list of IDs, and partial data */
 export const bulkUpdateRecords = async (collectionName: string, docIds: string[], data: any) => {
   const BATCH_LIMIT = 400;
+  const uniqueDocIds = Array.from(new Set(docIds.filter(Boolean)));
+  const cleanData = JSON.parse(JSON.stringify(data));
   let updated = 0;
-  for (let i = 0; i < docIds.length; i += BATCH_LIMIT) {
+  for (let i = 0; i < uniqueDocIds.length; i += BATCH_LIMIT) {
     const batch = writeBatch(db);
-    const chunk = docIds.slice(i, i + BATCH_LIMIT);
-    chunk.forEach(id => batch.update(doc(db, collectionName, id), data));
+    const chunk = uniqueDocIds.slice(i, i + BATCH_LIMIT);
+    chunk.forEach(id => batch.set(doc(db, collectionName, id), cleanData, { merge: true }));
     await batch.commit();
     updated += chunk.length;
   }

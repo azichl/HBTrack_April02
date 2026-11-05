@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
 import { Trash2, Edit2, X, Check, Database, Loader2 } from 'lucide-react';
 
+export interface BulkFieldOption {
+  key: string;
+  label: string;
+  options?: string[];
+  placeholder?: string;
+}
+
 interface BulkActionsToolbarProps {
   selectedIds: string[];
   onClearSelection: () => void;
   onBulkDelete: (ids: string[]) => Promise<void>;
   onBulkReplace: (ids: string[], field: string, value: string) => Promise<void>;
-  availableFields: { key: string; label: string }[];
+  availableFields: BulkFieldOption[];
 }
 
 export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
@@ -24,22 +31,41 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
 
   if (selectedIds.length === 0) return null;
 
+  const currentFieldDef = availableFields.find(f => f.key === replaceField);
+  const options = currentFieldDef?.options || (replaceField === 'status' ? ['Active', 'Potential Mortality', 'Static test', 'Dead', 'Inactive', 'Auto'] : undefined);
+
+  const handleFieldChange = (newField: string) => {
+    setReplaceField(newField);
+    const newFieldDef = availableFields.find(f => f.key === newField);
+    const newOptions = newFieldDef?.options || (newField === 'status' ? ['Active', 'Potential Mortality', 'Static test', 'Dead', 'Inactive', 'Auto'] : undefined);
+    setReplaceValue(newOptions && newOptions.length > 0 ? newOptions[0] : '');
+  };
+
   const handleDelete = async () => {
     if (window.confirm(`Are you sure you want to permanently delete ${selectedIds.length} selected records?`)) {
       setIsDeleting(true);
-      await onBulkDelete(selectedIds);
-      setIsDeleting(false);
-      onClearSelection();
+      try {
+        await onBulkDelete(selectedIds);
+      } finally {
+        setIsDeleting(false);
+        onClearSelection();
+      }
     }
   };
 
   const handleReplace = async () => {
-    if (window.confirm(`Are you sure you want to update "${replaceField}" to "${replaceValue}" for ${selectedIds.length} selected records?`)) {
+    if (replaceValue === '' && !window.confirm(`Are you sure you want to clear "${currentFieldDef?.label || replaceField}" for ${selectedIds.length} selected records?`)) {
+      return;
+    }
+    if (window.confirm(`Are you sure you want to update "${currentFieldDef?.label || replaceField}" to "${replaceValue}" for ${selectedIds.length} selected records?`)) {
       setIsReplacing(true);
-      await onBulkReplace(selectedIds, replaceField, replaceValue);
-      setIsReplacing(false);
-      setReplaceMode(false);
-      onClearSelection();
+      try {
+        await onBulkReplace(selectedIds, replaceField, replaceValue);
+      } finally {
+        setIsReplacing(false);
+        setReplaceMode(false);
+        onClearSelection();
+      }
     }
   };
 
@@ -60,31 +86,28 @@ export const BulkActionsToolbar: React.FC<BulkActionsToolbarProps> = ({
           <div className="flex items-center gap-3">
             <select
               value={replaceField}
-              onChange={(e) => setReplaceField(e.target.value)}
+              onChange={(e) => handleFieldChange(e.target.value)}
               className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500"
             >
               {availableFields.map(f => (
                 <option key={f.key} value={f.key}>{f.label}</option>
               ))}
             </select>
-            {replaceField === 'status' ? (
+            {options && options.length > 0 ? (
               <select
                 value={replaceValue}
                 onChange={(e) => setReplaceValue(e.target.value)}
                 className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500 w-48"
               >
-                <option value="">-- Select Status --</option>
-                <option value="Active">Active</option>
-                <option value="Potential Mortality">Potential Mortality</option>
-                <option value="Static test">Static test</option>
-                <option value="Dead">Dead</option>
-                <option value="Inactive">Inactive</option>
-                <option value="Auto">Auto (Calculate)</option>
+                <option value="">-- Select {currentFieldDef?.label || 'Option'} --</option>
+                {options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
               </select>
             ) : (
               <input
                 type="text"
-                placeholder="New Value"
+                placeholder={currentFieldDef?.placeholder || "New Value"}
                 value={replaceValue}
                 onChange={(e) => setReplaceValue(e.target.value)}
                 className="bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-brand-500 w-48"

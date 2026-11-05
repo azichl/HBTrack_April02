@@ -5,8 +5,8 @@ import { exportToCSV } from '../utils/csvExport';
 import { useSortableTable, SortableHeader } from '../components/TableComponents';
 import { BulkActionsToolbar } from '../components/BulkActionsToolbar';
 import { formatDateTime, formatUtcDateTime, normalizePttId, safeParseTimestamp, isValidCoordinate } from '../utils/formatting';
-import { buildFixes, type RawFix, type Fix } from '../utils/positionsEngine';
-import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, clearAllTrackingData, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords } from '../services/firestoreService';
+import { buildFixes, fixId, parseUtc, type RawFix, type Fix } from '../utils/positionsEngine';
+import { loadAllArgosPositions, loadAllPositions, deleteArgosPositions, clearAllTrackingData, deleteCoordinateRecord, getArgosTransmitterIds, saveDocument, bulkDeleteRecords, bulkUpdateRecords, clearTransmitterHistoryCache } from '../services/firestoreService';
 import { KNOWN_CLS_RAW_LOCATION_DATES } from '../services/argosService';
 import { CustomSelect } from '../components/CustomSelect';
 import Draggable from 'react-draggable';
@@ -128,6 +128,8 @@ export const ArgosData = () => {
 
       // Build canonical fixes using positionsEngine
       const rawFixes: RawFix[] = [];
+      const fixToRawDocsMap = new Map<string, { col: string; realId: string; platformId: string; timestamp: string }[]>();
+
       data.forEach(d => {
         const rawLc = String(d.locationClass || d.lc || '').trim();
         const latNum = Number(d.lat !== undefined ? d.lat : d.latitude);
@@ -161,6 +163,22 @@ export const ArgosData = () => {
 
         const receivedAtStr = d.firstMessageDate || d.receivedAt || d.messageDate || d.timestamp;
         const unitType = String(d.unitType || d.msgType || 'Houbara');
+
+        try {
+          const tMs = parseUtc(locDateStr);
+          const fId = fixId(pttId, locationType, tMs);
+          const docId = d.id;
+          const col = d._collection || (collectionMode === 'positions' ? 'positions' : 'argos_positions');
+          if (fId && docId) {
+            const list = fixToRawDocsMap.get(fId) || [];
+            if (!list.some(item => item.realId === docId && item.col === col)) {
+              list.push({ col, realId: docId, platformId: pttId, timestamp: locDateStr });
+            }
+            fixToRawDocsMap.set(fId, list);
+          }
+        } catch {
+          // Ignore parse errors, buildFixes will handle rejected items
+        }
 
         rawFixes.push({
           pttId,
@@ -215,9 +233,14 @@ export const ArgosData = () => {
         }
 
         const unitType = fix.unitTypes[0] || 'Houbara';
+        const sourceRefs = fixToRawDocsMap.get(fix.id) || [];
+        const hasPositions = sourceRefs.some(s => s.col === 'positions');
+        const hasArgos = sourceRefs.some(s => s.col === 'argos_positions');
+        const primaryCollection = hasArgos ? 'argos_positions' : (hasPositions ? 'positions' : (collectionMode === 'positions' ? 'positions' : 'argos_positions'));
 
         return {
           id: fix.id,
+          _sourceRefs: sourceRefs,
           pttId: fix.pttId,
           platformId: fix.pttId,
           unitType,
@@ -239,7 +262,7 @@ export const ArgosData = () => {
           quality,
           accepted,
           rejectReason,
-          _collection: 'argos_positions'
+          _collection: primaryCollection
         };
       });
 
@@ -280,12 +303,15 @@ export const ArgosData = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = editingRecordId || `argos-${Date.now()}`;
+    const existingRow = editingRecordId ? allData.find(x => x.id === editingRecordId) : null;
+    const realDocId = existingRow?._sourceRefs?.[0]?.realId || editingRecordId || `argos-${Date.now()}`;
+    const targetCol = existingRow?._sourceRefs?.[0]?.col || existingRow?._collection || 'argos_positions';
+
     const newPos: ArgosMessage = {
-      id,
+      id: realDocId,
       ...formData as ArgosMessage
     };
-    await saveDocument('argos_positions', id, newPos);
+    await saveDocument(targetCol, realDocId, newPos);
     setIsModalOpen(false);
     await loadData();
   };
@@ -448,39 +474,160 @@ export const ArgosData = () => {
   };
 
   const handleDeleteRow = async (row: any) => {
-    if (window.confirm("Are you sure you want to permanently delete this coordinate from the database?")) {
-      const col = row._collection || 'argos_positions';
-      await bulkDeleteRecords(col, [row.id]);
+    if (!window.confirm("Are you sure you want to permanently delete this coordinate from the database?")) {
+      return;
+    }
+
+    // 1. Optimistic removal from table for instant feedback
+    const deletedId = row.id;
+    setAllData(prev => prev.filter(r => r.id !== deletedId));
+    selectedIds.delete(deletedId);
+
+    try {
+      const sourceRefs = (row._sourceRefs && row._sourceRefs.length > 0)
+        ? row._sourceRefs
+        : [{ col: row._collection || 'argos_positions', realId: row.id, platformId: row.platformId, timestamp: row.timestamp }];
+
+      const argosRealIds: string[] = [];
+      const posRealIds: string[] = [];
+
+      sourceRefs.forEach((ref: any) => {
+        if (ref.col === 'positions') posRealIds.push(ref.realId);
+        else argosRealIds.push(ref.realId);
+      });
+
+      const promises: Promise<any>[] = [];
+      if (argosRealIds.length > 0) {
+        promises.push(bulkDeleteRecords('argos_positions', argosRealIds));
+      }
+      if (posRealIds.length > 0) {
+        promises.push(bulkDeleteRecords('positions', posRealIds));
+      }
+
+      await Promise.all(promises);
+
+      if (row.platformId) {
+        clearTransmitterHistoryCache(String(row.platformId));
+      }
+    } catch (err: any) {
+      console.error('Error deleting coordinate row:', err);
+      alert(`Error deleting row: ${err?.message || 'Unknown error'}`);
       await loadData();
     }
   };
 
-  // Bulk Handlers — group by collection
+  // Bulk Handlers — group by real Firestore doc IDs
   const handleBulkDelete = async (ids: string[]) => {
-    // Separate IDs by collection
-    const argosIds: string[] = [];
-    const posIds: string[] = [];
-    ids.forEach(id => {
-      const row = allData.find(r => r.id === id);
-      if (row?._collection === 'positions') posIds.push(id);
-      else argosIds.push(id);
-    });
-    if (argosIds.length > 0) await bulkDeleteRecords('argos_positions', argosIds);
-    if (posIds.length > 0) await bulkDeleteRecords('positions', posIds);
-    await loadData();
+    if (!ids || ids.length === 0) return;
+
+    // 1. Optimistic removal from table
+    const idsSet = new Set(ids);
+    const deletedRows = allData.filter(r => idsSet.has(r.id));
+    setAllData(prev => prev.filter(r => !idsSet.has(r.id)));
+    clearSelection();
+
+    try {
+      const argosRealIds: string[] = [];
+      const posRealIds: string[] = [];
+      const touchedTransmitters = new Set<string>();
+
+      deletedRows.forEach(row => {
+        if (row.platformId) touchedTransmitters.add(String(row.platformId));
+        const sourceRefs = (row._sourceRefs && row._sourceRefs.length > 0)
+          ? row._sourceRefs
+          : [{ col: row._collection || 'argos_positions', realId: row.id, platformId: row.platformId, timestamp: row.timestamp }];
+
+        sourceRefs.forEach((ref: any) => {
+          if (ref.col === 'positions') posRealIds.push(ref.realId);
+          else argosRealIds.push(ref.realId);
+        });
+      });
+
+      const promises: Promise<any>[] = [];
+      if (argosRealIds.length > 0) {
+        promises.push(bulkDeleteRecords('argos_positions', argosRealIds));
+      }
+      if (posRealIds.length > 0) {
+        promises.push(bulkDeleteRecords('positions', posRealIds));
+      }
+
+      await Promise.all(promises);
+      touchedTransmitters.forEach(tId => clearTransmitterHistoryCache(tId));
+    } catch (err: any) {
+      console.error('Error during bulk delete:', err);
+      alert(`Error deleting records: ${err?.message || 'Unknown error'}`);
+      await loadData();
+    }
   };
 
   const handleBulkReplace = async (ids: string[], field: string, value: string) => {
-    const argosIds: string[] = [];
-    const posIds: string[] = [];
-    ids.forEach(id => {
-      const row = allData.find(r => r.id === id);
-      if (row?._collection === 'positions') posIds.push(id);
-      else argosIds.push(id);
-    });
-    if (argosIds.length > 0) await bulkUpdateRecords('argos_positions', argosIds, { [field]: value });
-    if (posIds.length > 0) await bulkUpdateRecords('positions', posIds, { [field]: value });
-    await loadData();
+    if (!ids || ids.length === 0) return;
+
+    let cleanVal: any = value;
+    if (field === 'lat' || field === 'lon' || field === 'errorRadiusM') {
+      const num = Number(value);
+      if (!isNaN(num)) cleanVal = num;
+    }
+
+    // 1. Optimistic update
+    const idsSet = new Set(ids);
+    const targetRows = allData.filter(r => idsSet.has(r.id));
+    setAllData(prev => prev.map(row => {
+      if (idsSet.has(row.id)) {
+        return {
+          ...row,
+          [field]: cleanVal,
+          ...(field === 'lc' ? { locationClass: cleanVal } : {}),
+          ...(field === 'platformId' ? { pttId: cleanVal } : {}),
+          ...(field === 'unitType' ? { msgType: cleanVal } : {})
+        };
+      }
+      return row;
+    }));
+    clearSelection();
+
+    try {
+      const updateData: Record<string, any> = { [field]: cleanVal };
+      if (field === 'lat') updateData.latitude = cleanVal;
+      if (field === 'lon') updateData.longitude = cleanVal;
+      if (field === 'lc') updateData.locationClass = cleanVal;
+      if (field === 'platformId') {
+        updateData.transmitter_id = cleanVal;
+        updateData.pttId = cleanVal;
+      }
+      if (field === 'unitType') updateData.msgType = cleanVal;
+
+      const argosRealIds: string[] = [];
+      const posRealIds: string[] = [];
+      const touchedTransmitters = new Set<string>();
+
+      targetRows.forEach(row => {
+        if (row.platformId) touchedTransmitters.add(String(row.platformId));
+        const sourceRefs = (row._sourceRefs && row._sourceRefs.length > 0)
+          ? row._sourceRefs
+          : [{ col: row._collection || 'argos_positions', realId: row.id, platformId: row.platformId, timestamp: row.timestamp }];
+
+        sourceRefs.forEach((ref: any) => {
+          if (ref.col === 'positions') posRealIds.push(ref.realId);
+          else argosRealIds.push(ref.realId);
+        });
+      });
+
+      const promises: Promise<any>[] = [];
+      if (argosRealIds.length > 0) {
+        promises.push(bulkUpdateRecords('argos_positions', argosRealIds, updateData));
+      }
+      if (posRealIds.length > 0) {
+        promises.push(bulkUpdateRecords('positions', posRealIds, updateData));
+      }
+
+      await Promise.all(promises);
+      touchedTransmitters.forEach(tId => clearTransmitterHistoryCache(tId));
+    } catch (err: any) {
+      console.error('Error during bulk replace:', err);
+      alert(`Error updating records: ${err?.message || 'Unknown error'}`);
+      await loadData();
+    }
   };
 
   // Row click handler — toggle selection
@@ -502,12 +649,14 @@ export const ArgosData = () => {
         onBulkDelete={handleBulkDelete}
         onBulkReplace={handleBulkReplace}
         availableFields={[
-          { key: 'lat', label: 'Latitude' },
-          { key: 'lon', label: 'Longitude' },
-          { key: 'lc', label: 'Location Class (LC)' },
-          { key: 'locationType', label: 'Location Type' },
-          { key: 'platformId', label: 'Platform ID' },
-          { key: 'satellite', label: 'Satellite' }
+          { key: 'lc', label: 'Location Class (LC)', options: ['GPS', '3', '2', '1', '0', 'A', 'B', 'Z'] },
+          { key: 'locationType', label: 'Location Type', options: ['GPS', 'DOPPLER'] },
+          { key: 'unitType', label: 'Unit Type', options: ['Houbara', 'DS', 'Falcon', 'Solar', 'Manual'] },
+          { key: 'lat', label: 'Latitude', placeholder: 'e.g. 24.12345' },
+          { key: 'lon', label: 'Longitude', placeholder: 'e.g. 54.12345' },
+          { key: 'errorRadiusM', label: 'Error Radius (m)', placeholder: 'e.g. 150' },
+          { key: 'platformId', label: 'Platform ID', placeholder: 'e.g. 284104' },
+          { key: 'satellite', label: 'Satellite', placeholder: 'e.g. NOAA-15' }
         ]}
       />
 
