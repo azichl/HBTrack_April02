@@ -45,6 +45,7 @@ export interface ReportToolbarProps {
   // Workspace Fullscreen
   isWorkspaceFullscreen?: boolean;
   onToggleWorkspaceFullscreen?: () => void;
+  onPreviewSheet?: () => void;
 
   // Map elements
   mapElements: MapElements;
@@ -194,6 +195,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   onExportPng,
   isWorkspaceFullscreen = false,
   onToggleWorkspaceFullscreen,
+  onPreviewSheet,
   onPrint,
   onShareWhatsApp,
   onOpenCollections,
@@ -243,9 +245,11 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
       style={{
         position: 'sticky',
         top: 0,
-        zIndex: 40
+        zIndex: isWorkspaceFullscreen ? 1050 : 40
       }}
-      className="flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-200 dark:border-slate-800 shadow-xs text-xs mb-3 select-none"
+      className={`flex flex-col bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-200 dark:border-slate-800 shadow-xs text-xs select-none ${
+        isWorkspaceFullscreen ? 'mb-0 shadow-md' : 'mb-3'
+      }`}
     >
       {/* Top Toolbar Row */}
       <div className="flex flex-wrap items-center justify-between gap-2 p-2.5">
@@ -474,25 +478,48 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
             </button>
           </div>
 
+          {/* Fullscreen Workspace Indicator Badge */}
+          {isWorkspaceFullscreen && (
+            <span className="hidden xl:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+              <Compass size={11} />
+              {isAr ? 'مساحة العمل الكاملة' : 'Full Screen Studio'}
+            </span>
+          )}
+
+          {/* Sheet Preview Button (Moved from black bar into toolbar) */}
+          {onPreviewSheet && (
+            <button
+              type="button"
+              onClick={onPreviewSheet}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 shadow-2xs"
+              title={isAr ? 'معاينة ورقة التقرير فقط' : 'Preview Sheet'}
+            >
+              <Eye size={13} className="text-brand-600 dark:text-brand-400" />
+              <span className="hidden sm:inline">{isAr ? 'معاينة الورقة' : 'Preview Sheet'}</span>
+            </button>
+          )}
+
           {/* Fullscreen Workspace Toggle */}
           {onToggleWorkspaceFullscreen && (
             <button
               type="button"
               onClick={onToggleWorkspaceFullscreen}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-xs ${
                 isWorkspaceFullscreen
                   ? 'bg-red-600 hover:bg-red-700 text-white ring-2 ring-red-400'
                   : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700'
               }`}
               title={
                 isWorkspaceFullscreen
-                  ? (isAr ? 'إنهاء ملء الشاشة لمساحة العمل (Esc)' : 'Exit Fullscreen Workspace (Esc)')
+                  ? (isAr ? 'الخروج من ملء الشاشة (Esc)' : 'Exit Fullscreen (Esc)')
                   : (isAr ? 'ملء الشاشة لمساحة العمل بالكامل لتعديل التقرير بأريحية' : 'Full Screen Workspace')
               }
             >
               {isWorkspaceFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
               <span className="hidden sm:inline">
-                {isWorkspaceFullscreen ? (isAr ? 'إنهاء ملء الشاشة' : 'Exit Fullscreen') : (isAr ? 'ملء الشاشة' : 'Fullscreen')}
+                {isWorkspaceFullscreen 
+                  ? (isAr ? 'إنهاء ملء الشاشة (Esc)' : 'Exit Fullscreen (Esc)') 
+                  : (isAr ? 'ملء الشاشة' : 'Fullscreen')}
               </span>
             </button>
           )}
@@ -517,7 +544,7 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
                   position: 'fixed',
                   top: exportPos.top,
                   left: exportPos.left,
-                  zIndex: 1100,
+                  zIndex: 9999,
                   width: 200
                 }}
                 className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1 animate-in fade-in zoom-in-95"

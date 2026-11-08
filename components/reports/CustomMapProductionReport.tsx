@@ -3161,7 +3161,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   return (
     <div className={
       isWorkspaceFullscreen
-        ? "fixed inset-0 z-[5000] bg-slate-100 dark:bg-slate-950 overflow-y-auto overflow-x-hidden p-3 md:p-6 space-y-4 shadow-2xl"
+        ? "fixed inset-0 z-[5000] bg-slate-100 dark:bg-slate-950 overflow-y-auto overflow-x-hidden shadow-2xl"
         : "space-y-6"
     }>
       
@@ -3565,57 +3565,14 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         onChange={(e) => handleLogoUpload(e, 'right')}
       />
 
-      {/* ─── FULLSCREEN WORKSPACE BANNER ────────────────────────────────────────── */}
-      {isWorkspaceFullscreen && (
-        <div className="no-print w-full flex items-center justify-between mb-2 bg-slate-900/95 border border-slate-700 px-4 py-2.5 rounded-xl text-white select-none shadow-2xl sticky top-2 z-[60]" dir="rtl">
-          <div className="flex items-center gap-3">
-            <div className="p-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg">
-              <Compass size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-white">
-                  {reportLanguage === 'ar' ? 'مساحة العمل الكاملة بملء الشاشة' : 'Full Screen Studio Workspace'}
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
-                  {reportLanguage === 'ar' ? 'وضع التحرير الموسع والمريح' : 'Expanded Studio Canvas'}
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-400">
-                {reportLanguage === 'ar' ? 'مساحة عمل كاملة لتخصيص الخرائط والجداول والمسارات بأريحية تامة' : 'Spacious canvas to edit maps, tables, labels and tracks'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsReportFullscreen(true)}
-              className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-gray-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-              title={reportLanguage === 'ar' ? 'معاينة الورقة فقط' : 'Preview Sheet'}
-            >
-              <Eye size={13} />
-              <span>{reportLanguage === 'ar' ? 'معاينة الورقة' : 'Preview Sheet'}</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleToggleWorkspaceFullscreen}
-              className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
-              title={reportLanguage === 'ar' ? 'الخروج من ملء الشاشة (Esc)' : 'Exit Fullscreen (Esc)'}
-            >
-              <Minimize2 size={13} />
-              <span>{reportLanguage === 'ar' ? 'إنهاء ملء الشاشة (Esc)' : 'Exit Fullscreen (Esc)'}</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ─── STICKY STUDIO TOOLBAR (TOP DIRECTLY UNDER PAGE TITLE) ─────────────────── */}
-      <div className="no-print sticky top-0 z-[40] w-full">
+      <div className={`no-print sticky top-0 w-full ${isWorkspaceFullscreen ? 'z-[1050]' : 'z-[40]'}`}>
         <ReportToolbar
           isEditMode={isTableEditing}
           onToggleEditMode={() => setIsTableEditing(p => !p)}
           isWorkspaceFullscreen={isWorkspaceFullscreen}
           onToggleWorkspaceFullscreen={handleToggleWorkspaceFullscreen}
+          onPreviewSheet={() => setIsReportFullscreen(true)}
           mapImage={mapSnapshotUrl ? { url: mapSnapshotUrl, fit: mapImageFit } : undefined}
           onChangeMapImage={(url) => setMapSnapshotUrl(url || '')}
           onChangeMapImageFit={setMapImageFit}
@@ -3675,6 +3632,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           language={reportLanguage}
         />
       </div>
+
+      <div className={isWorkspaceFullscreen ? "p-3 md:p-6 space-y-4" : "space-y-6"}>
 
       {/* ─── FLOATING EDIT TOOLS PALETTE (SHOWN ONLY WHEN EDIT MODE IS ACTIVE) ───── */}
       {isTableEditing && (
@@ -7138,6 +7097,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           logoRightHeight={logoRightHeight}
           logoRightWidth={logoRightWidth}
         />
+      </div>
+
       </div>
 
     </div>
