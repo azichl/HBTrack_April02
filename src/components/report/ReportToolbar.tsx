@@ -20,7 +20,9 @@ import {
   RefreshCw,
   Share2,
   Image as ImageIcon,
-  BookOpen
+  BookOpen,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { MapImagePopover } from './popovers/MapImagePopover';
 import { MapElementsPopover } from './popovers/MapElementsPopover';
@@ -39,6 +41,10 @@ export interface ReportToolbarProps {
   // Edit Mode
   isEditMode: boolean;
   onToggleEditMode: () => void;
+
+  // Workspace Fullscreen
+  isWorkspaceFullscreen?: boolean;
+  onToggleWorkspaceFullscreen?: () => void;
 
   // Map elements
   mapElements: MapElements;
@@ -186,6 +192,8 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
   saveStatus = 'saved',
   onExportPdf,
   onExportPng,
+  isWorkspaceFullscreen = false,
+  onToggleWorkspaceFullscreen,
   onPrint,
   onShareWhatsApp,
   onOpenCollections,
@@ -465,6 +473,29 @@ export const ReportToolbar: React.FC<ReportToolbarProps> = ({
               <Redo2 size={13} />
             </button>
           </div>
+
+          {/* Fullscreen Workspace Toggle */}
+          {onToggleWorkspaceFullscreen && (
+            <button
+              type="button"
+              onClick={onToggleWorkspaceFullscreen}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all shadow-2xs ${
+                isWorkspaceFullscreen
+                  ? 'bg-red-600 hover:bg-red-700 text-white ring-2 ring-red-400'
+                  : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700'
+              }`}
+              title={
+                isWorkspaceFullscreen
+                  ? (isAr ? 'إنهاء ملء الشاشة لمساحة العمل (Esc)' : 'Exit Fullscreen Workspace (Esc)')
+                  : (isAr ? 'ملء الشاشة لمساحة العمل بالكامل لتعديل التقرير بأريحية' : 'Full Screen Workspace')
+              }
+            >
+              {isWorkspaceFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              <span className="hidden sm:inline">
+                {isWorkspaceFullscreen ? (isAr ? 'إنهاء ملء الشاشة' : 'Exit Fullscreen') : (isAr ? 'ملء الشاشة' : 'Fullscreen')}
+              </span>
+            </button>
+          )}
 
           {/* Export Menu */}
           <div className="relative">
