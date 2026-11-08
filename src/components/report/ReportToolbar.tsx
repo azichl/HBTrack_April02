@@ -22,7 +22,8 @@ import {
   Image as ImageIcon,
   BookOpen,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Compass
 } from 'lucide-react';
 import { MapImagePopover } from './popovers/MapImagePopover';
 import { MapElementsPopover } from './popovers/MapElementsPopover';
