@@ -2075,19 +2075,19 @@ export const useAppStore = create<AppState>()(
 
       refreshMonitoringData: async (onProgress) => {
         try {
-          onProgress?.('Synchronizing transmitters and fixes from Argos database...');
-          // 1. Sync transmitters & positions directly from Argos data (argos_positions + positions)
-          // Discovers any missing transmitters (like 244289) and writes them to Firestore transmitters collection!
-          const { transmitters: syncedTransmitters, positions: syncedPositions, createdCount, updatedCount } = await syncTransmittersFromArgosData();
+          onProgress?.('Refreshing transmitters and monitoring summary...');
+          // Fast, bounded refresh: load only transmitter & bird registry summaries (1 doc each, ~100 docs total)
+          // NEVER scan the entire argos_positions or positions collections in background refresh!
+          const [fsTransmittersRaw, fsBirdsRaw] = await Promise.all([
+            fetchAllTransmittersFromFirestore(),
+            fetchAllBirdsFromFirestore()
+          ]);
 
-          // 2. Load fresh birds
-          const freshBirdsRaw = await loadCollection<Bird>('birds');
-          const { deduplicated: dedupBirds } = deduplicateBirds(freshBirdsRaw);
+          // Deduplicate transmitters & birds
+          const { deduplicated: dedupTransmitters } = deduplicateTransmitters(fsTransmittersRaw);
+          const { deduplicated: dedupBirds } = deduplicateBirds(fsBirdsRaw);
 
-          // 3. Deduplicate transmitters
-          const { deduplicated: dedupTransmitters } = deduplicateTransmitters(syncedTransmitters);
-
-          // 4. Re-link birds to transmitters
+          // Re-link birds to transmitters
           dedupTransmitters.forEach(t => {
             const matched = findBirdForTransmitter(dedupBirds, t);
             if (matched) {
@@ -2098,10 +2098,52 @@ export const useAppStore = create<AppState>()(
             }
           });
 
-          // 5. Apply user visibility filtering
+          // Derive live positions directly from transmitter summary docs (0 network reads, 0 ms)
+          const derivedPositions: Position[] = dedupTransmitters
+            .filter(t => {
+              const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+              const rawLat = liveFix?.lat ?? t.lat ?? t.latitude ?? t.last_latitude;
+              const rawLon = liveFix?.lon ?? t.lon ?? t.longitude ?? t.last_longitude;
+              return isValidCoordinate(rawLat, rawLon);
+            })
+            .map(t => {
+              const liveFix = t.live?.lastFix || t.live?.lastGps || t.live?.lastDoppler;
+              const rawLat = liveFix?.lat ?? t.lat ?? t.latitude ?? t.last_latitude;
+              const rawLon = liveFix?.lon ?? t.lon ?? t.longitude ?? t.last_longitude;
+              const pLat = Number(rawLat);
+              let pLon = Number(rawLon);
+              if (String(t.platform_id) === '242086' && pLon < 0) pLon = Math.abs(pLon);
+
+              const txAny = t as any;
+              const locType = ((liveFix as any)?.type || 'GPS') as 'GPS' | 'DOPPLER';
+              const locClass = locType === 'GPS' ? null : ((liveFix as any)?.class || '3');
+              const errRadius = locType === 'GPS' ? 0 : ((liveFix as any)?.errorRadiusM || 0);
+              const fixDate = liveFix?.date || t.last_fix || txAny.lastFixAt || txAny.updatedAt || new Date().toISOString();
+
+              return {
+                id: `pos-${t.platform_id}-latest`,
+                transmitter_id: String(t.platform_id),
+                timestamp: fixDate,
+                locationDate: fixDate,
+                lat: pLat,
+                lon: pLon,
+                lc: (locType === 'GPS' ? 'GPS' : (locClass || '3')) as any,
+                locationClass: locClass,
+                errorRadiusM: errRadius,
+                is_kalman: false,
+                speed_kmh: Number(txAny.speed_kmh || 0),
+                course: Number(txAny.course || 0),
+                altitude: Number(txAny.altitude || 0),
+                battery_voltage: t.battery_voltage,
+                satellite: locType === 'GPS' ? 'GPS' : 'Argos',
+                locationType: locType
+              };
+            });
+
+          // Apply user visibility filtering
           const { currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole } = get();
           const filteredTransmitters = filterTransmittersForUser(dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
-          const filteredPositions = filterPositionsForUser(syncedPositions, dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
+          const filteredPositions = filterPositionsForUser(derivedPositions, dedupTransmitters, currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole);
 
           set({
             transmitters: filteredTransmitters,
@@ -2112,7 +2154,7 @@ export const useAppStore = create<AppState>()(
 
           clearTransmitterHistoryCache();
 
-          onProgress?.(`Synchronized ${filteredTransmitters.length} transmitters (${createdCount} new from Argos data) and ${filteredPositions.length} fixes.`);
+          onProgress?.(`Refreshed ${filteredTransmitters.length} transmitters and ${filteredPositions.length} live positions.`);
           return {
             transmittersCount: filteredTransmitters.length,
             birdsCount: dedupBirds.length,
@@ -2235,9 +2277,14 @@ export const useAppStore = create<AppState>()(
 
         // Listen only for new positions generated within the last 24 hours to avoid huge reads
         const unsubPositions = subscribeToRecentPositions(1, (firestorePositions) => {
-          // Merge incoming new positions into the store (retaining older ones loaded initially)
+          // Merge incoming new positions into the store (retaining recent ones, pruning stale ones)
           set((state) => {
-            const currentPositions = [...state.positions];
+            const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+            // Prune positions older than 24h to keep array bounded and prevent memory ballooning
+            const currentPositions = state.positions.filter(cp => {
+              const t = new Date(cp.timestamp || (cp as any).locationDate || 0).getTime();
+              return isNaN(t) || t >= cutoffMs;
+            });
             let changed = false;
 
             const { currentUserIosPttVisibility, currentUserIosVisiblePtts, currentUserRole } = get();
@@ -2271,7 +2318,12 @@ export const useAppStore = create<AppState>()(
                }
             });
 
-            return changed ? { positions: currentPositions } : {};
+            // Bound positions to maximum 1000 records to prevent memory leak
+            const boundedPositions = currentPositions.length > 1000 
+              ? currentPositions.slice(-1000) 
+              : currentPositions;
+
+            return changed ? { positions: boundedPositions } : {};
           });
         });
 

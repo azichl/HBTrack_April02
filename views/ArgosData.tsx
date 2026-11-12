@@ -73,25 +73,47 @@ export const ArgosData = () => {
       let eDate: Date | undefined;
 
       if (historyMode === 'preset' && historyPreset === 'latest') {
-        const tIds = selectedTransmitterIds.length > 0 ? selectedTransmitterIds : await getArgosTransmitterIds();
-        if (collectionMode === 'argos_positions') {
-          const { loadLatestArgosPositionsPerTransmitter } = await import('../services/firestoreService');
-          const latestArgos = await loadLatestArgosPositionsPerTransmitter(tIds);
-          data = latestArgos.map(d => ({ _collection: 'argos_positions', ...d }));
-        } else if (collectionMode === 'positions') {
-          const { loadLatestPositionsPerTransmitter } = await import('../services/firestoreService');
-          const latestPos = await loadLatestPositionsPerTransmitter(tIds);
-          data = latestPos.map(d => ({ _collection: 'positions', ...d }));
+        if (selectedTransmitterIds.length === 0) {
+          // Bounded fast query: retrieve latest 150 documents directly in 1-2 queries instead of 400-800 queries!
+          const { collection, query, orderBy, limit, getDocs } = await import('firebase/firestore');
+          const { db } = await import('../firebase');
+          if (collectionMode === 'argos_positions') {
+            const snap = await getDocs(query(collection(db, 'argos_positions'), orderBy('timestamp', 'desc'), limit(150)));
+            data = snap.docs.map(d => ({ id: d.id, _collection: 'argos_positions', ...d.data() }));
+          } else if (collectionMode === 'positions') {
+            const snap = await getDocs(query(collection(db, 'positions'), orderBy('timestamp', 'desc'), limit(150)));
+            data = snap.docs.map(d => ({ id: d.id, _collection: 'positions', ...d.data() }));
+          } else {
+            const [argosSnap, posSnap] = await Promise.all([
+              getDocs(query(collection(db, 'argos_positions'), orderBy('timestamp', 'desc'), limit(100))),
+              getDocs(query(collection(db, 'positions'), orderBy('timestamp', 'desc'), limit(100)))
+            ]);
+            data = [
+              ...argosSnap.docs.map(d => ({ id: d.id, _collection: 'argos_positions', ...d.data() })),
+              ...posSnap.docs.map(d => ({ id: d.id, _collection: 'positions', ...d.data() }))
+            ];
+          }
         } else {
-          const { loadLatestArgosPositionsPerTransmitter, loadLatestPositionsPerTransmitter } = await import('../services/firestoreService');
-          const [argos, pos] = await Promise.all([
-            loadLatestArgosPositionsPerTransmitter(tIds),
-            loadLatestPositionsPerTransmitter(tIds)
-          ]);
-          data = [
-            ...argos.map(d => ({ _collection: 'argos_positions', ...d })), 
-            ...pos.map(d => ({ _collection: 'positions', ...d }))
-          ];
+          const tIds = selectedTransmitterIds;
+          if (collectionMode === 'argos_positions') {
+            const { loadLatestArgosPositionsPerTransmitter } = await import('../services/firestoreService');
+            const latestArgos = await loadLatestArgosPositionsPerTransmitter(tIds);
+            data = latestArgos.map(d => ({ _collection: 'argos_positions', ...d }));
+          } else if (collectionMode === 'positions') {
+            const { loadLatestPositionsPerTransmitter } = await import('../services/firestoreService');
+            const latestPos = await loadLatestPositionsPerTransmitter(tIds);
+            data = latestPos.map(d => ({ _collection: 'positions', ...d }));
+          } else {
+            const { loadLatestArgosPositionsPerTransmitter, loadLatestPositionsPerTransmitter } = await import('../services/firestoreService');
+            const [argos, pos] = await Promise.all([
+              loadLatestArgosPositionsPerTransmitter(tIds),
+              loadLatestPositionsPerTransmitter(tIds)
+            ]);
+            data = [
+              ...argos.map(d => ({ _collection: 'argos_positions', ...d })), 
+              ...pos.map(d => ({ _collection: 'positions', ...d }))
+            ];
+          }
         }
       } else {
         if (historyMode === 'preset') {

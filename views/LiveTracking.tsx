@@ -612,14 +612,15 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
 
     const isMobileScreen = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
 
-    // Compute overlapping positions within 300 meters
+    // Compute overlapping positions within 300 meters (fast bounding-box check first to avoid heavy trig calculations)
     const overlappingPositions = useMemo(() => {
-        if (!latestPositions || latestPositions.length === 0) return [pos];
+        if (!latestPositions || latestPositions.length <= 1) return [pos];
         return latestPositions.filter(p => {
-            const dist = haversineDistMeters(pos.lat, pos.lon, p.lat, p.lon);
-            return dist <= 300;
+            if (p.id === pos.id) return true;
+            if (Math.abs(pos.lat - p.lat) > 0.003 || Math.abs(pos.lon - p.lon) > 0.004) return false;
+            return haversineDistMeters(pos.lat, pos.lon, p.lat, p.lon) <= 300;
         });
-    }, [latestPositions, pos.lat, pos.lon]);
+    }, [latestPositions, pos.lat, pos.lon, pos.id]);
 
     const isGroup = overlappingPositions.length > 1;
 
@@ -708,6 +709,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                 </div>
             </Tooltip>
             <Popup closeButton={false} minWidth={240}>
+                {isOpen && (
                 <div className="p-1">
                     {/* Header Tabs for Overlapping Markers */}
                     {overlappingPositions.length > 1 && (
@@ -911,6 +913,7 @@ const TransmitterMarkerInner: React.FC<TransmitterMarkerProps> = ({
                         </div>
                     )}
                 </div>
+                )}
             </Popup>
         </Marker>
     );
@@ -1016,6 +1019,8 @@ const StaticTestClusterMarker: React.FC<StaticTestClusterMarkerProps> = ({
         iconAnchor: [40, 46]
     });
 
+    const [isOpen, setIsOpen] = useState(false);
+
     return (
         <Marker
             position={[cluster.lat, cluster.lon]}
@@ -1025,10 +1030,13 @@ const StaticTestClusterMarker: React.FC<StaticTestClusterMarkerProps> = ({
                     if (map.getZoom() < 14) {
                         map.flyTo([cluster.lat, cluster.lon], Math.min(map.getZoom() + 3, 14));
                     }
-                }
+                },
+                popupopen: () => setIsOpen(true),
+                popupclose: () => setIsOpen(false)
             }}
         >
             <Popup closeButton={false} minWidth={240}>
+                {isOpen && (
                 <div className="p-1" style={{ fontFamily: "'Sakkal Majalla', sans-serif" }}>
                     <div className="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-slate-700">
                         <div className="font-bold text-gray-900 dark:text-white text-sm">
@@ -1068,6 +1076,7 @@ const StaticTestClusterMarker: React.FC<StaticTestClusterMarkerProps> = ({
                         })}
                     </div>
                 </div>
+                )}
             </Popup>
         </Marker>
     );
@@ -2800,6 +2809,8 @@ const LiveTrackingInner = () => {
             {latestPositions
                 .filter(pos => {
                     const t = transmitters.find(tr => String(tr.platform_id) === String(pos.transmitter_id));
+                    const st = t?.derived_status || t?.status;
+                    if (st === 'Static test' || st === 'Static Test' || st === 'static') return false; // Handled exclusively by StaticTestClusteredMarkers below
                     const hasFixInCurrentMonth = Boolean(hasCurrentMonthFixesMap.get(String(pos.transmitter_id)) || (pos.timestamp && getYearMonthKey(pos.timestamp) === currentYearMonthKey));
                     return t ? isVisibleOnLiveMap(t, selectedStatus, hasFixInCurrentMonth) : true;
                 })

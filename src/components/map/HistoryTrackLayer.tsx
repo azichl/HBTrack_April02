@@ -239,34 +239,46 @@ export const HistoryTrackLayer: React.FC<HistoryTrackLayerProps> = ({
               )}
 
               {/* Point Markers along the path with full metadata preserved */}
-              {cleanHistoryPoints.map((pt, idx) => {
-                if (renderPointMarker) {
+              {(() => {
+                // When path has extensive points (e.g. multi-month/year tracks), thin rendered DOM markers
+                // to at most ~120 key fixes + start & end to prevent browser DOM memory explosion (3.7 GB RAM warning).
+                // The continuous <Polyline> above still renders 100% of all coordinates unbroken!
+                const totalPts = cleanHistoryPoints.length;
+                const stride = totalPts > 150 ? Math.ceil(totalPts / 120) : 1;
+
+                return cleanHistoryPoints.map((pt, idx) => {
+                  if (stride > 1 && idx !== 0 && idx !== totalPts - 1 && idx % stride !== 0) {
+                    return null;
+                  }
+
+                  if (renderPointMarker) {
+                    return (
+                      <React.Fragment key={`custom-pt-${hp.id}-${idx}`}>
+                        {renderPointMarker(pt, hp.id, itemColor)}
+                      </React.Fragment>
+                    );
+                  }
+                  const isDoppler = (pt.type || '').toUpperCase() === 'DOPPLER';
                   return (
-                    <React.Fragment key={`custom-pt-${hp.id}-${idx}`}>
-                      {renderPointMarker(pt, hp.id, itemColor)}
-                    </React.Fragment>
+                    <CircleMarker
+                      key={`pt-${hp.id}-${idx}`}
+                      center={[pt.lat, pt.lon]}
+                      radius={isDoppler ? 3 : 4}
+                      pathOptions={isDoppler ? {
+                        color: itemColor,
+                        fillColor: '#ffffff',
+                        fillOpacity: 0.4,
+                        weight: 1.5
+                      } : {
+                        color: itemColor,
+                        fillColor: itemColor,
+                        fillOpacity: 0.9,
+                        weight: 1.5
+                      }}
+                    />
                   );
-                }
-                const isDoppler = (pt.type || '').toUpperCase() === 'DOPPLER';
-                return (
-                  <CircleMarker
-                    key={`pt-${hp.id}-${idx}`}
-                    center={[pt.lat, pt.lon]}
-                    radius={isDoppler ? 3 : 4}
-                    pathOptions={isDoppler ? {
-                      color: itemColor,
-                      fillColor: '#ffffff',
-                      fillOpacity: 0.4,
-                      weight: 1.5
-                    } : {
-                      color: itemColor,
-                      fillColor: itemColor,
-                      fillOpacity: 0.9,
-                      weight: 1.5
-                    }}
-                  />
-                );
-              })}
+                });
+              })()}
             </React.Fragment>
           );
         }

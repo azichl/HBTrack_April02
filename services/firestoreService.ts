@@ -287,7 +287,7 @@ export const loadLatestPositionsPerTransmitter = async (transmitterIds: (string 
           collection(db, colName),
           where(fieldName, '==', val),
           orderBy('timestamp', 'desc'),
-          limit(10)
+          limit(2)
         )).then(snap => snap.docs.map(d => ({ docId: d.id, colName, ...d.data() })))
         .catch(() => []);
       };
@@ -1344,25 +1344,55 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
   const endMs   = endDate.getTime();
   const allResults: any[] = [];
 
+  // Buffer ±24 hours around query range to accommodate GPS fix vs satellite arrival timestamp offsets
+  const startBufferIso = new Date(startMs - 24 * 3600 * 1000).toISOString();
+  const endBufferIso = new Date(endMs + 24 * 3600 * 1000).toISOString();
+
   try {
     for (const pttId of transmitterIds) {
       const pidStr = normalizePttId(pttId);
       const idNum = Number(pttId);
       const isNumValid = !isNaN(idNum);
 
+      // 1. Check in-memory cache first to eliminate repeat Firestore reads entirely
+      const cacheKey = `${pidStr}_${startMs}_${endMs}`;
+      const cached = transmitterHistoryCache.get(cacheKey);
+      if (cached && (Date.now() - cached.cachedAt < HISTORY_CACHE_TTL)) {
+        allResults.push(...cached.docs);
+        continue;
+      }
+
       const rawFixesForPtt: RawFix[] = [];
       const canonicalCoordToLocMs = new Map<string, number>();
 
+      // Bounded queries using composite index (platformId/transmitter_id + timestamp)
+      // Drastically reduces Firestore reads from unbounded scans (thousands) to exact date range (tens)
+      const fetchBoundedDocs = async (col: string, field: string, val: string | number) => {
+        try {
+          return await getDocs(query(
+            collection(db, col),
+            where(field, '==', val),
+            where('timestamp', '>=', startBufferIso),
+            where('timestamp', '<=', endBufferIso),
+            orderBy('timestamp', 'asc')
+          ));
+        } catch (queryErr) {
+          console.warn(`[Firestore] Bounded query failed for ${col}.${field}=${val}, falling back to unindexed query:`, queryErr);
+          // Fallback if index is unavailable
+          return await getDocs(query(collection(db, col), where(field, '==', val))).catch(() => null);
+        }
+      };
+
       const argosPromises: Promise<any>[] = [
-        getDocs(query(collection(db, 'argos_positions'), where('platformId', '==', pidStr))).catch(() => null)
+        fetchBoundedDocs('argos_positions', 'platformId', pidStr)
       ];
       const posPromises: Promise<any>[] = [
-        getDocs(query(collection(db, 'positions'), where('transmitter_id', '==', pidStr))).catch(() => null)
+        fetchBoundedDocs('positions', 'transmitter_id', pidStr)
       ];
 
       if (isNumValid && idNum !== Number(pidStr)) {
-        argosPromises.push(getDocs(query(collection(db, 'argos_positions'), where('platformId', '==', idNum))).catch(() => null));
-        posPromises.push(getDocs(query(collection(db, 'positions'), where('transmitter_id', '==', idNum))).catch(() => null));
+        argosPromises.push(fetchBoundedDocs('argos_positions', 'platformId', idNum));
+        posPromises.push(fetchBoundedDocs('positions', 'transmitter_id', idNum));
       }
 
       const [argosSnaps, posSnaps] = await Promise.all([
@@ -1512,12 +1542,17 @@ export const getHistoricalPositions = async (transmitterIds: string[], startDate
         };
       });
 
-      transmitterHistoryCache.set(pidStr, { cachedAt: Date.now(), docs: pttDocs });
-
       const dateFiltered = pttDocs.filter(r => {
         const ts = safeParseTimestamp(r.locationDate || r.timestamp);
         return !isNaN(ts) && ts >= startMs && ts <= endMs;
       });
+
+      // Bound cache size to prevent memory leaks (max 25 historical queries cached)
+      if (transmitterHistoryCache.size >= 25) {
+        const oldestKey = transmitterHistoryCache.keys().next().value;
+        if (oldestKey) transmitterHistoryCache.delete(oldestKey);
+      }
+      transmitterHistoryCache.set(cacheKey, { cachedAt: Date.now(), docs: dateFiltered });
 
       allResults.push(...dateFiltered);
     }

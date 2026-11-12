@@ -24,7 +24,7 @@ export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),
-    cacheSizeBytes: 100 * 1024 * 1024 // 100 MB bound to prevent IndexedDB ballooning
+    cacheSizeBytes: 50 * 1024 * 1024 // 50 MB bound to prevent IndexedDB ballooning and memory pressure
   }),
   experimentalAutoDetectLongPolling: true
 });

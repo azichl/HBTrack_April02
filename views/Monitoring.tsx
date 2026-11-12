@@ -7,7 +7,7 @@ import { Position } from '../types';
 import { formatDateTime, formatBattery, getYearMonthKey, getCurrentYearMonthKey, findBirdForTransmitter } from '../utils/formatting';
 import { isVisibleInMonitoring } from '../utils/statusCalculator';
 import Draggable from 'react-draggable';
-import { saveDocument, deleteCoordinateRecord, resetTransmitterCoordinates, resetAllTransmitterCoordinates, deleteArgosPositions, clearTransmitterHistoryCache, loadLatestPositionsPerTransmitter } from '../services/firestoreService';
+import { saveDocument, deleteCoordinateRecord, resetTransmitterCoordinates, resetAllTransmitterCoordinates, deleteArgosPositions, clearTransmitterHistoryCache } from '../services/firestoreService';
 import { CustomSelect } from '../components/CustomSelect';
 const safeParseDate = (ts: any): number => {
     if (!ts) return NaN;
@@ -94,31 +94,7 @@ export const Monitoring = () => {
     setIsModalOpen(false);
   };
 
-  // Auto-synchronize latest positions for transmitters from database on mount / when transmitters change
-  useEffect(() => {
-    let isCancelled = false;
-    const syncLatest = async () => {
-      if (!transmitters || transmitters.length === 0) return;
-      try {
-        const pids = transmitters.map(t => String(t.platform_id || t.id)).filter(Boolean);
-        const latestFromDb = await loadLatestPositionsPerTransmitter(pids);
-        if (!isCancelled && latestFromDb.length > 0) {
-          const store = useAppStore.getState();
-          const currentPositions = store.positions || [];
-          const posMap = new Map<string, Position>();
-          currentPositions.forEach(p => posMap.set(String(p.transmitter_id || (p as any).platformId), p));
-          latestFromDb.forEach(p => {
-            if (p) posMap.set(String(p.transmitter_id), p);
-          });
-          useAppStore.setState({ positions: Array.from(posMap.values()) });
-        }
-      } catch (err) {
-        console.warn('[Monitoring] Auto-load latest positions error:', err);
-      }
-    };
-    syncLatest();
-    return () => { isCancelled = true; };
-  }, [transmitters.length]);
+
 
   // 1. Prepare Flattened Data for Table
   const latestPositions = useMemo(() => {
