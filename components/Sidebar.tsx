@@ -80,7 +80,12 @@ export const Sidebar = () => {
   const activeAlertCount = alerts.filter(a => a.status === 'active').length;
 
   // RBAC helpers
-  const hasPermission = (perm: string) => currentUserPermissions.includes(perm);
+  const hasPermission = (perm: string) => {
+    if (perm === 'Manage Users' || perm === 'User Management') {
+      return currentUserPermissions.includes('User Management') || currentUserPermissions.includes('Manage Users');
+    }
+    return currentUserPermissions.includes(perm);
+  };
   const isAdmin = currentUserRole === 'Administrator';
 
   const handleNavigation = (tabName: string) => {
@@ -176,7 +181,7 @@ export const Sidebar = () => {
             <NavItem icon={Map} label="GIS" active={activeTab === 'GIS Features'} onClick={() => handleNavigation('GIS Features')} />
             <NavItem icon={Globe} label="QGIS Connect" active={activeTab === 'QGIS Connect'} badge="QGIS" badgeColor="bg-emerald-500 text-white" onClick={() => handleNavigation('QGIS Connect')} />
 
-            {(hasPermission('Manage Users') || isAdmin) && (
+            {(currentUserRole === 'Manager' || hasPermission('User Management')) && (
               <>
                 <GroupLabel label="Administration" />
                 <NavItem icon={Users} label="User Management" active={activeTab === 'User Management'} onClick={() => handleNavigation('User Management')} />

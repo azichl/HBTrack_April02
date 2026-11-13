@@ -1876,7 +1876,7 @@ export const useAppStore = create<AppState>()(
               const isFirstUser = mergedUsers.length === 0 || currentUser.email === 'achlih21@gmail.com';
               if (isFirstUser) {
                 role = 'Manager';
-                permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'System Settings'];
+                permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'User Management', 'System Settings'];
               }
               
               // Automatically register the user in the database so they don't lose access later
@@ -1898,7 +1898,7 @@ export const useAppStore = create<AppState>()(
             // GUARANTEE SUPER ADMIN ROLE
             if (currentUser.email === 'achlih21@gmail.com') {
               role = 'Manager';
-              permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'System Settings'];
+              permissions = ['View Data', 'Live Tracking', 'Generate Reports', 'Manage Alerts', 'Manage Transmitters', 'Upload Data', 'API Integration', 'Manage Database', 'Manage Users', 'User Management', 'System Settings'];
               
               // Also update the database document just in case it had Viewer loaded
               if (userProfile && userProfile.role !== 'Manager') {

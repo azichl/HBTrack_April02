@@ -149,7 +149,7 @@ class AuthViewModel: ObservableObject {
             email: isApple ? "" : (user.email ?? ""),
             role: isDefaultAdmin ? "Administrator" : "Viewer",
             status: "active",
-            permissions: isDefaultAdmin ? ["View Data", "Upload Data", "Manage Database", "Manage Users", "Live Tracking", "Generate Reports", "Manage Alerts", "Manage Transmitters", "API Integration", "System Settings"] : ["View Data", "Live Tracking"],
+            permissions: isDefaultAdmin ? ["View Data", "Upload Data", "Manage Database", "Manage Users", "User Management", "Live Tracking", "Generate Reports", "Manage Alerts", "Manage Transmitters", "API Integration", "System Settings"] : ["View Data", "Live Tracking"],
             appAccess: ["web", "ios", "ios_data_upload"],
             iosDataUpload: true,
             iosPttVisibility: "all",

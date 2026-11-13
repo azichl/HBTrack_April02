@@ -473,11 +473,18 @@ const App = () => {
 
              let permissions: string[] = [];
              if (Array.isArray(userData.permissions)) {
-               permissions = userData.permissions;
+               permissions = [...userData.permissions];
              } else if (userData.permissions && typeof userData.permissions === 'object') {
                permissions = Object.keys(userData.permissions).filter(k => userData.permissions[k]);
              } else {
                permissions = ['View Data'];
+             }
+
+             // Normalize Manage Users <-> User Management aliases
+             if (permissions.includes('Manage Users') && !permissions.includes('User Management')) {
+               permissions.push('User Management');
+             } else if (permissions.includes('User Management') && !permissions.includes('Manage Users')) {
+               permissions.push('Manage Users');
              }
 
              const iosDataUpload = userData.iosDataUpload === true || appAccess.includes('ios_data_upload');
@@ -486,7 +493,7 @@ const App = () => {
              setCurrentUserProfile(role, permissions, appAccess, iosDataUpload, iosPttVisibility, iosVisiblePtts);
           } else {
              if (user.email === 'admin@houbaratracker.com') {
-               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users'], ['web', 'ios', 'ios_data_upload'], true, 'all', []);
+               setCurrentUserProfile('Administrator', ['View Data', 'Upload Data', 'Manage Database', 'Manage Users', 'User Management'], ['web', 'ios', 'ios_data_upload'], true, 'all', []);
              }
           }
           mark('role:ready');
@@ -625,7 +632,13 @@ const App = () => {
       case 'Geo Spatial Analysis': content = <GeoSpatialAnalysis />; break;
       case 'Alerts': content = <Alerts />; break;
       case 'Geofence Alerts': content = <GeofenceAlerts />; break;
-      case 'User Management': content = <UserManagement />; break;
+      case 'User Management': {
+        const canAccessUM = currentUserRole === 'Manager' || 
+          currentUserPermissions.includes('User Management') || 
+          currentUserPermissions.includes('Manage Users');
+        content = canAccessUM ? <UserManagement /> : <Dashboard />;
+        break;
+      }
       case 'GIS Features': content = <GISFeatures />; break;
       case 'QGIS Connect': content = <QGISConnect />; break;
       case 'Settings': content = <Settings />; break;

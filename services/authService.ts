@@ -47,7 +47,7 @@ export interface AppUser {
   lastActive: string;
   createdAt: string;
   emailVerified?: boolean;
-  permissions: Record<string, boolean>;
+  permissions?: Record<string, boolean> | string[];
   appAccess?: ('web' | 'ios' | 'ios_data_upload')[];
   iosDataUpload?: boolean;
   iosPttVisibility?: 'all' | 'custom';
@@ -96,6 +96,7 @@ export async function createUser(
   role: string,
   username?: string,
   phone?: string,
+  permissions?: string[] | Record<string, boolean>,
   appAccess?: ('web' | 'ios' | 'ios_data_upload')[],
   iosDataUpload?: boolean,
   iosPttVisibility?: 'all' | 'custom',
@@ -108,6 +109,7 @@ export async function createUser(
     role, 
     username, 
     phone,
+    permissions,
     appAccess,
     iosDataUpload,
     iosPttVisibility,
@@ -124,7 +126,7 @@ export async function updateUserProfile(
     name?: string; 
     username?: string;
     phone?: string;
-    permissions?: Record<string, boolean>;
+    permissions?: Record<string, boolean> | string[];
     appAccess?: ('web' | 'ios' | 'ios_data_upload')[];
     iosDataUpload?: boolean;
     iosPttVisibility?: 'all' | 'custom';

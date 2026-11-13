@@ -17,13 +17,27 @@ const SYSTEM_PERMISSIONS = [
   'Upload Data',
   'API Integration',
   'Manage Database',
-  'Manage Users',
+  'User Management',
   'System Settings'
 ];
 
+// Helper to normalize permissions (maps legacy 'Manage Users' to 'User Management')
+const normalizePermissions = (raw: any): string[] => {
+  let list: string[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (raw && typeof raw === 'object') {
+    list = Object.keys(raw).filter(k => raw[k]);
+  }
+  return list.map(p => (p === 'Manage Users' ? 'User Management' : p));
+};
+
+const isUserManagementPermission = (perm: string) =>
+  perm === 'User Management' || perm === 'Manage Users';
+
 const ROLE_DEFAULTS: Record<Role, string[]> = {
   'Manager': SYSTEM_PERMISSIONS, // All permissions including App Access Management
-  'Administrator': SYSTEM_PERMISSIONS, // All permissions including API Integration
+  'Administrator': SYSTEM_PERMISSIONS, // All permissions including API Integration & User Management
   'Researcher': ['View Data', 'Generate Reports', 'Live Tracking', 'Manage Alerts', 'Manage Database'],
   'Field Coordinator': ['Live Tracking', 'Manage Transmitters', 'Upload Data'],
   'Data Entry': ['View Data', 'Upload Data', 'Manage Database'],
@@ -96,6 +110,14 @@ export const UserManagement = () => {
       // Sync to local store
       firebaseUsers.forEach((u: AppUser) => {
         const existing = users.find(eu => eu.id === u.id);
+        const mappedRole = mapFirebaseRole(u.role) as Role;
+        const hasSavedPermissions = u.permissions && (
+          Array.isArray(u.permissions) ? u.permissions.length > 0 : Object.keys(u.permissions).length > 0
+        );
+        const resolvedPermissions = hasSavedPermissions
+          ? normalizePermissions(u.permissions)
+          : [...(ROLE_DEFAULTS[mappedRole] || ROLE_DEFAULTS['Viewer'])];
+
         if (!existing) {
           addUser({
             id: u.id,
@@ -103,9 +125,9 @@ export const UserManagement = () => {
             email: u.email,
             username: u.username,
             phone: u.phone,
-            role: mapFirebaseRole(u.role) as Role,
+            role: mappedRole,
             status: u.status === 'active' ? 'active' : 'inactive',
-            permissions: mapPermissions(u.role),
+            permissions: resolvedPermissions,
             lastLogin: u.lastActive || undefined,
             appAccess: u.appAccess || ['web', 'ios'],
             iosPttVisibility: u.iosPttVisibility || 'all',
@@ -117,8 +139,9 @@ export const UserManagement = () => {
             email: u.email,
             username: u.username,
             phone: u.phone,
-            role: mapFirebaseRole(u.role) as Role,
+            role: mappedRole,
             status: u.status === 'active' ? 'active' : 'inactive',
+            permissions: resolvedPermissions,
             lastLogin: u.lastActive || undefined,
             appAccess: u.appAccess || ['web', 'ios'],
             iosPttVisibility: u.iosPttVisibility || 'all',
@@ -204,17 +227,30 @@ export const UserManagement = () => {
     setPttSearchTerm('');
     if (user) {
       setEditingUser(user);
-      setFormData(user);
+      const initialPerms = normalizePermissions(
+        user.permissions && user.permissions.length > 0
+          ? user.permissions
+          : (ROLE_DEFAULTS[user.role] || ROLE_DEFAULTS['Viewer'])
+      );
+      setFormData({
+        ...user,
+        permissions: initialPerms
+      });
     } else {
       setEditingUser(null);
+      const defaultRole: Role = 'Viewer';
+      let defaultPerms = [...ROLE_DEFAULTS[defaultRole]];
+      if (currentUserRole !== 'Manager') {
+        defaultPerms = defaultPerms.filter(p => !isUserManagementPermission(p));
+      }
       setFormData({
         name: '',
         email: '',
         username: '',
         phone: '',
-        role: 'Viewer',
+        role: defaultRole,
         status: 'active',
-        permissions: ROLE_DEFAULTS['Viewer'],
+        permissions: defaultPerms,
         appAccess: ['web', 'ios'],
         iosPttVisibility: 'all',
         iosVisiblePtts: []
@@ -224,20 +260,35 @@ export const UserManagement = () => {
   };
 
   const handleRoleChange = (role: Role) => {
+    let defaultPerms = [...ROLE_DEFAULTS[role]];
+    if (currentUserRole !== 'Manager') {
+      // Non-managers cannot grant User Management to any role
+      defaultPerms = defaultPerms.filter(p => !isUserManagementPermission(p));
+    }
     setFormData({
       ...formData,
       role,
-      permissions: ROLE_DEFAULTS[role]
+      permissions: defaultPerms
     });
   };
 
   const togglePermission = (perm: string) => {
-    const currentPerms = formData.permissions || [];
-    let newPerms;
-    if (currentPerms.includes(perm)) {
-      newPerms = currentPerms.filter(p => p !== perm);
+    // Only the Manager account can grant or remove the User Management permission
+    if (isUserManagementPermission(perm) && currentUserRole !== 'Manager') {
+      return;
+    }
+
+    const currentPerms = normalizePermissions(formData.permissions || []);
+    const isUM = isUserManagementPermission(perm);
+    const isCurrentlySelected = isUM
+      ? currentPerms.some(p => isUserManagementPermission(p))
+      : currentPerms.includes(perm);
+
+    let newPerms: string[];
+    if (isCurrentlySelected) {
+      newPerms = currentPerms.filter(p => (isUM ? !isUserManagementPermission(p) : p !== perm));
     } else {
-      newPerms = [...currentPerms, perm];
+      newPerms = [...currentPerms, isUM ? 'User Management' : perm];
     }
     setFormData({ ...formData, permissions: newPerms });
   };
@@ -248,6 +299,10 @@ export const UserManagement = () => {
     setError(null);
     
     try {
+      const effectivePermissions = normalizePermissions(
+        formData.permissions || ROLE_DEFAULTS[formData.role as Role] || ROLE_DEFAULTS['Viewer']
+      );
+
       if (editingUser) {
         // Update existing user via Cloud Function
         await updateUserProfile(editingUser.id, {
@@ -256,12 +311,16 @@ export const UserManagement = () => {
           name: formData.name,
           username: formData.username,
           phone: formData.phone,
+          permissions: effectivePermissions,
           appAccess: formData.appAccess,
           iosDataUpload: formData.iosDataUpload,
           iosPttVisibility: formData.iosPttVisibility,
           iosVisiblePtts: formData.iosVisiblePtts
         });
-        updateUser(editingUser.id, formData);
+        updateUser(editingUser.id, {
+          ...formData,
+          permissions: effectivePermissions
+        });
       } else {
         // Create new user via Cloud Function
         if (!password || password.length < 6) {
@@ -277,6 +336,7 @@ export const UserManagement = () => {
           mapRoleToFirebase(formData.role as Role),
           formData.username,
           formData.phone,
+          effectivePermissions,
           formData.appAccess,
           formData.iosDataUpload,
           formData.iosPttVisibility,
@@ -290,7 +350,7 @@ export const UserManagement = () => {
           phone: formData.phone,
           role: formData.role as Role,
           status: 'active',
-          permissions: formData.permissions || ROLE_DEFAULTS['Viewer'],
+          permissions: effectivePermissions,
           appAccess: formData.appAccess || ['web', 'ios'],
           iosDataUpload: formData.iosDataUpload || false,
           iosPttVisibility: formData.iosPttVisibility || 'all',
@@ -739,23 +799,50 @@ export const UserManagement = () => {
                    
                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {SYSTEM_PERMISSIONS.map(perm => {
-                         const isSelected = formData.permissions?.includes(perm);
+                         const isUM = isUserManagementPermission(perm);
+                         const isSelected = isUM
+                           ? (formData.permissions?.some(p => isUserManagementPermission(p)) ?? false)
+                           : (formData.permissions?.includes(perm) ?? false);
+                         const isLockedForCurrentUser = isUM && currentUserRole !== 'Manager';
+
                          return (
-                            <label key={perm} className="flex items-center gap-2 cursor-pointer select-none">
-                               <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-brand-600 border-brand-600' : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600'}`}>
+                            <label 
+                              key={perm} 
+                              className={`flex items-center gap-2 select-none ${isLockedForCurrentUser ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                              title={isLockedForCurrentUser ? 'Only the Manager account can grant or remove the User Management permission' : undefined}
+                            >
+                               <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+                                 isSelected 
+                                   ? (isLockedForCurrentUser ? 'bg-gray-400 border-gray-400 dark:bg-slate-600 dark:border-slate-600' : 'bg-brand-600 border-brand-600') 
+                                   : 'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600'
+                               }`}>
                                   {isSelected && <CheckCircle2 size={12} className="text-white" />}
                                   <input 
                                     type="checkbox" 
                                     className="hidden" 
                                     checked={isSelected}
-                                    onChange={() => togglePermission(perm)}
+                                    disabled={isLockedForCurrentUser}
+                                    onChange={() => !isLockedForCurrentUser && togglePermission(perm)}
                                   />
                                </div>
-                               <span className={`text-xs ${isSelected ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>{perm}</span>
+                               <span className={`text-xs flex items-center gap-1.5 ${isSelected ? 'text-gray-900 dark:text-white font-medium' : 'text-gray-500 dark:text-gray-400'}`}>
+                                 {perm}
+                                 {isUM && (
+                                   <span title={currentUserRole === 'Manager' ? 'Manager-controlled permission' : 'Locked: Only Manager can modify this'} className="inline-flex items-center">
+                                     <Lock size={11} className={currentUserRole === 'Manager' ? 'text-brand-600 dark:text-brand-400' : 'text-amber-500'} />
+                                   </span>
+                                 )}
+                               </span>
                             </label>
                          );
                       })}
                    </div>
+                   {currentUserRole !== 'Manager' && (
+                     <div className="mt-3 p-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                       <Lock size={12} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                       <span>Only the Manager account can grant or remove the &quot;User Management&quot; permission.</span>
+                     </div>
+                   )}
                 </div>
 
                 {/* App Access Control (Only Managers can see and edit this) */}
