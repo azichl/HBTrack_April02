@@ -1946,7 +1946,7 @@ const LiveTrackingInner = () => {
 
         // Filter out positions before the official release date of the bird
         const tr = transmitters.find(t => String(t.platform_id) === String(pttId) || String(t.id) === String(pttId));
-        const bird = findBirdForTransmitter(birds, tr) || birds.find(b => String(b.assigned_transmitter_id) === String(pttId) || String(b.transmitter_id) === String(pttId));
+        const bird = findBirdForTransmitter(birds, tr) || birds.find(b => String(b.assigned_transmitter_id) === String(pttId) || String((b as any).transmitter_id) === String(pttId));
         const releaseDateStr = bird?.release_date || (tr as any)?.deployment_date || (tr as any)?.release_date;
         const relMs = parseReleaseDateMs(releaseDateStr);
         if (relMs && relMs > 0) {
@@ -2043,8 +2043,8 @@ const LiveTrackingInner = () => {
 
         // 2. FORCE strict chronological sorting by the actual GPS/location timestamp (oldest to newest)
         const sortedHistoryPoints = [...orderedLine.map(formatPoint)].sort((a, b) => {
-          const timeA = new Date(a.locationDate || a.timestamp || a.fixTime || a.fixDate || 0).getTime();
-          const timeB = new Date(b.locationDate || b.timestamp || b.fixTime || b.fixDate || 0).getTime();
+          const timeA = new Date(a.locationDate || a.timestamp || (a as any).fixTime || a.fixDate || 0).getTime();
+          const timeB = new Date(b.locationDate || b.timestamp || (b as any).fixTime || b.fixDate || 0).getTime();
           return (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB); // Prevents packet ingestion-order zig-zag jumps
         });
 

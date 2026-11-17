@@ -27,7 +27,9 @@ import {
   safeParseTimestamp, 
   classifyLocationType, 
   findBirdForTransmitter,
-  isBirdLinkedToTransmitter
+  isBirdLinkedToTransmitter,
+  parseReleaseDateMs,
+  isValidCoordinate
 } from '../../utils/formatting';
 import { parseBirdCoordinateCommand, resolveBirdOrTransmitter } from '../../utils/coordinateParser';
 import { SevenDayTempChart } from './SevenDayTempChart';
@@ -48,7 +50,8 @@ import { MapLabel, ReportLegendItem, SectionId, DEFAULT_MAP_ELEMENTS, MapElement
 import { TrackPathSettings, DEFAULT_TRACK_SETTINGS } from '../../src/types/track';
 import { useReportFixes } from '../../src/features/report-track/useReportFixes';
 import { TrackOverlay, leafletAdapter } from '../../src/features/report-track/TrackOverlay';
-import { buildTrackRenderModel } from '../../src/features/report-track/trackRenderModel';
+import { buildTrackRenderModel, Fix, TrackRenderModel } from '../../src/features/report-track/trackRenderModel';
+import { toFix } from '../../src/features/report-track/toFix';
 import { useReportTrackSettings } from '../../src/features/report-track/useReportTrackSettings';
 import '../../src/features/report-track/ReportTrack.css';
 import { LegendBlock } from '../../src/features/report-track/LegendBlock';
@@ -887,6 +890,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     historyRows: any[];
     allHistoryPoints: Array<[number, number]>;
     rawHistoryRecords: any[];
+    fixes?: Fix[];
     isLoading: boolean;
     color: string;
   }>>({});
@@ -1322,7 +1326,22 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return buildTrackRenderModel(reportFixes, effectiveTrackSettings);
   }, [reportFixes, effectiveTrackSettings]);
 
-  // Live GPS vs Doppler counts for popover
+  // Pure track render models for additional PTTs: synchronizes with effectiveTrackSettings (type, dates, style)
+  const additionalPttRenderModels = useMemo(() => {
+    const models: Record<string, TrackRenderModel> = {};
+    activePttIds.slice(1).forEach((pttId, idx) => {
+      const data = additionalPttData[pttId];
+      const fixes = data?.fixes || [];
+      const color = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
+      models[pttId] = buildTrackRenderModel(fixes, {
+        ...effectiveTrackSettings,
+        color
+      });
+    });
+    return models;
+  }, [activePttIds, additionalPttData, effectiveTrackSettings]);
+
+  // Live GPS vs Doppler counts for popover (includes all active PTTs)
   const trackCounts = useMemo(() => {
     let gps = 0;
     let doppler = 0;
@@ -1330,13 +1349,22 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       if (f.kind === 'GPS') gps++;
       else if (f.kind === 'DOPPLER') doppler++;
     }
+    activePttIds.slice(1).forEach(pttId => {
+      const fixes = additionalPttData[pttId]?.fixes || [];
+      for (const f of fixes) {
+        if (f.kind === 'GPS') gps++;
+        else if (f.kind === 'DOPPLER') doppler++;
+      }
+    });
+    const addShown: number = Object.values(additionalPttRenderModels).reduce<number>((acc, m: any) => acc + (Number(m?.shown) || 0), 0);
+    const addTotal: number = Object.values(additionalPttRenderModels).reduce<number>((acc, m: any) => acc + (Number(m?.total) || 0), 0);
     return {
       gps,
       doppler,
-      total: reportFixes.length,
-      shown: trackRenderModel.shown
+      total: reportFixes.length + addTotal,
+      shown: trackRenderModel.shown + addShown
     };
-  }, [reportFixes, trackRenderModel.shown]);
+  }, [reportFixes, trackRenderModel.shown, activePttIds, additionalPttData, additionalPttRenderModels]);
 
   // Leaflet Map adapter for SVG overlay
   const trackMapAdapter = useMemo(() => {
@@ -2169,12 +2197,12 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         };
       });
 
-      // Filter valid coordinates for trajectory
+      // Filter valid coordinates for trajectory (Houbara range sanity check)
       const validPoints: Array<[number, number]> = [];
       allSortedPositions.forEach(p => {
         const lat = parseFloat(String(p.lat));
         const lon = parseFloat(String(p.lon));
-        if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+        if (isValidCoordinate(lat, lon) && lat >= 10 && lat <= 60 && lon >= -20 && lon <= 110) {
           validPoints.push([lat, lon]);
         }
       });
@@ -2323,6 +2351,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         historyRows: [],
         allHistoryPoints: [],
         rawHistoryRecords: [],
+        fixes: [],
         isLoading: true,
         color
       }
@@ -2333,66 +2362,127 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const foundTx = transmitters.find(t =>
         String(t.platform_id) === cleanId ||
         String(t.platform_id) === pttId ||
-        String(t.id) === pttId
+        String(t.id) === pttId ||
+        String(t.id) === cleanId
       );
-      if (!foundTx) throw new Error(`Transmitter ${pttId} not found`);
+      const bird = foundTx ? findBirdForTransmitter(birds, foundTx) : birds.find(b =>
+        String(b.assigned_transmitter_id) === cleanId ||
+        String((b as any).transmitter_id) === cleanId ||
+        String(b.assigned_transmitter_id) === pttId ||
+        String((b as any).transmitter_id) === pttId
+      );
+
+      const releaseDateStr = bird?.release_date || (foundTx as any)?.deployment_date || (foundTx as any)?.release_date;
+      const relMs = parseReleaseDateMs(releaseDateStr);
+      const officialRelLat = bird?.release_lat ? parseFloat(String(bird.release_lat)) : NaN;
+      const officialRelLon = bird?.release_lon ? parseFloat(String(bird.release_lon)) : NaN;
       
       const tenYearsAgo = new Date(); tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
       const now = new Date();
-      const rawPositions = await getHistoricalPositions([foundTx.id, foundTx.platform_id].filter(Boolean) as string[], tenYearsAgo, now);
+      const queryIds = Array.from(new Set([cleanId, pttId, foundTx?.id, foundTx?.platform_id].filter(Boolean))) as string[];
+      const rawPositions = await getHistoricalPositions(queryIds, tenYearsAgo, now);
+      const storePositions = (positions || []).filter(p => {
+        const pid = String(p.transmitter_id || (p as any).platformId || (p as any).platform_id || '');
+        return queryIds.includes(pid);
+      });
+      const allTelemetry = [...rawPositions, ...storePositions];
       
-      const gpsPositions = rawPositions.filter((p: any) => {
+      // Filter valid coordinates within realistic Houbara geography (10°N-60°N, -20°W-110°E)
+      // to eliminate Doppler satellite spikes or Arctic/sub-equatorial artifacts
+      const validPositions = allTelemetry.filter((p: any) => {
         const lat = parseFloat(String(p.latitude || p.lat || 0));
         const lon = parseFloat(String(p.longitude || p.lon || 0));
-        return !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+        if (!isValidCoordinate(lat, lon)) return false;
+        if (lat < 10 || lat > 60 || lon < -20 || lon > 110) return false;
+        return true;
       });
+
+      // Filter out pre-release positions if bird's official release date is known
+      let postReleasePositions = validPositions;
+      if (relMs && relMs > 0) {
+        postReleasePositions = validPositions.filter((p: any) => {
+          const pTime = safeParseTimestamp(p.locationDate || p.timestamp || p.fixTime || p.date || 0);
+          return !isNaN(pTime) && pTime >= relMs;
+        });
+        if (postReleasePositions.length === 0 && validPositions.length > 0) {
+          postReleasePositions = validPositions;
+        }
+      }
       
-      const sortedGps = [...gpsPositions].sort((a: any, b: any) => {
-        return safeParseTimestamp(a.timestamp || a.date) - safeParseTimestamp(b.timestamp || b.date);
+      // Strict chronological sorting by actual location fix time
+      const sortedTelemetry = [...postReleasePositions].sort((a: any, b: any) => {
+        return safeParseTimestamp(a.locationDate || a.fixTime || a.timestamp || a.date || 0) -
+               safeParseTimestamp(b.locationDate || b.fixTime || b.timestamp || b.date || 0);
       });
+
+      const normalized = normalizeHistoryFixes(sortedTelemetry);
+      const mappedFixes: Fix[] = [];
+      for (const nf of normalized) {
+        const fx = toFix({ ...nf.raw, t: nf.t, lat: nf.lat, lon: nf.lon });
+        if (fx && fx.lat >= 10 && fx.lat <= 60 && fx.lon >= -20 && fx.lon <= 110) {
+          mappedFixes.push(fx);
+        }
+      }
+
+      const gpsFixes = mappedFixes.filter(f => f.kind === 'GPS');
+      const availableFixes = gpsFixes.length > 0 ? gpsFixes : mappedFixes;
       
       let relTelemetry = { lat: 0, lon: 0, dateStr: '—' };
       let lastTelemetry = { lat: 0, lon: 0, dateStr: '—' };
-      
-      if (sortedGps.length > 0) {
-        const first = sortedGps[0] as any;
-        const last = sortedGps[sortedGps.length - 1] as any;
-        relTelemetry = { lat: parseFloat(String(first.latitude || first.lat)), lon: parseFloat(String(first.longitude || first.lon)), dateStr: formatDateDDMMYYYY(first.timestamp || first.date) };
-        lastTelemetry = { lat: parseFloat(String(last.latitude || last.lat)), lon: parseFloat(String(last.longitude || last.lon)), dateStr: formatDateDDMMYYYY(last.timestamp || last.date) };
+
+      if (!isNaN(officialRelLat) && !isNaN(officialRelLon) && officialRelLat !== 0 && officialRelLon !== 0) {
+        relTelemetry = {
+          lat: officialRelLat,
+          lon: officialRelLon,
+          dateStr: releaseDateStr ? formatDateDDMMYYYY(releaseDateStr) : (availableFixes[0] ? formatDateDDMMYYYY(availableFixes[0].t) : '—')
+        };
+      } else if (availableFixes.length > 0) {
+        const first = availableFixes[0];
+        relTelemetry = {
+          lat: first.lat,
+          lon: first.lon,
+          dateStr: releaseDateStr ? formatDateDDMMYYYY(releaseDateStr) : formatDateDDMMYYYY(first.t)
+        };
+      }
+
+      if (availableFixes.length > 0) {
+        const last = availableFixes[availableFixes.length - 1];
+        lastTelemetry = {
+          lat: last.lat,
+          lon: last.lon,
+          dateStr: formatDateDDMMYYYY(last.t)
+        };
       }
       
-      const allHistoryPoints: [number, number][] = sortedGps.map((p: any) => [
-        parseFloat(String(p.latitude || p.lat)),
-        parseFloat(String(p.longitude || p.lon))
-      ]);
+      const allHistoryPoints: [number, number][] = availableFixes.map(f => [f.lat, f.lon]);
 
-      const reversedGps = [...sortedGps].reverse();
-      const generatedRows = reversedGps.slice(0, 30).map((pos: any, idx: number) => {
-        const ts = safeParseTimestamp(pos.timestamp || pos.date);
-        const d = new Date(ts);
-        const dateStr = formatDateDDMMYYYY(pos.timestamp || pos.date);
-        const timeStr = !isNaN(ts) ? `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC` : '--:--';
+      const reversedFixes = [...availableFixes].reverse();
+      const generatedRows = reversedFixes.slice(0, 30).map((fx, idx) => {
+        const d = new Date(fx.t);
+        const dateStr = formatDateDDMMYYYY(fx.t);
+        const timeStr = !isNaN(fx.t) ? `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC` : '--:--';
         return {
           id: `hist-add-${cleanId}-${idx}`,
           index: idx + 1,
           dateStr,
           timeStr,
-          lat: parseFloat(Number(pos.latitude || pos.lat || 0).toFixed(5)),
-          lon: parseFloat(Number(pos.longitude || pos.lon || 0).toFixed(5)),
-          type: (pos.location_type || pos.locationType || pos.type || 'GPS').toUpperCase(),
-          speed: typeof pos.speed_kmh === 'number' ? `${pos.speed_kmh.toFixed(1)} km/h` : '0.0 km/h',
-          altitude: (pos as any).altitude ? `${(pos as any).altitude} m` : '-',
-          notes: idx === 0 ? 'آخر موقع تم رصده' : idx === sortedGps.length - 1 ? 'موقع تركيب الجهاز' : 'نقطة مسار'
+          lat: parseFloat(Number(fx.lat).toFixed(5)),
+          lon: parseFloat(Number(fx.lon).toFixed(5)),
+          type: fx.kind,
+          speed: '0.0 km/h',
+          altitude: '-',
+          notes: idx === 0 ? 'آخر موقع تم رصده' : idx === reversedFixes.length - 1 ? 'موقع تركيب الجهاز' : 'نقطة مسار'
         };
       });
       
       setAdditionalPttData(prev => ({
         ...prev,
         [pttId]: {
-          telemetryData: { releasePos: relTelemetry, lastGpsPos: lastTelemetry, rawGpsCount: sortedGps.length, dataSource: 'telemetry' },
+          telemetryData: { releasePos: relTelemetry, lastGpsPos: lastTelemetry, rawGpsCount: gpsFixes.length, dataSource: 'telemetry' },
           historyRows: generatedRows,
           allHistoryPoints,
-          rawHistoryRecords: sortedGps,
+          rawHistoryRecords: sortedTelemetry,
+          fixes: mappedFixes,
           isLoading: false,
           color
         }
@@ -2401,7 +2491,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       console.error('[MultiPTT] Failed to load additional PTT:', err);
       setAdditionalPttData(prev => ({ ...prev, [pttId]: { ...prev[pttId], isLoading: false } }));
     }
-  }, [activePttIds, transmitters]);
+  }, [activePttIds, transmitters, birds, positions]);
   
   /** Remove an additional PTT from the map */
   const handleRemoveAdditionalPtt = useCallback((pttId: string) => {
@@ -2412,10 +2502,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   
   /** All history points across all PTTs (for map bounds fitting) */
   const allMultiPttPoints = useMemo((): [number, number][] => {
-    const primary: [number, number][] = allHistoryPoints;
-    const additional = activePttIds.slice(1).flatMap(pttId => additionalPttData[pttId]?.allHistoryPoints ?? []);
+    const primary: [number, number][] = trackRenderModel.filtered.length > 0
+      ? trackRenderModel.filtered.map(p => [p.lat, p.lon] as [number, number])
+      : allHistoryPoints.filter(([lat, lon]) => isValidCoordinate(lat, lon) && lat >= 10 && lat <= 60 && lon >= -20 && lon <= 110);
+    const additional = activePttIds.slice(1).flatMap(pttId => {
+      const model = additionalPttRenderModels[pttId];
+      if (model && model.filtered.length > 0) {
+        return model.filtered.map(p => [p.lat, p.lon] as [number, number]);
+      }
+      return (additionalPttData[pttId]?.allHistoryPoints ?? []).filter(([lat, lon]) => isValidCoordinate(lat, lon) && lat >= 10 && lat <= 60 && lon >= -20 && lon <= 110);
+    });
     return [...primary, ...additional];
-  }, [allHistoryPoints, activePttIds, additionalPttData]);
+  }, [trackRenderModel.filtered, allHistoryPoints, activePttIds, additionalPttRenderModels, additionalPttData]);
   
   /** Currently selected history tab (for multi-PTT history table) */
   const [historyTabPttId, setHistoryTabPttId] = useState<string>('');
@@ -2543,21 +2641,28 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const additionalPttMetrics = useMemo(() => {
     return activePttIds.slice(1).map(pttId => {
       const data = additionalPttData[pttId];
-      if (!data || data.allHistoryPoints.length === 0) return { pttId, available: false, distFromRelease: 0, bearing: 0, distTraveled: 0, durationDays: 0, color: data?.color || '#6366f1' };
+      if (!data) return { pttId, available: false, distFromRelease: 0, bearing: 0, distTraveled: 0, durationDays: 0, color: data?.color || '#6366f1' };
       const rLat = data.telemetryData.releasePos.lat;
       const rLon = data.telemetryData.releasePos.lon;
       const lLat = data.telemetryData.lastGpsPos.lat;
       const lLon = data.telemetryData.lastGpsPos.lon;
-      const hasRel = rLat !== 0 && rLon !== 0;
-      const hasLast = lLat !== 0 && lLon !== 0;
+      const hasRel = rLat !== 0 && rLon !== 0 && !isNaN(rLat) && !isNaN(rLon);
+      const hasLast = lLat !== 0 && lLon !== 0 && !isNaN(lLat) && !isNaN(lLon);
       const distFromRelease = hasRel && hasLast ? calculateDistanceKm(rLat, rLon, lLat, lLon) : 0;
       const bearing = hasRel && hasLast ? calculateBearingDegrees(rLat, rLon, lLat, lLon) : 0;
+      
+      const model = additionalPttRenderModels[pttId];
+      const pts = (model && model.filtered.length > 0)
+        ? model.filtered.map(p => [p.lat, p.lon] as [number, number])
+        : data.allHistoryPoints;
+
       let distTraveled = 0;
-      const pts = data.allHistoryPoints;
       for (let i = 1; i < pts.length; i++) {
         distTraveled += calculateDistanceKm(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
       }
-      const durationDays = hasRel ? calculateDurationFromReleaseToToday(data.telemetryData.releasePos.dateStr) : 0;
+      const durationDays = (hasRel && data.telemetryData.releasePos.dateStr && data.telemetryData.releasePos.dateStr !== '—')
+        ? calculateDurationFromReleaseToToday(data.telemetryData.releasePos.dateStr)
+        : 0;
       return {
         pttId,
         available: true,
@@ -2568,7 +2673,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         color: data.color,
       };
     });
-  }, [activePttIds, additionalPttData]);
+  }, [activePttIds, additionalPttData, additionalPttRenderModels]);
 
   /** Unified summary metrics for all active PTTs (multi-PTT comparative table) */
   const allPttSummaryMetrics = useMemo(() => {
@@ -2588,7 +2693,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         };
       }
       const data = additionalPttData[pttId];
-      if (!data || data.allHistoryPoints.length === 0) {
+      if (!data) {
         return {
           pttId,
           cleanId,
@@ -2604,17 +2709,24 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       const rLon = data.telemetryData.releasePos.lon;
       const lLat = data.telemetryData.lastGpsPos.lat;
       const lLon = data.telemetryData.lastGpsPos.lon;
-      const hasRel = rLat !== 0 && rLon !== 0;
-      const hasLast = lLat !== 0 && lLon !== 0;
+      const hasRel = rLat !== 0 && rLon !== 0 && !isNaN(rLat) && !isNaN(rLon);
+      const hasLast = lLat !== 0 && lLon !== 0 && !isNaN(lLat) && !isNaN(lLon);
       const distFromRelease = hasRel && hasLast ? calculateDistanceKm(rLat, rLon, lLat, lLon) : 0;
       const bearing = hasRel && hasLast ? calculateBearingDegrees(rLat, rLon, lLat, lLon) : 0;
       const bearingObj = formatBearingByLanguage(bearing, reportLanguage);
+      
+      const model = additionalPttRenderModels[pttId];
+      const pts = (model && model.filtered.length > 0)
+        ? model.filtered.map(p => [p.lat, p.lon] as [number, number])
+        : data.allHistoryPoints;
+
       let distTraveled = 0;
-      const pts = data.allHistoryPoints;
       for (let i = 1; i < pts.length; i++) {
         distTraveled += calculateDistanceKm(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
       }
-      const durationDays = hasRel ? calculateDurationFromReleaseToToday(data.telemetryData.releasePos.dateStr) : 0;
+      const durationDays = (hasRel && data.telemetryData.releasePos.dateStr && data.telemetryData.releasePos.dateStr !== '—')
+        ? calculateDurationFromReleaseToToday(data.telemetryData.releasePos.dateStr)
+        : 0;
       return {
         pttId,
         cleanId,
@@ -2623,10 +2735,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         bearingFull: hasRel && hasLast ? bearingObj.full : '—',
         distToCamp: '—',
         distTraveled: (Math.round(distTraveled * 100) / 100).toLocaleString(),
-        durationDays: String(durationDays),
+        durationDays: durationDays > 0 ? String(durationDays) : '—',
       };
     });
-  }, [activePttIds, additionalPttData, metrics, calculatedDistanceTraveledKm, reportFixes.length, reportLanguage]);
+  }, [activePttIds, additionalPttData, metrics, calculatedDistanceTraveledKm, reportFixes.length, reportLanguage, additionalPttRenderModels]);
 
   // Presence of elements on this map (for Pass 7 Legend sync)
   const presence = useMemo(() => ({
@@ -2675,14 +2787,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       if (metrics.rLat && metrics.rLon && metrics.rLat !== 0 && metrics.rLon !== 0) {
         pts.push([metrics.rLat, metrics.rLon]);
       }
-      // Include all additional PTT release and latest positions
+      // Include all additional PTT release and latest positions (Houbara range sanity check)
       activePttIds.slice(1).forEach(pttId => {
         const d = additionalPttData[pttId];
-        if (d?.telemetryData?.releasePos?.lat && d?.telemetryData?.releasePos?.lon) {
-          pts.push([d.telemetryData.releasePos.lat, d.telemetryData.releasePos.lon]);
+        const rLat = d?.telemetryData?.releasePos?.lat;
+        const rLon = d?.telemetryData?.releasePos?.lon;
+        const lLat = d?.telemetryData?.lastGpsPos?.lat;
+        const lLon = d?.telemetryData?.lastGpsPos?.lon;
+        if (rLat && rLon && isValidCoordinate(rLat, rLon) && rLat >= 10 && rLat <= 60 && rLon >= -20 && rLon <= 110) {
+          pts.push([rLat, rLon]);
         }
-        if (d?.telemetryData?.lastGpsPos?.lat && d?.telemetryData?.lastGpsPos?.lon) {
-          pts.push([d.telemetryData.lastGpsPos.lat, d.telemetryData.lastGpsPos.lon]);
+        if (lLat && lLon && isValidCoordinate(lLat, lLon) && lLat >= 10 && lLat <= 60 && lLon >= -20 && lLon <= 110) {
+          pts.push([lLat, lLon]);
         }
       });
       if (activeCamp?.lat && activeCamp?.lon) {
@@ -6566,12 +6682,29 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
 
                       {/* Self-contained SVG Track Overlay mounted in Leaflet hbTrack pane (z-index 450) */}
                       {effectiveTrackSettings.show && mapElements.track?.visible !== false && (
-                        <TrackOverlay
-                          model={trackRenderModel}
-                          settings={activePttIds.length > 1 ? { ...effectiveTrackSettings, color: MULTI_PTT_COLORS[0] } : effectiveTrackSettings}
-                          adapter={trackMapAdapter}
-                          debug={isDebugTrack}
-                        />
+                        <>
+                          <TrackOverlay
+                            model={trackRenderModel}
+                            settings={activePttIds.length > 1 ? { ...effectiveTrackSettings, color: MULTI_PTT_COLORS[0] } : effectiveTrackSettings}
+                            adapter={trackMapAdapter}
+                            debug={isDebugTrack}
+                          />
+                          {activePttIds.slice(1).map((pttId, idx) => {
+                            const model = additionalPttRenderModels[pttId];
+                            if (!model || model.shown === 0) return null;
+                            const color = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
+                            return (
+                              <React.Fragment key={`track-overlay-${pttId}`}>
+                                <TrackOverlay
+                                  model={model}
+                                  settings={{ ...effectiveTrackSettings, color }}
+                                  adapter={trackMapAdapter}
+                                  debug={isDebugTrack}
+                                />
+                              </React.Fragment>
+                            );
+                          })}
+                        </>
                       )}
 
                       {/* Distance line between Camps (Requested Filter) */}
@@ -6766,24 +6899,34 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {/* ─── Additional PTT Tracks & Markers ─── */}
                       {activePttIds.slice(1).map((pttId, idx) => {
                         const data = additionalPttData[pttId];
-                        if (!data || data.isLoading || data.allHistoryPoints.length === 0) return null;
+                        if (!data || data.isLoading) return null;
                         const color = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
-                        const points = data.allHistoryPoints;
                         const relPos = data.telemetryData.releasePos;
                         const lastPos = data.telemetryData.lastGpsPos;
                         const cleanPttId = String(pttId).replace(/^trans-/, '');
                         
+                        // Fallback Polyline only when SVG TrackOverlay adapter is not mounted
+                        const model = additionalPttRenderModels[pttId];
+                        const fallbackPoints: [number, number][] = (!trackMapAdapter && effectiveTrackSettings.show && mapElements.track?.visible !== false)
+                          ? (model && model.filtered.length > 0 ? model.filtered.map(p => [p.lat, p.lon]) : data.allHistoryPoints)
+                          : [];
+                        
                         return (
                           <React.Fragment key={pttId}>
-                            {/* Flight Track Polyline */}
-                            {points.length > 1 && (
+                            {/* Fallback Flight Track Polyline */}
+                            {fallbackPoints.length > 1 && (
                               <Polyline
-                                positions={points}
-                                pathOptions={{ color, weight: 3, opacity: 0.9 }}
+                                positions={fallbackPoints}
+                                pathOptions={{
+                                  color,
+                                  weight: effectiveTrackSettings.width || 3,
+                                  opacity: effectiveTrackSettings.opacity ?? 0.9,
+                                  dashArray: effectiveTrackSettings.dash === 'dashed' ? '6, 6' : effectiveTrackSettings.dash === 'dotted' ? '2, 6' : undefined
+                                }}
                               />
                             )}
                             {/* Release Marker */}
-                            {relPos.lat !== 0 && relPos.lon !== 0 && (
+                            {relPos.lat !== 0 && relPos.lon !== 0 && !isNaN(relPos.lat) && !isNaN(relPos.lon) && (
                               <Marker
                                 position={[relPos.lat, relPos.lon]}
                                 icon={createLiveTrackingMarkerIcon({
@@ -6794,7 +6937,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               />
                             )}
                             {/* Latest Position Marker */}
-                            {lastPos.lat !== 0 && lastPos.lon !== 0 && (
+                            {lastPos.lat !== 0 && lastPos.lon !== 0 && !isNaN(lastPos.lat) && !isNaN(lastPos.lon) && (
                               <Marker
                                 position={[lastPos.lat, lastPos.lon]}
                                 icon={createLiveTrackingMarkerIcon({

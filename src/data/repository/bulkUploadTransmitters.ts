@@ -192,7 +192,7 @@ const optFlexibleDate = z.preprocess(
 // Reception Date: Obligatory (DD/MM/YYYY, DD-MM-YYYY, MM/YYYY, MM-YYYY, or YYYY)
 const receptionDateObligatory = z.preprocess(
   (v) => normalizeDateToDmy(v, true),
-  z.string({ required_error: 'Reception date is obligatory (DD/MM/YYYY, MM/YYYY, or YYYY)' })
+  z.string()
     .min(1, 'Reception date is obligatory')
     .refine((val) => /^(\d{2}-\d{2}-\d{4}|\d{2}-\d{4}|\d{4})$/.test(val), {
       message: 'Reception date must be in DD/MM/YYYY, MM/YYYY, or YYYY format (e.g. 15/03/2024, 03/2024, or 2024)',
