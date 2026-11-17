@@ -83,7 +83,8 @@ import {
   resolveLocationFromCoords,
   normalizeCountryAr,
   resolveRegionBilingual,
-  AutoResolvedLocation
+  AutoResolvedLocation,
+  createLiveTrackingMarkerIcon
 } from './QGISMapProductionReport';
 
 /** Formats coordinate to DD, DMM, or DMS for the coordinates comparison table. Returns '—' for empty/0/NaN */
@@ -874,6 +875,46 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   }, []);
 
   const [selectedPttId, setSelectedPttId] = useState<string>(initialPtt);
+
+  // ─── MULTI-PTT STATE ─────────────────────────────────────────────────────
+  /** All PTT IDs currently displayed (index 0 = primary PTT = selectedPttId) */
+  const [activePttIds, setActivePttIds] = useState<string[]>(() => [initialPtt].filter(Boolean));
+  /** Show the "Add Transmitter" dropdown modal */
+  const [showAddPttModal, setShowAddPttModal] = useState<boolean>(false);
+  /** Per-PTT loaded data (additional PTTs only; primary uses existing state) */
+  const [additionalPttData, setAdditionalPttData] = useState<Record<string, {
+    telemetryData: { releasePos: { lat: number; lon: number; dateStr: string }; lastGpsPos: { lat: number; lon: number; dateStr: string }; rawGpsCount: number; dataSource: 'telemetry' | 'manual' | 'reference_pdf'; };
+    historyRows: any[];
+    allHistoryPoints: Array<[number, number]>;
+    rawHistoryRecords: any[];
+    isLoading: boolean;
+    color: string;
+  }>>({});
+  
+  const MULTI_PTT_COLORS = [
+    '#dc2626', // red    — primary PTT
+    '#6366f1', // indigo
+    '#16a34a', // green
+    '#f59e0b', // amber
+    '#0ea5e9', // sky
+    '#a855f7', // purple
+    '#f97316', // orange
+    '#14b8a6', // teal
+  ];
+
+  // Keep selectedPttId in sync with activePttIds[0]
+  useEffect(() => {
+    if (activePttIds[0] && activePttIds[0] !== selectedPttId) {
+      setSelectedPttId(activePttIds[0]);
+    }
+  }, [activePttIds]);
+  
+  // Keep activePttIds[0] in sync when selectedPttId changes externally
+  useEffect(() => {
+    if (selectedPttId && activePttIds[0] !== selectedPttId) {
+      setActivePttIds(prev => [selectedPttId, ...prev.slice(1)]);
+    }
+  }, [selectedPttId]);
   const [pttSearchTerm, setPttSearchTerm] = useState<string>('');
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
   const [selectedCampId, setSelectedCampId] = useState<string>(initialNearestCamp.id);
@@ -2266,6 +2307,119 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     handleUploadFromHistory(selectedPttId);
   }, [selectedPttId, handleUploadFromHistory]);
 
+  /** Add an additional PTT to the map */
+  const handleAddAdditionalPtt = useCallback(async (pttId: string) => {
+    if (!pttId || activePttIds.includes(pttId) || activePttIds.length >= 8) return;
+    const newIndex = activePttIds.length;
+    const color = MULTI_PTT_COLORS[newIndex % MULTI_PTT_COLORS.length];
+    
+    // Add immediately with loading state
+    setActivePttIds(prev => [...prev, pttId]);
+    setAdditionalPttData(prev => ({
+      ...prev,
+      [pttId]: {
+        telemetryData: { releasePos: { lat: 0, lon: 0, dateStr: '—' }, lastGpsPos: { lat: 0, lon: 0, dateStr: '—' }, rawGpsCount: 0, dataSource: 'telemetry' },
+        historyRows: [],
+        allHistoryPoints: [],
+        rawHistoryRecords: [],
+        isLoading: true,
+        color
+      }
+    }));
+    
+    try {
+      const cleanId = String(pttId).replace(/^trans-/, '');
+      const foundTx = transmitters.find(t =>
+        String(t.platform_id) === cleanId ||
+        String(t.platform_id) === pttId ||
+        String(t.id) === pttId
+      );
+      if (!foundTx) throw new Error(`Transmitter ${pttId} not found`);
+      
+      const tenYearsAgo = new Date(); tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+      const now = new Date();
+      const rawPositions = await getHistoricalPositions([foundTx.id, foundTx.platform_id].filter(Boolean) as string[], tenYearsAgo, now);
+      
+      const gpsPositions = rawPositions.filter((p: any) => {
+        const lat = parseFloat(String(p.latitude || p.lat || 0));
+        const lon = parseFloat(String(p.longitude || p.lon || 0));
+        return !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
+      });
+      
+      const sortedGps = [...gpsPositions].sort((a: any, b: any) => {
+        return safeParseTimestamp(a.timestamp || a.date) - safeParseTimestamp(b.timestamp || b.date);
+      });
+      
+      let relTelemetry = { lat: 0, lon: 0, dateStr: '—' };
+      let lastTelemetry = { lat: 0, lon: 0, dateStr: '—' };
+      
+      if (sortedGps.length > 0) {
+        const first = sortedGps[0] as any;
+        const last = sortedGps[sortedGps.length - 1] as any;
+        relTelemetry = { lat: parseFloat(String(first.latitude || first.lat)), lon: parseFloat(String(first.longitude || first.lon)), dateStr: formatDateDDMMYYYY(first.timestamp || first.date) };
+        lastTelemetry = { lat: parseFloat(String(last.latitude || last.lat)), lon: parseFloat(String(last.longitude || last.lon)), dateStr: formatDateDDMMYYYY(last.timestamp || last.date) };
+      }
+      
+      const allHistoryPoints: [number, number][] = sortedGps.map((p: any) => [
+        parseFloat(String(p.latitude || p.lat)),
+        parseFloat(String(p.longitude || p.lon))
+      ]);
+
+      const reversedGps = [...sortedGps].reverse();
+      const generatedRows = reversedGps.slice(0, 30).map((pos: any, idx: number) => {
+        const ts = safeParseTimestamp(pos.timestamp || pos.date);
+        const d = new Date(ts);
+        const dateStr = formatDateDDMMYYYY(pos.timestamp || pos.date);
+        const timeStr = !isNaN(ts) ? `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC` : '--:--';
+        return {
+          id: `hist-add-${cleanId}-${idx}`,
+          index: idx + 1,
+          dateStr,
+          timeStr,
+          lat: parseFloat(Number(pos.latitude || pos.lat || 0).toFixed(5)),
+          lon: parseFloat(Number(pos.longitude || pos.lon || 0).toFixed(5)),
+          type: (pos.location_type || pos.locationType || pos.type || 'GPS').toUpperCase(),
+          speed: typeof pos.speed_kmh === 'number' ? `${pos.speed_kmh.toFixed(1)} km/h` : '0.0 km/h',
+          altitude: (pos as any).altitude ? `${(pos as any).altitude} m` : '-',
+          notes: idx === 0 ? 'آخر موقع تم رصده' : idx === sortedGps.length - 1 ? 'موقع تركيب الجهاز' : 'نقطة مسار'
+        };
+      });
+      
+      setAdditionalPttData(prev => ({
+        ...prev,
+        [pttId]: {
+          telemetryData: { releasePos: relTelemetry, lastGpsPos: lastTelemetry, rawGpsCount: sortedGps.length, dataSource: 'telemetry' },
+          historyRows: generatedRows,
+          allHistoryPoints,
+          rawHistoryRecords: sortedGps,
+          isLoading: false,
+          color
+        }
+      }));
+    } catch (err) {
+      console.error('[MultiPTT] Failed to load additional PTT:', err);
+      setAdditionalPttData(prev => ({ ...prev, [pttId]: { ...prev[pttId], isLoading: false } }));
+    }
+  }, [activePttIds, transmitters]);
+  
+  /** Remove an additional PTT from the map */
+  const handleRemoveAdditionalPtt = useCallback((pttId: string) => {
+    if (pttId === activePttIds[0]) return; // cannot remove primary
+    setActivePttIds(prev => prev.filter(id => id !== pttId));
+    setAdditionalPttData(prev => { const copy = { ...prev }; delete copy[pttId]; return copy; });
+  }, [activePttIds]);
+  
+  /** All history points across all PTTs (for map bounds fitting) */
+  const allMultiPttPoints = useMemo((): [number, number][] => {
+    const primary: [number, number][] = allHistoryPoints;
+    const additional = activePttIds.slice(1).flatMap(pttId => additionalPttData[pttId]?.allHistoryPoints ?? []);
+    return [...primary, ...additional];
+  }, [allHistoryPoints, activePttIds, additionalPttData]);
+  
+  /** Currently selected history tab (for multi-PTT history table) */
+  const [historyTabPttId, setHistoryTabPttId] = useState<string>('');
+  const activeHistoryPttId = historyTabPttId || activePttIds[0] || selectedPttId;
+
   // Active Field Camp
   const activeCamp: FieldCampPoint = useMemo(() => {
     const visibleCamps = FIXED_FIELD_CAMPS.filter(c => visibleCampIds.includes(c.id));
@@ -2340,6 +2494,81 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     };
   }, [telemetryData, activeCamp, reportLanguage, coordFormat]);
 
+  /** Get bird info for any PTT ID (for multi-column table) */
+  const getPttBirdInfo = useCallback((pttId: string) => {
+    const cleanId = String(pttId).replace(/^trans-/, '');
+    const tx = transmitters.find(t =>
+      String(t.platform_id) === cleanId ||
+      String(t.id) === cleanId ||
+      String(t.platform_id) === pttId
+    );
+    const bird = tx ? findBirdForTransmitter(birds, tx) : null;
+    
+    if (pttId === selectedPttId || pttId === activePttIds[0]) {
+      // Primary PTT — use existing computed values
+      return {
+        transmitterId: displayTransmitterLabel || cleanId,
+        ringNumber: customMetadata.birdRing || (bird?.ring_id ?? 'NA'),
+        species: customMetadata.species || (bird?.species ?? 'Houbara Bustard - Wild'),
+        gender: customMetadata.gender || (bird?.gender ?? '—'),
+        status: customMetadata.birdStatus || ((bird as any)?.status ?? 'Unknown'),
+        releaseLat: telemetryData.releasePos.lat,
+        releaseLon: telemetryData.releasePos.lon,
+        releaseDateStr: telemetryData.releasePos.dateStr,
+        lastLat: telemetryData.lastGpsPos.lat,
+        lastLon: telemetryData.lastGpsPos.lon,
+        lastDateStr: telemetryData.lastGpsPos.dateStr,
+      };
+    }
+    
+    // Additional PTT
+    const data = additionalPttData[pttId];
+    return {
+      transmitterId: cleanId,
+      ringNumber: bird?.ring_id ?? 'NA',
+      species: bird?.species ?? 'Houbara Bustard - Wild',
+      gender: bird?.gender ?? '—',
+      status: (bird as any)?.status ?? 'Unknown',
+      releaseLat: data?.telemetryData.releasePos.lat ?? 0,
+      releaseLon: data?.telemetryData.releasePos.lon ?? 0,
+      releaseDateStr: data?.telemetryData.releasePos.dateStr ?? '—',
+      lastLat: data?.telemetryData.lastGpsPos.lat ?? 0,
+      lastLon: data?.telemetryData.lastGpsPos.lon ?? 0,
+      lastDateStr: data?.telemetryData.lastGpsPos.dateStr ?? '—',
+    };
+  }, [selectedPttId, activePttIds, transmitters, birds, additionalPttData, displayTransmitterLabel, customMetadata, telemetryData]);
+  
+  /** Additional PTT metrics for the summary row */
+  const additionalPttMetrics = useMemo(() => {
+    return activePttIds.slice(1).map(pttId => {
+      const data = additionalPttData[pttId];
+      if (!data || data.allHistoryPoints.length === 0) return { pttId, available: false, distFromRelease: 0, bearing: 0, distTraveled: 0, durationDays: 0, color: data?.color || '#6366f1' };
+      const rLat = data.telemetryData.releasePos.lat;
+      const rLon = data.telemetryData.releasePos.lon;
+      const lLat = data.telemetryData.lastGpsPos.lat;
+      const lLon = data.telemetryData.lastGpsPos.lon;
+      const hasRel = rLat !== 0 && rLon !== 0;
+      const hasLast = lLat !== 0 && lLon !== 0;
+      const distFromRelease = hasRel && hasLast ? calculateDistanceKm(rLat, rLon, lLat, lLon) : 0;
+      const bearing = hasRel && hasLast ? calculateBearingDegrees(rLat, rLon, lLat, lLon) : 0;
+      let distTraveled = 0;
+      const pts = data.allHistoryPoints;
+      for (let i = 1; i < pts.length; i++) {
+        distTraveled += calculateDistanceKm(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
+      }
+      const durationDays = hasRel ? calculateDurationFromReleaseToToday(data.telemetryData.releasePos.dateStr) : 0;
+      return {
+        pttId,
+        available: true,
+        distFromRelease: Math.round(distFromRelease * 100) / 100,
+        bearing,
+        distTraveled: Math.round(distTraveled * 100) / 100,
+        durationDays,
+        color: data.color,
+      };
+    });
+  }, [activePttIds, additionalPttData]);
+
   // Presence of elements on this map (for Pass 7 Legend sync)
   const presence = useMemo(() => ({
     release: !!metrics.hasRelease && mapElements.release?.visible !== false,
@@ -2374,6 +2603,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       if (metrics.rLat && metrics.rLon && metrics.rLat !== 0 && metrics.rLon !== 0) {
         pts.push([metrics.rLat, metrics.rLon]);
       }
+      // Include all additional PTT release and latest positions
+      activePttIds.slice(1).forEach(pttId => {
+        const d = additionalPttData[pttId];
+        if (d?.telemetryData?.releasePos?.lat && d?.telemetryData?.releasePos?.lon) {
+          pts.push([d.telemetryData.releasePos.lat, d.telemetryData.releasePos.lon]);
+        }
+        if (d?.telemetryData?.lastGpsPos?.lat && d?.telemetryData?.lastGpsPos?.lon) {
+          pts.push([d.telemetryData.lastGpsPos.lat, d.telemetryData.lastGpsPos.lon]);
+        }
+      });
       if (activeCamp?.lat && activeCamp?.lon) {
         pts.push([activeCamp.lat, activeCamp.lon]);
       }
@@ -2389,7 +2628,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     } catch {
       // safe fallback if map is in transition
     }
-  }, [mapInstance, metrics.lLat, metrics.lLon, metrics.rLat, metrics.rLon, activeCamp, mapCenter, mapZoom]);
+  }, [mapInstance, metrics.lLat, metrics.lLon, metrics.rLat, metrics.rLon, activeCamp, mapCenter, mapZoom, activePttIds, additionalPttData]);
 
   // Auto-recenter when telemetry loads or changes
   useEffect(() => {
@@ -2398,7 +2637,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       handleRecenterMap();
     }, 200);
     return () => clearTimeout(timer);
-  }, [mapInstance, telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon, selectedCampId, handleRecenterMap]);
+  }, [mapInstance, telemetryData.lastGpsPos.lat, telemetryData.lastGpsPos.lon, selectedCampId, additionalPttData, handleRecenterMap]);
 
   // Close layer menu on outside click
   useEffect(() => {
@@ -3989,6 +4228,67 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               language={reportLanguage}
               placeholder={reportLanguage === 'ar' ? 'ابحث برقم PTT أو الحجل أو الدارفيك...' : 'Search PTT, Ring or Darvic...'}
             />
+            {/* ─── Multi-PTT chips + Add button ─── */}
+            <div className="flex flex-wrap gap-1.5 items-center mt-1.5">
+              {activePttIds.slice(1).map((pttId, idx) => {
+                const chipColor = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
+                const data = additionalPttData[pttId];
+                return (
+                  <span key={pttId} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold text-white shadow-sm"
+                    style={{ background: chipColor }}>
+                    {data?.isLoading
+                      ? <RefreshCw size={9} className="animate-spin" />
+                      : <MapPin size={9} />}
+                    {String(pttId).replace(/^trans-/, '')}
+                    <button
+                      onClick={() => handleRemoveAdditionalPtt(pttId)}
+                      className="ml-0.5 hover:opacity-70 font-black leading-none"
+                      title="Remove from map"
+                    >×</button>
+                  </span>
+                );
+              })}
+              {activePttIds.length < 8 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowAddPttModal(v => !v)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
+                               border border-dashed border-brand-400 text-brand-600 dark:text-brand-400
+                               hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+                    title={reportLanguage === 'ar' ? 'أضف جهاز إضافي على الخريطة' : 'Add another transmitter to map'}
+                  >
+                    <Plus size={10} />
+                    {reportLanguage === 'ar' ? 'إضافة جهاز' : 'Add PTT'}
+                  </button>
+                  {showAddPttModal && (
+                    <div className="absolute z-50 top-full mt-1 left-0 w-72 bg-white dark:bg-slate-900
+                                    border border-brand-200 dark:border-slate-700 rounded-xl shadow-xl p-3">
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">
+                        {reportLanguage === 'ar' ? 'اختر جهازاً لإضافته على الخريطة:' : 'Select a transmitter to add to the map:'}
+                      </p>
+                      <BirdIdCombobox
+                        value=""
+                        onSelect={(id) => {
+                          const pttId = typeof id === 'object' ? (id as any).pttId ?? (id as any).id : id;
+                          handleAddAdditionalPtt(String(pttId));
+                          setShowAddPttModal(false);
+                        }}
+                        options={unifiedTargetOptions.filter(o => {
+                          const id = (o as any).pttId ?? (o as any).id ?? '';
+                          return !activePttIds.some(ap => String(ap).replace(/^trans-/, '') === String(id).replace(/^trans-/, ''));
+                        })}
+                        language={reportLanguage}
+                        placeholder={reportLanguage === 'ar' ? 'ابحث عن جهاز...' : 'Search transmitter...'}
+                      />
+                      <button onClick={() => setShowAddPttModal(false)}
+                        className="mt-2 w-full text-xs text-gray-400 hover:text-gray-600 text-center">
+                        {reportLanguage === 'ar' ? 'إلغاء' : 'Cancel'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* 2. Map View Mode (Snapshot vs Interactive) */}
@@ -5292,9 +5592,23 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     )}
                   </div>
 
+                  {activePttIds.length > 1 && (
+                    <div className="trk-row bg-gray-50/80 font-bold text-[11px] border-b border-gray-200">
+                      <span className="k text-gray-500" style={{ flex: '1 1 30%', width: '30%' }}>{reportLanguage === 'ar' ? 'الجهاز' : 'Transmitter'}</span>
+                      {activePttIds.map((pttId, idx) => {
+                        const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+                        return (
+                          <span key={pttId} className="v" style={{ color, flex: '1 1 0', width: 'auto' }}>
+                            PTT {String(pttId).replace(/^trans-/, '')}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <div className="trk-row">
-                    <span className="k">{T.txId}</span>
-                    <span className="v">
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.txId}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
                       {isTableEditing ? (
                         <input
                           type="text"
@@ -5313,12 +5627,20 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </b>
                       )}
                     </span>
+                    {activePttIds.slice(1).map(pId => {
+                      const info = getPttBirdInfo(pId);
+                      return (
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
+                          <b className="maroon">{info.transmitterId}</b>
+                        </span>
+                      );
+                    })}
                   </div>
 
                   {sectionVisibility.frequencyRow && (
                     <div className="trk-row">
-                      <span className="k">{T.frequency}</span>
-                      <span className="v">
+                      <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.frequency}</span>
+                      <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
                         {isTableEditing ? (
                           <input
                             type="text"
@@ -5333,12 +5655,21 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           </span>
                         )}
                       </span>
+                      {activePttIds.slice(1).map(pId => {
+                        const cleanId = String(pId).replace(/^trans-/, '');
+                        const tx = transmitters.find(t => String(t.platform_id) === cleanId || String(t.id) === cleanId || String(t.platform_id) === pId);
+                        return (
+                          <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
+                            <span className="font-mono font-bold text-gray-800 text-[13px]">{tx?.frequency || 'NA'}</span>
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
 
                   <div className="trk-row">
-                    <span className="k">{T.ringId}</span>
-                    <span className="v">
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.ringId}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
                       {isTableEditing ? (
                         <input
                           type="text"
@@ -5356,11 +5687,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span className="pill pill--grey hb-chip">{translateValue(reportSubject.display.ringNumber || 'NA')}</span>
                       )}
                     </span>
+                    {activePttIds.slice(1).map(pId => {
+                      const info = getPttBirdInfo(pId);
+                      return (
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
+                          <span className="pill pill--grey hb-chip">{translateValue(info.ringNumber || 'NA')}</span>
+                        </span>
+                      );
+                    })}
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">{T.species}</span>
-                    <span className="v">
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.species}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
                       {isTableEditing ? (
                         <input
                           type="text"
@@ -5372,11 +5711,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span>{translateValue(customMetadata.species || 'وحش')}</span>
                       )}
                     </span>
+                    {activePttIds.slice(1).map(pId => {
+                      const info = getPttBirdInfo(pId);
+                      return (
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
+                          <span>{translateValue(info.species || 'وحش')}</span>
+                        </span>
+                      );
+                    })}
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">{T.gender}</span>
-                    <span className="v">
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.gender}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
                       {isTableEditing ? (
                         <select
                           value={customMetadata.gender}
@@ -5391,11 +5738,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <span>{translateValue(customMetadata.gender || 'ذكر')}</span>
                       )}
                     </span>
+                    {activePttIds.slice(1).map(pId => {
+                      const info = getPttBirdInfo(pId);
+                      return (
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
+                          <span>{translateValue(info.gender || 'ذكر')}</span>
+                        </span>
+                      );
+                    })}
                   </div>
 
                   <div className="trk-row">
-                    <span className="k">{T.status}</span>
-                    <span className="v flex items-center justify-center">
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.status}</span>
+                    <span className="v flex items-center justify-center" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
                       <BirdStatusChip
                         status={reportSubject.status.value}
                         isEditable={reportSubject.status.editable}
@@ -5404,6 +5759,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         language={reportLanguage}
                       />
                     </span>
+                    {activePttIds.slice(1).map(pId => {
+                      const info = getPttBirdInfo(pId);
+                      return (
+                        <span key={pId} className="v flex items-center justify-center" style={{ flex: '1 1 0', width: 'auto' }}>
+                          <BirdStatusChip
+                            status={info.status as any}
+                            isEditable={false}
+                            language={reportLanguage}
+                          />
+                        </span>
+                      );
+                    })}
                   </div>
                 </section>
               )}
@@ -5509,12 +5876,40 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               )}
 
               {/* TABLE 3: DETAILED HISTORY TRAJECTORY TABLE */}
-              {(tableMode === 'history_list' || tableMode === 'both') && (
+              {(tableMode === 'history_list' || tableMode === 'both') && (() => {
+                const displayedHistoryRows = activeHistoryPttId === activePttIds[0] || !activeHistoryPttId
+                  ? historyRows
+                  : (additionalPttData[activeHistoryPttId]?.historyRows ?? []);
+
+                return (
                 <div className={`border border-gray-300 rounded-xl overflow-hidden shadow-xs relative bg-white ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
                       <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول سجل المسار</span>
                       <span>⋮⋮</span>
+                    </div>
+                  )}
+
+                  {/* Multi-PTT history tab strip */}
+                  {activePttIds.length > 1 && (
+                    <div className="flex gap-1.5 p-2 bg-slate-100 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
+                      {activePttIds.map((pttId, idx) => {
+                        const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+                        const isActive = activeHistoryPttId === pttId;
+                        const cleanId = String(pttId).replace(/^trans-/, '');
+                        return (
+                          <button key={pttId}
+                            type="button"
+                            onClick={() => setHistoryTabPttId(pttId)}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                              isActive ? 'text-white shadow-sm' : 'text-gray-600 bg-white dark:bg-slate-700 hover:bg-gray-200 border border-gray-200'
+                            }`}
+                            style={isActive ? { background: color } : {}}>
+                            <span style={isActive ? { width: 6, height: 6, borderRadius: '50%', background: '#fff', display: 'inline-block' } : { width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' }} />
+                            PTT {cleanId}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -5525,7 +5920,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-gray-300">
-                        ({historyRows.length} نقاط)
+                        ({displayedHistoryRows.length} نقاط)
                       </span>
                       {isTableEditing && (
                         <button
@@ -5554,7 +5949,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {historyRows.slice(0, historyRowCount).map((row, idx) => (
+                        {displayedHistoryRows.slice(0, historyRowCount).map((row, idx) => (
                           <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'}>
                             <td className="py-1 px-1.5 font-mono text-[10px] text-gray-500">{idx + 1}</td>
                             <td className="py-1 px-1.5 font-mono text-[10.5px]">
@@ -5637,7 +6032,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             )}
                           </tr>
                         ))}
-                        {historyRows.length === 0 && (
+                        {displayedHistoryRows.length === 0 && (
                           <tr>
                             <td colSpan={isTableEditing ? 8 : 7} className="py-4 text-center text-xs text-gray-400 italic">
                               لا توجد إحداثيات مسجلة. اضغط على زر "تحميل من سجل الجهاز" أعلاه لجلب البيانات.
@@ -5648,7 +6043,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </table>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* KPI METRIC TILES */}
               {sectionVisibility.kpiCards && (
@@ -5775,6 +6171,39 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </div>
                     </div>
                   </div>
+
+                  {/* Additional PTTs summary metrics */}
+                  {additionalPttMetrics.map(m => m.available && (
+                    <div key={m.pttId} className="flex flex-wrap gap-2 mt-2 py-1 px-2.5 rounded-lg bg-gray-50 dark:bg-slate-800/80 text-xs items-center" style={{ borderLeft: `3px solid ${m.color}` }}>
+                      <span className="font-bold px-1.5 py-0.5 rounded text-white text-[10px]" style={{ background: m.color }}>
+                        PTT {String(m.pttId).replace(/^trans-/, '')}
+                      </span>
+                      <span>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                          {m.distFromRelease.toLocaleString()} km
+                        </span>
+                        <span className="text-gray-500"> {reportLanguage === 'ar' ? 'من نقطة الإطلاق' : 'from Release'}</span>
+                      </span>
+                      <span className="text-gray-400">·</span>
+                      <span>
+                        {reportLanguage === 'ar'
+                          ? formatArabicBearing(m.bearing).full
+                          : formatEnglishBearing(m.bearing).full}
+                      </span>
+                      <span className="text-gray-400">·</span>
+                      <span>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                          {m.distTraveled.toLocaleString()} km
+                        </span>
+                        <span className="text-gray-500"> {reportLanguage === 'ar' ? 'مسافة المسار' : 'traveled'}</span>
+                      </span>
+                      <span className="text-gray-400">·</span>
+                      <span>
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">{m.durationDays}</span>
+                        <span className="text-gray-500"> {reportLanguage === 'ar' ? 'يوم' : 'days'}</span>
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -6154,6 +6583,52 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           )}
                         </>
                       )}
+
+                      {/* ─── Additional PTT Tracks & Markers ─── */}
+                      {activePttIds.slice(1).map((pttId, idx) => {
+                        const data = additionalPttData[pttId];
+                        if (!data || data.isLoading || data.allHistoryPoints.length === 0) return null;
+                        const color = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
+                        const points = data.allHistoryPoints;
+                        const relPos = data.telemetryData.releasePos;
+                        const lastPos = data.telemetryData.lastGpsPos;
+                        const cleanPttId = String(pttId).replace(/^trans-/, '');
+                        
+                        return (
+                          <React.Fragment key={pttId}>
+                            {/* Flight Track Polyline */}
+                            {points.length > 1 && (
+                              <Polyline
+                                positions={points}
+                                pathOptions={{ color, weight: 2.5, opacity: 0.85 }}
+                              />
+                            )}
+                            {/* Release Marker */}
+                            {relPos.lat !== 0 && relPos.lon !== 0 && (
+                              <Marker
+                                position={[relPos.lat, relPos.lon]}
+                                icon={createLiveTrackingMarkerIcon({
+                                  number: cleanPttId,
+                                  pinColorHex: '#dc2626',
+                                  borderColorHex: color,
+                                })}
+                              />
+                            )}
+                            {/* Latest Position Marker */}
+                            {lastPos.lat !== 0 && lastPos.lon !== 0 && (
+                              <Marker
+                                position={[lastPos.lat, lastPos.lon]}
+                                icon={createLiveTrackingMarkerIcon({
+                                  number: cleanPttId,
+                                  pinColorHex: '#16a34a',
+                                  borderColorHex: color,
+                                  labelTitle: cleanPttId,
+                                })}
+                              />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
 
                       {/* Field Camps - Filtered one by one (Requested Filter) */}
                       {FIXED_FIELD_CAMPS.filter(camp => visibleCampIds.includes(camp.id)).map(camp => {

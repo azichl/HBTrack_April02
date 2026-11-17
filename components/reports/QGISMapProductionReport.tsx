@@ -233,7 +233,7 @@ export const calculateDurationDays = (startTs: any, endTs: any): number => {
  * - Rounded number pill with 2px border and transmitter ID
  * - Crisp title above with text-shadow (zero overlap, strictly separated zones)
  */
-const createLiveTrackingMarkerIcon = ({
+export const createLiveTrackingMarkerIcon = ({
   number,
   pinColorHex,
   borderColorHex,
