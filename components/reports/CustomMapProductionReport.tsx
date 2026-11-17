@@ -891,15 +891,16 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     color: string;
   }>>({});
   
+  // Live Map palette — vibrant distinct colors for each transmitter
   const MULTI_PTT_COLORS = [
-    '#dc2626', // red    — primary PTT
-    '#6366f1', // indigo
-    '#16a34a', // green
-    '#f59e0b', // amber
-    '#0ea5e9', // sky
-    '#a855f7', // purple
-    '#f97316', // orange
-    '#14b8a6', // teal
+    '#6366f1', // Indigo / Purple-Blue — primary PTT 0 (matches Live Map)
+    '#ec4899', // Pink / Magenta (PTT 1)
+    '#14b8a6', // Teal / Turquoise (PTT 2)
+    '#f59e0b', // Amber / Orange (PTT 3)
+    '#8b5cf6', // Purple / Violet (PTT 4)
+    '#ef4444', // Red (PTT 5)
+    '#10b981', // Emerald Green (PTT 6)
+    '#3b82f6', // Sky Blue (PTT 7)
   ];
 
   // Keep selectedPttId in sync with activePttIds[0]
@@ -2569,6 +2570,64 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     });
   }, [activePttIds, additionalPttData]);
 
+  /** Unified summary metrics for all active PTTs (multi-PTT comparative table) */
+  const allPttSummaryMetrics = useMemo(() => {
+    return activePttIds.map((pttId, idx) => {
+      const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+      const cleanId = String(pttId).replace(/^trans-/, '');
+      if (idx === 0) {
+        return {
+          pttId,
+          cleanId,
+          color,
+          distFromRelease: metrics.hasLast ? metrics.distFromReleaseKm : '—',
+          bearingFull: metrics.hasLast ? (metrics.bearingArabic?.full || `${metrics.bearingArabic?.text || ''} (${metrics.bearingArabic?.degrees || 0}°)`) : '—',
+          distToCamp: metrics.hasLast ? metrics.distCampKm : '—',
+          distTraveled: metrics.hasLast ? (calculatedDistanceTraveledKm > 0 ? calculatedDistanceTraveledKm.toFixed(2) : (reportFixes.length === 0 ? '—' : '0.00')) : '—',
+          durationDays: metrics.hasLast && metrics.durationDays > 0 ? String(metrics.durationDays) : '—',
+        };
+      }
+      const data = additionalPttData[pttId];
+      if (!data || data.allHistoryPoints.length === 0) {
+        return {
+          pttId,
+          cleanId,
+          color,
+          distFromRelease: '—',
+          bearingFull: '—',
+          distToCamp: '—',
+          distTraveled: '—',
+          durationDays: '—',
+        };
+      }
+      const rLat = data.telemetryData.releasePos.lat;
+      const rLon = data.telemetryData.releasePos.lon;
+      const lLat = data.telemetryData.lastGpsPos.lat;
+      const lLon = data.telemetryData.lastGpsPos.lon;
+      const hasRel = rLat !== 0 && rLon !== 0;
+      const hasLast = lLat !== 0 && lLon !== 0;
+      const distFromRelease = hasRel && hasLast ? calculateDistanceKm(rLat, rLon, lLat, lLon) : 0;
+      const bearing = hasRel && hasLast ? calculateBearingDegrees(rLat, rLon, lLat, lLon) : 0;
+      const bearingObj = formatBearingByLanguage(bearing, reportLanguage);
+      let distTraveled = 0;
+      const pts = data.allHistoryPoints;
+      for (let i = 1; i < pts.length; i++) {
+        distTraveled += calculateDistanceKm(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]);
+      }
+      const durationDays = hasRel ? calculateDurationFromReleaseToToday(data.telemetryData.releasePos.dateStr) : 0;
+      return {
+        pttId,
+        cleanId,
+        color,
+        distFromRelease: hasRel && hasLast ? (Math.round(distFromRelease * 100) / 100).toLocaleString() : '—',
+        bearingFull: hasRel && hasLast ? bearingObj.full : '—',
+        distToCamp: '—',
+        distTraveled: (Math.round(distTraveled * 100) / 100).toLocaleString(),
+        durationDays: String(durationDays),
+      };
+    });
+  }, [activePttIds, additionalPttData, metrics, calculatedDistanceTraveledKm, reportFixes.length, reportLanguage]);
+
   // Presence of elements on this map (for Pass 7 Legend sync)
   const presence = useMemo(() => ({
     release: !!metrics.hasRelease && mapElements.release?.visible !== false,
@@ -2576,12 +2635,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     camp: visibleCampIds.length > 0 && mapElements.camps?.visible !== false,
     distCamp: !!(campDistToLastEnabled && Object.values(campDistToLastEnabled).some(Boolean) && metrics.hasLast && visibleCampIds.length > 0 && mapElements.distCamp?.visible !== false),
     distRelease: !!(metrics.hasRelease && metrics.hasLast && mapElements.distRelease?.visible !== false),
-    track: effectiveTrackSettings.show && trackRenderModel.shown > 0 && !effectiveTrackSettings.periodsEnabled && mapElements.track?.visible !== false,
+    track: activePttIds.length <= 1 && effectiveTrackSettings.show && trackRenderModel.shown > 0 && !effectiveTrackSettings.periodsEnabled && mapElements.track?.visible !== false,
     mainRoad: !!showGoogleLabels,
     towns: !!showGoogleLabels,
-  }), [metrics.hasRelease, metrics.hasLast, mapElements, visibleCampIds.length, campDistToLastEnabled, effectiveTrackSettings.show, effectiveTrackSettings.periodsEnabled, trackRenderModel.shown, showGoogleLabels]);
+  }), [metrics.hasRelease, metrics.hasLast, mapElements, visibleCampIds.length, campDistToLastEnabled, effectiveTrackSettings.show, effectiveTrackSettings.periodsEnabled, trackRenderModel.shown, showGoogleLabels, activePttIds.length]);
 
   const periodItems: ExtraItem[] = useMemo(() => {
+    // When multiple PTTs are selected, render an item per PTT in the legend with its unique color
+    if (activePttIds.length > 1) {
+      return activePttIds.map((pttId, idx) => {
+        const cleanId = String(pttId).replace(/^trans-/, '');
+        const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+        return {
+          id: `ptt_track_${pttId}`,
+          label: reportLanguage === 'ar' ? `مسار ${cleanId}` : `Track ${cleanId}`,
+          color,
+          shape: 'line' as const,
+        };
+      });
+    }
     if (!effectiveTrackSettings.periodsEnabled || !effectiveTrackSettings.show || mapElements.track?.visible === false) return [];
     return trackRenderModel.legend.map(l => ({
       id: l.id,
@@ -2589,7 +2661,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
       color: l.color,
       shape: 'line' as const,
     }));
-  }, [effectiveTrackSettings.periodsEnabled, effectiveTrackSettings.show, mapElements.track?.visible, trackRenderModel.legend]);
+  }, [activePttIds, reportLanguage, effectiveTrackSettings.periodsEnabled, effectiveTrackSettings.show, mapElements.track?.visible, trackRenderModel.legend]);
 
   // Recenter Map Helper (Fits bounds around Release Point, Last GPS Fix, and Active Camp)
   const handleRecenterMap = useCallback(() => {
@@ -3118,14 +3190,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('box-sizing', 'border-box', 'important');
         });
 
+        const isMultiPtt = activePttIds.length > 1;
         const clonedRows = clonedDoc.querySelectorAll('#custom-map-production-print-area .trk-row');
         clonedRows.forEach(row => {
           const el = row as HTMLElement;
           el.style.setProperty('display', 'flex', 'important');
           el.style.setProperty('flex-direction', 'row', 'important');
           el.style.setProperty('align-items', 'center', 'important');
-          el.style.setProperty('min-height', '36px', 'important');
-          el.style.setProperty('height', '36px', 'important');
+          el.style.setProperty('min-height', isMultiPtt ? '30px' : '36px', 'important');
+          if (isMultiPtt) {
+            el.style.setProperty('height', 'auto', 'important');
+          } else {
+            el.style.setProperty('height', '36px', 'important');
+          }
           el.style.setProperty('box-sizing', 'border-box', 'important');
         });
 
@@ -3135,7 +3212,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('display', 'flex', 'important');
           el.style.setProperty('align-items', 'center', 'important');
           el.style.setProperty('height', '100%', 'important');
-          el.style.setProperty('padding', '0 14px', 'important');
+          el.style.setProperty('padding', isMultiPtt ? '0 6px' : '0 14px', 'important');
           el.style.setProperty('box-sizing', 'border-box', 'important');
           el.style.setProperty('line-height', '1.2', 'important');
         });
@@ -3147,7 +3224,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           el.style.setProperty('align-items', 'center', 'important');
           el.style.setProperty('justify-content', 'center', 'important');
           el.style.setProperty('height', '100%', 'important');
-          el.style.setProperty('padding', '0 14px', 'important');
+          el.style.setProperty('padding', isMultiPtt ? '0 4px' : '0 14px', 'important');
           el.style.setProperty('box-sizing', 'border-box', 'important');
           el.style.setProperty('line-height', '1.2', 'important');
         });
@@ -5536,7 +5613,23 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           {/* Subtitle */}
           {sectionVisibility.subtitle && (
             <p className="trk-sub">
-              {T.transmitterLabel} <b>{reportSubject.display.birdId}</b> • {isTableEditing ? (
+              {activePttIds.length > 1 ? (
+                <>
+                  <span>{reportLanguage === 'ar' ? 'أجهزة التتبع: ' : 'Bird IDs: '}</span>
+                  {activePttIds.map((pId, idx) => {
+                    const clean = String(pId).replace(/^trans-/, '');
+                    const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+                    return (
+                      <React.Fragment key={pId}>
+                        {idx > 0 && <span className="text-gray-400">, </span>}
+                        <b style={{ color }} className="font-mono">{clean}</b>
+                      </React.Fragment>
+                    );
+                  })}
+                </>
+              ) : (
+                <>{T.transmitterLabel} <b>{reportSubject.display.birdId}</b></>
+              )} • {isTableEditing ? (
                 <span className="inline-flex items-center gap-1 mx-1">
                   <input
                     type="text"
@@ -5593,54 +5686,53 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   </div>
 
                   {activePttIds.length > 1 && (
-                    <div className="trk-row bg-gray-50/80 font-bold text-[11px] border-b border-gray-200">
-                      <span className="k text-gray-500" style={{ flex: '1 1 30%', width: '30%' }}>{reportLanguage === 'ar' ? 'الجهاز' : 'Transmitter'}</span>
+                    <div className="trk-row bg-gray-50/90 font-bold text-[10.5px] border-b border-gray-200">
+                      <span className="k text-gray-600 font-bold" style={{ flex: '1 1 26%', width: '26%', padding: '0 8px' }}>
+                        {reportLanguage === 'ar' ? 'البيان' : 'Field'}
+                      </span>
                       {activePttIds.map((pttId, idx) => {
                         const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+                        const cleanId = String(pttId).replace(/^trans-/, '');
                         return (
-                          <span key={pttId} className="v" style={{ color, flex: '1 1 0', width: 'auto' }}>
-                            PTT {String(pttId).replace(/^trans-/, '')}
+                          <span key={pttId} className="v flex items-center justify-center py-1 px-1" style={{ flex: '1 1 0', width: 'auto' }}>
+                            <span className="px-2 py-0.5 rounded-full text-white text-[10px] font-mono font-bold shadow-2xs" style={{ background: color }}>
+                              PTT {cleanId}
+                            </span>
                           </span>
                         );
                       })}
                     </div>
                   )}
 
-                  <div className="trk-row">
-                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.txId}</span>
-                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
-                      {isTableEditing ? (
-                        <input
-                          type="text"
-                          value={reportSubject.display.transmitterId}
-                          onChange={(e) => {
-                            setReportSubject(prev => ({
-                              ...prev,
-                              display: { ...prev.display, transmitterId: e.target.value }
-                            }));
-                          }}
-                          className="w-full text-center font-bold text-[#7a1c32] text-[15px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        <b className="maroon">
-                          {reportSubject.display.transmitterId}
-                        </b>
-                      )}
-                    </span>
-                    {activePttIds.slice(1).map(pId => {
-                      const info = getPttBirdInfo(pId);
-                      return (
-                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
-                          <b className="maroon">{info.transmitterId}</b>
-                        </span>
-                      );
-                    })}
-                  </div>
+                  {activePttIds.length <= 1 && (
+                    <div className="trk-row">
+                      <span className="k">{T.txId}</span>
+                      <span className="v">
+                        {isTableEditing ? (
+                          <input
+                            type="text"
+                            value={reportSubject.display.transmitterId}
+                            onChange={(e) => {
+                              setReportSubject(prev => ({
+                                ...prev,
+                                display: { ...prev.display, transmitterId: e.target.value }
+                              }));
+                            }}
+                            className="w-full text-center font-bold text-[#7a1c32] text-[15px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
+                          />
+                        ) : (
+                          <b className="maroon">
+                            {reportSubject.display.transmitterId}
+                          </b>
+                        )}
+                      </span>
+                    </div>
+                  )}
 
                   {sectionVisibility.frequencyRow && (
                     <div className="trk-row">
-                      <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.frequency}</span>
-                      <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
+                      <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 26%', width: '26%', padding: '0 8px', fontSize: '11px' } : {}}>{T.frequency}</span>
+                      <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '11px' } : {}}>
                         {isTableEditing ? (
                           <input
                             type="text"
@@ -5659,8 +5751,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         const cleanId = String(pId).replace(/^trans-/, '');
                         const tx = transmitters.find(t => String(t.platform_id) === cleanId || String(t.id) === cleanId || String(t.platform_id) === pId);
                         return (
-                          <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
-                            <span className="font-mono font-bold text-gray-800 text-[13px]">{tx?.frequency || 'NA'}</span>
+                          <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '11px' }}>
+                            <span className="font-mono font-bold text-gray-800 text-[11px]">{tx?.frequency || 'NA'}</span>
                           </span>
                         );
                       })}
@@ -5668,8 +5760,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   )}
 
                   <div className="trk-row">
-                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.ringId}</span>
-                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 26%', width: '26%', padding: '0 8px', fontSize: '11px' } : {}}>{T.ringId}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '11px' } : {}}>
                       {isTableEditing ? (
                         <input
                           type="text"
@@ -5684,22 +5776,22 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           className="w-full text-center font-bold text-gray-800 text-[13px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
-                        <span className="pill pill--grey hb-chip">{translateValue(reportSubject.display.ringNumber || 'NA')}</span>
+                        <span className="pill pill--grey hb-chip" style={activePttIds.length > 1 ? { padding: '0 8px', height: '22px', fontSize: '10px' } : {}}>{translateValue(reportSubject.display.ringNumber || 'NA')}</span>
                       )}
                     </span>
                     {activePttIds.slice(1).map(pId => {
                       const info = getPttBirdInfo(pId);
                       return (
-                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
-                          <span className="pill pill--grey hb-chip">{translateValue(info.ringNumber || 'NA')}</span>
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '11px' }}>
+                          <span className="pill pill--grey hb-chip" style={{ padding: '0 8px', height: '22px', fontSize: '10px' }}>{translateValue(info.ringNumber || 'NA')}</span>
                         </span>
                       );
                     })}
                   </div>
 
                   <div className="trk-row">
-                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.species}</span>
-                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 26%', width: '26%', padding: '0 8px', fontSize: '11px' } : {}}>{T.species}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '10px', lineHeight: '1.2' } : {}}>
                       {isTableEditing ? (
                         <input
                           type="text"
@@ -5708,22 +5800,22 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           className="w-full text-center font-bold text-gray-800 text-[14px] border border-amber-300 rounded px-1.5 py-0.5 bg-amber-50/50"
                         />
                       ) : (
-                        <span>{translateValue(customMetadata.species || 'وحش')}</span>
+                        <span className={activePttIds.length > 1 ? "leading-tight font-medium text-[10px]" : ""}>{translateValue(customMetadata.species || 'وحش')}</span>
                       )}
                     </span>
                     {activePttIds.slice(1).map(pId => {
                       const info = getPttBirdInfo(pId);
                       return (
-                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
-                          <span>{translateValue(info.species || 'وحش')}</span>
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '10px', lineHeight: '1.2' }}>
+                          <span className="leading-tight font-medium text-[10px]">{translateValue(info.species || 'وحش')}</span>
                         </span>
                       );
                     })}
                   </div>
 
                   <div className="trk-row">
-                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.gender}</span>
-                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 26%', width: '26%', padding: '0 8px', fontSize: '11px' } : {}}>{T.gender}</span>
+                    <span className="v" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '11px' } : {}}>
                       {isTableEditing ? (
                         <select
                           value={customMetadata.gender}
@@ -5735,39 +5827,43 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                           <option value="غير محدد">غير محدد</option>
                         </select>
                       ) : (
-                        <span>{translateValue(customMetadata.gender || 'ذكر')}</span>
+                        <span className={activePttIds.length > 1 ? "text-[10.5px]" : ""}>{translateValue(customMetadata.gender || 'ذكر')}</span>
                       )}
                     </span>
                     {activePttIds.slice(1).map(pId => {
                       const info = getPttBirdInfo(pId);
                       return (
-                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto' }}>
-                          <span>{translateValue(info.gender || 'ذكر')}</span>
+                        <span key={pId} className="v" style={{ flex: '1 1 0', width: 'auto', padding: '0 4px', fontSize: '11px' }}>
+                          <span className="text-[10.5px]">{translateValue(info.gender || 'ذكر')}</span>
                         </span>
                       );
                     })}
                   </div>
 
                   <div className="trk-row">
-                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 30%', width: '30%' } : {}}>{T.status}</span>
-                    <span className="v flex items-center justify-center" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto' } : {}}>
-                      <BirdStatusChip
-                        status={reportSubject.status.value}
-                        isEditable={reportSubject.status.editable}
-                        onUpdateStatus={(newStatus) => handleUpdateBirdStatusInDb(newStatus)}
-                        isEditMode={isTableEditing}
-                        language={reportLanguage}
-                      />
+                    <span className="k" style={activePttIds.length > 1 ? { flex: '1 1 26%', width: '26%', padding: '0 8px', fontSize: '11px' } : {}}>{T.status}</span>
+                    <span className="v flex items-center justify-center" style={activePttIds.length > 1 ? { flex: '1 1 0', width: 'auto', padding: '0 2px' } : {}}>
+                      {activePttIds.length > 1 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          {reportLanguage === 'ar' ? 'حي' : 'Alive'}
+                        </span>
+                      ) : (
+                        <BirdStatusChip
+                          status={reportSubject.status.value}
+                          isEditable={reportSubject.status.editable}
+                          onUpdateStatus={(newStatus) => handleUpdateBirdStatusInDb(newStatus)}
+                          isEditMode={isTableEditing}
+                          language={reportLanguage}
+                        />
+                      )}
                     </span>
                     {activePttIds.slice(1).map(pId => {
                       const info = getPttBirdInfo(pId);
                       return (
-                        <span key={pId} className="v flex items-center justify-center" style={{ flex: '1 1 0', width: 'auto' }}>
-                          <BirdStatusChip
-                            status={info.status as any}
-                            isEditable={false}
-                            language={reportLanguage}
-                          />
+                        <span key={pId} className="v flex items-center justify-center" style={{ flex: '1 1 0', width: 'auto', padding: '0 2px' }}>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            {reportLanguage === 'ar' ? 'حي' : 'Alive'}
+                          </span>
                         </span>
                       );
                     })}
@@ -5780,98 +5876,171 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 <section id="custom-table2-coordinates" className={`trk-card trk-card--table ${isDragEnabled ? 'ring-2 ring-purple-400 ring-offset-1 relative' : ''}`}>
                   {isDragEnabled && (
                     <div className="drag-handle bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 flex items-center justify-between cursor-move select-none no-print no-export">
-                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> اسحب لنقل جدول مقارنة الإحداثيات</span>
+                      <span className="flex items-center gap-1"><GripHorizontal size={12} /> {reportLanguage === 'ar' ? 'اسحب لنقل جدول مقارنة الإحداثيات' : 'Drag to move coordinates table'}</span>
                       <span>⋮⋮</span>
                     </div>
                   )}
 
-                  <div className="trk-twohead">
-                    <div className="trk-twohead__install">{T.installHead}</div>
-                    <div className="trk-twohead__last">{T.lastHead}</div>
-                  </div>
-                  <div className="trk-table">
-                    <span className="lbl">{T.dateHeader}</span>
-                    <span dir="ltr">
-                      {isTableEditing ? (
-                        <input
-                          type="text"
-                          value={telemetryData.releasePos.dateStr}
-                          onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, dateStr: e.target.value } })}
-                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        telemetryData.releasePos.dateStr
-                      )}
-                    </span>
-                    <span dir="ltr">
-                      {isTableEditing ? (
-                        <input
-                          type="text"
-                          value={telemetryData.lastGpsPos.dateStr}
-                          onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, dateStr: e.target.value } })}
-                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        telemetryData.lastGpsPos.dateStr
-                      )}
-                    </span>
+                  {activePttIds.length > 1 ? (
+                    <div className="w-full">
+                      {/* Dual Headers: Release (Maroon) and Latest (Green) */}
+                      <div className="grid grid-cols-12 text-white font-bold text-[10.5px] text-center" style={{ minHeight: '32px' }}>
+                        <div className="col-span-2 bg-[#334155] flex items-center justify-center py-1">
+                          {reportLanguage === 'ar' ? 'الجهاز' : 'PTT'}
+                        </div>
+                        <div className="col-span-5 bg-[#7a1c32] flex items-center justify-center py-1 border-x border-white/20">
+                          {T.installHead}
+                        </div>
+                        <div className="col-span-5 bg-[#128a5b] flex items-center justify-center py-1">
+                          {T.lastHead}
+                        </div>
+                      </div>
 
-                    <span className="lbl">{T.latHeader}</span>
-                    <span dir="ltr">
-                      {isTableEditing ? (
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={telemetryData.releasePos.lat}
-                          onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lat: parseFloat(e.target.value) || 0 } })}
-                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        metrics.releaseLatTableDMM
-                      )}
-                    </span>
-                    <span dir="ltr">
-                      {isTableEditing ? (
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={telemetryData.lastGpsPos.lat}
-                          onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lat: parseFloat(e.target.value) || 0 } })}
-                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        metrics.lastGpsLatTableDMM
-                      )}
-                    </span>
+                      {/* Sub-header */}
+                      <div className="grid grid-cols-12 bg-gray-100 text-[9px] font-bold text-gray-600 text-center border-b border-gray-200">
+                        <div className="col-span-2 py-0.5 border-r border-gray-200">{reportLanguage === 'ar' ? 'الرقم' : 'ID'}</div>
+                        <div className="col-span-2 py-0.5 border-r border-gray-200">{T.dateHeader}</div>
+                        <div className="col-span-3 py-0.5 border-r border-gray-200">{reportLanguage === 'ar' ? 'الإحداثيات' : 'Coordinates'}</div>
+                        <div className="col-span-2 py-0.5 border-r border-gray-200">{T.dateHeader}</div>
+                        <div className="col-span-3 py-0.5">{reportLanguage === 'ar' ? 'الإحداثيات' : 'Coordinates'}</div>
+                      </div>
 
-                    <span className="lbl">{T.lonHeader}</span>
-                    <span dir="ltr">
-                      {isTableEditing ? (
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={telemetryData.releasePos.lon}
-                          onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lon: parseFloat(e.target.value) || 0 } })}
-                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        metrics.releaseLonTableDMM
-                      )}
-                    </span>
-                    <span dir="ltr">
-                      {isTableEditing ? (
-                        <input
-                          type="number"
-                          step="0.0001"
-                          value={telemetryData.lastGpsPos.lon}
-                          onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lon: parseFloat(e.target.value) || 0 } })}
-                          className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
-                        />
-                      ) : (
-                        metrics.lastGpsLonTableDMM
-                      )}
-                    </span>
-                  </div>
+                      {/* Rows for each active PTT */}
+                      <div className="divide-y divide-gray-100">
+                        {activePttIds.map((pId, idx) => {
+                          const info = getPttBirdInfo(pId);
+                          const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+                          const cleanId = String(pId).replace(/^trans-/, '');
+                          const relLatStr = formatCoordinateForTable(info.releaseLat, true, coordFormat);
+                          const relLonStr = formatCoordinateForTable(info.releaseLon, false, coordFormat);
+                          const lastLatStr = formatCoordinateForTable(info.lastLat, true, coordFormat);
+                          const lastLonStr = formatCoordinateForTable(info.lastLon, false, coordFormat);
+
+                          return (
+                            <div key={pId} className="grid grid-cols-12 items-center text-[9.5px] text-center hover:bg-gray-50/50 py-1 px-0.5">
+                              <div className="col-span-2 flex items-center justify-center">
+                                <span className="font-mono font-bold text-white px-1.5 py-0.5 rounded text-[9px] shadow-2xs" style={{ background: color }}>
+                                  {cleanId}
+                                </span>
+                              </div>
+                              <div className="col-span-2 font-mono text-[9px] text-gray-700" dir="ltr">
+                                {info.releaseDateStr || '—'}
+                              </div>
+                              <div className="col-span-3 font-mono text-[9px] text-gray-800 font-semibold px-0.5 leading-tight" dir="ltr">
+                                {info.releaseLat !== 0 ? (
+                                  <>
+                                    <div>{relLatStr}</div>
+                                    <div className="text-gray-500">{relLonStr}</div>
+                                  </>
+                                ) : '—'}
+                              </div>
+                              <div className="col-span-2 font-mono text-[9px] text-gray-700" dir="ltr">
+                                {info.lastDateStr || '—'}
+                              </div>
+                              <div className="col-span-3 font-mono text-[9px] text-emerald-800 font-semibold px-0.5 leading-tight" dir="ltr">
+                                {info.lastLat !== 0 ? (
+                                  <>
+                                    <div>{lastLatStr}</div>
+                                    <div className="text-gray-500">{lastLonStr}</div>
+                                  </>
+                                ) : '—'}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="trk-twohead">
+                        <div className="trk-twohead__install">{T.installHead}</div>
+                        <div className="trk-twohead__last">{T.lastHead}</div>
+                      </div>
+                      <div className="trk-table">
+                        <span className="lbl">{T.dateHeader}</span>
+                        <span dir="ltr">
+                          {isTableEditing ? (
+                            <input
+                              type="text"
+                              value={telemetryData.releasePos.dateStr}
+                              onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, dateStr: e.target.value } })}
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                            />
+                          ) : (
+                            telemetryData.releasePos.dateStr
+                          )}
+                        </span>
+                        <span dir="ltr">
+                          {isTableEditing ? (
+                            <input
+                              type="text"
+                              value={telemetryData.lastGpsPos.dateStr}
+                              onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, dateStr: e.target.value } })}
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                            />
+                          ) : (
+                            telemetryData.lastGpsPos.dateStr
+                          )}
+                        </span>
+
+                        <span className="lbl">{T.latHeader}</span>
+                        <span dir="ltr">
+                          {isTableEditing ? (
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={telemetryData.releasePos.lat}
+                              onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lat: parseFloat(e.target.value) || 0 } })}
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                            />
+                          ) : (
+                            metrics.releaseLatTableDMM
+                          )}
+                        </span>
+                        <span dir="ltr">
+                          {isTableEditing ? (
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={telemetryData.lastGpsPos.lat}
+                              onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lat: parseFloat(e.target.value) || 0 } })}
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                            />
+                          ) : (
+                            metrics.lastGpsLatTableDMM
+                          )}
+                        </span>
+
+                        <span className="lbl">{T.lonHeader}</span>
+                        <span dir="ltr">
+                          {isTableEditing ? (
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={telemetryData.releasePos.lon}
+                              onChange={(e) => setTelemetryData({ ...telemetryData, releasePos: { ...telemetryData.releasePos, lon: parseFloat(e.target.value) || 0 } })}
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                            />
+                          ) : (
+                            metrics.releaseLonTableDMM
+                          )}
+                        </span>
+                        <span dir="ltr">
+                          {isTableEditing ? (
+                            <input
+                              type="number"
+                              step="0.0001"
+                              value={telemetryData.lastGpsPos.lon}
+                              onChange={(e) => setTelemetryData({ ...telemetryData, lastGpsPos: { ...telemetryData.lastGpsPos, lon: parseFloat(e.target.value) || 0 } })}
+                              className="w-full text-center font-bold text-[12px] border border-amber-300 rounded px-1 py-0.5 bg-amber-50/50"
+                            />
+                          ) : (
+                            metrics.lastGpsLonTableDMM
+                          )}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </section>
               )}
 
@@ -6056,154 +6225,164 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     </div>
                   )}
 
-                  <div className="trk-stats">
-                    {/* Card 1: Distance from Release (Rightmost in RTL) */}
-                    <div className="trk-stat">
-                      <div className="val red" dir="ltr">
-                        {isTableEditing ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={customMetadata.statDistFromRelease ?? ''}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, statDistFromRelease: e.target.value })}
-                              className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                              placeholder={metrics.distFromReleaseKm.toString()}
-                            />
-                            <span>{distUnit}</span>
-                          </div>
-                        ) : (
-                          <>{!metrics.hasLast ? '—' : (customMetadata.statDistFromRelease ? `${customMetadata.statDistFromRelease} ${distUnit}` : (distUnit === 'mi' ? `${(parseFloat(metrics.distFromReleaseKm) * 0.621371).toFixed(2)} mi` : `${metrics.distFromReleaseKm} km`))}</>
-                        )}
+                  {activePttIds.length > 1 ? (
+                    <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white shadow-2xs">
+                      <div className="bg-[#7a1c32] text-white text-[11px] font-bold px-3 py-1.5 flex items-center justify-between">
+                        <span>{reportLanguage === 'ar' ? 'مؤشرات التتبع المقارنة' : 'Comparative Tracking Metrics'}</span>
+                        <span className="text-[9.5px] text-white/80">{activePttIds.length} {reportLanguage === 'ar' ? 'أجهزة' : 'Transmitters'}</span>
                       </div>
-                      <div className="lab">
-                        {T.distFromRelease}
-                      </div>
+                      <table className="w-full text-center text-[10px]">
+                        <thead>
+                          <tr className="bg-gray-100 text-gray-600 font-bold border-b border-gray-200 text-[9.5px]">
+                            <th className="py-1 px-1">{reportLanguage === 'ar' ? 'الجهاز' : 'PTT'}</th>
+                            <th className="py-1 px-1">{reportLanguage === 'ar' ? 'من الإطلاق' : 'From Release'}</th>
+                            <th className="py-1 px-1">{reportLanguage === 'ar' ? 'الاتجاه' : 'Direction'}</th>
+                            <th className="py-1 px-1">{reportLanguage === 'ar' ? 'المسافة المقطوعة' : 'Traveled'}</th>
+                            <th className="py-1 px-1">{reportLanguage === 'ar' ? 'المدة' : 'Duration'}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {allPttSummaryMetrics.map(m => (
+                            <tr key={m.pttId} className="hover:bg-gray-50/50">
+                              <td className="py-1.5 px-1 font-bold">
+                                <span className="inline-block px-1.5 py-0.5 rounded text-white text-[9px] font-mono shadow-2xs" style={{ background: m.color }}>
+                                  {m.cleanId}
+                                </span>
+                              </td>
+                              <td className="py-1.5 px-1 font-bold text-red-600 font-mono" dir="ltr">
+                                {m.distFromRelease !== '—' ? `${m.distFromRelease} km` : '—'}
+                              </td>
+                              <td className="py-1.5 px-1 text-gray-700 text-[9px] font-medium leading-tight">
+                                {m.bearingFull}
+                              </td>
+                              <td className="py-1.5 px-1 font-bold text-blue-600 font-mono" dir="ltr">
+                                {m.distTraveled !== '—' ? `${m.distTraveled} km` : '—'}
+                              </td>
+                              <td className="py-1.5 px-1 font-medium text-gray-700 font-mono">
+                                {m.durationDays !== '—' ? `${m.durationDays} ${T.days}` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-
-                    {/* Card 2: Bearing Direction & Degrees */}
-                    <div className="trk-stat">
-                      <div className="val">
-                        {isTableEditing ? (
-                          <input
-                            type="text"
-                            value={customMetadata.statDirection ?? ''}
-                            onChange={(e) => setCustomMetadata({ ...customMetadata, statDirection: e.target.value })}
-                            className="w-full text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                            placeholder={metrics.bearingArabic.text}
-                          />
-                        ) : (
-                          <>{!metrics.hasLast ? '—' : (customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text)}</>
-                        )}
-                      </div>
-                      <div className="lab">
-                        {T.direction} {!metrics.hasLast ? '' : `(${customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}°)`}
-                      </div>
-                    </div>
-
-                    {/* Card 3: Distance to Camp */}
-                    <div className="trk-stat">
-                      <div className="val brown" dir="ltr">
-                        {isTableEditing ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              value={customMetadata.statDistToCamp ?? ''}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, statDistToCamp: e.target.value })}
-                              className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                              placeholder={metrics.distToCampKm.toString()}
-                            />
-                            <span>{distUnit}</span>
-                          </div>
-                        ) : (
-                          <>{!metrics.hasLast ? '—' : (customMetadata.statDistToCamp ? `${customMetadata.statDistToCamp} ${distUnit}` : (distUnit === 'mi' ? `${(parseFloat(metrics.distToCampKm) * 0.621371).toFixed(2)} mi` : `${metrics.distToCampKm} km`))}</>
-                        )}
-                      </div>
-                      <div className="lab">
-                        {T.distToCamp}
-                      </div>
-                    </div>
-
-                    {/* Card 4: Distance Traveled (Based on GPS fixes in chosen track customized path date range) */}
-                    {sectionVisibility.distTraveledKpi && (
+                  ) : (
+                    <div className="trk-stats">
+                      {/* Card 1: Distance from Release (Rightmost in RTL) */}
                       <div className="trk-stat">
-                        <div className="val blue" dir="ltr">
+                        <div className="val red" dir="ltr">
                           {isTableEditing ? (
                             <div className="flex items-center gap-1">
                               <input
                                 type="text"
-                                value={customMetadata.statDistanceTraveled ?? ''}
-                                onChange={(e) => setCustomMetadata({ ...customMetadata, statDistanceTraveled: e.target.value })}
+                                value={customMetadata.statDistFromRelease ?? ''}
+                                onChange={(e) => setCustomMetadata({ ...customMetadata, statDistFromRelease: e.target.value })}
                                 className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                                placeholder={calculatedDistanceTraveledKm > 0 ? calculatedDistanceTraveledKm.toFixed(2) : '0'}
+                                placeholder={metrics.distFromReleaseKm.toString()}
                               />
                               <span>{distUnit}</span>
                             </div>
                           ) : (
-                            <>{customMetadata.statDistanceTraveled ? `${customMetadata.statDistanceTraveled} ${distUnit}` : (calculatedDistanceTraveledKm > 0 ? (distUnit === 'mi' ? `${(calculatedDistanceTraveledKm * 0.621371).toFixed(2)} mi` : `${calculatedDistanceTraveledKm.toFixed(2)} km`) : (reportFixes.length === 0 ? '—' : `0.00 ${distUnit}`))}</>
+                            <>{!metrics.hasLast ? '—' : (customMetadata.statDistFromRelease ? `${customMetadata.statDistFromRelease} ${distUnit}` : (distUnit === 'mi' ? `${(parseFloat(metrics.distFromReleaseKm) * 0.621371).toFixed(2)} mi` : `${metrics.distFromReleaseKm} km`))}</>
                           )}
                         </div>
                         <div className="lab">
-                          {T.distanceTraveled}
+                          {T.distFromRelease}
                         </div>
                       </div>
-                    )}
 
-                    {/* Card 5: Tracking Duration (Leftmost in RTL) */}
-                    <div className="trk-stat">
-                      <div className="val" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
-                        {isTableEditing ? (
-                          <div className="flex items-center gap-1 justify-center">
+                      {/* Card 2: Bearing Direction & Degrees */}
+                      <div className="trk-stat">
+                        <div className="val">
+                          {isTableEditing ? (
                             <input
                               type="text"
-                              value={customMetadata.statDuration ?? ''}
-                              onChange={(e) => setCustomMetadata({ ...customMetadata, statDuration: e.target.value })}
-                              className="w-12 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
-                              placeholder={metrics.durationDays.toString()}
+                              value={customMetadata.statDirection ?? ''}
+                              onChange={(e) => setCustomMetadata({ ...customMetadata, statDirection: e.target.value })}
+                              className="w-full text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                              placeholder={metrics.bearingArabic.text}
                             />
-                            <span>{T.days}</span>
-                          </div>
-                        ) : (
-                          <span>{!metrics.hasLast || metrics.durationDays <= 0 ? '—' : `${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
-                        )}
+                          ) : (
+                            <>{!metrics.hasLast ? '—' : (customMetadata.statDirection ? translateDirection(customMetadata.statDirection, reportLanguage) : metrics.bearingArabic.text)}</>
+                          )}
+                        </div>
+                        <div className="lab">
+                          {T.direction} {!metrics.hasLast ? '' : `(${customMetadata.statDirectionDeg || metrics.bearingArabic.degrees}°)`}
+                        </div>
                       </div>
-                      <div className="lab">
-                        {T.followUp}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Additional PTTs summary metrics */}
-                  {additionalPttMetrics.map(m => m.available && (
-                    <div key={m.pttId} className="flex flex-wrap gap-2 mt-2 py-1 px-2.5 rounded-lg bg-gray-50 dark:bg-slate-800/80 text-xs items-center" style={{ borderLeft: `3px solid ${m.color}` }}>
-                      <span className="font-bold px-1.5 py-0.5 rounded text-white text-[10px]" style={{ background: m.color }}>
-                        PTT {String(m.pttId).replace(/^trans-/, '')}
-                      </span>
-                      <span>
-                        <span className="font-semibold text-gray-700 dark:text-gray-300">
-                          {m.distFromRelease.toLocaleString()} km
-                        </span>
-                        <span className="text-gray-500"> {reportLanguage === 'ar' ? 'من نقطة الإطلاق' : 'from Release'}</span>
-                      </span>
-                      <span className="text-gray-400">·</span>
-                      <span>
-                        {reportLanguage === 'ar'
-                          ? formatArabicBearing(m.bearing).full
-                          : formatEnglishBearing(m.bearing).full}
-                      </span>
-                      <span className="text-gray-400">·</span>
-                      <span>
-                        <span className="font-semibold text-gray-700 dark:text-gray-300">
-                          {m.distTraveled.toLocaleString()} km
-                        </span>
-                        <span className="text-gray-500"> {reportLanguage === 'ar' ? 'مسافة المسار' : 'traveled'}</span>
-                      </span>
-                      <span className="text-gray-400">·</span>
-                      <span>
-                        <span className="font-semibold text-gray-700 dark:text-gray-300">{m.durationDays}</span>
-                        <span className="text-gray-500"> {reportLanguage === 'ar' ? 'يوم' : 'days'}</span>
-                      </span>
+                      {/* Card 3: Distance to Camp */}
+                      <div className="trk-stat">
+                        <div className="val brown" dir="ltr">
+                          {isTableEditing ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={customMetadata.statDistToCamp ?? ''}
+                                onChange={(e) => setCustomMetadata({ ...customMetadata, statDistToCamp: e.target.value })}
+                                className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                                placeholder={metrics.distToCampKm.toString()}
+                              />
+                              <span>{distUnit}</span>
+                            </div>
+                          ) : (
+                            <>{!metrics.hasLast ? '—' : (customMetadata.statDistToCamp ? `${customMetadata.statDistToCamp} ${distUnit}` : (distUnit === 'mi' ? `${(parseFloat(metrics.distToCampKm) * 0.621371).toFixed(2)} mi` : `${metrics.distToCampKm} km`))}</>
+                          )}
+                        </div>
+                        <div className="lab">
+                          {T.distToCamp}
+                        </div>
+                      </div>
+
+                      {/* Card 4: Distance Traveled (Based on GPS fixes in chosen track customized path date range) */}
+                      {sectionVisibility.distTraveledKpi && (
+                        <div className="trk-stat">
+                          <div className="val blue" dir="ltr">
+                            {isTableEditing ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  value={customMetadata.statDistanceTraveled ?? ''}
+                                  onChange={(e) => setCustomMetadata({ ...customMetadata, statDistanceTraveled: e.target.value })}
+                                  className="w-16 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                                  placeholder={calculatedDistanceTraveledKm > 0 ? calculatedDistanceTraveledKm.toFixed(2) : '0'}
+                                />
+                                <span>{distUnit}</span>
+                              </div>
+                            ) : (
+                              <>{customMetadata.statDistanceTraveled ? `${customMetadata.statDistanceTraveled} ${distUnit}` : (calculatedDistanceTraveledKm > 0 ? (distUnit === 'mi' ? `${(calculatedDistanceTraveledKm * 0.621371).toFixed(2)} mi` : `${calculatedDistanceTraveledKm.toFixed(2)} km`) : (reportFixes.length === 0 ? '—' : `0.00 ${distUnit}`))}</>
+                            )}
+                          </div>
+                          <div className="lab">
+                            {T.distanceTraveled}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Card 5: Tracking Duration (Leftmost in RTL) */}
+                      <div className="trk-stat">
+                        <div className="val" dir={reportLanguage === 'ar' ? 'rtl' : 'ltr'}>
+                          {isTableEditing ? (
+                            <div className="flex items-center gap-1 justify-center">
+                              <input
+                                type="text"
+                                value={customMetadata.statDuration ?? ''}
+                                onChange={(e) => setCustomMetadata({ ...customMetadata, statDuration: e.target.value })}
+                                className="w-12 text-center border border-amber-300 rounded bg-amber-50/50 text-gray-800 font-bold"
+                                placeholder={metrics.durationDays.toString()}
+                              />
+                              <span>{T.days}</span>
+                            </div>
+                          ) : (
+                            <span>{!metrics.hasLast || metrics.durationDays <= 0 ? '—' : `${customMetadata.statDuration || metrics.durationDays} ${T.days}`}</span>
+                          )}
+                        </div>
+                        <div className="lab">
+                          {T.followUp}
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                  )}
                 </div>
               )}
 
@@ -6389,7 +6568,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       {effectiveTrackSettings.show && mapElements.track?.visible !== false && (
                         <TrackOverlay
                           model={trackRenderModel}
-                          settings={effectiveTrackSettings}
+                          settings={activePttIds.length > 1 ? { ...effectiveTrackSettings, color: MULTI_PTT_COLORS[0] } : effectiveTrackSettings}
                           adapter={trackMapAdapter}
                           debug={isDebugTrack}
                         />
@@ -6553,7 +6732,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <>
                           <Marker
                             position={[metrics.lLat, metrics.lLon]}
-                            icon={createLiveTrackingPinIcon(mapElements.latest?.color || themeColors.latestPinColor, 'hb-pin-latest')}
+                            icon={createLiveTrackingPinIcon(activePttIds.length > 1 ? MULTI_PTT_COLORS[0] : (mapElements.latest?.color || themeColors.latestPinColor), 'hb-pin-latest')}
                             zIndexOffset={2000}
                             interactive={false}
                           />
@@ -6563,7 +6742,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               icon={createLiveTrackingLabelIcon({
                                 number: reportSubject.display.mapChipLabel,
                                 ringId: reportSubject.display.ringNumber,
-                                borderColorHex: mapElements.latest?.color || themeColors.latestPinColor,
+                                borderColorHex: activePttIds.length > 1 ? MULTI_PTT_COLORS[0] : (mapElements.latest?.color || themeColors.latestPinColor),
                                 labelTitle: mapElements.labelsConfig?.latestTitle ? translateValue(mapElements.labelsConfig.latestTitle) : (reportLanguage === 'en' ? 'Latest Location' : T.lastHead),
                                 position: mapElements.labelsConfig?.latestPosition || 'top',
                                 innerClass: 'hb-label-latest'
@@ -6600,7 +6779,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             {points.length > 1 && (
                               <Polyline
                                 positions={points}
-                                pathOptions={{ color, weight: 2.5, opacity: 0.85 }}
+                                pathOptions={{ color, weight: 3, opacity: 0.9 }}
                               />
                             )}
                             {/* Release Marker */}
@@ -6620,7 +6799,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 position={[lastPos.lat, lastPos.lon]}
                                 icon={createLiveTrackingMarkerIcon({
                                   number: cleanPttId,
-                                  pinColorHex: '#16a34a',
+                                  pinColorHex: color,
                                   borderColorHex: color,
                                   labelTitle: cleanPttId,
                                 })}
