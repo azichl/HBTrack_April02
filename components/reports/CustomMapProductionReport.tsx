@@ -1021,6 +1021,18 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [customReleaseMarkerPos, setCustomReleaseMarkerPos] = useState<[number, number] | null>(null);
   const [customLastPosMarkerPos, setCustomLastPosMarkerPos] = useState<[number, number] | null>(null);
 
+  // Draggable label and distance positions for all PTTs
+  const [customPttReleaseLabelPositions, setCustomPttReleaseLabelPositions] = useState<Record<string, [number, number]>>({});
+  const [customPttLatestLabelPositions, setCustomPttLatestLabelPositions] = useState<Record<string, [number, number]>>({});
+  const [customPttReleaseDistPositions, setCustomPttReleaseDistPositions] = useState<Record<string, [number, number]>>({});
+  const [customPttCampDistPositions, setCustomPttCampDistPositions] = useState<Record<string, [number, number]>>({});
+  const [customPttInterDistPositions, setCustomPttInterDistPositions] = useState<Record<string, [number, number]>>({});
+
+  // Multi-PTT distance display options (Active / Inactive)
+  const [showPttInterDistance, setShowPttInterDistance] = useState<boolean>(true);
+  const [showAllPttCampDistance, setShowAllPttCampDistance] = useState<boolean>(true);
+  const [showAllPttReleaseDistance, setShowAllPttReleaseDistance] = useState<boolean>(true);
+
   // ─── MAP CONTAINER REF & LABELS & TRACK SETTINGS ───────────────────────────
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
@@ -2126,6 +2138,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setCustomReleaseDistPos(null);
     setCustomReleaseMarkerPos(null);
     setCustomLastPosMarkerPos(null);
+    setCustomPttReleaseLabelPositions({});
+    setCustomPttLatestLabelPositions({});
+    setCustomPttReleaseDistPositions({});
+    setCustomPttCampDistPositions({});
+    setCustomPttInterDistPositions({});
 
     try {
       const resolved = resolveBirdOrTransmitter(pttId, transmitters, birds);
@@ -2740,6 +2757,25 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     });
   }, [activePttIds, additionalPttData, metrics, calculatedDistanceTraveledKm, reportFixes.length, reportLanguage, additionalPttRenderModels]);
 
+  // Active locations for all displayed PTTs (for multi-PTT distance calculations)
+  const activePttLocations = useMemo(() => {
+    return activePttIds.map((pttId, idx) => {
+      const cleanId = String(pttId).replace(/^trans-/, '');
+      const color = MULTI_PTT_COLORS[idx % MULTI_PTT_COLORS.length];
+      if (idx === 0) {
+        if (metrics.hasLast && metrics.lLat !== 0 && !isNaN(metrics.lLat)) {
+          return { pttId, cleanId, color, lat: metrics.lLat, lon: metrics.lLon, hasPos: true };
+        }
+        return { pttId, cleanId, color, lat: 0, lon: 0, hasPos: false };
+      }
+      const d = additionalPttData[pttId]?.telemetryData?.lastGpsPos;
+      if (d && d.lat !== 0 && d.lon !== 0 && !isNaN(d.lat) && !isNaN(d.lon)) {
+        return { pttId, cleanId, color, lat: d.lat, lon: d.lon, hasPos: true };
+      }
+      return { pttId, cleanId, color, lat: 0, lon: 0, hasPos: false };
+    }).filter(p => p.hasPos);
+  }, [activePttIds, metrics.hasLast, metrics.lLat, metrics.lLon, additionalPttData]);
+
   // Presence of elements on this map (for Pass 7 Legend sync)
   const presence = useMemo(() => ({
     release: !!metrics.hasRelease && mapElements.release?.visible !== false,
@@ -3117,6 +3153,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setCustomLastPosMarkerPos(null);
     setCustomReleaseDistPos(null);
     setCustomCampDistPositions({});
+    setCustomPttReleaseLabelPositions({});
+    setCustomPttLatestLabelPositions({});
+    setCustomPttReleaseDistPositions({});
+    setCustomPttCampDistPositions({});
+    setCustomPttInterDistPositions({});
 
     if (subject.bird) {
       const b = subject.bird;
@@ -4722,6 +4763,71 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     {campDistanceKm} km
                   </span>
                 </label>
+
+                {/* 4.5 Multi-PTT Distance Lines Toggles (Active / Inactive) */}
+                {activePttIds.length > 1 && (
+                  <>
+                    {/* Distance between all PTTs */}
+                    <label className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-sky-300 dark:border-sky-700/60 flex items-center justify-between gap-2 cursor-pointer select-none shadow-2xs hover:border-sky-400 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showPttInterDistance}
+                          onChange={(e) => setShowPttInterDistance(e.target.checked)}
+                          className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          {reportLanguage === 'en' ? 'Distance Between PTTs' : 'المسافة بين أجهزة التتبع'}
+                        </span>
+                      </div>
+                      {activePttLocations.length >= 2 ? (
+                        <span className="text-[10px] font-mono font-bold text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-950/60 px-1.5 py-0.5 rounded">
+                          {calculateDistanceKm(activePttLocations[0].lat, activePttLocations[0].lon, activePttLocations[1].lat, activePttLocations[1].lon).toFixed(1)} km
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono text-gray-400">
+                          {reportLanguage === 'en' ? 'Active' : 'مفعل'}
+                        </span>
+                      )}
+                    </label>
+
+                    {/* Distance from Camps for all PTTs */}
+                    <label className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700/60 flex items-center justify-between gap-2 cursor-pointer select-none shadow-2xs hover:border-amber-400 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showAllPttCampDistance}
+                          onChange={(e) => setShowAllPttCampDistance(e.target.checked)}
+                          className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          {reportLanguage === 'en' ? 'Camps Distance (All PTTs)' : 'مسافة المخيمات لجميع الأجهزة'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/60 px-1.5 py-0.5 rounded">
+                        {showAllPttCampDistance ? (reportLanguage === 'en' ? 'Active' : 'مفعل') : (reportLanguage === 'en' ? 'Inactive' : 'معطل')}
+                      </span>
+                    </label>
+
+                    {/* Distance from Release for all PTTs */}
+                    <label className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-red-300 dark:border-red-700/60 flex items-center justify-between gap-2 cursor-pointer select-none shadow-2xs hover:border-red-400 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={showAllPttReleaseDistance}
+                          onChange={(e) => setShowAllPttReleaseDistance(e.target.checked)}
+                          className="w-4 h-4 rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          {reportLanguage === 'en' ? 'Release Distance (All PTTs)' : 'مسافة الإطلاق لجميع الأجهزة'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-950/60 px-1.5 py-0.5 rounded">
+                        {showAllPttReleaseDistance ? (reportLanguage === 'en' ? 'Active' : 'مفعل') : (reportLanguage === 'en' ? 'Inactive' : 'معطل')}
+                      </span>
+                    </label>
+                  </>
+                )}
               </div>
 
               {/* 5. Compact Map Distance Measurement Tool */}
@@ -6786,6 +6892,67 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         );
                       })}
 
+                      {/* Distance lines between Chosen Camp(s) and Additional PTTs */}
+                      {mapElements.distCamp?.visible !== false && showAllPttCampDistance && activePttIds.slice(1).map((pttId, idx) => {
+                        const data = additionalPttData[pttId];
+                        const lastPos = data?.telemetryData?.lastGpsPos;
+                        if (!lastPos || lastPos.lat === 0 || lastPos.lon === 0 || isNaN(lastPos.lat) || isNaN(lastPos.lon)) return null;
+                        const color = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
+                        const cleanPttId = String(pttId).replace(/^trans-/, '');
+
+                        return visibleCampIds.map(campId => {
+                          if (!campDistToLastEnabled[campId]) return null;
+                          const camp = FIXED_FIELD_CAMPS.find(c => c.id === campId);
+                          if (!camp) return null;
+
+                          const rawDist = calculateDistanceKm(camp.lat, camp.lon, lastPos.lat, lastPos.lon);
+                          const distFormatted = distUnit === 'mi' ? `${(rawDist * 0.621371).toFixed(1)} mi` : `${rawDist.toFixed(1)} km`;
+                          const midLat = (camp.lat + lastPos.lat) / 2;
+                          const midLon = (camp.lon + lastPos.lon) / 2;
+                          const pillKey = `${cleanPttId}_${campId}`;
+                          const pillPos: [number, number] = customPttCampDistPositions[pillKey] || [midLat, midLon];
+
+                          return (
+                            <React.Fragment key={`camp-dist-ptt-${cleanPttId}-${campId}`}>
+                              <Polyline
+                                positions={[
+                                  [camp.lat, camp.lon],
+                                  [lastPos.lat, lastPos.lon]
+                                ]}
+                                pathOptions={{
+                                  color,
+                                  weight: 2.2,
+                                  dashArray: '5, 5',
+                                  opacity: 0.95
+                                }}
+                              />
+                              <Marker
+                                position={pillPos}
+                                icon={createDistancePillIcon(
+                                  `${cleanPttId} ↔ ${camp.name}: ${distFormatted}`,
+                                  color
+                                )}
+                                zIndexOffset={1600 + idx}
+                                interactive={true}
+                                draggable={true}
+                                eventHandlers={{
+                                  dragend: (e) => {
+                                    const marker = e.target;
+                                    if (marker && marker.getLatLng) {
+                                      const latLng = marker.getLatLng();
+                                      setCustomPttCampDistPositions(prev => ({
+                                        ...prev,
+                                        [pillKey]: [latLng.lat, latLng.lng]
+                                      }));
+                                    }
+                                  }
+                                }}
+                              />
+                            </React.Fragment>
+                          );
+                        });
+                      })}
+
                       {/* Distance line: Last Position to Release Location (Requested Filter) */}
                       {mapElements.distRelease?.visible !== false && showDistanceToRelease && metrics.hasLast && metrics.hasRelease && (
                         <>
@@ -6822,6 +6989,115 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                             }}
                           />
                         </>
+                      )}
+
+                      {/* Distance lines: Last Position to Release Location for Additional PTTs */}
+                      {mapElements.distRelease?.visible !== false && showAllPttReleaseDistance && activePttIds.slice(1).map((pttId, idx) => {
+                        const data = additionalPttData[pttId];
+                        const relPos = data?.telemetryData?.releasePos;
+                        const lastPos = data?.telemetryData?.lastGpsPos;
+                        if (!relPos || !lastPos) return null;
+                        if (relPos.lat === 0 || relPos.lon === 0 || isNaN(relPos.lat) || isNaN(relPos.lon)) return null;
+                        if (lastPos.lat === 0 || lastPos.lon === 0 || isNaN(lastPos.lat) || isNaN(lastPos.lon)) return null;
+
+                        const rawDist = calculateDistanceKm(relPos.lat, relPos.lon, lastPos.lat, lastPos.lon);
+                        const distFormatted = distUnit === 'mi' ? `${(rawDist * 0.621371).toFixed(2)} mi` : `${rawDist.toFixed(2)} km`;
+                        const midLat = (relPos.lat + lastPos.lat) / 2;
+                        const midLon = (relPos.lon + lastPos.lon) / 2;
+                        const cleanPttId = String(pttId).replace(/^trans-/, '');
+                        const color = MULTI_PTT_COLORS[(idx + 1) % MULTI_PTT_COLORS.length];
+                        const pillPos: [number, number] = customPttReleaseDistPositions[cleanPttId] || [midLat, midLon];
+
+                        return (
+                          <React.Fragment key={`rel-dist-ptt-${cleanPttId}`}>
+                            <Polyline
+                              positions={[
+                                [lastPos.lat, lastPos.lon],
+                                [relPos.lat, relPos.lon]
+                              ]}
+                              pathOptions={{
+                                color,
+                                weight: 2.5,
+                                dashArray: '6, 6',
+                                opacity: 0.95
+                              }}
+                            />
+                            <Marker
+                              position={pillPos}
+                              icon={createDistancePillIcon(
+                                `${cleanPttId}: ${distFormatted}`,
+                                color,
+                                [Math.max(70, `${cleanPttId}: ${distFormatted}`.length * 7.5 + 16) + 16, 12]
+                              )}
+                              zIndexOffset={1510 + idx}
+                              interactive={true}
+                              draggable={true}
+                              eventHandlers={{
+                                dragend: (e) => {
+                                  const marker = e.target;
+                                  if (marker && marker.getLatLng) {
+                                    const latLng = marker.getLatLng();
+                                    setCustomPttReleaseDistPositions(prev => ({
+                                      ...prev,
+                                      [cleanPttId]: [latLng.lat, latLng.lng]
+                                    }));
+                                  }
+                                }
+                              }}
+                            />
+                          </React.Fragment>
+                        );
+                      })}
+
+                      {/* Distance lines: Between all active PTTs */}
+                      {showPttInterDistance && activePttLocations.map((pA, i) =>
+                        activePttLocations.slice(i + 1).map((pB, j) => {
+                          const rawDist = calculateDistanceKm(pA.lat, pA.lon, pB.lat, pB.lon);
+                          const distFormatted = distUnit === 'mi' ? `${(rawDist * 0.621371).toFixed(1)} mi` : `${rawDist.toFixed(1)} km`;
+                          const midLat = (pA.lat + pB.lat) / 2;
+                          const midLon = (pA.lon + pB.lon) / 2;
+                          const pairKey = `${pA.cleanId}_${pB.cleanId}`;
+                          const pillPos: [number, number] = customPttInterDistPositions[pairKey] || [midLat, midLon];
+
+                          return (
+                            <React.Fragment key={`inter-ptt-${pairKey}`}>
+                              <Polyline
+                                positions={[
+                                  [pA.lat, pA.lon],
+                                  [pB.lat, pB.lon]
+                                ]}
+                                pathOptions={{
+                                  color: '#0284c7',
+                                  weight: 2.2,
+                                  dashArray: '4, 4',
+                                  opacity: 0.9
+                                }}
+                              />
+                              <Marker
+                                position={pillPos}
+                                icon={createDistancePillIcon(
+                                  `${pA.cleanId} ↔ ${pB.cleanId}: ${distFormatted}`,
+                                  '#0284c7'
+                                )}
+                                zIndexOffset={1550 + i * 10 + j}
+                                interactive={true}
+                                draggable={true}
+                                eventHandlers={{
+                                  dragend: (e) => {
+                                    const marker = e.target;
+                                    if (marker && marker.getLatLng) {
+                                      const latLng = marker.getLatLng();
+                                      setCustomPttInterDistPositions(prev => ({
+                                        ...prev,
+                                        [pairKey]: [latLng.lat, latLng.lng]
+                                      }));
+                                    }
+                                  }
+                                }}
+                              />
+                            </React.Fragment>
+                          );
+                        })
                       )}
 
                       {/* Release Location Marker (Requested Filter) */}
@@ -6925,28 +7201,85 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                                 }}
                               />
                             )}
-                            {/* Release Marker */}
-                            {relPos.lat !== 0 && relPos.lon !== 0 && !isNaN(relPos.lat) && !isNaN(relPos.lon) && (
-                              <Marker
-                                position={[relPos.lat, relPos.lon]}
-                                icon={createLiveTrackingMarkerIcon({
-                                  number: cleanPttId,
-                                  pinColorHex: '#dc2626',
-                                  borderColorHex: color,
-                                })}
-                              />
+                            {/* Release Marker: Pin + Draggable Label */}
+                            {mapElements.release?.visible !== false && showReleaseMarker && relPos.lat !== 0 && relPos.lon !== 0 && !isNaN(relPos.lat) && !isNaN(relPos.lon) && (
+                              <>
+                                <Marker
+                                  position={[relPos.lat, relPos.lon]}
+                                  icon={createLiveTrackingPinIcon(color, 'hb-pin-release')}
+                                  zIndexOffset={1800 + idx}
+                                  interactive={false}
+                                />
+                                {(mapElements.labelsConfig?.showReleaseLabel ?? true) && (
+                                  <Marker
+                                    position={customPttReleaseLabelPositions[cleanPttId] || [relPos.lat, relPos.lon]}
+                                    icon={createLiveTrackingLabelIcon({
+                                      number: cleanPttId,
+                                      ringId: data.birdRing || 'NA',
+                                      borderColorHex: color,
+                                      labelTitle: mapElements.labelsConfig?.releaseTitle
+                                        ? `${cleanPttId} - ${translateValue(mapElements.labelsConfig.releaseTitle)}`
+                                        : `${cleanPttId} - ${reportLanguage === 'en' ? 'Release' : T.installHead}`,
+                                      position: 'right',
+                                      innerClass: 'hb-label-release'
+                                    })}
+                                    zIndexOffset={1801 + idx}
+                                    draggable={true}
+                                    eventHandlers={{
+                                      dragend: (e) => {
+                                        const marker = e.target;
+                                        if (marker && marker.getLatLng) {
+                                          const latLng = marker.getLatLng();
+                                          setCustomPttReleaseLabelPositions(prev => ({
+                                            ...prev,
+                                            [cleanPttId]: [latLng.lat, latLng.lng]
+                                          }));
+                                        }
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </>
                             )}
-                            {/* Latest Position Marker */}
-                            {lastPos.lat !== 0 && lastPos.lon !== 0 && !isNaN(lastPos.lat) && !isNaN(lastPos.lon) && (
-                              <Marker
-                                position={[lastPos.lat, lastPos.lon]}
-                                icon={createLiveTrackingMarkerIcon({
-                                  number: cleanPttId,
-                                  pinColorHex: color,
-                                  borderColorHex: color,
-                                  labelTitle: cleanPttId,
-                                })}
-                              />
+                            {/* Latest Position Marker: Pin + Draggable Label */}
+                            {mapElements.latest?.visible !== false && lastPos.lat !== 0 && lastPos.lon !== 0 && !isNaN(lastPos.lat) && !isNaN(lastPos.lon) && (
+                              <>
+                                <Marker
+                                  position={[lastPos.lat, lastPos.lon]}
+                                  icon={createLiveTrackingPinIcon(color, 'hb-pin-latest')}
+                                  zIndexOffset={2000 + idx}
+                                  interactive={false}
+                                />
+                                {(mapElements.labelsConfig?.showLatestLabel ?? true) && (
+                                  <Marker
+                                    position={customPttLatestLabelPositions[cleanPttId] || [lastPos.lat, lastPos.lon]}
+                                    icon={createLiveTrackingLabelIcon({
+                                      number: cleanPttId,
+                                      ringId: data.birdRing || 'NA',
+                                      borderColorHex: color,
+                                      labelTitle: mapElements.labelsConfig?.latestTitle
+                                        ? `${cleanPttId} - ${translateValue(mapElements.labelsConfig.latestTitle)}`
+                                        : `${cleanPttId} - ${reportLanguage === 'en' ? 'Latest Location' : T.lastHead}`,
+                                      position: 'top',
+                                      innerClass: 'hb-label-latest'
+                                    })}
+                                    zIndexOffset={2001 + idx}
+                                    draggable={true}
+                                    eventHandlers={{
+                                      dragend: (e) => {
+                                        const marker = e.target;
+                                        if (marker && marker.getLatLng) {
+                                          const latLng = marker.getLatLng();
+                                          setCustomPttLatestLabelPositions(prev => ({
+                                            ...prev,
+                                            [cleanPttId]: [latLng.lat, latLng.lng]
+                                          }));
+                                        }
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </>
                             )}
                           </React.Fragment>
                         );
@@ -7403,7 +7736,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         <Crosshair size={13} />
                         <span>{reportLanguage === 'en' ? 'Center' : 'توسيط'}</span>
                       </button>
-                      {(customReleaseMarkerPos || customLastPosMarkerPos || customReleaseDistPos || Object.keys(customCampDistPositions).length > 0 || Object.keys(customCampLabelPositions).length > 0) && (
+                      {(customReleaseMarkerPos || customLastPosMarkerPos || customReleaseDistPos || Object.keys(customCampDistPositions).length > 0 || Object.keys(customCampLabelPositions).length > 0 || Object.keys(customPttReleaseLabelPositions).length > 0 || Object.keys(customPttLatestLabelPositions).length > 0 || Object.keys(customPttReleaseDistPositions).length > 0 || Object.keys(customPttCampDistPositions).length > 0 || Object.keys(customPttInterDistPositions).length > 0) && (
                         <>
                           <div className="w-px h-3.5 bg-white/25 mx-0.5" />
                           <button
@@ -7415,6 +7748,11 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                               setCustomReleaseMarkerPos(null);
                               setCustomLastPosMarkerPos(null);
                               setCustomReleaseDistPos(null);
+                              setCustomPttReleaseLabelPositions({});
+                              setCustomPttLatestLabelPositions({});
+                              setCustomPttReleaseDistPositions({});
+                              setCustomPttCampDistPositions({});
+                              setCustomPttInterDistPositions({});
                             }}
                             className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-white/20 rounded text-[11px] font-medium transition-colors text-amber-300 hover:text-amber-200"
                             title={reportLanguage === 'en' ? 'Reset dragged label positions' : 'إعادة ضبط مواضع التسميات المسحوبة'}
