@@ -19,6 +19,7 @@ export interface ReportBookMeta {
   logoRightUrl: string;
   logoLeftHeight: number;
   logoRightHeight: number;
+  notes?: string;
 }
 
 export interface ReportBookPage {

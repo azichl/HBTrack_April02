@@ -113,6 +113,7 @@ export function ReportBookManager({
   const [expandedBook, setExpandedBook] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string | null>(null);
   const [editTitleVal, setEditTitleVal] = useState('');
+  const [bookNotes, setBookNotes] = useState<Record<string, string>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -477,6 +478,36 @@ export function ReportBookManager({
                 {/* expanded pages list */}
                 {expandedBook === book.id && (
                   <div className="bg-slate-50 dark:bg-slate-800/40 px-3 pb-2 pt-1">
+                    {/* Collection Cover Notes (Modifiable) */}
+                    <div className="mb-2 mt-1 p-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+                          <span>📝</span>
+                          <span>Cover Notes (ملاحظات الغلاف)</span>
+                        </span>
+                        <span className="text-[10px] text-slate-400">Appears under transmitters</span>
+                      </div>
+                      <textarea
+                        value={bookNotes[book.id] ?? (book.notes || '')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setBookNotes(prev => ({ ...prev, [book.id]: val }));
+                        }}
+                        onBlur={async () => {
+                          const val = bookNotes[book.id];
+                          if (val !== undefined && val !== (book.notes || '')) {
+                            try {
+                              await updateReportBookMeta(book.id, { notes: val });
+                              setBooks(prev => prev.map(b => b.id === book.id ? { ...b, notes: val } : b));
+                            } catch (e) {
+                              console.error('Failed to update notes:', e);
+                            }
+                          }
+                        }}
+                        placeholder="Add notes to appear on the cover page under all transmitters..."
+                        className="w-full text-xs p-1.5 border border-slate-200 dark:border-slate-600 rounded bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 resize-none h-14 outline-none focus:border-indigo-500"
+                      />
+                    </div>
                     {!pages[book.id] ? (
                       <div className="text-xs text-slate-400 py-1 flex items-center gap-1"><Loader2 size={11} className="animate-spin" /> Loading pages…</div>
                     ) : pages[book.id].length === 0 ? (

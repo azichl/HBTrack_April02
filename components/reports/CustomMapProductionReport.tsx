@@ -7,7 +7,7 @@ import {
   Edit3, Trash2, History, Camera, Image as ImageIcon, Sparkles,
   Move, RotateCcw, GripHorizontal, Eye, EyeOff, Ruler, Building2, Upload,
   ChevronLeft, ChevronRight, Palette, ZoomIn, ZoomOut, X, Save, AlertTriangle,
-  Bot
+  Bot, BookOpen
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Polyline, CircleMarker, useMap, useMapEvents, ScaleControl } from 'react-leaflet';
 import L from 'leaflet';
@@ -1214,7 +1214,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
         if (parsed.logoLeftUrl) setLogoLeftUrl(parsed.logoLeftUrl);
         if (parsed.logoLeftHeight) setLogoLeftHeight(parsed.logoLeftHeight);
         if (parsed.logoLeftWidth) setLogoLeftWidth(parsed.logoLeftWidth);
-        if (parsed.logoRightUrl) setLogoRightUrl(parsed.logoRightUrl);
+        if (parsed.logoRightUrl) setLogoRightUrl(parsed.logoRightUrl === '/qatar-emblem.png' ? '/external-reserves-office-logo.png' : parsed.logoRightUrl);
         if (parsed.logoRightHeight) setLogoRightHeight(parsed.logoRightHeight);
         if (parsed.logoRightWidth) setLogoRightWidth(parsed.logoRightWidth);
         if (parsed.legendItems) setLegendItems(parsed.legendItems);
@@ -1562,6 +1562,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
   const [coverCount, setCoverCount] = useState(0);
   const [coverPages, setCoverPages] = useState<ReportBookPage[]>([]);
   const [coverCategory, setCoverCategory] = useState<ReportBookCategory>('almaty');
+  const [coverNotes, setCoverNotes] = useState<string>(() => {
+    try { return localStorage.getItem('hbtrack_cover_notes') || ''; } catch { return ''; }
+  });
+  const [isCoverPreviewOpen, setIsCoverPreviewOpen] = useState(false);
   const [isCollectionsOpen, setIsCollectionsOpen] = useState(false);
 
   const handleBeforeExport = useCallback((book: ReportBookMeta, pages: ReportBookPage[]) => {
@@ -1570,20 +1574,19 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     setCoverCount(pages.length);
     setCoverPages(pages);
     setCoverCategory(book.category);
+    if (book.notes) setCoverNotes(book.notes);
   }, []);
 
   // ─── CUSTOM LOGOS & QGIS MAP UPLOAD (USER REQUESTED) ────────────────────────
   const [logoLeftUrl, setLogoLeftUrl] = useState<string>('/qatar-houbara-center-logo.png');
-  const [logoRightUrl, setLogoRightUrl] = useState<string>('/qatar-emblem.png');
+  const [logoRightUrl, setLogoRightUrl] = useState<string>('/external-reserves-office-logo.png');
   const [mapImageFit, setMapImageFit] = useState<'cover' | 'contain' | 'fill'>('cover');
-
-
 
   // Logo Dimensions Management (User requested: click and adjust dimensions)
   const [logoLeftHeight, setLogoLeftHeight] = useState<number>(78);
   const [logoLeftWidth, setLogoLeftWidth] = useState<number>(260);
   const [logoRightHeight, setLogoRightHeight] = useState<number>(64);
-  const [logoRightWidth, setLogoRightWidth] = useState<number>(240);
+  const [logoRightWidth, setLogoRightWidth] = useState<number>(280);
   const [activeResizingLogo, setActiveResizingLogo] = useState<'left' | 'right' | null>(null);
 
   const mapImageInputRef = useRef<HTMLInputElement>(null);
@@ -3012,6 +3015,35 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
     return '';
   }, [metrics.lastGpsLatTableDMM, metrics.lastGpsLonTableDMM, telemetryData.lastGpsPos]);
 
+  // Effective cover pages: when coverPages is empty and multiple PTTs are on map, generate from all active PTTs
+  const effectiveCoverPages: ReportBookPage[] = useMemo(() => {
+    if (coverPages.length > 0) return coverPages;
+    return activePttIds.map((pttId, idx) => {
+      const cleanId = String(pttId).replace(/^trans-/, '');
+      const data = idx === 0 ? null : additionalPttData[pttId];
+      const ring = idx === 0 ? (customMetadata.birdRing || 'NA') : (data?.birdRing || 'NA');
+      const region = currentRegionValue;
+      const location = idx === 0
+        ? currentLocationValue
+        : (data?.telemetryData?.lastGpsPos?.lat
+          ? `${data.telemetryData.lastGpsPos.lat.toFixed(4)}°, ${data.telemetryData.lastGpsPos.lon.toFixed(4)}°`
+          : 'Kazakhstan');
+      return {
+        id: `ptt-page-${cleanId}`,
+        bookId: 'current',
+        order: idx,
+        birdId: cleanId,
+        birdLabel: cleanId,
+        ring,
+        region,
+        location,
+        storagePath: '',
+        downloadUrl: '',
+        addedAt: Date.now()
+      };
+    });
+  }, [coverPages, activePttIds, additionalPttData, customMetadata.birdRing, currentRegionValue, currentLocationValue]);
+
   const filteredPtts = useMemo(() => {
     const list: string[] = ['244289', '244276'];
     transmitters.forEach(t => {
@@ -4349,6 +4381,17 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
               onBeforeExport={handleBeforeExport}
             />
 
+            {/* Preview Cover & Notes */}
+            <button
+              type="button"
+              onClick={() => setIsCoverPreviewOpen(true)}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title={reportLanguage === 'ar' ? 'معاينة غلاف التقرير وتعديل الملاحظات' : 'Preview Cover Page & Edit Notes'}
+            >
+              <BookOpen size={14} />
+              <span>{reportLanguage === 'ar' ? 'غلاف وملاحظات' : 'Cover & Notes'}</span>
+            </button>
+
             {/* Fullscreen Workspace & Sheet Preview */}
             <div className="flex items-center gap-1">
               <button
@@ -5394,6 +5437,15 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 currentLocation={currentLocationValue}
                 onBeforeExport={handleBeforeExport}
               />
+              <button
+                type="button"
+                onClick={() => setIsCoverPreviewOpen(true)}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                title={reportLanguage === 'ar' ? 'معاينة غلاف التقرير وتعديل الملاحظات' : 'Preview Cover Page & Edit Notes'}
+              >
+                <BookOpen size={14} />
+                <span>{reportLanguage === 'ar' ? 'غلاف وملاحظات' : 'Cover & Notes'}</span>
+              </button>
             </div>
           </div>
         )}
@@ -5427,8 +5479,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                 style={{ position: 'relative', zIndex: activeResizingLogo === 'right' ? 3000 : 20 }}
               >
                 <img 
-                  src={logoRightUrl} 
-                  alt="شعار الدولة" 
+                  src={logoRightUrl === '/qatar-emblem.png' ? '/external-reserves-office-logo.png' : logoRightUrl} 
+                  alt="مكتب محميات الدولة الخارجية - شعار الدولة" 
                   className="object-contain cursor-pointer transition-all"
                   style={{
                     height: `${logoRightHeight}px`,
@@ -5439,7 +5491,10 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                   onClick={() => setActiveResizingLogo(activeResizingLogo === 'right' ? null : 'right')}
                   title="انقر على الشعار لتكبيره أو تصغيره وتعديل أبعاده"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/external-reserves-office-logo.png';
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes('external-reserves-office-logo.png')) {
+                      target.src = '/external-reserves-office-logo.png';
+                    }
                   }}
                 />
 
@@ -5470,12 +5525,12 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                     <Upload size={10} />
                     <span>استبدال</span>
                   </button>
-                  {logoRightUrl !== '/qatar-emblem.png' && (
+                  {logoRightUrl !== '/external-reserves-office-logo.png' && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setLogoRightUrl('/qatar-emblem.png');
+                        setLogoRightUrl('/external-reserves-office-logo.png');
                       }}
                       className="hover:text-amber-300 font-bold mr-0.5"
                       title="استعادة الشعار الافتراضي"
@@ -5576,7 +5631,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                         </button>
                         <button
                           type="button"
-                          onClick={() => { setLogoRightHeight(64); setLogoRightWidth(240); }}
+                          onClick={() => { setLogoRightHeight(64); setLogoRightWidth(280); }}
                           className="px-1.5 py-0.5 text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 rounded font-bold"
                         >
                           افتراضي
@@ -5602,7 +5657,7 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setLogoRightHeight(64); setLogoRightWidth(240); }}
+                        onClick={() => { setLogoRightHeight(64); setLogoRightWidth(280); }}
                         className="text-gray-500 hover:text-gray-800 dark:hover:text-white flex items-center gap-0.5"
                       >
                         <RotateCcw size={11} />
@@ -8218,8 +8273,8 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           ref={coverPageRef}
           title={coverTitle}
           issueDate={coverDate}
-          pageCount={coverCount}
-          pages={coverPages}
+          pageCount={coverCount || effectiveCoverPages.length}
+          pages={effectiveCoverPages}
           category={coverCategory}
           language={reportLanguage}
           activeBirdId={selectedPttId ?? ''}
@@ -8231,8 +8286,88 @@ export const CustomMapProductionReport: React.FC<CustomMapProductionReportProps>
           logoLeftWidth={logoLeftWidth}
           logoRightHeight={logoRightHeight}
           logoRightWidth={logoRightWidth}
+          notes={coverNotes}
+          onNotesChange={(n) => {
+            setCoverNotes(n);
+            try { localStorage.setItem('hbtrack_cover_notes', n); } catch {}
+          }}
+          isEditable={true}
         />
       </div>
+
+      {/* Cover Page Interactive Modal Preview (Allows viewing and modifying notes & layout) */}
+      {isCoverPreviewOpen && (
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setIsCoverPreviewOpen(false)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 overflow-hidden max-w-[95vw] max-h-[95vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60">
+              <div className="flex items-center gap-2">
+                <BookOpen size={18} className="text-brand-600" />
+                <span className="font-bold text-sm text-gray-900 dark:text-white">
+                  {reportLanguage === 'ar' ? 'معاينة غلاف التقرير المجمع وتعديل الملاحظات' : 'Multi-PTT Cover Page Preview & Notes'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCoverPreviewOpen(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"
+                title="إغلاق"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body with Zoom / Fit container */}
+            <div className="p-4 overflow-auto flex-1 flex justify-center bg-slate-100 dark:bg-slate-950">
+              <div style={{ transform: 'scale(0.85)', transformOrigin: 'top center', marginBottom: -90 }}>
+                <CoverPage
+                  title={coverTitle}
+                  issueDate={coverDate}
+                  pageCount={coverCount || effectiveCoverPages.length}
+                  pages={effectiveCoverPages}
+                  category={coverCategory}
+                  language={reportLanguage}
+                  activeBirdId={selectedPttId ?? ''}
+                  activeBirdRegion={currentRegionValue}
+                  activeBirdLocation={currentLocationValue}
+                  logoLeftUrl={logoLeftUrl}
+                  logoRightUrl={logoRightUrl}
+                  logoLeftHeight={logoLeftHeight}
+                  logoLeftWidth={logoLeftWidth}
+                  logoRightHeight={logoRightHeight}
+                  logoRightWidth={logoRightWidth}
+                  notes={coverNotes}
+                  onNotesChange={(n) => {
+                    setCoverNotes(n);
+                    try { localStorage.setItem('hbtrack_cover_notes', n); } catch {}
+                  }}
+                  isEditable={true}
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 border-t border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+              <span className="text-xs text-gray-500">
+                {reportLanguage === 'ar' ? 'الملاحظات تُحفظ تلقائياً وتظهر على الغلاف عند التصدير' : 'Notes are auto-saved and appear on the cover page upon export'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsCoverPreviewOpen(false)}
+                className="px-4 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+              >
+                {reportLanguage === 'ar' ? 'حفظ وإغلاق' : 'Save & Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       </div>
 

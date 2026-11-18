@@ -66,9 +66,10 @@ export async function createReportBook(
     updatedAt: now,
     pageCount: 0,
     logoLeftUrl: '/qatar-houbara-center-logo.png',
-    logoRightUrl: '/qatar-emblem.png',
+    logoRightUrl: '/external-reserves-office-logo.png',
     logoLeftHeight: 78,
     logoRightHeight: 64,
+    notes: '',
   };
   await setDoc(bookDoc(userId, id), meta);
   return meta;
@@ -82,7 +83,7 @@ export async function listReportBooks(): Promise<ReportBookMeta[]> {
 
 export async function updateReportBookMeta(
   bookId: string,
-  patch: Partial<Pick<ReportBookMeta, 'title' | 'issueDate' | 'logoLeftUrl' | 'logoRightUrl' | 'logoLeftHeight' | 'logoRightHeight'>>,
+  patch: Partial<Pick<ReportBookMeta, 'title' | 'issueDate' | 'logoLeftUrl' | 'logoRightUrl' | 'logoLeftHeight' | 'logoRightHeight' | 'notes'>>,
 ): Promise<void> {
   const userId = uid();
   await updateDoc(bookDoc(userId, bookId), { ...patch, updatedAt: Date.now() });

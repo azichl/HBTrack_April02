@@ -11,7 +11,7 @@
 // 6. Region accurately populated from report subtitle (e.g. Lebap Region – Turkmenistan).
 // 7. Report footer matching the single report footer colors (#6b7280, #4b5563, #d9dbe1).
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { ReportBookPage, ReportBookCategory } from '../../src/types/multiReport';
 import { PRESET_BOOKS } from '../../src/types/multiReport';
 
@@ -31,6 +31,9 @@ export interface CoverPageProps {
   logoLeftWidth?: number;
   logoRightHeight?: number;
   logoRightWidth?: number;
+  notes?: string;
+  onNotesChange?: (notes: string) => void;
+  isEditable?: boolean;
 }
 
 export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
@@ -46,16 +49,29 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
       activeBirdRegion,
       activeBirdLocation,
       logoLeftUrl = '/qatar-houbara-center-logo.png',
-      logoRightUrl = '/qatar-emblem.png',
+      logoRightUrl = '/external-reserves-office-logo.png',
       logoLeftHeight = 78,
       logoLeftWidth = 260,
       logoRightHeight = 64,
-      logoRightWidth = 240,
+      logoRightWidth = 280,
+      notes = '',
+      onNotesChange,
+      isEditable = true,
     },
     ref,
   ) => {
     const isAr = language === 'ar';
     const effectiveDate = issueDate || new Date().toISOString().slice(0, 10);
+    const [localNotes, setLocalNotes] = useState(notes || '');
+
+    useEffect(() => {
+      setLocalNotes(notes || '');
+    }, [notes]);
+
+    // Ensure official office logo is always used
+    const effectiveLogoRightUrl = (!logoRightUrl || logoRightUrl === '/qatar-emblem.png')
+      ? '/external-reserves-office-logo.png'
+      : logoRightUrl;
 
     const displayDate = (() => {
       try {
@@ -156,7 +172,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
           {/* Visual Right: External Reserves Office of The State Logo (identical in AR and EN) */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <img
-              src={logoRightUrl}
+              src={effectiveLogoRightUrl}
               alt="مكتب محميات الدولة الخارجية"
               style={{
                 height: `${logoRightHeight}px`,
@@ -166,7 +182,10 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                 display: 'block',
               }}
               onError={(e) => {
-                (e.target as HTMLImageElement).src = '/external-reserves-office-logo.png';
+                const target = e.target as HTMLImageElement;
+                if (!target.src.includes('external-reserves-office-logo.png')) {
+                  target.src = '/external-reserves-office-logo.png';
+                }
               }}
             />
           </div>
@@ -341,7 +360,7 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                   gridTemplateColumns: uniqueBirds.length <= 4 ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
                   gap: 14,
                   overflow: 'hidden',
-                  maxHeight: 390,
+                  maxHeight: 330,
                   width: '100%',
                   direction: isAr ? 'rtl' : 'ltr',
                 }}
@@ -524,6 +543,102 @@ export const CoverPage = React.forwardRef<HTMLDivElement, CoverPageProps>(
                 })}
               </div>
             )}
+
+            {/* ── Notes Section under all PTTs information (User Requested: Modifiable) ── */}
+            <div
+              style={{
+                width: '100%',
+                marginTop: 12,
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRight: isAr ? '4.5px solid #7a1c32' : undefined,
+                borderLeft: !isAr ? '4.5px solid #7a1c32' : undefined,
+                borderRadius: 8,
+                padding: '9px 14px',
+                boxSizing: 'border-box',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 5,
+                direction: isAr ? 'rtl' : 'ltr',
+                textAlign: isAr ? 'right' : 'left',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid #f1f5f9',
+                  paddingBottom: 4,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: '#7a1c32',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 13 }}>📝</span>
+                  <span>{isAr ? 'ملاحظات (Notes)' : 'Notes (ملاحظات)'}</span>
+                </div>
+                {isEditable && (
+                  <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>
+                    {isAr ? 'ملاحظات قابلة للتعديل' : 'Modifiable Notes'}
+                  </span>
+                )}
+              </div>
+
+              {isEditable ? (
+                <textarea
+                  value={localNotes}
+                  onChange={(e) => {
+                    setLocalNotes(e.target.value);
+                    onNotesChange?.(e.target.value);
+                  }}
+                  placeholder={
+                    isAr
+                      ? 'أدخل أي ملاحظات هنا حول أجهزة التتبع أو التقرير المجمع...'
+                      : 'Enter any notes here regarding the transmitters or tracking report...'
+                  }
+                  style={{
+                    width: '100%',
+                    minHeight: 44,
+                    maxHeight: 70,
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontSize: 11.5,
+                    fontFamily: isAr ? "'IBM Plex Sans Arabic', Arial, sans-serif" : "'Inter', Arial, sans-serif",
+                    color: '#334155',
+                    backgroundColor: '#f8fafc',
+                    resize: 'none',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    lineHeight: 1.45,
+                    direction: isAr ? 'rtl' : 'ltr',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    fontSize: 11.5,
+                    color: localNotes ? '#334155' : '#94a3b8',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: 1.45,
+                    minHeight: 22,
+                    fontStyle: localNotes ? 'normal' : 'italic',
+                    fontFamily: isAr ? "'IBM Plex Sans Arabic', Arial, sans-serif" : "'Inter', Arial, sans-serif",
+                  }}
+                >
+                  {localNotes || (isAr ? 'لا توجد ملاحظات إضافية.' : 'No additional notes.')}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

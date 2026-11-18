@@ -102,7 +102,17 @@ export const Sidebar = () => {
       {/* Logo Section */}
       <div className="py-5 px-4 flex items-center justify-center sticky top-0 bg-white dark:bg-slate-900 z-10">
         <div className="flex items-center justify-center w-full">
-            <img src="/ministry-logo.png" alt="Ministry Logo" className="w-[90%] max-w-[220px] h-auto object-contain transform scale-[1.25] origin-center dark:brightness-0 dark:invert" />
+            <img 
+              src="/ministry-logo.png" 
+              alt="مكتب محميات الدولة الخارجية - Ministry Logo" 
+              className="w-[90%] max-w-[220px] h-auto object-contain transform scale-[1.25] origin-center dark:brightness-0 dark:invert"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (!target.src.includes('external-reserves-office-logo.png')) {
+                  target.src = '/external-reserves-office-logo.png';
+                }
+              }}
+            />
         </div>
         <div className="absolute right-3 top-5 flex items-center gap-1">
 
